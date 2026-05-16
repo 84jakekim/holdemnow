@@ -1,0 +1,65 @@
+# Firebase App Hosting 설정
+# 참고: https://firebase.google.com/docs/app-hosting/configure
+#
+# - runConfig: 서버 런타임 리소스/스케일링
+# - env: 빌드/런타임에 노출되는 환경변수
+#   - value: 평문 (NEXT_PUBLIC_* 처럼 어차피 브라우저에 노출되는 값)
+#   - secret: Secret Manager 시크릿 참조 (서버용 키)
+#
+# 시크릿 등록 명령:
+#   firebase apphosting:secrets:set <secretName>
+#   firebase apphosting:secrets:grantaccess <secretName>
+
+runConfig:
+  # 처음엔 보수적으로 (베타 무료 한도 안에서 운영)
+  minInstances: 0
+  maxInstances: 1
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  # Firebase Web SDK config — 모두 NEXT_PUBLIC_*로 클라이언트에 노출되는 값.
+  # 보안은 firestore.rules / storage.rules / Auth 도메인 화이트리스트로 처리.
+  # 평문 value로 저장해도 됨 (이 값들은 결국 브라우저에 들어감).
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyC3WVSca1WpLk8O81cS8JqNWELBDj_Jocg
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: holdemnow-prod.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: holdemnow-prod
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: holdemnow-prod.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "279366919379"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:279366919379:web:486f079698915469852026"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: G-MVDG6B4H92
+    availability:
+      - BUILD
+      - RUNTIME
