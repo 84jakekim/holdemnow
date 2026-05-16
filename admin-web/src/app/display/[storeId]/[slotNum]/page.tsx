@@ -9,6 +9,7 @@ import {
   type LiveSession,
   fmtTime,
   computeLateRegMinutes,
+  useLiveCountdown,
 } from '@/lib/live';
 
 interface StoreData {
@@ -50,16 +51,8 @@ export default function DisplayPage({
     return unsub;
   }, [slot?.sessionId]);
 
-  // 클라이언트 자체 카운트다운
-  const [sec, setSec] = useState(0);
-  useEffect(() => {
-    if (session) setSec(session.levelSecondsLeft);
-  }, [session?.levelSecondsLeft, session?.currentLevel, session?.id, session?.status]);
-  useEffect(() => {
-    if (!session || session.status !== 'running') return;
-    const t = setInterval(() => setSec((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [session?.status, session?.id]);
+  // 절대 시각(levelEndsAt) 기반 카운트다운
+  const sec = useLiveCountdown(session ?? null);
 
   // F11 안내 (한 번만)
   const [showHint, setShowHint] = useState(true);

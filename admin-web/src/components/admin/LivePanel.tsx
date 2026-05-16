@@ -14,6 +14,7 @@ import {
   nextLevelTick,
   computeLateRegMinutes,
   fmtTime,
+  useLiveCountdown,
 } from '@/lib/live';
 import {
   type TournamentTemplate,
@@ -163,8 +164,8 @@ function SessionTab({
   active: boolean;
   onClick: () => void;
 }) {
-  // 클라이언트 자체 카운트다운 (Firestore 값 + 흐른 시간)
-  const seconds = useClientCountdown(session);
+  // 절대 시각(levelEndsAt) 기반 카운트다운
+  const seconds = useLiveCountdown(session);
   return (
     <button
       onClick={onClick}
@@ -193,43 +194,8 @@ function SessionTab({
   );
 }
 
-/** 클라이언트 자체 카운트다운 (running 상태에서만 감소) */
-function useClientCountdown(session: LiveSession) {
-  const [seconds, setSeconds] = useState(session.levelSecondsLeft);
-  const lastSyncedRef = useRef<{ id: string; level: number; serverSec: number; syncedAt: number }>({
-    id: session.id,
-    level: session.currentLevel,
-    serverSec: session.levelSecondsLeft,
-    syncedAt: Date.now(),
-  });
-
-  // 서버 값이 바뀌면 동기화
-  useEffect(() => {
-    lastSyncedRef.current = {
-      id: session.id,
-      level: session.currentLevel,
-      serverSec: session.levelSecondsLeft,
-      syncedAt: Date.now(),
-    };
-    setSeconds(session.levelSecondsLeft);
-  }, [session.id, session.currentLevel, session.levelSecondsLeft, session.status]);
-
-  // 1초마다 tick — running 상태일 때만 감소
-  useEffect(() => {
-    if (session.status !== 'running') return;
-    const t = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - lastSyncedRef.current.syncedAt) / 1000);
-      const remain = Math.max(0, lastSyncedRef.current.serverSec - elapsed);
-      setSeconds(remain);
-    }, 250);
-    return () => clearInterval(t);
-  }, [session.status]);
-
-  return seconds;
-}
-
 function SessionControls({ session }: { session: LiveSession }) {
-  const seconds = useClientCountdown(session);
+  const seconds = useLiveCountdown(session);
   const isPaused = session.status === 'paused';
   const lowTime = seconds <= 10 && !isPaused;
   const structure = session.blindStructure;

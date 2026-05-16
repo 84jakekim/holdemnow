@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { subscribeAllLiveSessions, type LiveSession, fmtTime } from '@/lib/live';
+import { subscribeAllLiveSessions, type LiveSession, fmtTime, useLiveCountdown } from '@/lib/live';
 import { subscribeAllTournaments, type TournamentInstance } from '@/lib/tournaments';
 import Link from 'next/link';
 import { posterStyleFor } from '@/lib/templates';
@@ -142,39 +142,12 @@ export default function CalendarPage() {
             </span>
           </div>
           <div className="space-y-2">
-            {sessions.map((s) => {
-              const poster = posterStyleFor(s.posterStyle);
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => {
-                    bumpStoreMetric(s.storeId, 'liveOpens');
-                    router.push(`/m/live/${s.id}`);
-                  }}
-                  className="w-full bg-red-50 rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.98] transition"
-                >
-                  <div
-                    className="w-10 h-12 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
-                    style={{ background: poster.bg, color: poster.color }}
-                  >
-                    {s.tournamentName.split(' ')[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-gray-900 truncate">{s.tournamentName}</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">
-                      {s.storeName} · Lv {s.currentLevel} · {s.playersRemaining}명
-                    </div>
-                  </div>
-                  <div
-                    className={`font-mono text-base font-extrabold ${
-                      s.status === 'paused' ? 'text-amber-600' : 'text-red-600'
-                    }`}
-                  >
-                    {fmtTime(s.levelSecondsLeft)}
-                  </div>
-                </button>
-              );
-            })}
+            {sessions.map((s) => (
+              <CalendarLiveCard key={s.id} session={s} onOpen={() => {
+                bumpStoreMetric(s.storeId, 'liveOpens');
+                router.push(`/m/live/${s.id}`);
+              }} />
+            ))}
           </div>
         </div>
       )}
@@ -252,5 +225,36 @@ export default function CalendarPage() {
         .scrollbar-none { scrollbar-width: none; }
       `}</style>
     </div>
+  );
+}
+
+function CalendarLiveCard({ session: s, onOpen }: { session: LiveSession; onOpen: () => void }) {
+  const sec = useLiveCountdown(s);
+  const poster = posterStyleFor(s.posterStyle);
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full bg-red-50 rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.98] transition"
+    >
+      <div
+        className="w-10 h-12 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
+        style={{ background: poster.bg, color: poster.color }}
+      >
+        {s.tournamentName.split(' ')[0]}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-bold text-gray-900 truncate">{s.tournamentName}</div>
+        <div className="text-[11px] text-gray-500 mt-0.5">
+          {s.storeName} · Lv {s.currentLevel} · {s.playersRemaining}명
+        </div>
+      </div>
+      <div
+        className={`font-mono text-base font-extrabold ${
+          s.status === 'paused' ? 'text-amber-600' : 'text-red-600'
+        }`}
+      >
+        {fmtTime(sec)}
+      </div>
+    </button>
   );
 }

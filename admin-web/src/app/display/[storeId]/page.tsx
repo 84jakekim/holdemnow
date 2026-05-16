@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { subscribeSlots, type DisplaySlot } from '@/lib/slots';
-import { subscribeLiveSession, type LiveSession, fmtTime } from '@/lib/live';
+import { subscribeLiveSession, type LiveSession, fmtTime, useLiveCountdown } from '@/lib/live';
 
 export default function DisplayStoreIndex({
   params,
@@ -132,15 +132,7 @@ function SlotCard({ storeId, slot }: { storeId: string; slot: DisplaySlot }) {
       </div>
 
       {session && session.status !== 'completed' ? (
-        <>
-          <div className="text-sm font-bold text-gray-200 truncate mb-2">{session.tournamentName}</div>
-          <div className="font-mono text-3xl font-extrabold text-white leading-none">
-            {fmtTime(session.levelSecondsLeft)}
-          </div>
-          <div className="text-[11px] text-gray-500 mt-2 font-mono">
-            Lv {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
-          </div>
-        </>
+        <SlotPreviewTimer session={session} />
       ) : (
         <div className="text-sm text-gray-600 leading-relaxed">
           이 슬롯에 매핑된 LIVE가 없습니다.<br />
@@ -148,6 +140,21 @@ function SlotCard({ storeId, slot }: { storeId: string; slot: DisplaySlot }) {
         </div>
       )}
     </Link>
+  );
+}
+
+function SlotPreviewTimer({ session }: { session: LiveSession }) {
+  const sec = useLiveCountdown(session);
+  return (
+    <>
+      <div className="text-sm font-bold text-gray-200 truncate mb-2">{session.tournamentName}</div>
+      <div className="font-mono text-3xl font-extrabold text-white leading-none">
+        {fmtTime(sec)}
+      </div>
+      <div className="text-[11px] text-gray-500 mt-2 font-mono">
+        Lv {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
+      </div>
+    </>
   );
 }
 

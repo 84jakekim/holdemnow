@@ -18,6 +18,7 @@ import {
   type LiveSession,
   fmtTime,
   computeLateRegMinutes,
+  useLiveCountdown,
 } from '@/lib/live';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric } from '@/lib/analytics';
@@ -99,16 +100,8 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     bumpStoreMetric(session.storeId, 'liveOpens');
   }, [session?.id, session?.storeId]);
 
-  // 클라이언트 카운트다운
-  const [sec, setSec] = useState(0);
-  useEffect(() => {
-    if (session) setSec(session.levelSecondsLeft);
-  }, [session?.levelSecondsLeft, session?.currentLevel, session?.id, session?.status]);
-  useEffect(() => {
-    if (!session || session.status !== 'running') return;
-    const t = setInterval(() => setSec((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [session?.status, session?.id]);
+  // 절대 시각(levelEndsAt) 기반 카운트다운 — 폰 재접속해도 정확
+  const sec = useLiveCountdown(session ?? null);
 
   if (session === undefined) {
     return (

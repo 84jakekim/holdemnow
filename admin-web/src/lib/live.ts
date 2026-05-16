@@ -8,10 +8,12 @@ import {
   deleteDoc,
   onSnapshot,
   serverTimestamp,
+  Timestamp,
   query,
   where,
   orderBy,
 } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
 import { db } from './firebase';
 import type { BlindLevel, TournamentTemplate } from './templates';
 
@@ -32,7 +34,12 @@ export interface LiveSession {
   // 진행 상태
   status: LiveStatus;
   currentLevel: number;
+  /** 현재 레벨에 "남은 초" — paused/break일 때만 의미 있음.
+   *  running일 때는 levelEndsAt이 진실의 원천. levelEndsAt이 없는 레거시 세션의 fallback으로도 사용. */
   levelSecondsLeft: number;
+  /** 현재 레벨이 끝나는 절대 시각. running일 때만 유효 (paused 시 null로 설정).
+   *  모든 클라이언트가 같은 deadline을 보고 자기 시계로 카운트다운. */
+  levelEndsAt?: Timestamp | null;
   smallBlind: number;
   bigBlind: number;
   ante: number;
@@ -47,6 +54,45 @@ export interface LiveSession {
 
 export function liveSessionsCol() {
   return collection(db, 'liveSessions');
+}
+
+/** "지금부터 N초 후" Timestamp 생성 (Firestore는 add-seconds 연산을 지원 안 해서 클라 시계 기준). */
+function deadlineFromNow(seconds: number): Timestamp {
+  return Timestamp.fromMillis(Date.now() + Math.max(0, seconds) * 1000);
+}
+
+/** 세션 객체에서 현재 표시할 남은 초 계산.
+ *  running + levelEndsAt 있음 → deadline − now (절대 시각 기반, 폰 재접속해도 정확)
+ *  그 외 (paused, break, 레거시) → 저장된 levelSecondsLeft */
+export function computeRemainingSec(s: LiveSession): number {
+  if (s.status === 'running' && s.levelEndsAt) {
+    const endsMs = s.levelEndsAt.toMillis();
+    return Math.max(0, Math.floor((endsMs - Date.now()) / 1000));
+  }
+  return Math.max(0, s.levelSecondsLeft);
+}
+
+/** 표시용 카운트다운 훅 — 1초 tick + 세션 변화 시 재동기화. */
+export function useLiveCountdown(session: LiveSession | null | undefined): number {
+  const [sec, setSec] = useState(() => (session ? computeRemainingSec(session) : 0));
+  useEffect(() => {
+    if (!session) {
+      setSec(0);
+      return;
+    }
+    setSec(computeRemainingSec(session));
+    if (session.status !== 'running') return;
+    const t = setInterval(() => setSec(computeRemainingSec(session)), 1000);
+    return () => clearInterval(t);
+    // 세션의 정체성 + 타이머 상태가 바뀌면 재구성
+  }, [
+    session?.id,
+    session?.status,
+    session?.currentLevel,
+    session?.levelSecondsLeft,
+    session?.levelEndsAt?.toMillis(),
+  ]);
+  return sec;
 }
 
 /** 전체 진행 중 LIVE 세션 구독 (모바일 피드용) */
@@ -130,6 +176,7 @@ export async function startLiveSession(
     status: 'running' as LiveStatus,
     currentLevel: first.level,
     levelSecondsLeft: first.durationSec,
+    levelEndsAt: deadlineFromNow(first.durationSec),
     smallBlind: first.sb,
     bigBlind: first.bb,
     ante: first.ante,
@@ -152,9 +199,12 @@ export async function patchSession(sessionId: string, updates: Partial<LiveSessi
 }
 
 export async function togglePauseSession(s: LiveSession, currentSecondsLeft: number) {
+  const newStatus: LiveStatus = s.status === 'paused' ? 'running' : 'paused';
   await patchSession(s.id, {
-    status: s.status === 'paused' ? 'running' : 'paused',
+    status: newStatus,
     levelSecondsLeft: currentSecondsLeft,
+    // 일시정지 → null로 deadline 제거. 재개 → 남은 시간만큼 새 deadline.
+    levelEndsAt: newStatus === 'running' ? deadlineFromNow(currentSecondsLeft) : null,
   });
 }
 
@@ -167,16 +217,21 @@ export async function goToLevelInSession(s: LiveSession, delta: 1 | -1, currentS
     bigBlind: target.bb,
     ante: target.ante,
     levelSecondsLeft: target.durationSec,
+    levelEndsAt: s.status === 'running' ? deadlineFromNow(target.durationSec) : null,
   });
 }
 
 export async function addSecondsToSession(s: LiveSession, currentSecondsLeft: number, delta: number) {
   const maxSec = (s.blindStructure.find((l) => l.level === s.currentLevel)?.durationSec || 1200) * 3;
   const next = Math.max(0, Math.min(maxSec, currentSecondsLeft + delta));
-  await patchSession(s.id, { levelSecondsLeft: next });
+  await patchSession(s.id, {
+    levelSecondsLeft: next,
+    levelEndsAt: s.status === 'running' ? deadlineFromNow(next) : null,
+  });
 }
 
 export async function eliminatePlayerInSession(s: LiveSession, currentSecondsLeft: number) {
+  // 시간 흐름과 무관 — levelEndsAt 건드리지 않음 (running 중이면 deadline 그대로 유효)
   await patchSession(s.id, {
     levelSecondsLeft: currentSecondsLeft,
     playersRemaining: Math.max(1, s.playersRemaining - 1),
@@ -193,6 +248,7 @@ export async function toggleLateRegInSession(s: LiveSession, currentSecondsLeft:
 export async function stopLiveSession(s: LiveSession, currentSecondsLeft: number) {
   await patchSession(s.id, {
     levelSecondsLeft: currentSecondsLeft,
+    levelEndsAt: null,
     status: 'completed',
     endedAt: serverTimestamp(),
   });
@@ -204,7 +260,7 @@ export async function nextLevelTick(s: LiveSession) {
   // 카운트다운 0 도달 시 자동 다음 레벨
   const next = s.blindStructure.find((l) => l.level === s.currentLevel + 1);
   if (!next) {
-    await patchSession(s.id, { levelSecondsLeft: 0 });
+    await patchSession(s.id, { levelSecondsLeft: 0, levelEndsAt: null });
     return false;
   }
   await patchSession(s.id, {
@@ -213,6 +269,7 @@ export async function nextLevelTick(s: LiveSession) {
     bigBlind: next.bb,
     ante: next.ante,
     levelSecondsLeft: next.durationSec,
+    levelEndsAt: deadlineFromNow(next.durationSec),
   });
   return true;
 }

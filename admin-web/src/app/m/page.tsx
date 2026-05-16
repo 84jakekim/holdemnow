@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { collection, getDocs, query, where, documentId } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { subscribeAllLiveSessions, type LiveSession, fmtTime } from '@/lib/live';
+import { subscribeAllLiveSessions, type LiveSession, fmtTime, useLiveCountdown } from '@/lib/live';
 import { subscribeAllSeries, type Series } from '@/lib/series';
 import { posterStyleFor } from '@/lib/templates';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
@@ -409,15 +409,7 @@ function SeriesCard({ series }: { series: Series }) {
 }
 
 function CountdownInline({ session }: { session: LiveSession }) {
-  // 가벼운 클라이언트 카운트다운 (모바일 표시용)
-  const [sec, setSec] = useState(session.levelSecondsLeft);
-  useEffect(() => setSec(session.levelSecondsLeft), [session.levelSecondsLeft, session.currentLevel, session.id]);
-  useEffect(() => {
-    if (session.status !== 'running') return;
-    const t = setInterval(() => setSec((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [session.status, session.id]);
-
+  const sec = useLiveCountdown(session);
   const paused = session.status === 'paused';
   return (
     <span className={`font-mono text-sm font-extrabold ${paused ? 'text-amber-700' : 'text-gray-900'}`}>

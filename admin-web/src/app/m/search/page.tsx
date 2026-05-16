@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { subscribeAllLiveSessions, type LiveSession, fmtTime } from '@/lib/live';
+import { subscribeAllLiveSessions, type LiveSession, fmtTime, useLiveCountdown } from '@/lib/live';
 import { subscribeAllTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { subscribeAllSeries, type Series } from '@/lib/series';
 import { posterStyleFor } from '@/lib/templates';
@@ -147,35 +147,9 @@ export default function SearchPage() {
           {/* LIVE */}
           {results.liveHit.length > 0 && (
             <Section title={`지금 LIVE (${results.liveHit.length})`}>
-              {results.liveHit.map((s) => {
-                const poster = posterStyleFor(s.posterStyle);
-                return (
-                  <Link
-                    key={s.id}
-                    href={`/m/live/${s.id}`}
-                    onClick={() => bumpStoreMetric(s.storeId, 'liveOpens')}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
-                  >
-                    <div
-                      className="w-10 h-12 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
-                      style={{ background: poster.bg, color: poster.color }}
-                    >
-                      {s.tournamentName.split(' ')[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-gray-900 truncate">
-                        <Highlight text={s.tournamentName} term={term} />
-                      </div>
-                      <div className="text-[11px] text-gray-500 mt-0.5 truncate">
-                        🔴 <Highlight text={s.storeName} term={term} /> · Lv {s.currentLevel}
-                      </div>
-                    </div>
-                    <div className="font-mono text-sm font-extrabold text-red-500">
-                      {fmtTime(s.levelSecondsLeft)}
-                    </div>
-                  </Link>
-                );
-              })}
+              {results.liveHit.map((s) => (
+                <SearchLiveHit key={s.id} session={s} term={term} />
+              ))}
             </Section>
           )}
 
@@ -245,6 +219,36 @@ export default function SearchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function SearchLiveHit({ session: s, term }: { session: LiveSession; term: string }) {
+  const sec = useLiveCountdown(s);
+  const poster = posterStyleFor(s.posterStyle);
+  return (
+    <Link
+      href={`/m/live/${s.id}`}
+      onClick={() => bumpStoreMetric(s.storeId, 'liveOpens')}
+      className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
+    >
+      <div
+        className="w-10 h-12 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
+        style={{ background: poster.bg, color: poster.color }}
+      >
+        {s.tournamentName.split(' ')[0]}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-bold text-gray-900 truncate">
+          <Highlight text={s.tournamentName} term={term} />
+        </div>
+        <div className="text-[11px] text-gray-500 mt-0.5 truncate">
+          🔴 <Highlight text={s.storeName} term={term} /> · Lv {s.currentLevel}
+        </div>
+      </div>
+      <div className="font-mono text-sm font-extrabold text-red-500">
+        {fmtTime(sec)}
+      </div>
+    </Link>
   );
 }
 

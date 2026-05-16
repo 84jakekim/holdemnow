@@ -14,7 +14,7 @@ import {
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
-import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes } from '@/lib/live';
+import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveCountdown } from '@/lib/live';
 import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { posterStyleFor } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
@@ -308,14 +308,7 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
   } as const;
   const sz = sizes[cols as 1 | 2 | 3];
 
-  const [sec, setSec] = useState(session.levelSecondsLeft);
-  useEffect(() => setSec(session.levelSecondsLeft), [session.levelSecondsLeft, session.currentLevel, session.id]);
-  useEffect(() => {
-    if (session.status !== 'running') return;
-    const t = setInterval(() => setSec((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [session.status, session.id]);
-
+  const sec = useLiveCountdown(session);
   const paused = session.status === 'paused';
   const lowTime = sec <= 10 && !paused;
   const lateMin = computeLateRegMinutes(session, sec);
