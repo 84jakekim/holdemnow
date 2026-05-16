@@ -1,20 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
+import { searchPlaces, geocodeAddress } from '@/lib/kakao';
 
 const FACILITY_OPTIONS = ['주차', '발렛', '식사', '24시간', '흡연실', '룸', '여성전용시간', 'VIP룸'];
 
-// 카카오 주소 API 대신 mock 검색 결과
-const ADDR_RESULTS = [
-  { main: '부산광역시 부산진구 서면로 23', sub: '서면역 1번 출구 도보 3분' },
-  { main: '부산광역시 부산진구 서면로 45', sub: '롯데백화점 부산본점 옆' },
-  { main: '부산광역시 해운대구 해운대로 145', sub: '해운대역 인근' },
-  { main: '부산광역시 수영구 광안해변로 219', sub: '광안리 해변 인근' },
-];
+interface AddrCandidate {
+  main: string;      // 도로명 또는 지번 주소
+  sub: string;       // 보조 설명 (장소명 또는 동/번지)
+  lat: number;
+  lng: number;
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export default function SignupPage() {
   const [form, setForm] = useState({
     name: '',
     addressQuery: '',
-    addressSelected: null as { main: string; sub: string } | null,
+    addressSelected: null as AddrCandidate | null,
     addressDetail: '',
     phone: '',
     hours: '매일 18:00 - 익일 05:00',
@@ -34,6 +34,9 @@ export default function SignupPage() {
     facilities: [] as string[],
     agree: false,
   });
+  const [addrResults, setAddrResults] = useState<AddrCandidate[]>([]);
+  const [addrSearching, setAddrSearching] = useState(false);
+  const addrSeqRef = useRef(0);
 
   if (authState.status === 'loading') {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
@@ -45,9 +48,41 @@ export default function SignupPage() {
 
   const update = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const addrResults = form.addressQuery.length >= 2
-    ? ADDR_RESULTS.filter((r) => r.main.includes(form.addressQuery))
-    : [];
+  // 카카오 키워드/주소 검색 — 디바운스 300ms
+  useEffect(() => {
+    const q = form.addressQuery.trim();
+    if (q.length < 2) {
+      setAddrResults([]);
+      setAddrSearching(false);
+      return;
+    }
+    const seq = ++addrSeqRef.current;
+    setAddrSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const places = await searchPlaces(q);
+        if (seq !== addrSeqRef.current) return; // 더 최신 쿼리가 있음
+        const list: AddrCandidate[] = places.slice(0, 8).map((p) => ({
+          main: p.roadAddress || p.address,
+          sub: p.name + (p.address && p.roadAddress ? ` · ${p.address}` : ''),
+          lat: p.lat,
+          lng: p.lng,
+        }));
+        // 장소 검색 결과 없으면 주소 직접 geocoding 폴백
+        if (list.length === 0) {
+          const coords = await geocodeAddress(q);
+          if (seq !== addrSeqRef.current) return;
+          if (coords) {
+            list.push({ main: q, sub: '주소 직접 입력', lat: coords.lat, lng: coords.lng });
+          }
+        }
+        setAddrResults(list);
+      } finally {
+        if (seq === addrSeqRef.current) setAddrSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [form.addressQuery]);
 
   const canProceed = (() => {
     if (step === 1) return form.name.trim() && form.addressSelected && form.phone.trim();
@@ -71,6 +106,8 @@ export default function SignupPage() {
         address: form.addressSelected!.main,
         addressDetail: form.addressDetail.trim(),
         addressSub: form.addressSelected!.sub,
+        lat: form.addressSelected!.lat,
+        lng: form.addressSelected!.lng,
         phone: form.phone.trim(),
         hours: form.hours.trim(),
         description: form.description.trim(),
@@ -164,16 +201,25 @@ export default function SignupPage() {
                       className="form-input"
                       value={form.addressQuery}
                       onChange={(e) => update('addressQuery', e.target.value)}
-                      placeholder="🔍 도로명·지번·건물명"
+                      placeholder="🔍 매장명·도로명·건물명 (카카오 지도 검색)"
                     />
+                    {addrSearching && (
+                      <div className="mt-2 text-[11px] text-gray-500 px-1">검색 중…</div>
+                    )}
+                    {!addrSearching && form.addressQuery.trim().length >= 2 && addrResults.length === 0 && (
+                      <div className="mt-2 text-[11px] text-gray-500 px-1">
+                        결과 없음 · 다른 키워드로 시도해보세요
+                      </div>
+                    )}
                     {addrResults.length > 0 && (
-                      <div className="mt-2 space-y-1">
+                      <div className="mt-2 space-y-1 max-h-64 overflow-y-auto">
                         {addrResults.map((r, i) => (
                           <div
                             key={i}
                             onClick={() => {
                               update('addressSelected', r);
                               update('addressQuery', '');
+                              setAddrResults([]);
                             }}
                             className="bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-50"
                           >

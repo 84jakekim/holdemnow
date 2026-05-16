@@ -9,6 +9,7 @@ import {
   uploadStorePhoto,
   deleteStorePhotoByUrl,
 } from '@/lib/storeInfo';
+import { geocodeAddress } from '@/lib/kakao';
 
 interface Props {
   storeId: string;
@@ -78,7 +79,17 @@ export default function StoreInfoPanel({ storeId }: Props) {
     setSaving(true);
     setError(null);
     try {
-      await updateStoreInfo(storeId, form);
+      const updates: Parameters<typeof updateStoreInfo>[1] = { ...form };
+      // 주소가 바뀌었으면 카카오 Geocoder로 lat/lng 재계산
+      const addressChanged = (store?.address ?? '') !== form.address;
+      if (addressChanged && form.address.trim()) {
+        const coords = await geocodeAddress(form.address);
+        if (coords) {
+          updates.lat = coords.lat;
+          updates.lng = coords.lng;
+        }
+      }
+      await updateStoreInfo(storeId, updates);
       setSavedAt(Date.now());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));

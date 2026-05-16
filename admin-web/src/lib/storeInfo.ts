@@ -19,6 +19,8 @@ export async function updateStoreInfo(
     name?: string;
     address?: string;
     addressDetail?: string;
+    lat?: number;
+    lng?: number;
     phone?: string;
     hours?: string;
     description?: string;

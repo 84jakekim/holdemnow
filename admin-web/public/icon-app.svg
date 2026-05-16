@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Felt Black 배경 (Midnight Felt 디자인 시스템) -->
+  <rect width="512" height="512" rx="96" fill="#0A0E0C"/>
+
+  <!-- LIVE 펄스 도트 (Signal Red) -->
+  <circle cx="160" cy="256" r="48" fill="#D94B3D"/>
+
+  <!-- "H" 모노그램 (Champagne Gold) -->
+  <g transform="translate(220, 158)">
+    <path
+      d="M 0 0 L 0 196 L 32 196 L 32 114 L 128 114 L 128 196 L 160 196 L 160 0 L 128 0 L 128 86 L 32 86 L 32 0 Z"
+      fill="#D4AF37"
+    />
+  </g>
+
+  <!-- 하단 워드마크 (작게) -->
+  <text
+    x="256" y="448"
+    text-anchor="middle"
+    fill="#F4F1E8"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="36" font-weight="800"
+    letter-spacing="-1"
+  >HoldemNow</text>
+</svg>

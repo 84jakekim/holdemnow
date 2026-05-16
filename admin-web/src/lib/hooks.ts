@@ -66,6 +66,10 @@ export interface StoreDoc {
   ownerUid?: string;
   address?: string;
   addressDetail?: string;
+  /** 카카오 Geocoder로 변환된 위도. 없을 수 있음 (레거시 데이터). */
+  lat?: number;
+  /** 카카오 Geocoder로 변환된 경도. 없을 수 있음 (레거시 데이터). */
+  lng?: number;
   phone?: string;
   hours?: string;
   description?: string;
