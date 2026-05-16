@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" font-family="Pretendard, sans-serif">
+  <rect width="1440" height="900" fill="#FAFAFA"/>
+
+  <!-- Sidebar -->
+  <g>
+    <rect width="240" height="900" fill="#FFFFFF"/>
+    <line x1="240" y1="0" x2="240" y2="900" stroke="#EAEAEA"/>
+
+    <g transform="translate(24, 28)">
+      <circle cx="6" cy="14" r="5" fill="#E53E3E"/>
+      <text x="20" y="20" fill="#111111" font-size="17" font-weight="800" letter-spacing="-0.5">HoldemNow</text>
+      <text x="20" y="34" fill="#A8A8A8" font-size="10" font-weight="600" letter-spacing="1.5">ADMIN</text>
+    </g>
+
+    <g transform="translate(24, 84)">
+      <rect width="192" height="68" rx="10" fill="#F7F7F7"/>
+      <text x="14" y="22" fill="#767676" font-size="10" letter-spacing="1" font-weight="600">매장 ID</text>
+      <text x="14" y="40" fill="#111111" font-size="14" font-weight="700" font-family="JetBrains Mono, monospace">BSN_001</text>
+      <text x="14" y="58" fill="#111111" font-size="11">서면 ABC홀덤</text>
+      <rect x="146" y="14" width="36" height="20" rx="10" fill="#00875A"/>
+      <text x="164" y="27" fill="#FFFFFF" font-size="9" text-anchor="middle" font-weight="700">VIP</text>
+    </g>
+
+    <!-- Menu -->
+    <g transform="translate(0, 184)" font-size="13">
+      <rect x="12" y="0" width="216" height="40" rx="8" fill="#111111"/>
+      <text x="36" y="25" fill="#FFFFFF" font-size="14">🏠</text>
+      <text x="64" y="25" fill="#FFFFFF" font-weight="600">대시보드</text>
+
+      <g transform="translate(0, 48)"><text x="36" y="25" font-size="14">🏢</text><text x="64" y="25" fill="#111111">매장 정보</text></g>
+      <g transform="translate(0, 88)"><text x="36" y="25" font-size="14">🃏</text><text x="64" y="25" fill="#111111">토너먼트</text></g>
+      <g transform="translate(0, 128)">
+        <text x="36" y="25" font-size="14">🔴</text>
+        <text x="64" y="25" fill="#111111">LIVE 운영</text>
+      </g>
+      <g transform="translate(0, 168)">
+        <text x="36" y="25" font-size="14">📷</text>
+        <text x="64" y="25" fill="#111111">콘텐츠</text>
+        <rect x="170" y="13" width="44" height="16" rx="8" fill="#FFB800"/>
+        <text x="192" y="24" fill="#FFFFFF" font-size="9" text-anchor="middle" font-weight="800">NEW</text>
+      </g>
+      <g transform="translate(0, 208)"><text x="36" y="25" font-size="14">📊</text><text x="64" y="25" fill="#111111">통계</text></g>
+      <g transform="translate(0, 248)"><text x="36" y="25" font-size="14">⭐</text><text x="64" y="25" fill="#111111">리뷰</text></g>
+    </g>
+  </g>
+
+  <!-- Top bar -->
+  <g transform="translate(240, 0)">
+    <rect width="1200" height="68" fill="#FFFFFF"/>
+    <line x1="0" y1="68" x2="1200" y2="68" stroke="#EAEAEA"/>
+
+    <text x="32" y="32" fill="#111111" font-size="22" font-weight="800">대시보드</text>
+    <text x="32" y="52" fill="#767676" font-size="12">2026년 5월 13일 · 안녕하세요, 김사장님</text>
+
+    <circle cx="1118" cy="36" r="16" fill="#F7F7F7"/>
+    <text x="1118" y="42" fill="#111111" font-size="14" text-anchor="middle">🔔</text>
+    <circle cx="1126" cy="26" r="4" fill="#E53E3E"/>
+    
+    <circle cx="1158" cy="36" r="16" fill="#111111"/>
+    <text x="1158" y="42" fill="#FFFFFF" font-size="12" text-anchor="middle" font-weight="700">김</text>
+  </g>
+
+  <!-- Main content -->
+  <g transform="translate(264, 92)">
+    <!-- KPI 카드 4개 -->
+    <g>
+      <rect width="280" height="124" rx="14" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="20" y="32" fill="#767676" font-size="11" letter-spacing="1.5" font-weight="700">오늘 노출</text>
+      <text x="20" y="74" fill="#111111" font-size="34" font-weight="800" font-family="JetBrains Mono, monospace">1,247</text>
+      <rect x="20" y="92" width="56" height="22" rx="11" fill="#DCFCE7"/>
+      <text x="48" y="107" fill="#00875A" font-size="11" text-anchor="middle" font-weight="700">▲ 18%</text>
+      <text x="86" y="107" fill="#767676" font-size="11">전주 대비</text>
+    </g>
+
+    <g transform="translate(296, 0)">
+      <rect width="280" height="124" rx="14" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="20" y="32" fill="#767676" font-size="11" letter-spacing="1.5" font-weight="700">오늘 클릭</text>
+      <text x="20" y="74" fill="#111111" font-size="34" font-weight="800" font-family="JetBrains Mono, monospace">86</text>
+      <rect x="20" y="92" width="56" height="22" rx="11" fill="#DCFCE7"/>
+      <text x="48" y="107" fill="#00875A" font-size="11" text-anchor="middle" font-weight="700">▲ 22%</text>
+      <text x="86" y="107" fill="#767676" font-size="11">전주 대비</text>
+    </g>
+
+    <g transform="translate(592, 0)">
+      <rect width="280" height="124" rx="14" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="20" y="32" fill="#767676" font-size="11" letter-spacing="1.5" font-weight="700">예정 토너 (7일)</text>
+      <text x="20" y="74" fill="#111111" font-size="34" font-weight="800" font-family="JetBrains Mono, monospace">5</text>
+      <text x="20" y="107" fill="#767676" font-size="11">다음: 오늘 19:00 프리징 90GTD</text>
+    </g>
+
+    <g transform="translate(888, 0)">
+      <rect width="280" height="124" rx="14" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="20" y="32" fill="#767676" font-size="11" letter-spacing="1.5" font-weight="700">콘텐츠</text>
+      <text x="20" y="74" fill="#111111" font-size="34" font-weight="800" font-family="JetBrains Mono, monospace">8</text>
+      <text x="20" y="92" fill="#767676" font-size="11">사진 5 · 포스터 3</text>
+      <rect x="180" y="86" width="80" height="24" rx="12" fill="#FEF3C7"/>
+      <text x="220" y="101" fill="#92400E" font-size="11" font-weight="700" text-anchor="middle">+ 추가</text>
+    </g>
+
+    <!-- QUICK START -->
+    <g transform="translate(0, 148)">
+      <rect width="1168" height="92" rx="14" fill="#111111"/>
+      <text x="28" y="38" fill="#A8A8A8" font-size="11" letter-spacing="2" font-weight="700">QUICK START</text>
+      <text x="28" y="68" fill="#FFFFFF" font-size="18" font-weight="700">오늘 19:00 시작 · 프리징 90GTD 준비 완료</text>
+      
+      <!-- 토너 포스터 미리보기 -->
+      <rect x="780" y="14" width="56" height="64" rx="6" fill="#1A1A1A"/>
+      <text x="808" y="38" fill="#FFB800" font-size="7" font-weight="800" text-anchor="middle">TODAY</text>
+      <text x="808" y="55" fill="#FFFFFF" font-size="9" font-weight="800" text-anchor="middle">FREEZE</text>
+      <text x="808" y="68" fill="#FFFFFF" font-size="9" font-weight="800" text-anchor="middle">90GTD</text>
+      
+      <rect x="936" y="22" width="208" height="48" rx="12" fill="#E53E3E"/>
+      <circle cx="958" cy="46" r="4" fill="#FFFFFF"/>
+      <circle cx="958" cy="46" r="8" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.5"/>
+      <text x="1044" y="52" fill="#FFFFFF" font-size="15" font-weight="800" text-anchor="middle">LIVE 시작 →</text>
+    </g>
+
+    <!-- 노출 추이 + 인사이트 -->
+    <g transform="translate(0, 264)">
+      <rect width="760" height="320" rx="14" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="24" y="32" fill="#111111" font-size="16" font-weight="800">노출 추이 (지난 30일)</text>
+      <text x="24" y="52" fill="#767676" font-size="11">동일 지역 평균 대비 +32%</text>
+
+      <line x1="60" y1="270" x2="720" y2="270" stroke="#EAEAEA"/>
+      <line x1="60" y1="80" x2="60" y2="270" stroke="#EAEAEA"/>
+
+      <polyline fill="none" stroke="#111111" stroke-width="2.5"
+                points="80,240 140,220 200,225 260,190 320,200 380,170 440,180 500,140 560,130 620,100 680,110 720,90"/>
+      <polyline fill="#111111" opacity="0.06"
+                points="80,240 140,220 200,225 260,190 320,200 380,170 440,180 500,140 560,130 620,100 680,110 720,90 720,270 80,270"/>
+
+      <line x1="380" y1="80" x2="380" y2="270" stroke="#E53E3E" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="384" y="92" fill="#E53E3E" font-size="10" font-weight="700">포스터 첫 업로드</text>
+
+      <text x="80" y="290" fill="#767676" font-size="10">4/13</text>
+      <text x="260" y="290" fill="#767676" font-size="10">4/23</text>
+      <text x="440" y="290" fill="#767676" font-size="10">5/3</text>
+      <text x="620" y="290" fill="#767676" font-size="10">5/13</text>
+    </g>
+
+    <!-- 인사이트 -->
+    <g transform="translate(784, 264)">
+      <rect width="384" height="320" rx="14" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="24" y="32" fill="#111111" font-size="16" font-weight="800">인사이트</text>
+
+      <g transform="translate(24, 56)">
+        <rect width="336" height="68" rx="10" fill="#FEF3C7"/>
+        <text x="20" y="26" fill="#92400E" font-size="11" font-weight="700">📷 콘텐츠 업로드 권장</text>
+        <text x="20" y="44" fill="#111111" font-size="11">토너 포스터 1장 추가 시 노출 +47%</text>
+        <text x="20" y="58" fill="#92400E" font-size="11" font-weight="700">[ 콘텐츠 페이지 → ]</text>
+      </g>
+
+      <g transform="translate(24, 136)">
+        <rect width="336" height="68" rx="10" fill="#DCFCE7"/>
+        <text x="20" y="26" fill="#00875A" font-size="11" font-weight="700">📈 평점 상승 중</text>
+        <text x="20" y="44" fill="#111111" font-size="11">4.3 → 4.7 (+0.4)</text>
+        <text x="20" y="58" fill="#767676" font-size="11">최근 142개 리뷰 반영</text>
+      </g>
+
+      <g transform="translate(24, 216)">
+        <rect width="336" height="68" rx="10" fill="#FEE2E2"/>
+        <text x="20" y="26" fill="#E53E3E" font-size="11" font-weight="700">⚠ 미답변 리뷰 3개</text>
+        <text x="20" y="44" fill="#111111" font-size="11">평균 응답 시간 늘어남</text>
+        <text x="240" y="58" fill="#E53E3E" font-size="11" font-weight="700">답변하기 →</text>
+      </g>
+    </g>
+  </g>
+</svg>

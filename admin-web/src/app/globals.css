@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* ============================================================
+ * HoldemNow 디자인 시스템 v2 — "Open Canvas"
+ * 매장 사진·토너 포스터·로고가 콘텐츠. UI는 차분한 캔버스.
+ * ============================================================ */
+
+:root {
+  /* 라이트 (모바일 홈·매장 상세·어드민) */
+  --bg: #ffffff;
+  --surface: #f7f7f7;
+  --border: #eaeaea;
+  --text-primary: #111111;
+  --text-secondary: #767676;
+  --text-tertiary: #a8a8a8;
+  --accent-green: #00875a;     /* 포커 식별 — 작게만 */
+  --live-red: #e53e3e;          /* LIVE 진행 전용 */
+  --rating-gold: #ffb800;       /* 별점 전용 */
+
+  /* 다크 (LIVE 풀스크린·TV 디스플레이) */
+  --dark-bg: #0a0a0a;
+  --dark-surface: #1a1a1a;
+  --dark-border: #2a2a2a;
+  --dark-text-primary: #ffffff;
+  --dark-text-secondary: #a8a8a8;
+  --dark-accent-green: #00b074;
+  --dark-live-red: #ff4757;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text-primary);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-accent-green: var(--accent-green);
+  --color-live: var(--live-red);
+  --color-gold: var(--rating-gold);
+
+  /* Pretendard 우선, fallback chain */
+  --font-sans: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
+    system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-mono: var(--font-mono, 'JetBrains Mono'), 'SF Mono', 'Menlo', monospace;
+  --font-serif: var(--font-serif, 'Fraunces'), Georgia, serif;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  font-family: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
+    system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  letter-spacing: -0.005em;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+/* 한글-숫자 혼용 시 숫자만 mono 처리 */
+.mono, .font-mono, code, kbd, pre, samp {
+  font-feature-settings: 'tnum';
+}
+
+/* serif 디스플레이 (브랜드·헤드라인) */
+.font-serif {
+  font-family: var(--font-serif), Georgia, serif;
+  letter-spacing: -0.02em;
+}
+
+/* 스크롤바 숨김 유틸 (Tailwind v4에 기본 없음) */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { scrollbar-width: none; }
+
+/* LIVE 펄스 (디자인 시스템 표준) */
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.6); }
+  50%      { box-shadow: 0 0 0 6px rgba(229, 62, 62, 0); }
+}
+.pulse-live {
+  animation: pulseDot 1.8s ease-in-out infinite;
+}
+
+/* 모바일 뷰포트 최적화 */
+@media (max-width: 480px) {
+  html { font-size: 15px; }
+}

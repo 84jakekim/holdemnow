@@ -1,0 +1,411 @@
+// HoldemNow DB 스키마 (v0.1)
+// 진실의 원천: ../HoldemNow_DB_Schema_v1.0.md
+// 프로토타입의 데이터 모델을 코드로 옮긴 것.
+//
+// v0.1 미포함 (M19~M21 + Phase 3+): 광고/결제 테이블, 리뷰 테이블,
+//   stats_daily, push_logs 등은 v0.2부터 추가.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+enum StoreTier {
+  FREE
+  PREMIUM
+  VIP
+}
+
+enum StoreStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum TournamentStatus {
+  DRAFT
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TournamentType {
+  FREEZEOUT
+  REBUY
+  TURBO
+  BOUNTY
+  SATELLITE
+  CASH
+}
+
+enum LiveStatus {
+  RUNNING
+  PAUSED
+  BREAK
+  COMPLETED
+}
+
+enum StaffRole {
+  MASTER
+  STAFF
+}
+
+enum UserRole {
+  PLAYER
+  STORE_MASTER
+  STORE_STAFF
+  ORGANIZER_MASTER
+  ORGANIZER_STAFF
+  PLATFORM_ADMIN
+}
+
+enum LiveEventType {
+  STARTED
+  PAUSED
+  RESUMED
+  LEVEL_NEXT
+  LEVEL_PREV
+  TIME_ADDED
+  TIME_REMOVED
+  BREAK_START
+  BREAK_END
+  LATE_REG_CLOSED
+  LATE_REG_REOPENED
+  PLAYERS_UPDATED
+  PRIZE_POOL_UPDATED
+  FINISHED
+}
+
+// ============================================================
+// A. 매장 도메인
+// ============================================================
+
+/// 매장 — 모든 LIVE·디스커버리의 출발점
+model Store {
+  id            BigInt      @id @default(autoincrement())
+  publicId      String      @unique @default(uuid()) @map("public_id") @db.Uuid
+  storeCode     String      @unique @map("store_code") @db.VarChar(16) // 사장님에게 보이는 ID (BSN_001)
+  name          String      @db.VarChar(80)
+  nameEn        String?     @map("name_en") @db.VarChar(80)
+  description   String?     @db.Text
+  address       String      @db.Text
+  addressDetail String?     @map("address_detail") @db.Text
+  regionCode    String      @map("region_code") @db.VarChar(16) // busan-seomyeon
+  // PostGIS GEOGRAPHY(POINT, 4326) — Prisma는 Unsupported로 처리, raw SQL로 조작
+  // 마이그레이션에서 ALTER TABLE로 GEOGRAPHY 컬럼 + GIST 인덱스 추가
+  latitude      Decimal     @db.Decimal(10, 7)
+  longitude     Decimal     @db.Decimal(10, 7)
+  phone         String?     @db.VarChar(20)
+  hours         Json        @default("{}") // 요일별 영업시간
+  facilities    String[]    @default([]) // 주차/식사/24시간 등
+  thumbnailUrl  String?     @map("thumbnail_url") @db.Text
+  photoUrls     String[]    @default([]) @map("photo_urls")
+  tier          StoreTier   @default(FREE)
+  status        StoreStatus @default(ACTIVE)
+  averageRating Decimal?    @map("average_rating") @db.Decimal(3, 2)
+  reviewCount   Int         @default(0) @map("review_count")
+  // 평균 바이인/레이크 (디스커버리 표시)
+  avgBuyIn      Int?        @map("avg_buy_in")
+  rake          Int?        // 레이크 (원)
+
+  staff               StoreStaff[]
+  tournaments         Tournament[]
+  tournamentTemplates TournamentTemplate[]
+  liveSessions        LiveSession[]
+  displaySlots        DisplaySlot[]
+  favorites           Favorite[]
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@index([regionCode])
+  @@index([status])
+  @@map("stores")
+}
+
+/// 매장 스태프 계정 (마스터·스태프)
+model StoreStaff {
+  id           BigInt    @id @default(autoincrement())
+  storeId      BigInt    @map("store_id")
+  username     String    @unique @db.VarChar(40)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  displayName  String    @map("display_name") @db.VarChar(40)
+  role         StaffRole @default(STAFF)
+  // 권한 토글
+  canEditInfo  Boolean   @default(false) @map("can_edit_info")
+  canOperateLive Boolean @default(true) @map("can_operate_live")
+  canPurchase  Boolean   @default(false) @map("can_purchase")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@index([storeId])
+  @@map("store_staff")
+}
+
+// ============================================================
+// B. 토너먼트 도메인
+// ============================================================
+
+/// 토너 템플릿 (사장이 미리 등록해두고 새 LIVE 시 선택)
+/// 프로토타입 M18 `customTemplates`와 1:1
+model TournamentTemplate {
+  id             BigInt          @id @default(autoincrement())
+  publicId       String          @unique @default(uuid()) @map("public_id") @db.Uuid
+  storeId        BigInt          @map("store_id")
+  name           String          @db.VarChar(80)
+  type           TournamentType  @default(FREEZEOUT)
+  buyIn          Int             @map("buy_in")
+  guarantee      Int             @default(0)
+  totalPlayers   Int             @map("total_players") // 예상 인원
+  prizePool      Int             @default(0) @map("prize_pool") // 기준 상금 풀
+  startingStack  Int             @default(20000) @map("starting_stack")
+  lateRegEndLevel Int            @default(5) @map("late_reg_end_level")
+  posterStyle    String          @default("poster-dark") @map("poster_style") @db.VarChar(24)
+  // 블라인드 구조는 별도 테이블 (level별)
+  levels         TournamentTemplateLevel[]
+  tournaments    Tournament[]
+
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@index([storeId])
+  @@map("tournament_templates")
+}
+
+/// 템플릿의 블라인드 구조 — 레벨별 SB/BB/Ante/Duration
+model TournamentTemplateLevel {
+  id          BigInt @id @default(autoincrement())
+  templateId  BigInt @map("template_id")
+  level       Int    // 1, 2, 3...
+  smallBlind  Int    @map("small_blind")
+  bigBlind    Int    @map("big_blind")
+  ante        Int    @default(0)
+  durationSec Int    @map("duration_sec") // 초 단위
+  isBreak     Boolean @default(false) @map("is_break") // 휴식 레벨
+
+  template    TournamentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, level])
+  @@index([templateId])
+  @@map("tournament_template_levels")
+}
+
+/// 토너 인스턴스 (특정 일자에 진행하는 1회분 토너)
+/// 프로토타입 dynamic-templates를 통해 생성된 instance
+model Tournament {
+  id          BigInt           @id @default(autoincrement())
+  publicId    String           @unique @default(uuid()) @map("public_id") @db.Uuid
+  storeId     BigInt           @map("store_id")
+  templateId  BigInt?          @map("template_id") // null이면 ad-hoc
+  name        String           @db.VarChar(80) // 템플릿에서 복사된 이름
+  type        TournamentType
+  buyIn       Int              @map("buy_in")
+  guarantee   Int              @default(0)
+  startsAt    DateTime         @map("starts_at") @db.Timestamptz
+  status      TournamentStatus @default(SCHEDULED)
+  posterStyle String           @default("poster-dark") @map("poster_style") @db.VarChar(24)
+
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  template     TournamentTemplate? @relation(fields: [templateId], references: [id])
+  levels       TournamentLevel[]
+  liveSessions LiveSession[]
+  interests    TournamentInterest[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@index([storeId, startsAt])
+  @@index([status])
+  @@map("tournaments")
+}
+
+/// 토너 인스턴스의 블라인드 구조 (시작 시점에 템플릿에서 복사 — 시작 후 템플릿 편집 영향 X)
+model TournamentLevel {
+  id           BigInt @id @default(autoincrement())
+  tournamentId BigInt @map("tournament_id")
+  level        Int
+  smallBlind   Int    @map("small_blind")
+  bigBlind     Int    @map("big_blind")
+  ante         Int    @default(0)
+  durationSec  Int    @map("duration_sec")
+  isBreak      Boolean @default(false) @map("is_break")
+
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, level])
+  @@index([tournamentId])
+  @@map("tournament_levels")
+}
+
+// ============================================================
+// C. LIVE 세션 도메인 (실시간 송출의 핵심)
+// ============================================================
+
+/// LIVE 세션 — 실제 진행 중인 토너의 실시간 상태
+/// 프로토타입 `sessions[]` 와 1:1
+model LiveSession {
+  id              BigInt     @id @default(autoincrement())
+  publicId        String     @unique @default(uuid()) @map("public_id") @db.Uuid
+  storeId         BigInt     @map("store_id")
+  tournamentId    BigInt     @map("tournament_id")
+  status          LiveStatus @default(RUNNING)
+  // 진행 상태
+  currentLevel    Int        @default(1) @map("current_level")
+  levelSecondsLeft Int       @map("level_seconds_left")
+  playersRemaining Int       @map("players_remaining")
+  totalPlayers    Int        @map("total_players")
+  tablesRemaining Int        @default(1) @map("tables_remaining")
+  prizePool       Int        @default(0) @map("prize_pool")
+  lateRegClosed   Boolean    @default(false) @map("late_reg_closed")
+  // 메타
+  startedAt       DateTime   @map("started_at") @db.Timestamptz
+  pausedAt        DateTime?  @map("paused_at") @db.Timestamptz
+  endedAt         DateTime?  @map("ended_at") @db.Timestamptz
+  viewerCount     Int        @default(0) @map("viewer_count")
+  note            String?    @db.Text
+
+  store      Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tournament Tournament         @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  events     LiveSessionEvent[]
+  slots      DisplaySlot[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([storeId, status])
+  @@index([status])
+  @@map("live_sessions")
+}
+
+/// LIVE 세션 이벤트 로그 (모든 액션 추적 — 감사 + Undo 가능)
+model LiveSessionEvent {
+  id        BigInt        @id @default(autoincrement())
+  sessionId BigInt        @map("session_id")
+  type      LiveEventType
+  payload   Json          @default("{}")
+  actorId   BigInt?       @map("actor_id") // StoreStaff.id (운영자)
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  session   LiveSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("live_session_events")
+}
+
+/// 매장 디스플레이 슬롯 (M10 — 매장 TV 1, 2, 3번)
+/// 프로토타입 `slots[]` 와 1:1
+model DisplaySlot {
+  id        BigInt  @id @default(autoincrement())
+  storeId   BigInt  @map("store_id")
+  slotNum   Int     @map("slot_num") // 매장 안 슬롯 번호 (1, 2, 3...)
+  name      String? @db.VarChar(40) // "1번 메인 TV" 등 사장 라벨
+  sessionId BigInt? @map("session_id") // null이면 비어있음
+
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  session   LiveSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([storeId, slotNum])
+  @@index([storeId])
+  @@map("display_slots")
+}
+
+// ============================================================
+// D. 사용자 (플레이어) 도메인
+// ============================================================
+
+/// 일반 사용자 (플레이어) — 카카오 OAuth
+model User {
+  id           BigInt    @id @default(autoincrement())
+  publicId     String    @unique @default(uuid()) @map("public_id") @db.Uuid
+  kakaoId      String?   @unique @map("kakao_id") @db.VarChar(40)
+  nickname     String    @db.VarChar(32)
+  profileImage String?   @map("profile_image") @db.Text
+  email        String?   @db.VarChar(120)
+  phone        String?   @db.VarChar(20)
+  role         UserRole  @default(PLAYER)
+  // 선호 지역 (디폴트 디스커버리)
+  preferredRegion String? @map("preferred_region") @db.VarChar(16)
+
+  favorites       Favorite[]
+  interests       TournamentInterest[]
+  notificationPrefs NotificationPreference?
+
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@index([nickname])
+  @@map("users")
+}
+
+/// 즐겨찾기 매장
+model Favorite {
+  id              BigInt  @id @default(autoincrement())
+  userId          BigInt  @map("user_id")
+  storeId         BigInt  @map("store_id")
+  notifyOnLive    Boolean @default(true) @map("notify_on_live")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store           Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+/// 관심 토너 (D-1, 시작 1시간 전, 등록 마감 임박 알림)
+model TournamentInterest {
+  id           BigInt @id @default(autoincrement())
+  userId       BigInt @map("user_id")
+  tournamentId BigInt @map("tournament_id")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([userId, tournamentId])
+  @@index([userId])
+  @@map("tournament_interests")
+}
+
+/// 사용자별 알림 설정
+model NotificationPreference {
+  userId            BigInt  @id @map("user_id")
+  favLive           Boolean @default(true) @map("fav_live")
+  tournamentStart   Boolean @default(true) @map("tournament_start")
+  lateRegImminent   Boolean @default(false) @map("late_reg_imminent")
+  marketing         Boolean @default(false)
+  // FCM 디바이스 토큰 (멀티 디바이스 대비 별도 테이블이 더 정확하지만 v0.1은 단일)
+  fcmToken          String? @map("fcm_token") @db.Text
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("notification_preferences")
+}

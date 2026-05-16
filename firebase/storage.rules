@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() { return request.auth != null; }
+    function isImage() { return request.resource.contentType.matches('image/.*'); }
+    function maxSize(mb) { return request.resource.size < mb * 1024 * 1024; }
+
+    // 매장 사진 (v0.1 — 인증된 사용자만, storeId 권한은 클라이언트에서 검증)
+    // TODO v0.2: Custom Claims로 storeId 권한 정밀화
+    match /stores/{storeId}/photos/{photoId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
+    match /series/{seriesId}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
+    match /users/{userId}/avatar/{file} {
+      allow read: if true;
+      allow write: if request.auth.uid == userId && isImage() && maxSize(2);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

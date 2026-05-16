@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "holdemnow-prod"
+  },
+  "targets": {
+    "holdemnow-prod": {
+      "hosting": {
+        "admin": ["holdemnow-admin"],
+        "display": ["holdemnow-display"]
+      }
+    }
+  }
+}

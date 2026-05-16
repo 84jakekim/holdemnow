@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" font-family="Pretendard, sans-serif">
+  <rect width="1440" height="900" fill="#FAFAFA"/>
+
+  <!-- Sidebar -->
+  <g>
+    <rect width="240" height="900" fill="#FFFFFF"/>
+    <line x1="240" y1="0" x2="240" y2="900" stroke="#EAEAEA"/>
+
+    <!-- 로고 (단순) -->
+    <g transform="translate(24, 28)">
+      <circle cx="6" cy="14" r="5" fill="#E53E3E"/>
+      <text x="20" y="20" fill="#111111" font-size="17" font-weight="800" letter-spacing="-0.5">HoldemNow</text>
+      <text x="20" y="34" fill="#A8A8A8" font-size="10" font-weight="600" letter-spacing="1.5">ADMIN</text>
+    </g>
+
+    <!-- 매장 정보 박스 -->
+    <g transform="translate(24, 84)">
+      <rect width="192" height="68" rx="10" fill="#F7F7F7"/>
+      <text x="14" y="22" fill="#767676" font-size="10" letter-spacing="1" font-weight="600">매장 ID</text>
+      <text x="14" y="40" fill="#111111" font-size="14" font-weight="700" font-family="JetBrains Mono, monospace">BSN_001</text>
+      <text x="14" y="58" fill="#111111" font-size="11">서면 ABC홀덤</text>
+      <rect x="146" y="14" width="36" height="20" rx="10" fill="#00875A"/>
+      <text x="164" y="27" fill="#FFFFFF" font-size="9" text-anchor="middle" font-weight="700">VIP</text>
+    </g>
+
+    <!-- 메뉴 -->
+    <g transform="translate(0, 184)" font-size="13">
+      <text x="36" y="25" fill="#767676" font-size="14">🏠</text>
+      <text x="64" y="25" fill="#111111">대시보드</text>
+
+      <g transform="translate(0, 40)">
+        <text x="36" y="25" font-size="14">🏢</text>
+        <text x="64" y="25" fill="#111111">매장 정보</text>
+      </g>
+      
+      <g transform="translate(0, 80)">
+        <text x="36" y="25" font-size="14">🃏</text>
+        <text x="64" y="25" fill="#111111">토너먼트</text>
+      </g>
+
+      <!-- LIVE 운영 활성 -->
+      <g transform="translate(0, 120)">
+        <rect x="12" width="216" height="40" rx="8" fill="#FEE2E2"/>
+        <circle cx="36" cy="20" r="4" fill="#E53E3E"/>
+        <circle cx="36" cy="20" r="8" fill="none" stroke="#E53E3E" stroke-width="1" opacity="0.5"/>
+        <text x="64" y="25" fill="#E53E3E" font-weight="700">LIVE 운영</text>
+        <rect x="190" y="13" width="32" height="16" rx="8" fill="#E53E3E"/>
+        <text x="206" y="24" fill="#FFFFFF" font-size="9" text-anchor="middle" font-weight="800">ON</text>
+      </g>
+
+      <g transform="translate(0, 168)">
+        <text x="36" y="25" font-size="14">📊</text>
+        <text x="64" y="25" fill="#111111">통계</text>
+      </g>
+      
+      <g transform="translate(0, 208)">
+        <text x="36" y="25" font-size="14">⭐</text>
+        <text x="64" y="25" fill="#111111">리뷰</text>
+      </g>
+
+      <g transform="translate(0, 248)">
+        <text x="36" y="25" font-size="14">📷</text>
+        <text x="64" y="25" fill="#111111">콘텐츠</text>
+        <text x="190" y="25" fill="#A8A8A8" font-size="10">+포스터</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Top bar -->
+  <g transform="translate(240, 0)">
+    <rect width="1200" height="68" fill="#FFFFFF"/>
+    <line x1="0" y1="68" x2="1200" y2="68" stroke="#EAEAEA"/>
+
+    <text x="32" y="32" fill="#111111" font-size="22" font-weight="800">LIVE 운영</text>
+    <text x="32" y="52" fill="#767676" font-size="12">실시간 토너먼트 진행 · 매장 디스플레이 송출 중</text>
+
+    <!-- LIVE 상태 -->
+    <rect x="970" y="20" width="180" height="32" rx="16" fill="#FEE2E2"/>
+    <circle cx="990" cy="36" r="4" fill="#E53E3E"/>
+    <circle cx="990" cy="36" r="8" fill="none" stroke="#E53E3E" stroke-width="1" opacity="0.5"/>
+    <text x="1004" y="41" fill="#E53E3E" font-size="13" font-weight="700">송출 중 · 14:32</text>
+  </g>
+
+  <!-- 3컬럼 레이아웃 -->
+  <g transform="translate(264, 92)">
+    <text x="0" y="14" fill="#111111" font-size="14" font-weight="800">토너 선택</text>
+
+    <!-- 진행 중 토너 카드 (포스터 미리보기 포함) -->
+    <g transform="translate(0, 28)">
+      <rect width="280" height="100" rx="12" fill="#111111"/>
+      
+      <!-- 좌측: 포스터 미리보기 -->
+      <rect x="12" y="12" width="60" height="76" rx="6" fill="#1A1A1A"/>
+      <text x="42" y="35" fill="#FFB800" font-size="7" font-weight="800" text-anchor="middle">FRI</text>
+      <text x="42" y="52" fill="#FFFFFF" font-size="9" font-weight="800" text-anchor="middle">FREEZE</text>
+      <text x="42" y="65" fill="#FFFFFF" font-size="9" font-weight="800" text-anchor="middle">90GTD</text>
+      <text x="42" y="80" fill="#FFB800" font-size="7" font-weight="700" text-anchor="middle">50K</text>
+      
+      <!-- 우측: 정보 -->
+      <text x="86" y="24" fill="#FFB800" font-size="9" font-weight="700" letter-spacing="1">진행 중</text>
+      <text x="86" y="44" fill="#FFFFFF" font-size="14" font-weight="700">프리징 90GTD</text>
+      <text x="86" y="62" fill="#A8A8A8" font-size="11">시작 19:00 · 32명</text>
+      <circle cx="262" cy="58" r="4" fill="#FF4757"/>
+      <circle cx="262" cy="58" r="8" fill="none" stroke="#FF4757" stroke-width="1" opacity="0.5"/>
+    </g>
+
+    <!-- 다음 토너 -->
+    <g transform="translate(0, 140)">
+      <rect width="280" height="76" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <rect x="12" y="12" width="52" height="52" rx="6" fill="#F0E6D2"/>
+      <text x="38" y="32" fill="#7C5E2F" font-size="7" font-weight="800" text-anchor="middle">SAT</text>
+      <text x="38" y="48" fill="#1A1A1A" font-size="8" font-weight="800" text-anchor="middle">DEEP</text>
+      <text x="38" y="60" fill="#7C5E2F" font-size="7" font-weight="700" text-anchor="middle">50GTD</text>
+      
+      <text x="76" y="24" fill="#767676" font-size="10" font-weight="600">21:00 예정</text>
+      <text x="76" y="44" fill="#111111" font-size="14" font-weight="700">딥스택 50GTD</text>
+      <text x="76" y="62" fill="#767676" font-size="11">18명 사전 등록</text>
+    </g>
+
+    <!-- 캐쉬 게임 -->
+    <text x="0" y="252" fill="#111111" font-size="14" font-weight="800">캐쉬 게임</text>
+
+    <g transform="translate(0, 268)">
+      <rect width="280" height="56" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <rect width="3" height="56" rx="1.5" fill="#00875A"/>
+      <text x="16" y="24" fill="#111111" font-size="13" font-weight="700">1번 · NLH 1/2</text>
+      <text x="16" y="42" fill="#00875A" font-size="11" font-weight="600">● 자리 2석 여유</text>
+    </g>
+
+    <g transform="translate(0, 336)">
+      <rect width="280" height="56" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <rect width="3" height="56" rx="1.5" fill="#FFB800"/>
+      <text x="16" y="24" fill="#111111" font-size="13" font-weight="700">2번 · NLH 2/5</text>
+      <text x="16" y="42" fill="#FFB800" font-size="11" font-weight="600">● 대기 4명</text>
+    </g>
+
+    <g transform="translate(0, 404)">
+      <rect width="280" height="44" rx="12" fill="#FAFAFA" stroke="#EAEAEA" stroke-dasharray="4 4"/>
+      <text x="140" y="28" fill="#767676" font-size="12" text-anchor="middle">+ 캐쉬 테이블 추가</text>
+    </g>
+  </g>
+
+  <!-- CENTER: 타이머 -->
+  <g transform="translate(576, 92)">
+    <text x="0" y="14" fill="#111111" font-size="14" font-weight="800">타이머 제어</text>
+
+    <!-- 타이머 (다크 카드) -->
+    <g transform="translate(0, 28)">
+      <rect width="504" height="300" rx="14" fill="#0A0A0A"/>
+      
+      <text x="252" y="36" fill="#A8A8A8" font-size="11" text-anchor="middle" letter-spacing="3" font-weight="700">LEVEL 3</text>
+      
+      <text x="252" y="148" fill="#FFFFFF" font-size="96" font-weight="800" text-anchor="middle" font-family="JetBrains Mono, monospace">14:32</text>
+      
+      <text x="252" y="200" fill="#FFFFFF" font-size="22" text-anchor="middle" font-family="JetBrains Mono, monospace">200 / 400 / 50</text>
+
+      <line x1="40" y1="232" x2="464" y2="232" stroke="#2A2A2A"/>
+
+      <g transform="translate(98, 260)">
+        <text x="0" y="0" fill="#767676" font-size="9" text-anchor="middle" letter-spacing="1">PLAYERS</text>
+        <text x="0" y="24" fill="#FFFFFF" font-size="22" font-weight="700" text-anchor="middle" font-family="JetBrains Mono, monospace">14</text>
+      </g>
+      <g transform="translate(252, 260)">
+        <text x="0" y="0" fill="#767676" font-size="9" text-anchor="middle" letter-spacing="1">PRIZE</text>
+        <text x="0" y="24" fill="#FFFFFF" font-size="22" font-weight="700" text-anchor="middle" font-family="JetBrains Mono, monospace">904K</text>
+      </g>
+      <g transform="translate(406, 260)">
+        <text x="0" y="0" fill="#767676" font-size="9" text-anchor="middle" letter-spacing="1">LATE REG</text>
+        <text x="0" y="24" fill="#FF4757" font-size="22" font-weight="700" text-anchor="middle" font-family="JetBrains Mono, monospace">12:00</text>
+      </g>
+    </g>
+
+    <!-- 컨트롤 버튼 -->
+    <g transform="translate(0, 348)">
+      <!-- Row 1 -->
+      <rect width="160" height="56" rx="12" fill="#111111"/>
+      <text x="80" y="34" fill="#FFFFFF" font-size="13" font-weight="700" text-anchor="middle">⏸ 일시정지</text>
+
+      <rect x="172" width="160" height="56" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="252" y="34" fill="#111111" font-size="13" font-weight="600" text-anchor="middle">⏭ 다음 레벨</text>
+
+      <rect x="344" width="160" height="56" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="424" y="34" fill="#111111" font-size="13" font-weight="600" text-anchor="middle">⏮ 이전 레벨</text>
+
+      <!-- Row 2 -->
+      <g transform="translate(0, 68)">
+        <rect width="116" height="48" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+        <text x="58" y="30" fill="#111111" font-size="13" font-weight="600" text-anchor="middle">+1분</text>
+
+        <rect x="128" width="116" height="48" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+        <text x="186" y="30" fill="#111111" font-size="13" font-weight="600" text-anchor="middle">−1분</text>
+
+        <rect x="256" width="116" height="48" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+        <text x="314" y="30" fill="#111111" font-size="13" font-weight="600" text-anchor="middle">☕ 휴식</text>
+
+        <rect x="384" width="120" height="48" rx="12" fill="#FEF3C7" stroke="#FFB800" stroke-width="1.5"/>
+        <text x="444" y="30" fill="#92400E" font-size="12" font-weight="700" text-anchor="middle">등록 마감</text>
+      </g>
+
+      <!-- 인원 입력 -->
+      <g transform="translate(0, 132)">
+        <rect width="244" height="60" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+        <text x="16" y="22" fill="#767676" font-size="10" font-weight="600">잔여 인원</text>
+        <text x="16" y="48" fill="#111111" font-size="22" font-weight="700" font-family="JetBrains Mono, monospace">14</text>
+        <text x="216" y="48" fill="#767676" font-size="20" text-anchor="end">⌃⌄</text>
+
+        <rect x="256" width="248" height="60" rx="12" fill="#FFFFFF" stroke="#EAEAEA"/>
+        <text x="272" y="22" fill="#767676" font-size="10" font-weight="600">평균 스택</text>
+        <text x="272" y="48" fill="#111111" font-size="22" font-weight="700" font-family="JetBrains Mono, monospace">28,500</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- RIGHT: 송출 -->
+  <g transform="translate(1104, 92)">
+    <text x="0" y="14" fill="#111111" font-size="14" font-weight="800">송출 채널</text>
+
+    <!-- 디스플레이 -->
+    <g transform="translate(0, 28)">
+      <rect width="312" height="200" rx="14" fill="#FFFFFF" stroke="#EAEAEA"/>
+      <text x="20" y="32" fill="#767676" font-size="10" letter-spacing="1.5" font-weight="700">매장 TV</text>
+
+      <!-- QR -->
+      <rect x="20" y="48" width="100" height="100" rx="8" fill="#111111"/>
+      <text x="70" y="103" fill="#FFFFFF" font-size="10" text-anchor="middle">QR</text>
+
+      <text x="136" y="64" fill="#111111" font-size="11" font-weight="700">URL</text>
+      <rect x="136" y="74" width="158" height="28" rx="6" fill="#F7F7F7"/>
+      <text x="144" y="92" fill="#00875A" font-size="10" font-family="JetBrains Mono, monospace" font-weight="600">display/BSN_001</text>
+
+      <text x="136" y="124" fill="#111111" font-size="11" font-weight="700">상태</text>
+      <g transform="translate(136, 132)">
+        <circle cx="5" cy="6" r="3" fill="#00875A"/>
+        <text x="14" y="10" fill="#00875A" font-size="11" font-weight="700">연결됨</text>
+      </g>
+
+      <rect x="20" y="160" width="272" height="28" rx="8" fill="#111111"/>
+      <text x="156" y="178" fill="#FFFFFF" font-size="11" text-anchor="middle" font-weight="700">새 창 디스플레이 열기 →</text>
+    </g>
+
+    <!-- 모바일 미리보기 -->
+    <text x="0" y="258" fill="#111111" font-size="14" font-weight="800">모바일 노출 미리보기</text>
+    <g transform="translate(0, 274)">
+      <rect width="312" height="200" rx="14" fill="#F7F7F7"/>
+      
+      <rect x="12" y="12" width="180" height="160" rx="10" fill="#1A1A1A"/>
+      <text x="102" y="65" fill="#FFB800" font-size="9" font-weight="800" text-anchor="middle">TONIGHT</text>
+      <text x="102" y="95" fill="#FFFFFF" font-size="13" font-weight="800" text-anchor="middle">FREEZE 90GTD</text>
+      
+      <!-- LIVE 뱃지 -->
+      <rect x="20" y="20" width="42" height="18" rx="9" fill="#E53E3E"/>
+      <circle cx="28" cy="29" r="2.5" fill="#FFFFFF"/>
+      <text x="48" y="32" fill="#FFFFFF" font-size="9" font-weight="800" text-anchor="middle">LIVE</text>
+
+      <!-- 정보 -->
+      <text x="204" y="32" fill="#111111" font-size="13" font-weight="700">서면 ABC홀덤</text>
+      <text x="204" y="50" fill="#767676" font-size="11">2.3km</text>
+      <text x="204" y="80" fill="#111111" font-size="11">Lv 3</text>
+      <text x="204" y="98" fill="#767676" font-size="11">200/400</text>
+      
+      <text x="204" y="140" fill="#E53E3E" font-size="11" font-weight="700">⏱ 추가등록</text>
+      <text x="204" y="155" fill="#E53E3E" font-size="13" font-weight="800">12분</text>
+      
+      <text x="156" y="190" fill="#A8A8A8" font-size="9" text-anchor="middle" font-style="italic">86명 시청 중 · 실시간</text>
+    </g>
+
+    <!-- 매장 콘텐츠 알림 -->
+    <g transform="translate(0, 506)">
+      <rect width="312" height="64" rx="12" fill="#FEF3C7"/>
+      <text x="16" y="22" fill="#92400E" font-size="11" font-weight="700">💡 콘텐츠 업로드 안내</text>
+      <text x="16" y="40" fill="#111111" font-size="11">토너 포스터 추가하면 노출 +47%</text>
+      <text x="16" y="56" fill="#92400E" font-size="11" font-weight="700">[ 콘텐츠 페이지 → ]</text>
+    </g>
+  </g>
+</svg>

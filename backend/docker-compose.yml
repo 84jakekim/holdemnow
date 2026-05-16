@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: holdemnow-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: holdem
+      POSTGRES_PASSWORD: holdem_dev
+      POSTGRES_DB: holdemnow
+    volumes:
+      - holdemnow_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U holdem -d holdemnow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: holdemnow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - holdemnow_redisdata:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  holdemnow_pgdata:
+  holdemnow_redisdata:

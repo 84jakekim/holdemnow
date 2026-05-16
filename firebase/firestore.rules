@@ -1,0 +1,147 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== 헬퍼 =====
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function uid() {
+      return request.auth.uid;
+    }
+    function hasRole(r) {
+      return isSignedIn() && request.auth.token.role == r;
+    }
+    function isStoreMember(storeId) {
+      return isSignedIn() && request.auth.token.storeId == storeId;
+    }
+    // v0.1 — Custom Claims 없이 ownerUid 직접 검증 (한 번의 get() read 발생)
+    function isStoreOwner(storeId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/stores/$(storeId))
+        && get(/databases/$(database)/documents/stores/$(storeId)).data.ownerUid == request.auth.uid;
+    }
+    function isStoreOwnerOrMember(storeId) {
+      return isStoreOwner(storeId) || isStoreMember(storeId);
+    }
+    function isOrganizerMember(orgId) {
+      return isSignedIn() && request.auth.token.organizerId == orgId;
+    }
+    function isPlatformAdmin() {
+      return hasRole('platform_admin');
+    }
+
+    // ===== 매장 =====
+    match /stores/{storeId} {
+      allow read: if true;                               // 누구나 매장 조회
+      // v0.1: 인증된 사용자가 본인을 owner로 매장 생성 가능 (심사 흐름은 v0.2)
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn()
+        && (resource.data.ownerUid == request.auth.uid || isStoreMember(storeId) || isPlatformAdmin());
+      allow delete: if isPlatformAdmin();
+
+      match /staff/{staffId} {
+        allow read: if isStoreMember(storeId);
+        allow write: if isStoreMember(storeId) && request.auth.token.storeRole == 'master';
+      }
+
+      match /tournamentTemplates/{templateId} {
+        allow read: if isStoreOwnerOrMember(storeId);
+        allow write: if isStoreOwnerOrMember(storeId);
+      }
+
+      match /tournaments/{tournamentId} {
+        allow read: if true;                             // 플레이어도 캘린더에서 조회
+        allow write: if isStoreOwnerOrMember(storeId);
+      }
+
+      match /displaySlots/{slotNum} {
+        allow read: if true;                             // TV 디스플레이는 URL만으로 접근 가능
+        allow write: if isStoreOwnerOrMember(storeId);
+      }
+    }
+
+    // ===== LIVE 세션 (실시간 송출의 심장) =====
+    match /liveSessions/{sessionId} {
+      allow read: if true;                               // 누구나 LIVE 피드 구독
+      allow create: if isSignedIn()
+        && (isStoreOwner(request.resource.data.storeId) || isStoreMember(request.resource.data.storeId));
+      allow update: if isSignedIn()
+        && (isStoreOwner(resource.data.storeId) || isStoreMember(resource.data.storeId));
+      allow delete: if isSignedIn()
+        && (isStoreOwner(resource.data.storeId) || isStoreMember(resource.data.storeId));
+
+      match /events/{eventId} {
+        // 이벤트 로그는 매장 스태프만 read, write는 Functions에서만
+        allow read: if isStoreMember(
+          get(/databases/$(database)/documents/liveSessions/$(sessionId)).data.storeId
+        );
+        allow write: if false;
+      }
+    }
+
+    // ===== 사용자 =====
+    match /users/{userId} {
+      allow read: if isSignedIn() && uid() == userId;
+      allow create: if isSignedIn() && uid() == userId;
+      allow update: if isSignedIn() && uid() == userId;
+      allow delete: if false;                            // 소프트 삭제만
+
+      match /favorites/{storeId} {
+        allow read, write: if uid() == userId;
+      }
+      match /interests/{tournamentId} {
+        allow read, write: if uid() == userId;
+      }
+      match /seriesSubscriptions/{seriesId} {
+        allow read, write: if uid() == userId;
+      }
+    }
+
+    // ===== 시리즈 (대회사) — v0.1: 인증된 사용자 = ownerUid로 직접 검증 =====
+    match /series/{seriesId} {
+      allow read: if true;                               // 모바일 시리즈 페이지 누구나
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && (resource.data.ownerUid == request.auth.uid || isOrganizerMember(resource.data.organizerId));
+
+      match /finalists/{finalistId} {
+        allow read: if true;
+        allow write: if isSignedIn() && (
+          get(/databases/$(database)/documents/series/$(seriesId)).data.ownerUid == request.auth.uid
+          || isOrganizerMember(get(/databases/$(database)/documents/series/$(seriesId)).data.organizerId)
+        );
+      }
+    }
+
+    // ===== 대회사 — v0.1: ownerUid 직접 검증 =====
+    match /organizers/{organizerId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn()
+        && (resource.data.ownerUid == request.auth.uid || isOrganizerMember(organizerId));
+      allow delete: if isSignedIn()
+        && (resource.data.ownerUid == request.auth.uid || isPlatformAdmin());
+
+      match /staff/{staffId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+    }
+
+    // ===== 지역 lookup =====
+    match /regions/{regionCode} {
+      allow read: if true;
+      allow write: if isPlatformAdmin();
+    }
+
+    // ===== 그 외 모두 차단 (default deny) =====
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
