@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   doc,
@@ -20,6 +20,7 @@ import {
   computeLateRegMinutes,
 } from '@/lib/live';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
+import { bumpStoreMetric } from '@/lib/analytics';
 
 export default function LiveFullscreen({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
@@ -78,6 +79,7 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
           notifyOnLive: true,
           createdAt: serverTimestamp(),
         });
+        bumpStoreMetric(session.storeId, 'favoriteAdds');
       }
     } finally {
       setFavBusy(false);
@@ -88,6 +90,14 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     const unsub = subscribeLiveSession(sessionId, setSession, () => setSession(null));
     return unsub;
   }, [sessionId]);
+
+  // LIVE 풀스크린 열림 = liveOpen 1회 (sessionId 단위로 dedupe)
+  const trackedSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session?.storeId || trackedSessionRef.current === session.id) return;
+    trackedSessionRef.current = session.id;
+    bumpStoreMetric(session.storeId, 'liveOpens');
+  }, [session?.id, session?.storeId]);
 
   // 클라이언트 카운트다운
   const [sec, setSec] = useState(0);
@@ -221,13 +231,22 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
       {/* 하단 CTA */}
       <div className="mt-auto px-5 pt-6 pb-8">
         <button
-          onClick={() => openDirections(session.storeName, storeAddress)}
+          onClick={() => {
+            bumpStoreMetric(session.storeId, 'directionsClicks');
+            openDirections(session.storeName, storeAddress);
+          }}
           className="w-full h-14 bg-white text-black rounded-2xl font-extrabold text-base"
         >
           지금 가기 · 길찾기 시작
         </button>
         <div className="flex justify-around pt-4 text-xs text-gray-300">
-          <button onClick={() => callPhone(storePhone)} className="flex flex-col items-center gap-1">
+          <button
+            onClick={() => {
+              bumpStoreMetric(session.storeId, 'phoneClicks');
+              callPhone(storePhone);
+            }}
+            className="flex flex-col items-center gap-1"
+          >
             <span>📞</span><span>전화</span>
           </button>
           <button

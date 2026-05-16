@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -13,6 +13,7 @@ import StoreInfoPanel from '@/components/admin/StoreInfoPanel';
 import TournamentsPanel from '@/components/admin/TournamentsPanel';
 import AdsPanel from '@/components/admin/AdsPanel';
 import StatsPanel from '@/components/admin/StatsPanel';
+import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
 
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드' },
@@ -142,14 +143,14 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
             </div>
           )}
 
-          {activeMenu === 'dashboard' && <DashboardContent storeName={store.name} />}
+          {activeMenu === 'dashboard' && <DashboardContent storeId={storeId} storeName={store.name} />}
           {activeMenu === 'templates' && <TemplatesPanel storeId={storeId} />}
           {activeMenu === 'live' && <LivePanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'tournaments' && <TournamentsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'slots' && <SlotsPanel storeId={storeId} />}
           {activeMenu === 'store' && <StoreInfoPanel storeId={storeId} />}
           {activeMenu === 'ads' && <AdsPanel />}
-          {activeMenu === 'stats' && <StatsPanel />}
+          {activeMenu === 'stats' && <StatsPanel storeId={storeId} />}
           {!['dashboard', 'templates', 'live', 'tournaments', 'slots', 'store', 'ads', 'stats'].includes(activeMenu) && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />
           )}
@@ -159,12 +160,26 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
   );
 }
 
-function DashboardContent({ storeName }: { storeName: string }) {
+function DashboardContent({ storeId, storeName }: { storeId: string; storeName: string }) {
+  const [metrics, setMetrics] = useState<StoreMetrics>({});
+  useEffect(() => {
+    const unsub = subscribeStoreMetrics(storeId, setMetrics);
+    return unsub;
+  }, [storeId]);
+
+  const fmt = (n: number | undefined) => (n ?? 0).toLocaleString();
+  const kpis = [
+    { label: '누적 노출', value: fmt(metrics.impressions), tag: '카드 표시 수' },
+    { label: '카드 클릭', value: fmt(metrics.cardClicks), tag: '상세 진입' },
+    { label: '길찾기', value: fmt(metrics.directionsClicks), tag: '카카오맵 호출' },
+    { label: '전화', value: fmt(metrics.phoneClicks), tag: 'tel: 호출' },
+  ];
+
   return (
     <>
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📊 대시보드</h1>
-        <p className="text-sm text-gray-500 mt-1">{storeName} · 이번 주 운영 요약</p>
+        <p className="text-sm text-gray-500 mt-1">{storeName} · 실시간 누적 지표</p>
       </div>
 
       <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-100 rounded-xl p-5 mb-6">
@@ -175,20 +190,24 @@ function DashboardContent({ storeName }: { storeName: string }) {
         </div>
       </div>
 
-
-
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: '이번 주 노출', value: '0', tag: '곧 시작' },
-          { label: '카드 클릭', value: '0', tag: '-' },
-          { label: '길찾기', value: '0', tag: '-' },
-          { label: '전화', value: '0', tag: '-' },
-        ].map((k) => (
+        {kpis.map((k) => (
           <div key={k.label} className="bg-white border border-gray-200 rounded-xl p-4">
             <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{k.label}</div>
             <div className="font-mono text-xl font-extrabold text-gray-900">{k.value}</div>
             <div className="text-[10px] text-gray-400 mt-1">{k.tag}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: 'LIVE 풀스크린 열기', value: fmt(metrics.liveOpens) },
+          { label: '즐겨찾기 추가', value: fmt(metrics.favoriteAdds) },
+        ].map((k) => (
+          <div key={k.label} className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{k.label}</div>
+            <div className="font-mono text-xl font-extrabold text-gray-900">{k.value}</div>
           </div>
         ))}
       </div>

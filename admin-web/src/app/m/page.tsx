@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase';
 import { subscribeAllLiveSessions, type LiveSession, fmtTime } from '@/lib/live';
 import { subscribeAllSeries, type Series } from '@/lib/series';
 import { posterStyleFor } from '@/lib/templates';
+import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 
 interface StoreGroup {
   storeId: string;
@@ -235,9 +236,32 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
         {sorted.map((st) => {
           const live = liveByStore[st.id] || 0;
           return (
-            <Link
+            <NearbyStoreCard
               key={st.id}
+              store={st}
+              live={live}
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function NearbyStoreCard({
+  store: st,
+  live,
+}: {
+  store: { id: string; name: string; address?: string; photoUrl?: string; facilities?: string[]; tier?: string };
+  live: number;
+}) {
+  useEffect(() => {
+    trackImpressionOnce(st.id, 'home-nearby');
+  }, [st.id]);
+  return (
+            <Link
               href={`/m/store/${st.id}`}
+              onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
               className="flex bg-white border border-gray-200 rounded-2xl overflow-hidden active:scale-[0.99] transition"
             >
               <div className="w-28 h-28 bg-gray-100 flex-shrink-0 relative overflow-hidden">
@@ -268,10 +292,6 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
                 )}
               </div>
             </Link>
-          );
-        })}
-      </div>
-    </>
   );
 }
 
@@ -280,9 +300,14 @@ function StoreCard({ group, thumbnail }: { group: StoreGroup; thumbnail?: string
   const count = group.sessions.length;
   const poster = posterStyleFor(primary.posterStyle);
 
+  useEffect(() => {
+    trackImpressionOnce(group.storeId, 'home-live');
+  }, [group.storeId]);
+
   return (
     <Link
       href={`/m/store/${group.storeId}`}
+      onClick={() => bumpStoreMetric(group.storeId, 'cardClicks')}
       className="w-[220px] rounded-2xl bg-white border border-gray-200 overflow-hidden flex-shrink-0 active:scale-[0.98] transition"
     >
       {/* 사진 (있으면) + 포스터 오버레이 */}

@@ -1,119 +1,124 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
+import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
 
-export default function StatsPanel() {
-  const days30 = useMemo(() => {
-    return Array.from({ length: 30 }, (_, i) => {
-      const dow = i % 7;
-      const base = dow === 5 || dow === 6 ? 600 : 350;
-      return base + Math.floor(Math.random() * 200);
-    });
-  }, []);
-  const maxBar = Math.max(...days30);
-  const total = days30.reduce((a, b) => a + b, 0);
+export default function StatsPanel({ storeId }: { storeId: string }) {
+  const [metrics, setMetrics] = useState<StoreMetrics>({});
+  useEffect(() => {
+    const unsub = subscribeStoreMetrics(storeId, setMetrics);
+    return unsub;
+  }, [storeId]);
 
-  const campaigns = [
-    { name: '추천 대회 노출', cost: '50,000', visits: '34', roi: '+ ₩340K' },
-    { name: '지역 타깃 푸시', cost: '80,000', visits: '52', roi: '+ ₩520K' },
-    { name: '주간 배너', cost: '300,000', visits: '128', roi: '+ ₩1.28M' },
+  const fmt = (n: number | undefined) => (n ?? 0).toLocaleString();
+
+  // 일별 차트는 dailyMetrics 컬렉션 필요 — v0.2 Cloud Functions 배치 잡으로 추가 예정
+  // 지금은 누적 카운터만 표시
+
+  const rows: { label: string; value: string; sub?: string }[] = [
+    {
+      label: '누적 노출',
+      value: fmt(metrics.impressions),
+      sub: '홈·탐색·검색 결과에 카드 표시된 횟수 (세션당 중복 제거)',
+    },
+    {
+      label: '카드 클릭 → 매장 상세',
+      value: fmt(metrics.cardClicks),
+      sub: '디스커버리 → 매장 페이지 진입',
+    },
+    {
+      label: 'LIVE 풀스크린 열기',
+      value: fmt(metrics.liveOpens),
+      sub: '실시간 LIVE 카드 → 풀스크린',
+    },
+    {
+      label: '길찾기 클릭',
+      value: fmt(metrics.directionsClicks),
+      sub: '카카오맵 길찾기 호출 — 실제 방문 의도 지표',
+    },
+    {
+      label: '전화 클릭',
+      value: fmt(metrics.phoneClicks),
+      sub: 'tel: 호출',
+    },
+    {
+      label: '즐겨찾기 추가',
+      value: fmt(metrics.favoriteAdds),
+      sub: 'LIVE 시작 시 알림 받는 사용자 수',
+    },
   ];
 
-  const rankings = [
-    { rank: 1, name: '서면 ABC홀덤 (우리 매장)', exp: '4,820', highlight: true },
-    { rank: 2, name: '서면 B펍', exp: '3,210' },
-    { rank: 3, name: '서면 C카드', exp: '2,890' },
-    { rank: 4, name: '서면 D홀덤', exp: '2,140' },
-  ];
+  // 클릭 전환율 (impression → cardClick)
+  const ctr =
+    metrics.impressions && metrics.impressions > 0
+      ? (((metrics.cardClicks ?? 0) / metrics.impressions) * 100).toFixed(1)
+      : '–';
+  // 전환률 (cardClick → directionsClick)
+  const visitRate =
+    metrics.cardClicks && metrics.cardClicks > 0
+      ? (((metrics.directionsClicks ?? 0) / metrics.cardClicks) * 100).toFixed(1)
+      : '–';
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📈 통계 리포트</h1>
-        <p className="text-sm text-gray-500 mt-1">최근 30일 노출·클릭·ROI (v0.2 — 실데이터)</p>
+        <p className="text-sm text-gray-500 mt-1">실시간 누적 지표 · 일별/주별 추이는 v0.2</p>
       </div>
 
-      {/* 30일 차트 */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-6">
-        <div className="flex justify-between items-baseline mb-3">
-          <div className="text-sm font-bold text-gray-900">30일 노출 추이</div>
-          <div className="text-[11px] text-gray-500">총 {total.toLocaleString()}회</div>
+      {/* CTR 카드 */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5">
+          <div className="text-[10px] font-bold text-amber-800 tracking-wider mb-1.5">
+            카드 클릭률 (CTR)
+          </div>
+          <div className="font-mono text-3xl font-extrabold text-gray-900">
+            {ctr}{typeof ctr === 'string' && ctr !== '–' ? '%' : ''}
+          </div>
+          <div className="text-[11px] text-gray-600 mt-2 leading-relaxed">
+            노출 → 카드 클릭 비율. 5%↑이면 양호, 10%↑면 우수.
+          </div>
         </div>
-        <div className="flex items-end gap-0.5 h-24 mb-2">
-          {days30.map((v, i) => (
-            <div
-              key={i}
-              className={`flex-1 rounded-t ${i >= 23 ? 'bg-red-500' : 'bg-gray-900'}`}
-              style={{ height: `${(v / maxBar) * 100}%` }}
-            />
-          ))}
-        </div>
-        <div className="flex justify-between text-[9px] text-gray-400">
-          <span>30일 전</span>
-          <span className="text-red-600">● 최근 7일</span>
-        </div>
-      </div>
-
-      {/* ROI 표 */}
-      <div className="mb-6">
-        <div className="text-xs font-bold text-gray-500 tracking-wider mb-2">광고 캠페인 ROI</div>
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 tracking-wider">
-              <tr>
-                <th className="text-left p-3">캠페인</th>
-                <th className="text-right p-3">비용</th>
-                <th className="text-right p-3">추정 방문</th>
-                <th className="text-right p-3">ROI</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {campaigns.map((c) => (
-                <tr key={c.name}>
-                  <td className="p-3">{c.name}</td>
-                  <td className="p-3 text-right font-mono font-bold text-gray-900">₩{c.cost}</td>
-                  <td className="p-3 text-right font-mono">{c.visits}명</td>
-                  <td className="p-3 text-right font-mono font-bold text-green-600">{c.roi}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5">
+          <div className="text-[10px] font-bold text-green-800 tracking-wider mb-1.5">
+            방문 전환율
+          </div>
+          <div className="font-mono text-3xl font-extrabold text-gray-900">
+            {visitRate}{typeof visitRate === 'string' && visitRate !== '–' ? '%' : ''}
+          </div>
+          <div className="text-[11px] text-gray-600 mt-2 leading-relaxed">
+            카드 클릭 → 길찾기 비율. 실제 방문 의도 지표.
+          </div>
         </div>
       </div>
 
-      {/* 지역 순위 */}
-      <div className="mb-6">
-        <div className="text-xs font-bold text-gray-500 tracking-wider mb-2">지역 순위 (서면 15곳 중)</div>
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-gray-100">
-              {rankings.map((r) => (
-                <tr key={r.rank} className={r.highlight ? 'bg-amber-50' : ''}>
-                  <td className="p-3 w-12 font-mono font-bold text-center">
-                    <span className={r.highlight ? 'text-red-600' : 'text-gray-500'}>#{r.rank}</span>
-                  </td>
-                  <td className="p-3">
-                    <span className={r.highlight ? 'font-bold text-gray-900' : 'text-gray-700'}>
-                      {r.name}
-                    </span>
-                  </td>
-                  <td className="p-3 text-right font-mono text-gray-700">{r.exp}회</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* 6개 지표 */}
+      <div className="space-y-2 mb-6">
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-gray-900">{r.label}</div>
+              {r.sub && <div className="text-[11px] text-gray-500 mt-0.5">{r.sub}</div>}
+            </div>
+            <div className="font-mono text-xl font-extrabold text-gray-900 tabular-nums">
+              {r.value}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <button
-        onClick={() => alert('CSV 다운로드는 v0.2에서 작동합니다')}
-        className="w-full py-3 rounded-xl border-[1.5px] border-gray-200 text-sm font-bold text-gray-900 hover:bg-gray-50"
-      >
-        ⬇ CSV로 내보내기
-      </button>
-
-      <div className="mt-4 text-[10px] text-gray-400 text-center">
-        v0.2 — Cloud Functions 일일 집계 잡으로 실데이터 표시
+      {/* CSV / 일별 차트는 v0.2 안내 */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-600 leading-relaxed">
+        <div className="font-bold text-gray-900 mb-1">📅 v0.2 추가 예정</div>
+        <ul className="space-y-1 list-disc list-inside">
+          <li>일별·주별 추이 차트 (Cloud Functions 자정 배치)</li>
+          <li>지역 평균 대비 비교</li>
+          <li>CSV / Excel 다운로드</li>
+          <li>광고 캠페인 ROI 자동 산출</li>
+        </ul>
       </div>
     </div>
   );

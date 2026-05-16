@@ -9,6 +9,7 @@ import { subscribeAllLiveSessions, type LiveSession, fmtTime } from '@/lib/live'
 import { subscribeAllTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { subscribeAllSeries, type Series } from '@/lib/series';
 import { posterStyleFor } from '@/lib/templates';
+import { bumpStoreMetric } from '@/lib/analytics';
 
 interface StoreItem {
   id: string;
@@ -113,7 +114,12 @@ export default function SearchPage() {
           {results.storesHit.length > 0 && (
             <Section title={`매장 (${results.storesHit.length})`}>
               {results.storesHit.map((st) => (
-                <Link key={st.id} href={`/m/store/${st.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
+                <Link
+                  key={st.id}
+                  href={`/m/store/${st.id}`}
+                  onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
+                >
                   <div className="w-12 h-12 rounded-lg bg-gray-200 flex-shrink-0 overflow-hidden">
                     {st.photoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -144,7 +150,12 @@ export default function SearchPage() {
               {results.liveHit.map((s) => {
                 const poster = posterStyleFor(s.posterStyle);
                 return (
-                  <Link key={s.id} href={`/m/live/${s.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
+                  <Link
+                    key={s.id}
+                    href={`/m/live/${s.id}`}
+                    onClick={() => bumpStoreMetric(s.storeId, 'liveOpens')}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
+                  >
                     <div
                       className="w-10 h-12 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
                       style={{ background: poster.bg, color: poster.color }}
@@ -177,7 +188,12 @@ export default function SearchPage() {
                 const mm = String(d.getMinutes()).padStart(2, '0');
                 const poster = posterStyleFor(t.posterStyle);
                 return (
-                  <Link key={t.id} href={`/m/store/${t.storeId}`} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
+                  <Link
+                    key={t.id}
+                    href={`/m/store/${t.storeId}`}
+                    onClick={() => bumpStoreMetric(t.storeId, 'cardClicks')}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
+                  >
                     <div
                       className="w-10 h-12 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
                       style={{ background: poster.bg, color: poster.color }}

@@ -18,6 +18,7 @@ import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMi
 import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { posterStyleFor } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
+import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
 
 interface StoreData {
@@ -42,6 +43,11 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
     return unsub;
+  }, [storeId]);
+
+  // 매장 상세 진입 = impression 1회
+  useEffect(() => {
+    trackImpressionOnce(storeId, 'store-detail');
   }, [storeId]);
   const [isFav, setIsFav] = useState(false);
   const [favBusy, setFavBusy] = useState(false);
@@ -82,6 +88,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           notifyOnLive: true,
           createdAt: serverTimestamp(),
         });
+        bumpStoreMetric(storeId, 'favoriteAdds');
       }
     } finally {
       setFavBusy(false);
@@ -238,13 +245,19 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       {/* CTA */}
       <div className="px-5 pb-6 flex gap-2">
         <button
-          onClick={() => openDirections(store.name, store.address)}
+          onClick={() => {
+            bumpStoreMetric(storeId, 'directionsClicks');
+            openDirections(store.name, store.address);
+          }}
           className="flex-1 h-12 bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-1.5"
         >
           🗺 길찾기
         </button>
         <button
-          onClick={() => callPhone(store.phone)}
+          onClick={() => {
+            bumpStoreMetric(storeId, 'phoneClicks');
+            callPhone(store.phone);
+          }}
           disabled={!store.phone}
           className="w-12 h-12 border-[1.5px] border-gray-200 rounded-xl text-sm flex items-center justify-center disabled:opacity-40"
           title={store.phone ? `전화: ${store.phone}` : '전화번호 없음'}

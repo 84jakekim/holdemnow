@@ -61,6 +61,13 @@ service cloud.firestore {
         allow read: if true;                             // TV 디스플레이는 URL만으로 접근 가능
         allow write: if isStoreOwnerOrMember(storeId);
       }
+
+      // 노출·클릭 카운터 (sharded-free, v0.1 demo)
+      // v0.1: 누구나 increment 가능 — 베타에서 abuse 감지 시 Cloud Function 인덱싱으로 이관
+      match /metrics/{metricId} {
+        allow read: if true;
+        allow write: if true;
+      }
     }
 
     // ===== LIVE 세션 (실시간 송출의 심장) =====

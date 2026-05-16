@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { subscribeAllLiveSessions, type LiveSession } from '@/lib/live';
+import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 
 interface StoreSummary {
   id: string;
@@ -44,6 +45,8 @@ export default function DiscoverPage() {
           };
         });
         setStores(list);
+        // 지도에 표시되는 매장 = impression (탐색 surface)
+        list.forEach((s) => trackImpressionOnce(s.id, 'discover-map'));
         if (list.length > 0) setSelectedId(list[0].id);
       } finally {
         setLoading(false);
@@ -159,7 +162,10 @@ export default function DiscoverPage() {
         {/* 하단 매장 카드 */}
         {selected && (
           <button
-            onClick={() => router.push(`/m/store/${selected.id}`)}
+            onClick={() => {
+              bumpStoreMetric(selected.id, 'cardClicks');
+              router.push(`/m/store/${selected.id}`);
+            }}
             className="absolute bottom-3 left-3 right-3 bg-white rounded-2xl p-3 shadow-lg flex items-center gap-3 text-left z-30 active:scale-[0.98] transition"
           >
             <div

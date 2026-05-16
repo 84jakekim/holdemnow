@@ -7,6 +7,7 @@ import { subscribeAllTournaments, type TournamentInstance } from '@/lib/tourname
 import Link from 'next/link';
 import { posterStyleFor } from '@/lib/templates';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
+import { bumpStoreMetric } from '@/lib/analytics';
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -146,7 +147,10 @@ export default function CalendarPage() {
               return (
                 <button
                   key={s.id}
-                  onClick={() => router.push(`/m/live/${s.id}`)}
+                  onClick={() => {
+                    bumpStoreMetric(s.storeId, 'liveOpens');
+                    router.push(`/m/live/${s.id}`);
+                  }}
                   className="w-full bg-red-50 rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.98] transition"
                 >
                   <div
@@ -203,7 +207,10 @@ export default function CalendarPage() {
                   className="w-full bg-white border border-gray-200 rounded-2xl p-3 flex items-center gap-3"
                 >
                   <button
-                    onClick={() => router.push(`/m/store/${t.storeId}`)}
+                    onClick={() => {
+                      bumpStoreMetric(t.storeId, 'cardClicks');
+                      router.push(`/m/store/${t.storeId}`);
+                    }}
                     className="flex items-center gap-3 flex-1 min-w-0 text-left"
                   >
                     <div
