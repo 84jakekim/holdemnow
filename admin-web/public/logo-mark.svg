@@ -1,30 +1,61 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="hold'emNow">
   <!--
-    hold'emNow 심볼 마크 v4
-    ─ 카드 슬릿 + 핑크 펄스 도트 조합
-    ─ 흰 배경 + 라이트 그레이 카드 윤곽 + 핑크 도트
-    ─ 헤더 28×28, 파비콘 베이스
+    hold'emNow 심볼 마크 v5
+    ─ 살짝 기울인(8°) 에이스 카드 + 빨강 그라데이션 LIVE 도트
+    ─ 라이트 배경 + 흰 카드 면 + 빨강 도트 (♠ 대신 LIVE 신호)
+    ─ 헤더 28×28, 파비콘 베이스 용도
   -->
   <defs>
-    <linearGradient id="dotGradM" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF1F8F"/>
-      <stop offset="100%" stop-color="#E01077"/>
-    </linearGradient>
+    <!-- LIVE 도트 빨강 그라데이션 -->
+    <radialGradient id="liveDotGradM" cx="38%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#FF6B6B"/>
+      <stop offset="45%" stop-color="#E53E3E"/>
+      <stop offset="100%" stop-color="#C53030"/>
+    </radialGradient>
+    <!-- 글로우 -->
+    <radialGradient id="liveGlowM" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E53E3E" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#E53E3E" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 카드 그림자 필터 -->
+    <filter id="cardShadowM" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#111827" flood-opacity="0.10"/>
+    </filter>
   </defs>
 
   <!-- 배경 -->
   <rect width="40" height="40" rx="10" fill="#F7F7F8"/>
 
-  <!-- 카드 모양 (중앙) -->
-  <rect x="7" y="9" width="19" height="25" rx="3.5" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1.5"/>
+  <!-- 에이스 카드 그룹 (중심 20,21 기준 8° 회전) -->
+  <g transform="translate(20,21) rotate(8) translate(-20,-21)">
 
-  <!-- 카드 내부 슬릿 3줄 -->
-  <line x1="11" y1="16" x2="22" y2="16" stroke="#D1D5DB" stroke-width="1.4" stroke-linecap="round"/>
-  <line x1="11" y1="20" x2="20" y2="20" stroke="#D1D5DB" stroke-width="1.4" stroke-linecap="round"/>
-  <line x1="11" y1="24" x2="17" y2="24" stroke="#D1D5DB" stroke-width="1.4" stroke-linecap="round"/>
+    <!-- 카드 본체 -->
+    <rect x="6" y="6" width="22" height="30" rx="4"
+      fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.4"
+      filter="url(#cardShadowM)"/>
 
-  <!-- 핑크 LIVE 펄스 도트 — 우상단 -->
-  <circle cx="28" cy="12" r="7" fill="url(#dotGradM)"/>
-  <!-- 글로우 링 -->
-  <circle cx="28" cy="12" r="10" fill="#FF1F8F" opacity="0.16"/>
+    <!-- 카드 모서리 A — 좌상단 -->
+    <text x="8.5" y="15"
+      font-family="'Pretendard', 'Georgia', serif"
+      font-size="6.5" font-weight="900" letter-spacing="-0.03em"
+      fill="#111827">A</text>
+
+    <!-- 모서리 펄스 도트 — 우하단 -->
+    <circle cx="24.5" cy="33" r="1.6" fill="#E53E3E">
+      <animate attributeName="opacity" values="1;0.45;1" dur="1.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+
+    <!-- 중앙 LIVE 도트 -->
+    <!-- 글로우 원 (숨쉬기) -->
+    <circle cx="17" cy="22" r="9" fill="url(#liveGlowM)">
+      <animate attributeName="r" values="9;12;9" dur="2.0s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+      <animate attributeName="opacity" values="0.9;0.3;0.9" dur="2.0s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+    <!-- 메인 도트 -->
+    <circle cx="17" cy="22" r="6" fill="url(#liveDotGradM)">
+      <animate attributeName="r" values="6;6.8;6" dur="2.0s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+    <!-- 내부 하이라이트 -->
+    <circle cx="15" cy="20" r="1.8" fill="#FFFFFF" opacity="0.65"/>
+  </g>
 </svg>

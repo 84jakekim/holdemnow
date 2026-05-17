@@ -367,6 +367,47 @@ html, body {
   color: var(--text-3);
 }
 
+/* ── 브랜드 핑크 띠 인테리어 v5 ──────────────────────── */
+/*
+ * 핑크 띠는 세 군데에만: 탭바 활성 알약, 섹션 분리선, 공지 팝업 헤더
+ * 나머지는 라이트 톤 유지.
+ * 핑크 띠 위 텍스트/아이콘은 반드시 #FFFFFF.
+ */
+
+/* 탭바 활성 알약 — 핑크 솔리드 (옅은 pale → 솔리드 핑크로 강화) */
+.tabbar-active-pill {
+  background: var(--brand);
+  box-shadow: 0 2px 8px rgba(255,31,143,0.30);
+}
+
+/* 섹션 분리 띠 — 브랜드 핑크 그라데이션 (좌→우 페이드) */
+.brand-strip-divider {
+  height: 4px;
+  background: linear-gradient(90deg, var(--brand) 0%, rgba(255,31,143,0.35) 60%, transparent 100%);
+  border: none;
+}
+
+/* 공지/이벤트 팝업 헤더 핑크 띠 */
+.brand-band {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dim) 100%);
+  color: #FFFFFF;
+}
+.brand-band * {
+  color: #FFFFFF;
+}
+
+/* 헤더 상단 1px 핑크 액센트 라인 (하단 border 대체용) */
+.header-brand-accent {
+  border-bottom: 2px solid rgba(255,31,143,0.18);
+}
+
+/* 상단 상태바 영역 핑크 아주 옅은 배경 (선택적 사용) */
+.header-brand-tint {
+  background: linear-gradient(to bottom,
+    rgba(255,31,143,0.06) 0%,
+    rgba(255,255,255,0.96) 100%);
+}
+
 /* ── 어드민 / 플랫폼 — 다크 오버라이드 유지 ──────────── */
 /* admin, platform, organizer 라우트는 별도 다크 처리 */
 .admin-scope {

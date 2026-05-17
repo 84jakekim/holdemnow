@@ -101,12 +101,11 @@ export default function MobileHome() {
           1. 상단 헤더 — 위치 + 로고 + 알림
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <header
-        className="px-4 h-14 flex items-center justify-between sticky top-0 z-30"
+        className="px-4 h-14 flex items-center justify-between sticky top-0 z-30 header-brand-accent"
         style={{
-          background: 'rgba(255,255,255,0.94)',
+          background: 'rgba(255,255,255,0.95)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid var(--border)',
         }}
       >
         {/* 로고 + 위치 */}
@@ -219,8 +218,8 @@ export default function MobileHome() {
         )}
       </section>
 
-      {/* 섹션 구분 */}
-      <div className="section-divider mt-5" />
+      {/* 섹션 구분 — 브랜드 핑크 스트립 */}
+      <div className="brand-strip-divider mt-5" />
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           3. 원형 카테고리 아이콘 그리드 — lun DNA 핵심
@@ -293,24 +292,24 @@ export default function MobileHome() {
         </div>
       </section>
 
-      {/* 섹션 구분 */}
-      <div className="section-divider" />
+      {/* 섹션 구분 — 브랜드 핑크 스트립 */}
+      <div className="brand-strip-divider" />
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           4. 인기 매장 아바타 가로 스크롤 — lun 인기 유튜버 패턴
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <PopularStoresAvatarScroll liveByStore={liveByStore} />
 
-      {/* 섹션 구분 */}
-      <div className="section-divider" />
+      {/* 섹션 구분 — 브랜드 핑크 스트립 */}
+      <div className="brand-strip-divider" />
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           5. 내 주변 매장 TOP
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <NearbyStoresSection liveByStore={liveByStore} />
 
-      {/* 섹션 구분 */}
-      {series.length > 0 && <div className="section-divider mt-5" />}
+      {/* 섹션 구분 — 브랜드 핑크 스트립 */}
+      {series.length > 0 && <div className="brand-strip-divider mt-5" />}
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           6. 메이저 시리즈 (큰 포스터 카드)
@@ -342,8 +341,8 @@ export default function MobileHome() {
         </section>
       )}
 
-      {/* 섹션 구분 */}
-      <div className="section-divider" />
+      {/* 섹션 구분 — 브랜드 핑크 스트립 */}
+      <div className="brand-strip-divider" />
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           7. 콘텐츠 영역 — 추후 SNS/피드로 확장될 자리
@@ -651,10 +650,13 @@ const NEARBY_RADIUS_STEPS_KM = [20, 40, 60, 80, 100] as const;
 const NEARBY_RADIUS_INITIAL_KM = 20;
 const NEARBY_RADIUS_MAX_KM = 100;
 
+const NEARBY_LIST_INITIAL_COUNT = 20;
+
 function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
   const [stores, setStores] = useState<NearbyStore[]>([]);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(NEARBY_RADIUS_INITIAL_KM);
+  const [listExpanded, setListExpanded] = useState(false);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
@@ -775,14 +777,45 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
         <div className="w-3 flex-shrink-0" aria-hidden="true" />
       </div>
 
-      {/* 거리순 리스트 */}
+      {/* 거리순 리스트 — 기본 1~20개, 펼치기로 전체 */}
       <div className="mt-4">
-        {visible.map((st, idx) => (
+        {(listExpanded ? visible : visible.slice(0, NEARBY_LIST_INITIAL_COUNT)).map((st, idx) => (
           <NearbyStoreListRow key={st.id} store={st} live={liveByStore[st.id] || 0} rank={idx + 1} />
         ))}
       </div>
 
-      {/* 단계 확장 더보기 */}
+      {/* 펼치기/접기 토글 — 20개 초과 시만 노출 */}
+      {visible.length > NEARBY_LIST_INITIAL_COUNT && (
+        <div className="px-4 pt-3">
+          <button
+            onClick={() => setListExpanded((v) => !v)}
+            className="w-full py-3 rounded-2xl text-[13px] font-bold transition active:scale-[0.99] flex items-center justify-center gap-1.5"
+            style={{
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+            aria-expanded={listExpanded}
+          >
+            {listExpanded ? (
+              <>
+                접기
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
+              </>
+            ) : (
+              <>
+                <span>더 보기</span>
+                <span className="stat-number" style={{ color: 'var(--brand)' }}>
+                  +{visible.length - NEARBY_LIST_INITIAL_COUNT}개
+                </span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* 단계 확장 더보기 — 반경 늘리기 */}
       {canExpand && (
         <div className="px-4 pt-3 pb-1">
           <button

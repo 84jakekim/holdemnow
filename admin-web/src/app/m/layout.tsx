@@ -112,24 +112,31 @@ function TabBar({ pathname }: { pathname: string }) {
               aria-label={t.label}
               aria-current={active ? 'page' : undefined}
               className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors relative"
-              style={{ color: active ? 'var(--brand)' : 'var(--text-3)' }}
+              style={{ color: active ? '#FFFFFF' : 'var(--text-3)' }}
             >
-              {/* 활성 탭: 아이콘 위 아주 옅은 핑크 알약 */}
+              {/* 활성 탭: 핑크 솔리드 알약 배경 (브랜드 컨셉 띠 v5) */}
               {active && (
                 <span
-                  className="absolute top-1.5 left-1/2 -translate-x-1/2 rounded-full pointer-events-none"
+                  className="absolute top-1.5 left-1/2 -translate-x-1/2 rounded-full pointer-events-none tabbar-active-pill"
                   style={{
                     width: 44,
                     height: 28,
-                    background: 'var(--brand-pale)',
                   }}
                   aria-hidden="true"
                 />
               )}
-              <span className="relative z-10">{t.icon(active)}</span>
+              <span
+                className="relative z-10"
+                style={{ color: active ? '#FFFFFF' : undefined }}
+              >
+                {t.icon(active)}
+              </span>
               <span
                 className="relative z-10 text-[10px] leading-none"
-                style={{ fontWeight: active ? 700 : 500 }}
+                style={{
+                  fontWeight: active ? 700 : 500,
+                  color: active ? '#FFFFFF' : undefined,
+                }}
               >
                 {t.label}
               </span>

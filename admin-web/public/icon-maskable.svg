@@ -1,38 +1,71 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!--
-    hold'emNow Maskable 아이콘 v4
+    hold'emNow Maskable 아이콘 v5
     ─ 핑크 그라데이션 전체 배경 (OS 마스킹 대응)
-    ─ 흰 카드 슬릿 + 흰 도트
+    ─ 흰 에이스 카드 (기울임) + 흰 LIVE 도트 (♠ 대신)
     ─ 안전 영역(80%) = 중앙 410×410 안에 핵심 요소
+    ─ 카드 모서리 A + 도트 모두 흰색 (핑크 배경과 대비)
   -->
   <defs>
-    <linearGradient id="bgGradMK" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- 핑크 배경 그라데이션 -->
+    <linearGradient id="bgGradMK5" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FF1F8F"/>
-      <stop offset="100%" stop-color="#C4006B"/>
+      <stop offset="100%" stop-color="#B5006A"/>
     </linearGradient>
+    <!-- 흰 도트 내부 광택 그라데이션 -->
+    <radialGradient id="whiteDotGradMK" cx="38%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0.90"/>
+      <stop offset="100%" stop-color="#FFC0D8" stop-opacity="0.85"/>
+    </radialGradient>
+    <!-- 흰 글로우 -->
+    <radialGradient id="whiteGlowMK" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 카드 그림자 -->
+    <filter id="cardShadowMK" x="-12%" y="-12%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#000000" flood-opacity="0.22"/>
+    </filter>
   </defs>
 
   <!-- 핑크 전체 배경 -->
-  <rect width="512" height="512" fill="url(#bgGradMK)"/>
+  <rect width="512" height="512" fill="url(#bgGradMK5)"/>
 
   <!-- 배경 서클 질감 -->
-  <circle cx="256" cy="256" r="220" fill="#ffffff" opacity="0.06"/>
+  <circle cx="256" cy="256" r="230" fill="#FFFFFF" opacity="0.055"/>
+  <circle cx="340" cy="180" r="140" fill="#FFFFFF" opacity="0.04"/>
 
-  <!-- 흰 카드 그래픽 -->
-  <!-- 뒤 카드 (기울기) -->
-  <g transform="translate(256,248) rotate(-6) translate(-78,-95)">
-    <rect width="156" height="190" rx="16" fill="#ffffff" opacity="0.35"/>
-  </g>
-  <!-- 앞 카드 -->
-  <g transform="translate(256,248) rotate(4) translate(-78,-95)">
-    <rect width="156" height="190" rx="16" fill="#ffffff" opacity="0.90"/>
-    <!-- 슬릿 (핑크로 역대비) -->
-    <line x1="18" y1="60" x2="138" y2="60" stroke="#FF1F8F" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
-    <line x1="18" y1="86" x2="110" y2="86" stroke="#FF1F8F" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
-    <line x1="18" y1="112" x2="85" y2="112" stroke="#FF1F8F" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
-  </g>
+  <!-- ── 에이스 카드 (8° 회전, 안전 영역 내) ── -->
+  <g transform="translate(256,250) rotate(8) translate(-256,-250)">
 
-  <!-- 흰 도트 (우상단, 안전 영역 내) -->
-  <circle cx="345" cy="140" r="52" fill="#ffffff"/>
-  <circle cx="345" cy="140" r="72" fill="#ffffff" opacity="0.20"/>
+    <!-- 카드 본체 (흰색, 살짝 투명) -->
+    <rect x="130" y="105" width="252" height="316" rx="20"
+      fill="#FFFFFF" opacity="0.92"
+      filter="url(#cardShadowMK)"/>
+
+    <!-- 카드 모서리 A — 좌상단 (핑크 역대비로 핑크 or 다크) -->
+    <text x="150" y="158"
+      font-family="'Georgia', 'Times New Roman', serif"
+      font-size="60" font-weight="900" letter-spacing="-2"
+      fill="#D0006A">A</text>
+
+    <!-- 모서리 흰 도트 — 좌상단 -->
+    <circle cx="169" cy="180" r="9" fill="#D0006A" opacity="0.80">
+      <animate attributeName="opacity" values="0.8;0.4;0.8" dur="1.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+
+    <!-- ── 중앙 LIVE 도트 (핑크 배경 위 흰색) ── -->
+    <!-- 흰 글로우 ripple -->
+    <circle cx="256" cy="263" r="95" fill="url(#whiteGlowMK)">
+      <animate attributeName="r" values="95;125;95" dur="2.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+      <animate attributeName="opacity" values="0.9;0;0.9" dur="2.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+    <!-- 메인 흰 도트 -->
+    <circle cx="256" cy="263" r="54" fill="url(#whiteDotGradMK)">
+      <animate attributeName="r" values="54;60;54" dur="2.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+    <!-- 내부 핑크 틴트 역하이라이트 -->
+    <circle cx="243" cy="251" r="14" fill="#FF1F8F" opacity="0.18"/>
+  </g>
 </svg>

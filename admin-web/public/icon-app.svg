@@ -1,54 +1,108 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!--
-    hold'emNow PWA 앱 아이콘 v4
-    ─ 카드 슬릿 + 핑크 펄스 도트 심볼
+    hold'emNow PWA 앱 아이콘 v5
+    ─ 살짝 기울인 에이스 카드 + 빨강 그라데이션 LIVE 도트
     ─ 흰~핑크틴트 그라데이션 배경
-    ─ 카드 그래픽 중앙 + 우상단 핑크 도트
+    ─ 중앙 대형 에이스 카드 + 중앙 LIVE 도트 (♠ 대신)
+    ─ SMIL 애니메이션: 도트 숨쉬기 + 글로우 ripple
   -->
   <defs>
-    <linearGradient id="bgGradA" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- 배경 그라데이션 -->
+    <linearGradient id="bgGradA5" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF"/>
       <stop offset="100%" stop-color="#FFF0F7"/>
     </linearGradient>
-    <linearGradient id="dotGradA" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF1F8F"/>
-      <stop offset="100%" stop-color="#E01077"/>
-    </linearGradient>
-    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#111827" flood-opacity="0.10"/>
+    <!-- LIVE 도트 빨강 라디얼 그라데이션 (핵심) -->
+    <radialGradient id="liveDotGradA5" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#FF7070"/>
+      <stop offset="40%" stop-color="#E53E3E"/>
+      <stop offset="100%" stop-color="#9B1C1C"/>
+    </radialGradient>
+    <!-- ripple 글로우 -->
+    <radialGradient id="liveRipple1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E53E3E" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#E53E3E" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="liveRipple2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E53E3E" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#E53E3E" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 카드 그림자 -->
+    <filter id="cardShadowA5" x="-12%" y="-12%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#111827" flood-opacity="0.14"/>
+    </filter>
+    <!-- 도트 그림자 -->
+    <filter id="dotGlowA5" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#E53E3E" flood-opacity="0.50"/>
     </filter>
   </defs>
 
   <!-- 배경 -->
-  <rect width="512" height="512" fill="url(#bgGradA)"/>
+  <rect width="512" height="512" fill="url(#bgGradA5)"/>
 
-  <!-- 배경 서클 질감 -->
-  <circle cx="256" cy="240" r="200" fill="#FF1F8F" opacity="0.04"/>
+  <!-- 배경 서클 질감 (핑크 브랜드 미세 느낌) -->
+  <circle cx="256" cy="240" r="210" fill="#FF1F8F" opacity="0.032"/>
 
-  <!-- 카드 그래픽 (중앙, 약간 기울어진 느낌) -->
-  <!-- 뒤 카드 (살짝 회전) -->
-  <g transform="translate(256,245) rotate(-6) translate(-90,-110)">
-    <rect width="180" height="220" rx="18" fill="#F3F4F6" stroke="#E5E7EB" stroke-width="2" filter="url(#cardShadow)"/>
+  <!-- ── 에이스 카드 (중앙, 8° 회전) ── -->
+  <g transform="translate(256,248) rotate(8) translate(-256,-248)">
+
+    <!-- 카드 본체 -->
+    <rect x="126" y="98" width="260" height="330" rx="22"
+      fill="#FFFFFF" stroke="#E5E7EB" stroke-width="2.5"
+      filter="url(#cardShadowA5)"/>
+
+    <!-- 카드 광택 레이어 -->
+    <rect x="126" y="98" width="260" height="110" rx="22"
+      fill="rgba(255,255,255,0.40)" opacity="0.6"/>
+
+    <!-- 카드 모서리 A — 좌상단 -->
+    <text x="146" y="155"
+      font-family="'Georgia', 'Times New Roman', serif"
+      font-size="64" font-weight="900" letter-spacing="-2"
+      fill="#111827">A</text>
+
+    <!-- 모서리 스페이드 대신 빨강 도트 — 좌상단 A 아래 -->
+    <circle cx="167" cy="178" r="10" fill="#E53E3E">
+      <animate attributeName="opacity" values="1;0.5;1" dur="1.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+
+    <!-- 우하단 반전 A (실제 트럼프 카드 스타일) -->
+    <text x="386" y="398"
+      font-family="'Georgia', 'Times New Roman', serif"
+      font-size="64" font-weight="900" letter-spacing="-2"
+      text-anchor="end"
+      fill="#111827"
+      transform="rotate(180 356 370)">A</text>
+
+    <!-- 우하단 도트 -->
+    <circle cx="345" cy="348" r="10" fill="#E53E3E">
+      <animate attributeName="opacity" values="1;0.5;1" dur="1.8s" begin="0.9s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+
+    <!-- ── 중앙 메인 LIVE 도트 (♠ 대체) ── -->
+    <!-- ripple 3겹 (밖 → 안) -->
+    <circle cx="256" cy="263" r="104" fill="url(#liveRipple2)">
+      <animate attributeName="r" values="104;130;104" dur="2.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+      <animate attributeName="opacity" values="0.9;0;0.9" dur="2.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+    <circle cx="256" cy="263" r="80" fill="url(#liveRipple1)">
+      <animate attributeName="r" values="80;100;80" dur="2.4s" begin="0.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+      <animate attributeName="opacity" values="1;0;1" dur="2.4s" begin="0.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+    <!-- 메인 도트 본체 -->
+    <circle cx="256" cy="263" r="56" fill="url(#liveDotGradA5)" filter="url(#dotGlowA5)">
+      <animate attributeName="r" values="56;62;56" dur="2.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+    </circle>
+    <!-- 도트 내부 광택 -->
+    <circle cx="241" cy="249" r="16" fill="#FFFFFF" opacity="0.55"/>
+    <circle cx="248" cy="254" r="8" fill="#FFFFFF" opacity="0.30"/>
   </g>
-  <!-- 앞 카드 -->
-  <g transform="translate(256,245) rotate(4) translate(-90,-110)">
-    <rect width="180" height="220" rx="18" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="2" filter="url(#cardShadow)"/>
-    <!-- 카드 슬릿 3줄 -->
-    <line x1="22" y1="70" x2="158" y2="70" stroke="#D1D5DB" stroke-width="10" stroke-linecap="round"/>
-    <line x1="22" y1="100" x2="130" y2="100" stroke="#D1D5DB" stroke-width="10" stroke-linecap="round"/>
-    <line x1="22" y1="130" x2="100" y2="130" stroke="#D1D5DB" stroke-width="10" stroke-linecap="round"/>
-  </g>
 
-  <!-- 핑크 LIVE 펄스 도트 — 우상단 강조 -->
-  <circle cx="355" cy="135" r="60" fill="url(#dotGradA)"/>
-  <circle cx="355" cy="135" r="84" fill="#FF1F8F" opacity="0.14"/>
-  <circle cx="355" cy="135" r="104" fill="#FF1F8F" opacity="0.06"/>
-
-  <!-- 하단 워드마크 -->
-  <text x="256" y="456"
+  <!-- ── 하단 워드마크 ── -->
+  <text x="256" y="464"
     text-anchor="middle"
     font-family="'Pretendard', 'Inter', system-ui, -apple-system, sans-serif"
-    font-size="58" font-weight="800"
+    font-size="52" font-weight="800"
     letter-spacing="-2"
     fill="#111827">hold<tspan fill="#FF1F8F">'</tspan>em<tspan fill="#FF1F8F">Now</tspan></text>
 </svg>

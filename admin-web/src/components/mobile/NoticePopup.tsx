@@ -90,12 +90,37 @@ export default function NoticePopup() {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+      {/* 배경 오버레이 탭으로 닫기 */}
       <button
-        aria-label="닫기"
+        aria-label="팝업 닫기"
         onClick={() => setOpen(false)}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        tabIndex={-1}
       />
       <div className="relative w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl">
+        {/* 팝업 핑크 띠 헤더 */}
+        <div className="brand-band flex items-center justify-between px-5 py-3">
+          <div className="flex items-center gap-2">
+            {/* LIVE 도트 (공지 = 긴급 정보 신호) */}
+            <span className="w-2 h-2 rounded-full bg-white pulse-live flex-shrink-0" aria-hidden="true" />
+            <span className="text-[13px] font-extrabold tracking-tight text-white">공지사항</span>
+            {visible.length > 1 && (
+              <span className="text-[10px] font-bold bg-white/25 rounded-full px-2 py-0.5 text-white">
+                {visible.length}건
+              </span>
+            )}
+          </div>
+          <button
+            aria-label="닫기"
+            onClick={() => setOpen(false)}
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20 text-white transition active:bg-white/30"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
         {/* 공지 슬라이드 (여러 공지) */}
         <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none">
           {visible.map((notice) => (
