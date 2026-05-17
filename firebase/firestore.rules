@@ -159,6 +159,14 @@ service cloud.firestore {
       allow write: if isPlatformAdmin();
     }
 
+    // ===== 본사 팝업 공지 =====
+    // 모바일/어드민 진입 시 표시되는 본사 공지. 본사 관리자만 등록 의도지만 v0.1은
+    // platform_admin token claim이 없으므로 인증 사용자 누구나 write 허용(데모 패턴).
+    match /notices/{noticeId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
+    }
+
     // ===== 대회 (events) — 국내외 메이저 토너먼트 이벤트 =====
     // 대회사 또는 platform_admin이 등록. 모바일 사용자는 누구나 조회.
     match /events/{eventId} {

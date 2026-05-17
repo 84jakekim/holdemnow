@@ -37,18 +37,21 @@ export default function DiscoverPage() {
   // 지도 인스턴스 ref — handleUserSelect의 panTo가 KakaoMap 내부 ref를 공유해서 호출.
   const mapInstanceRef = useRef<any>(null);
 
-  // 현재 위치
+  // 현재 위치 — watchPosition으로 실시간 추적 (사용자가 이동하면 즉시 재정렬)
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      // browser API 부재는 사실상 발생 안 함('use client'). 비동기로 미뤄서 effect 동기 setState 회피.
       const tid = setTimeout(() => setLocationDenied(true), 0);
       return () => clearTimeout(tid);
     }
-    navigator.geolocation.getCurrentPosition(
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => setLocationDenied(true),
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 },
+      // enableHighAccuracy:false → GPS 대신 셀/와이파이 (배터리 절약 + 빠른 응답)
+      // maximumAge:30s → 30초 이내 캐시된 위치는 재사용
+      // timeout:10s → 10초 안에 못 잡으면 일시 실패 (또는 denied)
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
     );
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   // 매장 데이터
@@ -96,16 +99,15 @@ export default function DiscoverPage() {
     return map;
   }, [sessions]);
 
-  // 10km 반경 + 거리 정렬. LIVE 진행 중 매장은 거리와 무관하게 항상 포함 (핵심 기능).
-  const NEARBY_RADIUS_M = 10_000;
+  // 거리 정렬 — 거리 필터는 없음 (지도에 전체 매장 표시, 사용자가 줌·팬으로 탐색).
+  // 위치 이동 시 watchPosition이 userLocation 갱신 → useMemo 재계산 → 자동 재정렬.
   const nearbyStores = useMemo<NearbyStore[]>(() => {
     const withCoords = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
     if (!userLocation) return withCoords;
     return withCoords
       .map((s) => ({ ...s, _dist: haversineMeters(userLocation, { lat: s.lat!, lng: s.lng! }) }))
-      .filter((s) => (s._dist as number) <= NEARBY_RADIUS_M || (liveCountByStore[s.id] ?? 0) > 0)
       .sort((a, b) => (a._dist as number) - (b._dist as number));
-  }, [stores, userLocation, liveCountByStore]);
+  }, [stores, userLocation]);
 
   const totalLive = Object.values(liveCountByStore).reduce((a, b) => a + b, 0);
   const selected = stores.find((s) => s.id === selectedId);
@@ -184,7 +186,7 @@ export default function DiscoverPage() {
         >
           <div>
             <div className="text-[11px] text-gray-500">
-              {userLocation ? '내 주변 매장 · 10km' : locationDenied ? '서면 중심' : '위치 확인 중…'}
+              {userLocation ? '내 주변 매장 · 거리순 (실시간)' : locationDenied ? '서면 중심' : '위치 확인 중…'}
             </div>
             <div className="text-sm font-bold text-gray-900 mt-0.5 flex items-center gap-1.5">
               <span>{nearbyStores.length}개</span>
@@ -297,7 +299,7 @@ function NearbyStoresSheet({
       <div className="relative bg-white rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col">
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
           <div>
-            <div className="text-[11px] text-gray-500">내 주변 매장 · 10km · 거리순</div>
+            <div className="text-[11px] text-gray-500">내 주변 매장 · 거리순 (실시간)</div>
             <div className="text-base font-extrabold text-gray-900">{stores.length}개</div>
           </div>
           <button

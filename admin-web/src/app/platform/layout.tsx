@@ -15,6 +15,7 @@ const MENUS = [
   { id: 'stores', icon: '🏬', label: '매장 심사', href: '/platform/stores' },
   { id: 'organizers', icon: '🏢', label: '대회사 심사', href: '/platform/organizers' },
   { id: 'events', icon: '🎫', label: '대회 큐레이션', href: '/platform/events' },
+  { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
   { id: 'demo', icon: '🛠', label: '데모 데이터', href: '/platform/demo' },
   { id: 'stats', icon: '📈', label: '플랫폼 통계', href: '/platform/stats' },
 ];

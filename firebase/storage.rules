@@ -36,6 +36,12 @@ service firebase.storage {
       allow write: if request.auth.uid == userId && isImage() && maxSize(2);
     }
 
+    // 본사 공지 첨부 이미지 — 인증 사용자만 업로드 (페이지 자체가 platform_admin gating)
+    match /notices/{noticeId}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" width="200" height="40" role="img" aria-label="HoldemNow">
+  <!-- 심볼: 네온 핑크 펄스 도트 -->
+  <circle cx="14" cy="20" r="5" fill="#FF1F8F" opacity="0.9"/>
+  <circle cx="14" cy="20" r="9" fill="#FF1F8F" opacity="0.18"/>
+
+  <!-- 워드마크: Holdem -->
+  <text
+    x="26" y="26"
+    font-family="Inter, system-ui, -apple-system, sans-serif"
+    font-size="20" font-weight="800"
+    letter-spacing="-0.04em"
+    fill="#F0F2F6"
+  >Holdem</text>
+
+  <!-- 워드마크: Now (네온 핑크) -->
+  <text
+    x="116" y="26"
+    font-family="Inter, system-ui, -apple-system, sans-serif"
+    font-size="20" font-weight="800"
+    letter-spacing="-0.04em"
+    fill="#FF1F8F"
+  >Now</text>
+</svg>

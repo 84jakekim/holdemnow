@@ -1,25 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- Felt Black 배경 (Midnight Felt 디자인 시스템) -->
-  <rect width="512" height="512" rx="96" fill="#0A0E0C"/>
+  <!-- 다크 배경 -->
+  <rect width="512" height="512" rx="112" fill="#0D1117"/>
 
-  <!-- LIVE 펄스 도트 (Signal Red) -->
-  <circle cx="160" cy="256" r="48" fill="#D94B3D"/>
+  <!-- 외부 글로우 링 -->
+  <circle cx="256" cy="220" r="130" fill="none" stroke="#FF1F8F" stroke-width="3" opacity="0.20"/>
+  <!-- 중간 링 -->
+  <circle cx="256" cy="220" r="90" fill="none" stroke="#FF1F8F" stroke-width="2" opacity="0.35"/>
 
-  <!-- "H" 모노그램 (Champagne Gold) -->
-  <g transform="translate(220, 158)">
-    <path
-      d="M 0 0 L 0 196 L 32 196 L 32 114 L 128 114 L 128 196 L 160 196 L 160 0 L 128 0 L 128 86 L 32 86 L 32 0 Z"
-      fill="#D4AF37"
-    />
-  </g>
+  <!-- 네온 핑크 중앙 도트 -->
+  <circle cx="256" cy="220" r="52" fill="#FF1F8F" opacity="0.15"/>
+  <circle cx="256" cy="220" r="34" fill="#FF1F8F"/>
 
-  <!-- 하단 워드마크 (작게) -->
+  <!-- 하단 워드마크 -->
   <text
-    x="256" y="448"
+    x="256" y="390"
     text-anchor="middle"
-    fill="#F4F1E8"
+    fill="#F0F2F6"
     font-family="Inter, system-ui, sans-serif"
-    font-size="36" font-weight="800"
-    letter-spacing="-1"
-  >HoldemNow</text>
+    font-size="42" font-weight="800"
+    letter-spacing="-2"
+  >Holdem</text>
+  <text
+    x="256" y="440"
+    text-anchor="middle"
+    fill="#FF1F8F"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="42" font-weight="800"
+    letter-spacing="-2"
+  >Now</text>
 </svg>
