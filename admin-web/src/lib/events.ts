@@ -153,9 +153,18 @@ export async function getEvent(eventId: string): Promise<EventDoc | null> {
 
 export type EventInput = Omit<EventDoc, 'id' | 'createdAt' | 'updatedAt'>;
 
+/** Firestore는 undefined를 거부 — 옵셔널 필드는 키 자체를 제거해서 보냄. */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
 export async function createEvent(input: EventInput): Promise<string> {
   const ref = await addDoc(eventsCol(), {
-    ...input,
+    ...stripUndefined(input as Record<string, unknown>),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -164,7 +173,7 @@ export async function createEvent(input: EventInput): Promise<string> {
 
 export async function updateEvent(eventId: string, patch: Partial<EventInput>): Promise<void> {
   await updateDoc(doc(eventsCol(), eventId), {
-    ...patch,
+    ...stripUndefined(patch as Record<string, unknown>),
     updatedAt: serverTimestamp(),
   });
 }
