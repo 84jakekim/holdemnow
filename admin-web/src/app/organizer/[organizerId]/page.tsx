@@ -12,13 +12,15 @@ import {
   updateOrganizer,
 } from '@/lib/organizers';
 import SeriesPanel from '@/components/admin/SeriesPanel';
+import EventsPanel from '@/components/admin/EventsPanel';
 
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드' },
+  { id: 'events', icon: '🎫', label: '대회 등록' },
   { id: 'series', icon: '🏆', label: '시리즈 관리' },
   { id: 'partners', icon: '🏪', label: '협력 매장' },
   { id: 'broadcast', icon: '📣', label: '일괄 홍보' },
-  { id: 'finalists', icon: '🎫', label: '본선 진출자' },
+  { id: 'finalists', icon: '👥', label: '본선 진출자' },
   { id: 'ads', icon: '💼', label: '광고 패키지' },
   { id: 'stats', icon: '📈', label: '통계 리포트' },
 ];
@@ -110,8 +112,9 @@ export default function OrganizerAdminPage({ params }: { params: Promise<{ organ
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-5xl">
           {activeMenu === 'dashboard' && <OrganizerDashboard org={org} onActivate={() => updateOrganizer(org.id, { status: 'active' })} />}
+          {activeMenu === 'events' && <EventsPanel organizerId={org.id} organizerName={org.name} ownerUid={authState.user.uid} />}
           {activeMenu === 'series' && <SeriesPanel organizerId={org.id} />}
-          {activeMenu !== 'dashboard' && activeMenu !== 'series' && (
+          {activeMenu !== 'dashboard' && activeMenu !== 'series' && activeMenu !== 'events' && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />
           )}
         </div>

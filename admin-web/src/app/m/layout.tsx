@@ -7,6 +7,7 @@ const TABS = [
   { id: 'home', href: '/m', label: '홈', icon: '🏠' },
   { id: 'discover', href: '/m/discover', label: '탐색', icon: '🗺️' },
   { id: 'calendar', href: '/m/calendar', label: '토너', icon: '📅' },
+  { id: 'events', href: '/m/events', label: '대회', icon: '🏆' },
   { id: 'favorites', href: '/m/favorites', label: '즐겨찾기', icon: '⭐' },
   { id: 'my', href: '/m/my', label: '마이', icon: '👤' },
 ];
@@ -14,7 +15,10 @@ const TABS = [
 export default function MobileLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   // 풀스크린 페이지에서는 탭바 숨김
-  const isFullscreen = pathname.startsWith('/m/store/') || pathname.startsWith('/m/live/');
+  const isFullscreen =
+    pathname.startsWith('/m/store/') ||
+    pathname.startsWith('/m/live/') ||
+    pathname.startsWith('/m/events/'); // 대회 상세 페이지도 풀스크린
 
   return (
     <div className="min-h-screen bg-white">

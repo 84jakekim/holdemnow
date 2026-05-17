@@ -15,7 +15,7 @@ import { auth } from './firebase';
 
 const INTENT_KEY = 'hn-login-intent';
 
-export type LoginIntent = 'player' | 'store';
+export type LoginIntent = 'player' | 'store' | 'organizer';
 
 export function setLoginIntent(intent: LoginIntent) {
   if (typeof window === 'undefined') return;
@@ -30,7 +30,7 @@ export function getLoginIntent(): LoginIntent | null {
   if (typeof window === 'undefined') return null;
   try {
     const v = sessionStorage.getItem(INTENT_KEY);
-    return v === 'player' || v === 'store' ? v : null;
+    return v === 'player' || v === 'store' || v === 'organizer' ? v : null;
   } catch {
     return null;
   }
@@ -54,5 +54,11 @@ export async function loginAsPlayerWithGoogle(): Promise<void> {
 /** 매장 사장으로 Google 로그인 (/admin-login 페이지에서 호출) */
 export async function loginAsStoreOwnerWithGoogle(): Promise<void> {
   setLoginIntent('store');
+  await signInWithPopup(auth, new GoogleAuthProvider());
+}
+
+/** 대회사 어드민으로 Google 로그인 (/organizer-login 페이지에서 호출) */
+export async function loginAsOrganizerWithGoogle(): Promise<void> {
+  setLoginIntent('organizer');
   await signInWithPopup(auth, new GoogleAuthProvider());
 }

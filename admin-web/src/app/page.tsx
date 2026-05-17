@@ -58,9 +58,13 @@ export default function Home() {
     // 문서 없음 (Google 첫 로그인 또는 옛 세션) — 의도에 따라 분기
     const intent = getLoginIntent();
     if (intent === 'store') {
-      // /admin-login에서 명시적으로 매장 사장 로그인한 경우만 매장 가입 마법사로 이동
       clearLoginIntent();
       router.replace('/signup');
+      return;
+    }
+    if (intent === 'organizer') {
+      clearLoginIntent();
+      router.replace('/organizer-signup');
       return;
     }
     // 그 외 (intent='player' 또는 없음/만료) — 플레이어로 처리해서 /m으로.
@@ -115,13 +119,19 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col bg-gradient-to-b from-white to-gray-50 relative">
-      {/* 우상단: 매장 사장 로그인 진입점 */}
-      <div className="absolute top-4 right-4">
+      {/* 우상단: 사장·대회사 로그인 진입점 */}
+      <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
         <Link
           href="/admin-login"
           className="text-[11px] text-gray-500 hover:text-gray-900 underline-offset-2 hover:underline"
         >
           매장 사장이신가요? →
+        </Link>
+        <Link
+          href="/organizer-login"
+          className="text-[11px] text-gray-500 hover:text-gray-900 underline-offset-2 hover:underline"
+        >
+          대회사이신가요? →
         </Link>
       </div>
 

@@ -1,12 +1,13 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
   deleteDoc,
   onSnapshot,
   serverTimestamp,
@@ -20,7 +21,10 @@ import { posterStyleFor } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
+import { loadKakaoMaps, geocodeAddress } from '@/lib/kakao';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 interface StoreData {
   name: string;
@@ -30,6 +34,8 @@ interface StoreData {
   description?: string;
   facilities?: string[];
   photoUrls?: string[];
+  lat?: number;
+  lng?: number;
 }
 
 export default function MobileStorePage({ params }: { params: Promise<{ storeId: string }> }) {
@@ -56,8 +62,8 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   // 즐겨찾기 상태 구독
   useEffect(() => {
     if (authState.status !== 'authenticated') {
-      setIsFav(false);
-      return;
+      const tid = setTimeout(() => setIsFav(false), 0);
+      return () => clearTimeout(tid);
     }
     const unsub = onSnapshot(
       doc(db, 'users', authState.user.uid, 'favorites', storeId),
@@ -106,6 +112,28 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       setStore(snap.exists() ? (snap.data() as StoreData) : null);
     })();
   }, [storeId]);
+
+  // 좌표 없는 매장은 주소로 1회 geocoding → Firestore 캐시 + 로컬 반영
+  useEffect(() => {
+    if (!store || !store.address) return;
+    if (store.lat != null && store.lng != null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const coords = await geocodeAddress(store.address!);
+        if (cancelled || !coords) return;
+        setStore((prev) => (prev ? { ...prev, lat: coords.lat, lng: coords.lng } : prev));
+        updateDoc(doc(db, 'stores', storeId), { lat: coords.lat, lng: coords.lng }).catch(() => {
+          // owner 아니면 권한 거부 — 메모리만 반영
+        });
+      } catch {
+        // skip
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store, storeId]);
 
   useEffect(() => {
     const unsub = subscribeStoreLiveSessions(
@@ -185,6 +213,19 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           </div>
         )}
       </div>
+
+      {/* 위치 — 미니맵 (틀 안에서 직접 드래그/줌) */}
+      {store.lat != null && store.lng != null && (
+        <div className="px-5 py-4 border-b-[6px] border-gray-50">
+          <div className="text-xs font-extrabold text-gray-900 tracking-wider mb-3">
+            🗺 위치
+          </div>
+          <StoreMiniMap lat={store.lat} lng={store.lng} name={store.name} />
+          {store.address && (
+            <div className="text-[11px] text-gray-500 mt-2">📍 {store.address}</div>
+          )}
+        </div>
+      )}
 
       {/* LIVE 세션 멀티 타이머 그리드 */}
       {loading ? (
@@ -289,6 +330,108 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       </div>
     </div>
   );
+}
+
+/**
+ * 매장 상세 미니맵.
+ * - 틀 안에서 직접 드래그/핀치 줌/더블클릭 줌 가능 — 별도 전체보기 모달 없음.
+ * - 우상단 줌 컨트롤(+/-) 노출 — 카카오맵 표준 ZoomControl.
+ * - 마커는 매장명 뱃지 SVG (다크 알약 + 흰 텍스트 + 꼬리 핀).
+ */
+function StoreMiniMap({
+  lat,
+  lng,
+  name,
+}: {
+  lat: number;
+  lng: number;
+  name: string;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const maps = await loadKakaoMaps();
+        if (cancelled || !containerRef.current || mapRef.current) return;
+        const center = new maps.LatLng(lat, lng);
+        mapRef.current = new maps.Map(containerRef.current, {
+          center,
+          level: 3,
+          // 인터랙션 전부 허용 (default가 활성). 명시적으로 활성화 호출은 불필요.
+        });
+        // 줌 컨트롤(+/-) — 우상단
+        const zoomControl = new maps.ZoomControl();
+        mapRef.current.addControl(zoomControl, maps.ControlPosition.TOPRIGHT);
+        // 매장명 뱃지 마커
+        markerRef.current = new maps.Marker({
+          position: center,
+          map: mapRef.current,
+          image: buildNameBadgeMarker(maps, name),
+          title: name,
+        });
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lng, name]);
+
+  // 좌표 갱신(geocoding 결과 도착 등) — 중심 + 마커 위치
+  useEffect(() => {
+    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
+    if (!mapRef.current || !maps) return;
+    const pos = new maps.LatLng(lat, lng);
+    mapRef.current.setCenter(pos);
+    if (markerRef.current) markerRef.current.setPosition(pos);
+  }, [lat, lng]);
+
+  return (
+    <div className="relative w-full h-56 rounded-xl overflow-hidden border border-gray-200">
+      <div ref={containerRef} className="absolute inset-0" />
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-xs text-gray-500">
+          지도 로드 실패
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 매장명 뱃지 마커 — 다크 알약 + 흰색 매장명 + 아래 꼬리.
+ * 너비는 매장명 길이에 맞춰 자동 (한글 약 13px/자, 영문 약 8px/자 보수 추정).
+ */
+function buildNameBadgeMarker(maps: any, name: string) {
+  // 글자별 너비 추정 — 정확한 폰트 메트릭 대신 한글/영문 분기로 근사
+  const widthOf = (s: string) =>
+    Array.from(s).reduce((sum, ch) => sum + (/[ -~]/.test(ch) ? 8 : 13), 0);
+  const PAD_X = 14;
+  const TAIL_H = 8;
+  const PILL_H = 28;
+  const width = Math.max(60, widthOf(name) + PAD_X * 2);
+  const height = PILL_H + TAIL_H;
+  const cx = width / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width - 1}" height="${PILL_H - 1}" rx="${PILL_H / 2}" fill="#1F2937" stroke="#0F172A" stroke-width="1"/><text x="${cx}" y="${PILL_H / 2 + 5}" fill="#fff" font-family="Pretendard,Inter,system-ui,-apple-system,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${escapeSvg(name)}</text><polygon points="${cx - 6},${PILL_H} ${cx + 6},${PILL_H} ${cx},${PILL_H + TAIL_H}" fill="#1F2937" stroke="#0F172A" stroke-width="1"/></svg>`;
+  const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  return new maps.MarkerImage(url, new maps.Size(width, height), {
+    offset: new maps.Point(cx, height),
+  });
+}
+
+function escapeSvg(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function SessionTimerGrid({ sessions }: { sessions: LiveSession[] }) {

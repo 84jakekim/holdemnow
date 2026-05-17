@@ -13,7 +13,8 @@ import { db } from '@/lib/firebase';
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드', href: '/platform' },
   { id: 'stores', icon: '🏬', label: '매장 심사', href: '/platform/stores' },
-  { id: 'organizers', icon: '🏆', label: '대회사 심사', href: '/platform/organizers' },
+  { id: 'organizers', icon: '🏢', label: '대회사 심사', href: '/platform/organizers' },
+  { id: 'events', icon: '🎫', label: '대회 큐레이션', href: '/platform/events' },
   { id: 'demo', icon: '🛠', label: '데모 데이터', href: '/platform/demo' },
   { id: 'stats', icon: '📈', label: '플랫폼 통계', href: '/platform/stats' },
 ];

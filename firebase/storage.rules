@@ -19,6 +19,18 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(5);
     }
 
+    // 대회(events) 포스터 — 인증된 사용자만 업로드, 정밀 권한은 Firestore rules에서.
+    match /events/{eventId}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
+    // 대회사(organizers) 로고
+    match /organizers/{organizerId}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(3);
+    }
+
     match /users/{userId}/avatar/{file} {
       allow read: if true;
       allow write: if request.auth.uid == userId && isImage() && maxSize(2);

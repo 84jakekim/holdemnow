@@ -159,6 +159,25 @@ service cloud.firestore {
       allow write: if isPlatformAdmin();
     }
 
+    // ===== 대회 (events) — 국내외 메이저 토너먼트 이벤트 =====
+    // 대회사 또는 platform_admin이 등록. 모바일 사용자는 누구나 조회.
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (
+        isPlatformAdmin()
+        || request.resource.data.ownerUid == request.auth.uid
+      );
+      allow update: if isSignedIn() && (
+        isPlatformAdmin()
+        || resource.data.ownerUid == request.auth.uid
+        || (resource.data.organizerId != null && isOrganizerMember(resource.data.organizerId))
+      );
+      allow delete: if isSignedIn() && (
+        isPlatformAdmin()
+        || resource.data.ownerUid == request.auth.uid
+      );
+    }
+
     // ===== Collection Group 쿼리용 recursive 와일드카드 규칙 =====
     // stores/{storeId}/tournaments/{tournamentId} 같이 중첩된 path에 대해
     // collectionGroup('tournaments') 쿼리도 허용.
