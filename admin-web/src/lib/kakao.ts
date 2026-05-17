@@ -37,7 +37,19 @@ export function loadKakaoMaps(): Promise<any> {
       }
       if (Date.now() - start > TIMEOUT) {
         readyPromise = null;
-        reject(new Error('Kakao Maps SDK 로드 타임아웃 (10s). API 키·도메인 화이트리스트 확인.'));
+        // 진단 힌트
+        const has = !!window.kakao;
+        const scripts = Array.from(document.querySelectorAll('script[src*="dapi.kakao.com"]'));
+        const mapsScript = scripts[0] as HTMLScriptElement | undefined;
+        const detail = `window.kakao=${has}, scripts=${scripts.length}, src=${mapsScript?.src ?? 'none'}`;
+        console.error('[kakao] SDK 로드 실패. ' + detail);
+        console.error('[kakao] 가능한 원인:\n' +
+          '  1) 카카오 개발자 콘솔 → 플랫폼 → Web에 현재 도메인 미등록\n' +
+          '     현재 도메인: ' + window.location.origin + '\n' +
+          '  2) JavaScript 키 오타 또는 다른 앱의 키\n' +
+          '  3) 카카오맵 API 사용 설정 OFF (앱 설정에서 확인)\n' +
+          '  현재 키 prefix: ' + (process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY?.slice(0, 8) ?? 'EMPTY') + '...');
+        reject(new Error('Kakao Maps SDK 로드 타임아웃 (10s). ' + detail));
         return;
       }
       setTimeout(check, TICK);
