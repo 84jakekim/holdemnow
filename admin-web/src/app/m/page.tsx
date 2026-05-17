@@ -101,57 +101,71 @@ export default function MobileHome() {
           1. 상단 헤더 — 위치 + 로고 + 알림
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <header
-        className="px-4 h-14 flex items-center justify-between sticky top-0 z-30 header-brand-accent"
+        className="sticky top-0 z-30 header-brand-accent"
         style={{
           background: 'rgba(255,255,255,0.95)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
         }}
       >
-        {/* 로고 + 위치 */}
-        <div className="flex items-center gap-2.5">
-          <img
-            src="/logo-mark.svg"
-            alt="hold'emNow"
-            width={28}
-            height={28}
-            className="flex-shrink-0"
-            style={{ borderRadius: 7 }}
-          />
-          <button className="flex items-center gap-1 transition active:opacity-70">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)', flexShrink: 0 }} aria-hidden="true">
+        {/* 1단 — 브랜드 (로고마크 + 워드마크 hold'emNow) + 우측 액션 */}
+        <div className="px-4 h-14 flex items-center justify-between">
+          <Link href="/m" aria-label="HoldemNow 홈" className="flex items-center gap-2 transition active:opacity-70">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-mark.svg"
+              alt=""
+              width={30}
+              height={30}
+              className="flex-shrink-0"
+              style={{ borderRadius: 8 }}
+              aria-hidden="true"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.svg"
+              alt="hold'emNow"
+              height={22}
+              style={{ width: 'auto', display: 'block' }}
+            />
+          </Link>
+
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/m/search"
+              aria-label="검색"
+              className="w-9 h-9 flex items-center justify-center rounded-xl transition active:scale-90"
+              style={{ background: 'var(--surface-2)' }}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+            </Link>
+            <button
+              aria-label="알림"
+              className="w-9 h-9 flex items-center justify-center rounded-xl relative transition active:scale-90"
+              style={{ background: 'var(--surface-2)' }}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 01-3.46 0"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* 2단 — 위치 헤딩 (토스 스타일: 큰 글씨, 별도 줄) */}
+        <div className="px-4 pb-3 -mt-1">
+          <button className="flex items-center gap-1.5 transition active:opacity-70">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)', flexShrink: 0 }} aria-hidden="true">
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
               <circle cx="12" cy="10" r="3"/>
             </svg>
-            <span className="text-[15px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+            <span className="text-[16px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
               부산 서면
             </span>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)' }} aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)' }} aria-hidden="true">
               <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* 우측 액션 */}
-        <div className="flex items-center gap-1.5">
-          <Link
-            href="/m/search"
-            aria-label="검색"
-            className="w-9 h-9 flex items-center justify-center rounded-xl transition active:scale-90"
-            style={{ background: 'var(--surface-2)' }}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-            </svg>
-          </Link>
-          <button
-            aria-label="알림"
-            className="w-9 h-9 flex items-center justify-center rounded-xl relative transition active:scale-90"
-            style={{ background: 'var(--surface-2)' }}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 01-3.46 0"/>
             </svg>
           </button>
         </div>

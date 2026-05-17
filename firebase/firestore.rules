@@ -84,10 +84,15 @@ service cloud.firestore {
       allow read: if true;                               // 누구나 LIVE 피드 구독
       allow create: if isSignedIn()
         && (isStoreOwner(request.resource.data.storeId) || isStoreMember(request.resource.data.storeId));
+      // platform_admin은 본사 모니터링 페이지에서 전국 LIVE를 직접 제어 가능 (긴급 정지·종료·시간 조정).
       allow update: if isSignedIn()
-        && (isStoreOwner(resource.data.storeId) || isStoreMember(resource.data.storeId));
+        && (isStoreOwner(resource.data.storeId)
+            || isStoreMember(resource.data.storeId)
+            || isPlatformAdmin());
       allow delete: if isSignedIn()
-        && (isStoreOwner(resource.data.storeId) || isStoreMember(resource.data.storeId));
+        && (isStoreOwner(resource.data.storeId)
+            || isStoreMember(resource.data.storeId)
+            || isPlatformAdmin());
 
       match /events/{eventId} {
         // 이벤트 로그는 매장 스태프만 read, write는 Functions에서만

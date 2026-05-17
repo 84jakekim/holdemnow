@@ -12,6 +12,7 @@ import { db } from '@/lib/firebase';
 
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드', href: '/platform' },
+  { id: 'live', icon: '🎬', label: '전국 LIVE', href: '/platform/live' },
   { id: 'stores', icon: '🏬', label: '매장 심사', href: '/platform/stores' },
   { id: 'organizers', icon: '🏢', label: '대회사 심사', href: '/platform/organizers' },
   { id: 'events', icon: '🎫', label: '대회 큐레이션', href: '/platform/events' },

@@ -1,0 +1,331 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import {
+  subscribeAllLiveSessions,
+  type LiveSession,
+  fmtTime,
+  computeLateRegMinutes,
+  useLiveCountdown,
+  togglePauseSession,
+  goToLevelInSession,
+  addSecondsToSession,
+  stopLiveSession,
+} from '@/lib/live';
+
+/**
+ * 본사 모니터링 — 전국 모든 매장의 LIVE 세션을 지역별로 모아서 표시.
+ * 본사 운영팀이 긴급 상황 시 직접 제어 가능 (일시정지·레벨 이동·시간 조정·종료).
+ * 진행 중(running/paused/break)인 세션만 — subscribeAllLiveSessions이 이미 필터.
+ */
+
+interface StoreInfo {
+  name: string;
+  address?: string;
+  region: string;
+}
+
+/** 주소에서 광역 단위 추출. "부산광역시 부산진구 ..." → "부산". */
+function regionFromAddress(address?: string): string {
+  if (!address) return '미분류';
+  const first = address.trim().split(/\s+/)[0];
+  if (!first) return '미분류';
+  // 부산광역시·서울특별시·세종특별자치시 → 앞 2글자
+  if (first.includes('광역시') || first.includes('특별시') || first.includes('특별자치시')) {
+    return first.slice(0, 2);
+  }
+  // 강원특별자치도·전북특별자치도 → '강원'·'전북'
+  if (first.includes('특별자치도')) return first.slice(0, 2);
+  // 경기도·충북·전남 등 → 끝 '도' 제거
+  if (first.endsWith('도') && first.length >= 2) return first.replace(/도$/, '');
+  return first.slice(0, 4);
+}
+
+export default function PlatformLivePage() {
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
+  const [stores, setStores] = useState<Record<string, StoreInfo>>({});
+  const [loading, setLoading] = useState(true);
+  const [collapsedRegions, setCollapsedRegions] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const unsub = subscribeAllLiveSessions(
+      (items) => {
+        setSessions(items);
+        setLoading(false);
+      },
+      () => setLoading(false),
+    );
+    return unsub;
+  }, []);
+
+  // 매장 정보(주소) fetch — 지역 분류용
+  useEffect(() => {
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, 'stores'));
+        const map: Record<string, StoreInfo> = {};
+        snap.forEach((d) => {
+          const data = d.data() as { name: string; address?: string };
+          map[d.id] = {
+            name: data.name,
+            address: data.address,
+            region: regionFromAddress(data.address),
+          };
+        });
+        setStores(map);
+      } catch {
+        /* skip */
+      }
+    })();
+  }, []);
+
+  // 지역별 그룹화
+  const grouped = useMemo(() => {
+    const map: Record<string, LiveSession[]> = {};
+    for (const s of sessions) {
+      const region = stores[s.storeId]?.region ?? '미분류';
+      (map[region] ??= []).push(s);
+    }
+    // 지역별 정렬: 세션 수 많은 순 → 지역명 가나다순
+    return Object.entries(map).sort((a, b) => {
+      if (a[1].length !== b[1].length) return b[1].length - a[1].length;
+      return a[0].localeCompare(b[0], 'ko');
+    });
+  }, [sessions, stores]);
+
+  const totalCount = sessions.length;
+  const totalRunning = sessions.filter((s) => s.status === 'running').length;
+  const totalPaused = sessions.filter((s) => s.status === 'paused').length;
+
+  return (
+    <div>
+      {/* 헤더 */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🎬 전국 LIVE 모니터링</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          모든 매장의 진행 중인 LIVE 세션을 본사가 직접 모니터링·제어합니다.
+        </p>
+      </div>
+
+      {/* 요약 */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <Summary label="총 LIVE" value={totalCount} highlight />
+        <Summary label="진행 중" value={totalRunning} color="green" />
+        <Summary label="일시정지" value={totalPaused} color="amber" />
+        <Summary label="지역" value={grouped.length} />
+      </div>
+
+      {/* 결과 */}
+      {loading ? (
+        <div className="py-10 text-center text-sm text-gray-500">로딩 중…</div>
+      ) : grouped.length === 0 ? (
+        <div className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-12 text-center">
+          <div className="text-4xl mb-3">🎬</div>
+          <div className="font-bold text-gray-900 mb-2">현재 진행 중인 LIVE가 없습니다</div>
+          <div className="text-xs text-gray-500 leading-relaxed max-w-md mx-auto">
+            매장 어드민에서 LIVE 시작 시 이 페이지에 즉시 노출됩니다.
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map(([region, list]) => {
+            const collapsed = collapsedRegions[region] ?? false;
+            const running = list.filter((s) => s.status === 'running').length;
+            const paused = list.filter((s) => s.status === 'paused').length;
+            return (
+              <section key={region} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                <button
+                  onClick={() =>
+                    setCollapsedRegions((prev) => ({ ...prev, [region]: !collapsed }))
+                  }
+                  className="w-full px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-left hover:bg-gray-100"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">📍</span>
+                    <span className="font-extrabold text-gray-900">{region}</span>
+                    <span className="text-xs text-gray-500">
+                      {list.length}개 LIVE
+                      {running > 0 ? ` · 진행 ${running}` : ''}
+                      {paused > 0 ? ` · 일시정지 ${paused}` : ''}
+                    </span>
+                  </div>
+                  <span className="text-gray-400 text-sm">{collapsed ? '▼' : '▲'}</span>
+                </button>
+                {!collapsed && (
+                  <div className="divide-y divide-gray-100">
+                    {list.map((s) => (
+                      <SessionRow
+                        key={s.id}
+                        session={s}
+                        storeAddress={stores[s.storeId]?.address}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Summary({
+  label,
+  value,
+  highlight,
+  color,
+}: {
+  label: string;
+  value: number;
+  highlight?: boolean;
+  color?: 'green' | 'amber';
+}) {
+  const valColor = color === 'green' ? 'text-green-600' : color === 'amber' ? 'text-amber-600' : highlight ? 'text-red-600' : 'text-gray-900';
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{label}</div>
+      <div className={`font-mono text-xl font-extrabold ${valColor}`}>{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+/* ============================================================
+ * 세션 한 행 — 정보 + 컨트롤 버튼
+ * ========================================================== */
+
+function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddress?: string }) {
+  const sec = useLiveCountdown(session);
+  const [busy, setBusy] = useState(false);
+  const isPaused = session.status === 'paused';
+  const isRunning = session.status === 'running';
+  const lateMin = computeLateRegMinutes(session, sec);
+
+  const wrap = async (fn: () => Promise<unknown>, label: string) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e: unknown) {
+      alert(`${label} 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!window.confirm(`[${session.storeName}] ${session.tournamentName} LIVE를 종료할까요?`)) return;
+    await wrap(() => stopLiveSession(session, sec), '종료');
+  };
+
+  return (
+    <div className="px-5 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50">
+      {/* 매장 + 토너 — 4열 */}
+      <div className="col-span-4 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          {isPaused ? (
+            <span className="text-[10px] font-extrabold tracking-wider text-amber-700">⏸ PAUSED</span>
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[10px] font-extrabold tracking-wider text-red-600">LIVE</span>
+            </>
+          )}
+          <span className="text-sm font-bold text-gray-900 truncate">{session.storeName}</span>
+        </div>
+        <div className="text-xs text-gray-700 truncate">{session.tournamentName}</div>
+        {storeAddress && (
+          <div className="text-[10px] text-gray-400 truncate mt-0.5">📍 {storeAddress}</div>
+        )}
+      </div>
+
+      {/* 핵심 지표 — 5열 */}
+      <div className="col-span-5 grid grid-cols-4 gap-2 text-center">
+        <div>
+          <div className="text-[9px] font-bold text-gray-500 tracking-wider">남은시간</div>
+          <div className={`font-mono text-base font-extrabold ${sec <= 60 && isRunning ? 'text-red-500' : isPaused ? 'text-amber-700' : 'text-gray-900'}`}>
+            {fmtTime(sec)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] font-bold text-gray-500 tracking-wider">레벨</div>
+          <div className="text-sm font-extrabold text-gray-900">Lv {session.currentLevel}</div>
+        </div>
+        <div>
+          <div className="text-[9px] font-bold text-gray-500 tracking-wider">블라인드</div>
+          <div className="font-mono text-sm font-bold text-gray-900">
+            {session.smallBlind}/{session.bigBlind}
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] font-bold text-gray-500 tracking-wider">인원</div>
+          <div className="text-sm font-bold text-gray-900">
+            {session.playersRemaining}<span className="text-[10px] text-gray-500">/{session.totalPlayers}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 컨트롤 — 3열 */}
+      <div className="col-span-3 flex flex-wrap gap-1 justify-end">
+        <button
+          onClick={() => wrap(() => togglePauseSession(session, sec), isPaused ? '재개' : '일시정지')}
+          disabled={busy}
+          className={`px-2.5 py-1.5 rounded text-[11px] font-bold disabled:opacity-40 ${
+            isPaused ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-amber-500 text-white hover:bg-amber-600'
+          }`}
+          title={isPaused ? '재개' : '일시정지'}
+        >
+          {isPaused ? '▶ 재개' : '⏸ 일시정지'}
+        </button>
+        <button
+          onClick={() => wrap(() => goToLevelInSession(session, -1, sec), '이전 레벨')}
+          disabled={busy || session.currentLevel <= 1}
+          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+          title="이전 레벨"
+        >
+          ◀ Lv
+        </button>
+        <button
+          onClick={() => wrap(() => goToLevelInSession(session, 1, sec), '다음 레벨')}
+          disabled={busy}
+          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+          title="다음 레벨"
+        >
+          Lv ▶
+        </button>
+        <button
+          onClick={() => wrap(() => addSecondsToSession(session, sec, 60), '시간 +60s')}
+          disabled={busy}
+          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+          title="+60초"
+        >
+          +60s
+        </button>
+        <button
+          onClick={() => wrap(() => addSecondsToSession(session, sec, -60), '시간 -60s')}
+          disabled={busy || sec <= 60}
+          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+          title="-60초"
+        >
+          -60s
+        </button>
+        <button
+          onClick={handleStop}
+          disabled={busy}
+          className="px-2.5 py-1.5 rounded text-[11px] font-bold bg-red-50 hover:bg-red-100 text-red-700 disabled:opacity-40"
+          title="LIVE 종료"
+        >
+          ⏹ 종료
+        </button>
+        {!session.lateRegClosed && lateMin > 0 && (
+          <div className="text-[10px] text-gray-500 mt-1 w-full text-right">
+            등록 {lateMin}분 남음
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
