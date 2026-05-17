@@ -72,7 +72,7 @@ export default function RootLayout({
           <Script
             id="kakao-maps-sdk"
             strategy="afterInteractive"
-            src={`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=services&autoload=false`}
+            src={`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=services,clusterer&autoload=false`}
           />
         )}
         {/* Kakao JS SDK (Auth/공유 등) — Maps와 다른 별도 SDK */}

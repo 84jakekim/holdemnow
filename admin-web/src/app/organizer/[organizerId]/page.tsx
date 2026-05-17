@@ -37,11 +37,15 @@ export default function OrganizerAdminPage({ params }: { params: Promise<{ organ
     return unsub;
   }, [organizerId]);
 
+  // 비로그인 → 메인 (effect로)
+  useEffect(() => {
+    if (authState.status === 'anonymous') router.replace('/');
+  }, [authState.status, router]);
+
   if (authState.status === 'loading' || org === undefined) {
     return <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</div>;
   }
   if (authState.status === 'anonymous') {
-    if (typeof window !== 'undefined') router.replace('/');
     return null;
   }
   if (org === null) {

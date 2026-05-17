@@ -22,11 +22,15 @@ export default function OrganizerSignupPage() {
     agree: false,
   });
 
+  // 비로그인 → 대회사 로그인 (effect로)
+  useEffect(() => {
+    if (authState.status === 'anonymous') router.replace('/organizer-login');
+  }, [authState.status, router]);
+
   if (authState.status === 'loading') {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
   }
   if (authState.status === 'anonymous') {
-    if (typeof window !== 'undefined') router.replace('/organizer-login');
     return null;
   }
 

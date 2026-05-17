@@ -35,11 +35,15 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
   const [activeMenu, setActiveMenu] = useState('dashboard');
 
+  // 비로그인 시 메인으로 리다이렉트 (render 중 직접 호출하면 React가 경고 — effect로 옮김)
+  useEffect(() => {
+    if (authState.status === 'anonymous') router.replace('/');
+  }, [authState.status, router]);
+
   if (authState.status === 'loading' || store === undefined) {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
   }
   if (authState.status === 'anonymous') {
-    if (typeof window !== 'undefined') router.replace('/');
     return null;
   }
   if (store === null) {

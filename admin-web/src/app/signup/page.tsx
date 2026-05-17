@@ -76,11 +76,15 @@ export default function SignupPage() {
     return () => clearTimeout(t);
   }, [form.addressQuery]);
 
+  // 비로그인 → 메인 (effect로)
+  useEffect(() => {
+    if (authState.status === 'anonymous') router.replace('/');
+  }, [authState.status, router]);
+
   if (authState.status === 'loading') {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
   }
   if (authState.status === 'anonymous') {
-    if (typeof window !== 'undefined') router.replace('/');
     return null;
   }
 

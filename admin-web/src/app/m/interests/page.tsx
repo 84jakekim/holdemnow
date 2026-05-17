@@ -44,11 +44,15 @@ export default function InterestsPage() {
       .sort((a, b) => (a.startsAt as Timestamp).toDate().getTime() - (b.startsAt as Timestamp).toDate().getTime());
   }, [items]);
 
+  // 비로그인 → /m (effect로)
+  useEffect(() => {
+    if (authState.status === 'anonymous') router.replace('/m');
+  }, [authState.status, router]);
+
   if (authState.status === 'loading') {
     return <div className="p-6 text-center text-sm text-gray-500">로딩 중…</div>;
   }
   if (authState.status === 'anonymous') {
-    if (typeof window !== 'undefined') router.replace('/m');
     return null;
   }
 

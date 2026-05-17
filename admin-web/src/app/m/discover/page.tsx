@@ -381,12 +381,16 @@ function KakaoMap({
   mapInstanceRef: React.MutableRefObject<any>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
+  // 일반 매장 마커 — MarkerClusterer에 위탁 (멀리서 그룹화, 가까이서 개별)
+  const normalMarkersRef = useRef<Map<string, any>>(new Map());
+  // LIVE 매장 마커 — 클러스터에서 제외, 항상 직접 가시 (LIVE는 핵심)
+  const liveMarkersRef = useRef<Map<string, any>>(new Map());
+  const clustererRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
   const radiusCircleRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
 
-  // 지도 초기화 — 위치 결정 후 사용자 위치 중심으로 시작
+  // 지도 + 클러스터러 초기화 — 위치 결정 후 사용자 위치 중심으로 시작
   useEffect(() => {
     if (!userLocation && !locationDenied) return;
     let cancelled = false;
@@ -398,6 +402,16 @@ function KakaoMap({
           ? new maps.LatLng(userLocation.lat, userLocation.lng)
           : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
         mapInstanceRef.current = new maps.Map(containerRef.current, { center, level: 4 });
+        // MarkerClusterer — level 6 이상(멀리)에서 그룹화. 가까이 줌인하면 개별 매장명 뱃지.
+        clustererRef.current = new maps.MarkerClusterer({
+          map: mapInstanceRef.current,
+          averageCenter: true,
+          minLevel: 6,
+          gridSize: 80,
+          disableClickZoom: false,
+          calculator: [10, 30, 100, 300],
+          styles: clusterStyles(),
+        });
         setMapReady(true);
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));
@@ -441,43 +455,88 @@ function KakaoMap({
     }
   }, [mapReady, userLocation, mapInstanceRef]);
 
-  // 매장 마커 동기화
+  // 매장 마커 동기화 — LIVE는 직접 map, 일반은 clusterer.
+  // 같은 매장의 LIVE↔일반 전이도 정확히 처리 (한쪽에서 제거 후 반대로 추가).
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
+    if (!mapInstanceRef.current || !clustererRef.current) return;
     const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
     if (!maps) return;
 
     const validStores = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
-    const seen = new Set<string>();
+    const seenNormal = new Set<string>();
+    const seenLive = new Set<string>();
+    const newClusterMarkers: any[] = [];
 
     for (const s of validStores) {
-      seen.add(s.id);
       const live = liveCountByStore[s.id] || 0;
       const isSelected = s.id === selectedId;
       const pos = new maps.LatLng(s.lat!, s.lng!);
+      const image = getMarkerImage(maps, { name: s.name, live, selected: isSelected });
 
-      const existing = markersRef.current.get(s.id);
-      if (existing) {
-        existing.setPosition(pos);
-        existing.setImage(buildMarkerImage(maps, { live, selected: isSelected }));
-        continue;
+      if (live > 0) {
+        seenLive.add(s.id);
+        // 이전에 일반이었다면 클러스터에서 제거
+        const wasNormal = normalMarkersRef.current.get(s.id);
+        if (wasNormal) {
+          clustererRef.current.removeMarker(wasNormal);
+          normalMarkersRef.current.delete(s.id);
+        }
+        const existing = liveMarkersRef.current.get(s.id);
+        if (existing) {
+          existing.setPosition(pos);
+          existing.setImage(image);
+        } else {
+          const marker = new maps.Marker({
+            position: pos,
+            map: mapInstanceRef.current,
+            title: s.name,
+            image,
+            zIndex: 25,
+          });
+          maps.event.addListener(marker, 'click', () => onSelect(s.id));
+          liveMarkersRef.current.set(s.id, marker);
+        }
+      } else {
+        seenNormal.add(s.id);
+        // 이전에 LIVE였다면 직접 마커 제거
+        const wasLive = liveMarkersRef.current.get(s.id);
+        if (wasLive) {
+          wasLive.setMap(null);
+          liveMarkersRef.current.delete(s.id);
+        }
+        const existing = normalMarkersRef.current.get(s.id);
+        if (existing) {
+          existing.setPosition(pos);
+          existing.setImage(image);
+        } else {
+          const marker = new maps.Marker({
+            position: pos,
+            title: s.name,
+            image,
+            zIndex: isSelected ? 20 : 10,
+          });
+          maps.event.addListener(marker, 'click', () => onSelect(s.id));
+          normalMarkersRef.current.set(s.id, marker);
+          newClusterMarkers.push(marker);
+        }
       }
-
-      const marker = new maps.Marker({
-        position: pos,
-        map: mapInstanceRef.current,
-        title: s.name,
-        image: buildMarkerImage(maps, { live, selected: isSelected }),
-        zIndex: live > 0 ? 20 : isSelected ? 25 : 10,
-      });
-      maps.event.addListener(marker, 'click', () => onSelect(s.id));
-      markersRef.current.set(s.id, marker);
     }
 
-    for (const [id, m] of markersRef.current) {
-      if (!seen.has(id)) {
+    if (newClusterMarkers.length > 0) {
+      clustererRef.current.addMarkers(newClusterMarkers);
+    }
+
+    // 사라진 매장 정리
+    for (const [id, m] of normalMarkersRef.current) {
+      if (!seenNormal.has(id)) {
+        clustererRef.current.removeMarker(m);
+        normalMarkersRef.current.delete(id);
+      }
+    }
+    for (const [id, m] of liveMarkersRef.current) {
+      if (!seenLive.has(id)) {
         m.setMap(null);
-        markersRef.current.delete(id);
+        liveMarkersRef.current.delete(id);
       }
     }
   }, [stores, liveCountByStore, selectedId, onSelect, mapInstanceRef]);
@@ -486,32 +545,98 @@ function KakaoMap({
 }
 
 /**
- * 마커 이미지.
- * LIVE 진행 중 → 빨간 알약 (눈에 띄게).
- * 일반 홀덤펍 → 다크 핀(표준 location pin) + 흰 원 안에 ♠ 스페이드. 선택 시 골드.
- * 사이즈는 선택/비선택 통일(28x38) — 색상으로만 강조.
+ * 마커 이미지 — 매장명 뱃지 형식.
+ * 일반: 다크 알약 + 흰 매장명 + 꼬리. 선택 시 골드.
+ * LIVE: 빨강 알약 + 흰 점 + 흰 'LIVE' 라벨 + 흰 매장명 + 꼬리. 선택 시 진한 빨강 stroke.
+ * 매장 수천개 대비 → cache key별로 MarkerImage 재사용.
  */
-function buildMarkerImage(maps: any, opts: { live: number; selected: boolean }) {
-  const { live, selected } = opts;
+const _markerImageCache = new Map<string, any>();
+function getMarkerImage(maps: any, opts: { name: string; live: number; selected: boolean }) {
+  const key = `${opts.live}|${opts.selected ? 's' : ''}|${opts.name}`;
+  const cached = _markerImageCache.get(key);
+  if (cached) return cached;
+  const img = buildMarkerImage(maps, opts);
+  _markerImageCache.set(key, img);
+  return img;
+}
+
+function buildMarkerImage(maps: any, opts: { name: string; live: number; selected: boolean }) {
+  const { name, live, selected } = opts;
+  const PILL_H = 26;
+  const TAIL_H = 7;
+  const height = PILL_H + TAIL_H;
+  const nameW = widthOf(name);
+  const safeName = escapeSvg(name);
 
   if (live > 0) {
-    const label = live > 1 ? `LIVE ${live}` : 'LIVE';
-    const width = label.length * 8 + 16;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="28" viewBox="0 0 ${width} 28"><rect x="0" y="0" width="${width}" height="24" rx="12" fill="#D94B3D" stroke="${selected ? '#000' : 'none'}" stroke-width="${selected ? 2 : 0}"/><circle cx="10" cy="12" r="3" fill="#fff"/><text x="${width / 2 + 4}" y="16" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="10" font-weight="800" text-anchor="middle">${label}</text><polygon points="${width / 2 - 4},24 ${width / 2 + 4},24 ${width / 2},28" fill="#D94B3D"/></svg>`;
+    // LIVE: 빨강 알약 + ● + LIVE 라벨 + 매장명
+    const liveLabel = live > 1 ? `LIVE ${live}` : 'LIVE';
+    const liveLabelW = liveLabel.length * 6;
+    const LEFT = 8;
+    const DOT = 6;
+    const G1 = 5;
+    const G2 = 8;
+    const RIGHT = 12;
+    const width = LEFT + DOT + G1 + liveLabelW + G2 + nameW + RIGHT;
+    const cx = width / 2;
+    const dotX = LEFT + DOT / 2;
+    const liveX = LEFT + DOT + G1;
+    const nameX = liveX + liveLabelW + G2;
+    const fill = '#D94B3D';
+    const stroke = selected ? '#7F1D1D' : '#991B1B';
+    const sw = selected ? 2 : 1;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width - 1}" height="${PILL_H - 1}" rx="${PILL_H / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/><circle cx="${dotX}" cy="${PILL_H / 2}" r="${DOT / 2}" fill="#fff"/><text x="${liveX}" y="${PILL_H / 2 + 4}" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="10" font-weight="800">${liveLabel}</text><text x="${nameX}" y="${PILL_H / 2 + 5}" fill="#fff" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800">${safeName}</text><polygon points="${cx - 6},${PILL_H} ${cx + 6},${PILL_H} ${cx},${PILL_H + TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`;
     const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-    return new maps.MarkerImage(url, new maps.Size(width, 28), {
-      offset: new maps.Point(width / 2, 28),
+    return new maps.MarkerImage(url, new maps.Size(width, height), {
+      offset: new maps.Point(cx, height),
     });
   }
 
-  // 표준 location pin — 단순/검증된 path. 사이즈 28x38 통일, 색상으로 선택 강조.
+  // 일반: 다크 알약 + 매장명
+  const PAD = 14;
+  const width = nameW + PAD * 2;
+  const cx = width / 2;
   const fill = selected ? '#D97706' : '#1F2937';
   const stroke = selected ? '#7C2D12' : '#0F172A';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38"><path d="M14 37 C14 37 26 22 26 13 C26 6.4 20.6 1 14 1 C7.4 1 2 6.4 2 13 C2 22 14 37 14 37 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/><circle cx="14" cy="13" r="6" fill="#fff"/><text x="14" y="17" text-anchor="middle" font-size="11" font-weight="800" fill="${fill}" font-family="Arial,sans-serif">♠</text></svg>`;
+  const sw = selected ? 2 : 1;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width - 1}" height="${PILL_H - 1}" rx="${PILL_H / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/><text x="${cx}" y="${PILL_H / 2 + 5}" fill="#fff" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${safeName}</text><polygon points="${cx - 6},${PILL_H} ${cx + 6},${PILL_H} ${cx},${PILL_H + TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`;
   const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(28, 38), {
-    offset: new maps.Point(14, 37),
+  return new maps.MarkerImage(url, new maps.Size(width, height), {
+    offset: new maps.Point(cx, height),
   });
+}
+
+function widthOf(s: string): number {
+  // 한글 12px/자, 영문/숫자/기호 7px/자 근사
+  return Array.from(s).reduce((sum, ch) => sum + (/[\x00-\x7F]/.test(ch) ? 7 : 12), 0);
+}
+
+function escapeSvg(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** MarkerClusterer 단계별 스타일 — 다크 원 + 흰 카운트, calculator 단계 수 +1개 필요 */
+function clusterStyles() {
+  const base = {
+    color: '#fff',
+    textAlign: 'center' as const,
+    fontWeight: '800' as const,
+    fontFamily: 'Inter,system-ui,sans-serif',
+    border: '2px solid #0F172A',
+    background: '#1F2937',
+  };
+  return [
+    { ...base, width: '36px', height: '36px', borderRadius: '18px', lineHeight: '32px', fontSize: '12px' },
+    { ...base, width: '44px', height: '44px', borderRadius: '22px', lineHeight: '40px', fontSize: '13px' },
+    { ...base, width: '52px', height: '52px', borderRadius: '26px', lineHeight: '48px', fontSize: '14px' },
+    { ...base, width: '60px', height: '60px', borderRadius: '30px', lineHeight: '56px', fontSize: '15px' },
+    { ...base, width: '72px', height: '72px', borderRadius: '36px', lineHeight: '68px', fontSize: '16px' },
+  ];
 }
 
 function buildUserMarker(maps: any) {
