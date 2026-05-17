@@ -55,29 +55,30 @@ export default function Home() {
       return;
     }
 
-    // 문서 없음 (Google 첫 로그인) — 의도에 따라 분기
+    // 문서 없음 (Google 첫 로그인 또는 옛 세션) — 의도에 따라 분기
     const intent = getLoginIntent();
-    if (intent === 'player') {
-      // 사용자로 로그인한 경우 — 자동으로 player 문서 생성 후 /m으로 이동시킴
+    if (intent === 'store') {
+      // /admin-login에서 명시적으로 매장 사장 로그인한 경우만 매장 가입 마법사로 이동
       clearLoginIntent();
-      setDoc(
-        doc(db, 'users', uid),
-        {
-          uid,
-          role: 'player',
-          email: authState.user.email ?? null,
-          displayName: authState.user.displayName ?? null,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      ).catch(() => {});
-      // setDoc 후 onSnapshot이 새 doc을 받아오면 위 분기에서 /m으로 이동
+      router.replace('/signup');
       return;
     }
-    // intent === 'store' 또는 없음 — 매장 가입 마법사로
+    // 그 외 (intent='player' 또는 없음/만료) — 플레이어로 처리해서 /m으로.
+    // 매장 사장이 되고 싶으면 명시적으로 /admin-login을 거치게 함 — 실수로 가입되는 거 방지.
     clearLoginIntent();
-    router.replace('/signup');
+    setDoc(
+      doc(db, 'users', uid),
+      {
+        uid,
+        role: 'player',
+        email: authState.user.email ?? null,
+        displayName: authState.user.displayName ?? null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(() => {});
+    // setDoc 후 onSnapshot이 새 doc을 받아오면 위 분기에서 /m으로 이동
   }, [authState, userDoc, router]);
 
   const handleKakaoLogin = async () => {

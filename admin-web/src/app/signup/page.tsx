@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { signOut } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
 import { searchPlaces, geocodeAddress } from '@/lib/kakao';
 
@@ -147,7 +148,26 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+      {/* 매장 사장 아닌 경우 빠져나가기 */}
+      <div className="w-full max-w-md mb-3 flex items-center justify-between text-xs">
+        <button
+          onClick={() => router.replace('/m')}
+          className="text-gray-500 hover:text-gray-900 underline-offset-2 hover:underline"
+        >
+          ← 일반 사용자로 둘러보기
+        </button>
+        <button
+          onClick={async () => {
+            await signOut(auth);
+            router.replace('/');
+          }}
+          className="text-gray-500 hover:text-gray-900 underline-offset-2 hover:underline"
+        >
+          다른 계정으로 로그인 →
+        </button>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md overflow-hidden">
         {/* 진행 막대 */}
         <div className="p-5 border-b border-gray-100">
@@ -162,7 +182,7 @@ export default function SignupPage() {
             ))}
           </div>
           <div className="text-[10px] font-bold text-gray-500 tracking-wider">
-            STEP {Math.min(step, 4)} / 4
+            STEP {Math.min(step, 4)} / 4 · 매장 가입
           </div>
           <div className="text-base font-extrabold text-gray-900 mt-1">
             {['', '기본 정보', '운영 정보', '약관 동의', '완료', '신청 완료'][step]}
