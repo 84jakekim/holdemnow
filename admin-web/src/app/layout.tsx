@@ -39,13 +39,22 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col font-sans">
         {children}
-        {/* Kakao Maps SDK + services 라이브러리 (Geocoder/Places).
-            autoload=false: 명시적으로 kakao.maps.load(cb) 호출 패턴. */}
+        {/* Kakao Maps SDK + services 라이브러리 (Geocoder/Places). */}
         {KAKAO_JS_KEY && (
           <Script
             id="kakao-maps-sdk"
             strategy="afterInteractive"
             src={`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=services&autoload=false`}
+          />
+        )}
+        {/* Kakao JS SDK (Auth/공유 등) — Maps와 다른 별도 SDK */}
+        {KAKAO_JS_KEY && (
+          <Script
+            id="kakao-js-sdk"
+            strategy="afterInteractive"
+            src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"
+            integrity="sha384-DKYJZ8NLiK8MN4/C5P2dtSmLQ4KwPaoqAfyA/DfmEc1VDxu4yyC7wy6K1Hs90nka"
+            crossOrigin="anonymous"
           />
         )}
       </body>

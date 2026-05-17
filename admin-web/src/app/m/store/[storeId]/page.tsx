@@ -19,6 +19,7 @@ import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tourna
 import { posterStyleFor } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
+import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
 
 interface StoreData {
@@ -89,6 +90,10 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           createdAt: serverTimestamp(),
         });
         bumpStoreMetric(storeId, 'favoriteAdds');
+        // 즐겨찾기 추가 시 알림 권한 요청 (default 상태에서만 — 이미 거부됐으면 무리하지 않음)
+        if (getNotificationPermission() === 'default') {
+          enableNotifications(authState.user.uid).catch(() => {});
+        }
       }
     } finally {
       setFavBusy(false);

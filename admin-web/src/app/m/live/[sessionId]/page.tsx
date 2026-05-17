@@ -22,6 +22,7 @@ import {
 } from '@/lib/live';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric } from '@/lib/analytics';
+import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
 
 export default function LiveFullscreen({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
@@ -81,6 +82,9 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
           createdAt: serverTimestamp(),
         });
         bumpStoreMetric(session.storeId, 'favoriteAdds');
+        if (getNotificationPermission() === 'default') {
+          enableNotifications(authState.user.uid).catch(() => {});
+        }
       }
     } finally {
       setFavBusy(false);

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
+import { startKakaoLogin } from '@/lib/kakaoAuth';
 
 export default function Home() {
   const router = useRouter();
@@ -30,17 +31,31 @@ export default function Home() {
       router.replace(`/organizer/${userDoc.organizerId}`);
       return;
     }
-    // 매장 미가입 → 가입 마법사
+    // 카카오 로그인 등 일반 플레이어 → 모바일 피드
+    if (userDoc && userDoc.role === 'player') {
+      router.replace('/m');
+      return;
+    }
+    // 그 외 (Google 로그인 후 role 미지정) → 가입 마법사
     router.replace('/signup');
   }, [authState, userDoc, router]);
 
-  const handleLogin = async () => {
+  const handleGoogleLogin = async () => {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       alert(`로그인 실패: ${msg}`);
+    }
+  };
+
+  const handleKakaoLogin = async () => {
+    try {
+      await startKakaoLogin('/');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`카카오 로그인 시작 실패: ${msg}`);
     }
   };
 
@@ -68,16 +83,30 @@ export default function Home() {
           <div className="w-3 h-3 rounded-full bg-red-500" />
           <span className="text-xl font-extrabold tracking-tight">HoldemNow</span>
         </div>
-        <h1 className="text-lg font-bold text-gray-900 mb-2">매장 어드민</h1>
-        <p className="text-xs text-gray-500 mb-8">v0.1 · 매장 사장님 전용</p>
+        <h1 className="text-lg font-bold text-gray-900 mb-2">로그인</h1>
+        <p className="text-xs text-gray-500 mb-8">v0.1 · 매장 사장님·플레이어 공용</p>
+
+        {/* 카카오 (한국 사용자 친숙도 — 메인) */}
         <button
-          onClick={handleLogin}
+          onClick={handleKakaoLogin}
+          className="w-full bg-[#FEE500] text-[#181600] py-3 rounded-xl font-bold text-sm hover:opacity-90 transition flex items-center justify-center gap-2 mb-2"
+        >
+          <span className="text-base">💬</span>
+          <span>카카오로 시작하기</span>
+        </button>
+
+        {/* Google (보조) */}
+        <button
+          onClick={handleGoogleLogin}
           className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm hover:bg-gray-900 transition"
         >
           Google 로그인
         </button>
+
         <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
-          최초 로그인 시 자동으로 매장 가입 마법사로 이동합니다.
+          최초 로그인 시 매장 사장님은 가입 마법사로,
+          <br />
+          플레이어는 바로 모바일 앱으로 이동합니다.
         </p>
       </div>
     </main>

@@ -21,7 +21,7 @@ export function useAuth(): AuthState {
   return state;
 }
 
-export type UserRole = 'store_master' | 'store_staff' | 'organizer_master' | 'organizer_staff' | 'platform_admin';
+export type UserRole = 'store_master' | 'store_staff' | 'organizer_master' | 'organizer_staff' | 'platform_admin' | 'player';
 
 export interface UserDoc {
   uid: string;

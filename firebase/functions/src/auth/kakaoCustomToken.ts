@@ -19,7 +19,12 @@ import * as admin from 'firebase-admin';
 import axios from 'axios';
 
 interface KakaoTokenInput {
-  accessToken: string;
+  /** 이미 발급된 access_token (예: 카카오 SDK 클라이언트 로그인 결과) */
+  accessToken?: string;
+  /** OAuth code (redirect 기반 인증 결과) */
+  code?: string;
+  /** code 발급 시 사용한 redirect_uri — token 교환 시 동일하게 보내야 함 */
+  redirectUri?: string;
 }
 
 interface KakaoUserInfo {
@@ -36,12 +41,44 @@ interface KakaoUserInfo {
 export const kakaoCustomToken = onCall<KakaoTokenInput>(
   { region: 'asia-northeast3', maxInstances: 10 },
   async (request) => {
-    const { accessToken } = request.data || {};
-    if (!accessToken) {
-      throw new HttpsError('invalid-argument', 'accessToken is required');
+    const { accessToken: providedToken, code, redirectUri } = request.data || {};
+
+    if (!providedToken && !code) {
+      throw new HttpsError('invalid-argument', 'accessToken 또는 code 필요');
     }
 
-    // 1. 카카오 API로 사용자 정보 조회
+    // 1. code가 있으면 access_token으로 교환
+    let accessToken = providedToken;
+    if (!accessToken && code) {
+      if (!redirectUri) {
+        throw new HttpsError('invalid-argument', 'redirectUri 필요 (code 교환 시)');
+      }
+      const restKey = process.env.KAKAO_REST_API_KEY;
+      if (!restKey) {
+        throw new HttpsError('failed-precondition', 'KAKAO_REST_API_KEY 환경변수 미설정');
+      }
+      try {
+        const params = new URLSearchParams();
+        params.set('grant_type', 'authorization_code');
+        params.set('client_id', restKey);
+        params.set('redirect_uri', redirectUri);
+        params.set('code', code);
+        const tokenRes = await axios.post(
+          'https://kauth.kakao.com/oauth/token',
+          params,
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' } },
+        );
+        accessToken = tokenRes.data.access_token;
+      } catch (err: any) {
+        const detail = err?.response?.data || err?.message;
+        throw new HttpsError('unauthenticated', `카카오 토큰 교환 실패: ${JSON.stringify(detail)}`);
+      }
+    }
+    if (!accessToken) {
+      throw new HttpsError('internal', 'access_token 확보 실패');
+    }
+
+    // 2. 카카오 API로 사용자 정보 조회
     let kakaoUser: KakaoUserInfo;
     try {
       const res = await axios.get<KakaoUserInfo>('https://kapi.kakao.com/v2/user/me', {

@@ -77,3 +77,10 @@ env:
     value: 2aa9c84fdbee9b7294a2437bd34dfb4d
     availability:
       - RUNTIME
+
+  # FCM Web Push VAPID 공개 키 (브라우저에서 토큰 발급 시 사용)
+  - variable: NEXT_PUBLIC_FIREBASE_VAPID_KEY
+    value: BHo1YyO4gWmoeKBFxYR7D91bXRCYKl7a61SvILrrnYTGR3jgv9Nnu32bpGa3pR80jnbhjrv0gpYn46c18o4GwW0
+    availability:
+      - BUILD
+      - RUNTIME

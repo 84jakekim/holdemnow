@@ -16,12 +16,14 @@ admin.initializeApp();
 // ===== Auth =====
 export { kakaoCustomToken } from './auth/kakaoCustomToken';
 
+// ===== Notifications (FCM) =====
+export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';
+
 // ===== LIVE (v0.2+ 추가 예정) =====
 // export { onLiveSessionCreate } from './live/onLiveSessionCreate';
 // export { tickCountdownDrift } from './live/tickCountdownDrift';
 
-// ===== Notifications (FCM) (v0.2+ 추가 예정) =====
-// export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';
+// ===== Notifications (FCM) v0.2+ 추가 예정 =====
 // export { notifyInterestedTournamentStart } from './notifications/notifyInterestedTournamentStart';
 
 // ===== Series — 위성 예선 자동 집계 (M19 매핑) (v0.2+ 추가 예정) =====

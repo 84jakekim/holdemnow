@@ -105,6 +105,10 @@ service cloud.firestore {
       match /seriesSubscriptions/{seriesId} {
         allow read, write: if uid() == userId;
       }
+      // FCM 디바이스 토큰 (멀티 디바이스 지원) — 본인만
+      match /fcmTokens/{tokenId} {
+        allow read, write: if uid() == userId;
+      }
     }
 
     // ===== 시리즈 (대회사) — v0.1: 인증된 사용자 = ownerUid로 직접 검증 =====
