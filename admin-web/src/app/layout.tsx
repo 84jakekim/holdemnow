@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { JetBrains_Mono, Fraunces } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
@@ -20,6 +20,34 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: 'HoldemNow',
   description: '전국 홀덤펍 + 토너먼트 디스커버리 플랫폼',
+  applicationName: 'HoldemNow',
+  // PWA 설치 시 표시 — manifest.ts에서 정의한 값과 일치
+  appleWebApp: {
+    capable: true,
+    title: 'HoldemNow',
+    statusBarStyle: 'black-translucent',
+  },
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  // 브라우저 상단 (Android), 상태바 (iOS PWA) 배경색 — Felt Black
+  themeColor: '#0A0E0C',
 };
 
 export default function RootLayout({

@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-/** 본사 관리자가 일회성으로 추가하는 데모 매장 5개 */
+/** 본사 관리자가 일회성으로 추가하는 데모 매장 5개. 좌표 포함 — Discover 첫 진입 시 즉시 마커 표시. */
 export const DEMO_STORES = [
   {
     id: 'demo-store-seomyeon',
@@ -22,6 +22,8 @@ export const DEMO_STORES = [
     hours: '매일 18:00 - 익일 05:00',
     description: '서면 중심부 30평 규모. 토너·캐쉬 동시 운영, 부산진구 최대.',
     facilities: ['주차', '발렛', '식사', '24시간'],
+    lat: 35.1576,
+    lng: 129.0596,
   },
   {
     id: 'demo-store-haeundae',
@@ -32,6 +34,8 @@ export const DEMO_STORES = [
     hours: '매일 19:00 - 익일 04:00',
     description: '해운대 바닷가 인근, 캐쉬게임 특화 매장.',
     facilities: ['주차', '식사'],
+    lat: 35.1631,
+    lng: 129.1635,
   },
   {
     id: 'demo-store-gwangalli',
@@ -42,6 +46,8 @@ export const DEMO_STORES = [
     hours: '매일 18:00 - 익일 06:00',
     description: '메이저 토너 시리즈 협력 매장. VIP룸 보유.',
     facilities: ['주차', '발렛', '식사', '24시간', 'VIP룸'],
+    lat: 35.1531,
+    lng: 129.1185,
   },
   {
     id: 'demo-store-dongnae',
@@ -52,6 +58,8 @@ export const DEMO_STORES = [
     hours: '매일 17:00 - 익일 03:00',
     description: '위성 예선 개최 매장. 동래 권역 인지도 1위.',
     facilities: ['주차', '식사'],
+    lat: 35.2052,
+    lng: 129.0832,
   },
   {
     id: 'demo-store-centum',
@@ -62,6 +70,8 @@ export const DEMO_STORES = [
     hours: '매일 18:00 - 익일 05:00',
     description: '센텀시티 인근 고급 매장. 룸·VIP 코너 보유.',
     facilities: ['주차', '발렛', '식사', '24시간', 'VIP룸', '룸'],
+    lat: 35.1696,
+    lng: 129.1306,
   },
 ];
 
@@ -91,6 +101,8 @@ export async function seedDemoStores(ownerUid: string): Promise<number> {
       description: s.description,
       facilities: s.facilities,
       photoUrls: [],
+      lat: s.lat,
+      lng: s.lng,
       status: 'active',
       tier: 'free',
       reviewCount: 0,

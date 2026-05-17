@@ -20,6 +20,10 @@ interface StoreSummary {
   lng?: number;
 }
 
+interface NearbyStore extends StoreSummary {
+  _dist?: number;
+}
+
 export default function DiscoverPage() {
   const router = useRouter();
   const [stores, setStores] = useState<StoreSummary[]>([]);
@@ -29,30 +33,30 @@ export default function DiscoverPage() {
   const [mapError, setMapError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // 지도 인스턴스 ref — handleUserSelect의 panTo가 KakaoMap 내부 ref를 공유해서 호출.
+  const mapInstanceRef = useRef<any>(null);
 
-  // 현재 위치 가져오기 (Permission 거부 시 기본 중심 사용)
+  // 현재 위치
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setLocationDenied(true);
-      return;
+      // browser API 부재는 사실상 발생 안 함('use client'). 비동기로 미뤄서 effect 동기 setState 회피.
+      const tid = setTimeout(() => setLocationDenied(true), 0);
+      return () => clearTimeout(tid);
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      },
-      () => {
-        // 권한 거부 또는 실패 — 기본 중심(서면)으로 fallback
-        setLocationDenied(true);
-      },
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setLocationDenied(true),
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 },
     );
   }, []);
 
-  // 매장 데이터 로드
+  // 매장 데이터
   useEffect(() => {
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, 'stores'));
+    let cancelled = false;
+    getDocs(collection(db, 'stores'))
+      .then((snap) => {
+        if (cancelled) return;
         const list: StoreSummary[] = snap.docs.map((d) => {
           const data = d.data() as {
             name: string;
@@ -72,10 +76,13 @@ export default function DiscoverPage() {
         });
         setStores(list);
         list.forEach((s) => trackImpressionOnce(s.id, 'discover-map'));
-      } finally {
-        setLoading(false);
-      }
-    })();
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -89,22 +96,16 @@ export default function DiscoverPage() {
     return map;
   }, [sessions]);
 
-  // 10km 반경 매장만 + 거리 정렬 (사용자 위치 없으면 전체)
+  // 10km 반경 + 거리 정렬. LIVE 진행 중 매장은 거리와 무관하게 항상 포함 (핵심 기능).
   const NEARBY_RADIUS_M = 10_000;
-  const nearbyStores = useMemo(() => {
+  const nearbyStores = useMemo<NearbyStore[]>(() => {
     const withCoords = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
     if (!userLocation) return withCoords;
     return withCoords
       .map((s) => ({ ...s, _dist: haversineMeters(userLocation, { lat: s.lat!, lng: s.lng! }) }))
-      .filter((s) => s._dist <= NEARBY_RADIUS_M)
-      .sort((a, b) => a._dist - b._dist);
-  }, [stores, userLocation]);
-
-  // 사용자 위치 잡히고 selectedId 없으면 가장 가까운 매장 자동 선택
-  useEffect(() => {
-    if (selectedId || !userLocation || nearbyStores.length === 0) return;
-    setSelectedId(nearbyStores[0].id);
-  }, [userLocation, nearbyStores, selectedId]);
+      .filter((s) => (s._dist as number) <= NEARBY_RADIUS_M || (liveCountByStore[s.id] ?? 0) > 0)
+      .sort((a, b) => (a._dist as number) - (b._dist as number));
+  }, [stores, userLocation, liveCountByStore]);
 
   const totalLive = Object.values(liveCountByStore).reduce((a, b) => a + b, 0);
   const selected = stores.find((s) => s.id === selectedId);
@@ -124,11 +125,7 @@ export default function DiscoverPage() {
         try {
           const coords = await geocodeAddress(s.address!);
           if (!coords) continue;
-          // Firestore에 저장 (다음 번부터 즉시 사용)
-          updateDoc(doc(db, 'stores', s.id), { lat: coords.lat, lng: coords.lng }).catch(() => {
-            // owner 아닌 경우 권한 없음 — 메모리에만 반영
-          });
-          // 로컬 state도 즉시 업데이트
+          updateDoc(doc(db, 'stores', s.id), { lat: coords.lat, lng: coords.lng }).catch(() => {});
           setStores((prev) => prev.map((x) => (x.id === s.id ? { ...x, lat: coords.lat, lng: coords.lng } : x)));
         } catch {
           // skip
@@ -140,9 +137,26 @@ export default function DiscoverPage() {
     };
   }, [stores]);
 
+  // 사용자 직접 선택 (마커 클릭) — panTo + selectedId 갱신.
+  // 자동 선택은 하지 않음 — 지도 중심을 사용자 위치에 유지하기 위함.
+  const handleUserSelect = (id: string) => {
+    setSelectedId(id);
+    const target = stores.find((s) => s.id === id);
+    if (!target || target.lat == null || target.lng == null) return;
+    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
+    if (mapInstanceRef.current && maps) {
+      mapInstanceRef.current.panTo(new maps.LatLng(target.lat, target.lng));
+    }
+  };
+
+  const handleSheetItemClick = (id: string) => {
+    setSheetOpen(false);
+    bumpStoreMetric(id, 'cardClicks');
+    router.push(`/m/store/${id}`);
+  };
+
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 80px)' }}>
-      {/* 상단 헤더 */}
       <div className="px-5 h-14 flex items-center justify-between border-b border-gray-100 bg-white">
         <span className="text-xl font-extrabold tracking-tight font-serif">탐색</span>
         <Link href="/m/search" className="text-lg" title="검색">
@@ -151,24 +165,33 @@ export default function DiscoverPage() {
       </div>
 
       <div className="flex-1 relative">
-        {/* 카카오맵 — 10km 반경 안 매장만 마커, 사용자 반경 500m 원 오버레이 */}
         <KakaoMap
           stores={nearbyStores}
           liveCountByStore={liveCountByStore}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={handleUserSelect}
           onError={setMapError}
           userLocation={userLocation}
           locationDenied={locationDenied}
+          mapInstanceRef={mapInstanceRef}
         />
 
-        {/* 상단 정보 카드 */}
-        <div className="absolute top-3 left-3 right-3 bg-white/95 backdrop-blur rounded-xl px-4 py-3 flex items-center justify-between shadow-md z-30 pointer-events-none">
+        {/* 상단 — 터치 가능 버튼. 누르면 거리순 리스트 시트가 열림 */}
+        <button
+          onClick={() => setSheetOpen(true)}
+          disabled={nearbyStores.length === 0}
+          className="absolute top-3 left-3 right-3 bg-white/95 backdrop-blur rounded-xl px-4 py-3 flex items-center justify-between shadow-md z-30 text-left active:scale-[0.98] transition disabled:opacity-60 disabled:active:scale-100"
+        >
           <div>
             <div className="text-[11px] text-gray-500">
               {userLocation ? '내 주변 매장 · 10km' : locationDenied ? '서면 중심' : '위치 확인 중…'}
             </div>
-            <div className="text-sm font-bold text-gray-900 mt-0.5">{nearbyStores.length}개</div>
+            <div className="text-sm font-bold text-gray-900 mt-0.5 flex items-center gap-1.5">
+              <span>{nearbyStores.length}개</span>
+              {nearbyStores.length > 0 && (
+                <span className="text-gray-400 text-[11px] font-normal">전체보기 ›</span>
+              )}
+            </div>
           </div>
           {totalLive > 0 ? (
             <div className="bg-red-50 text-red-600 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
@@ -178,7 +201,7 @@ export default function DiscoverPage() {
           ) : (
             <div className="text-xs text-gray-500">LIVE 없음</div>
           )}
-        </div>
+        </button>
 
         {mapError && (
           <div className="absolute top-20 left-3 right-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 z-30">
@@ -192,7 +215,7 @@ export default function DiscoverPage() {
           </div>
         )}
 
-        {/* 하단 선택 매장 카드 */}
+        {/* 하단 선택 매장 카드 — 사용자가 마커/시트에서 선택해야 표시 */}
         {selected && (
           <button
             onClick={() => {
@@ -238,15 +261,106 @@ export default function DiscoverPage() {
             <span className="text-xl text-gray-400">›</span>
           </button>
         )}
+
+        {sheetOpen && (
+          <NearbyStoresSheet
+            stores={nearbyStores}
+            liveCountByStore={liveCountByStore}
+            onClose={() => setSheetOpen(false)}
+            onItemClick={handleSheetItemClick}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-/**
- * 카카오맵 인스턴스 + 매장 마커 관리.
- * SDK는 layout.tsx에서 로드됨. 여기서는 load()만 기다리고 지도 인스턴스 생성.
- */
+/** 내 주변 매장 거리순 리스트 시트 — 상단 카운트 버튼이 트리거. row 터치 시 매장 페이지 이동. */
+function NearbyStoresSheet({
+  stores,
+  liveCountByStore,
+  onClose,
+  onItemClick,
+}: {
+  stores: NearbyStore[];
+  liveCountByStore: Record<string, number>;
+  onClose: () => void;
+  onItemClick: (id: string) => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-40 flex flex-col justify-end">
+      <button
+        aria-label="닫기"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40"
+      />
+      <div className="relative bg-white rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
+          <div>
+            <div className="text-[11px] text-gray-500">내 주변 매장 · 10km · 거리순</div>
+            <div className="text-base font-extrabold text-gray-900">{stores.length}개</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-2xl text-gray-400 leading-none px-2"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+          {stores.map((s) => {
+            const live = liveCountByStore[s.id] || 0;
+            return (
+              <button
+                key={s.id}
+                onClick={() => onItemClick(s.id)}
+                className="w-full flex items-center gap-3 px-5 py-3 text-left active:bg-gray-50"
+              >
+                <div
+                  className="w-12 h-12 rounded-xl flex-shrink-0 bg-gray-200 overflow-hidden"
+                  style={
+                    s.photoUrl
+                      ? undefined
+                      : { background: 'linear-gradient(135deg, #C9B49A 0%, #A8927A 100%)' }
+                  }
+                >
+                  {s.photoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.photoUrl} alt={s.name} className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <div className="text-sm font-bold text-gray-900 truncate">{s.name}</div>
+                    {live > 0 && (
+                      <div className="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-md px-1.5 py-0.5">
+                        <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-[9px] font-extrabold">
+                          LIVE{live > 1 ? ` ${live}` : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-gray-500 truncate mt-0.5">
+                    {s._dist != null && (
+                      <span className="font-bold text-gray-700 flex-shrink-0">
+                        {formatDistance(s._dist)}
+                      </span>
+                    )}
+                    {s.address && <span className="truncate">📍 {s.address}</span>}
+                  </div>
+                </div>
+                <span className="text-lg text-gray-400">›</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KakaoMap({
   stores,
   liveCountByStore,
@@ -255,6 +369,7 @@ function KakaoMap({
   onError,
   userLocation,
   locationDenied,
+  mapInstanceRef,
 }: {
   stores: StoreSummary[];
   liveCountByStore: Record<string, number>;
@@ -263,33 +378,26 @@ function KakaoMap({
   onError: (msg: string | null) => void;
   userLocation: LatLng | null;
   locationDenied: boolean;
+  mapInstanceRef: React.MutableRefObject<any>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
   const userMarkerRef = useRef<any>(null);
   const radiusCircleRef = useRef<any>(null);
-  const centeredRef = useRef(false);
-  // 지도 인스턴스 생성 완료 신호 — async 초기화 후 false→true. 마커 effect가 이걸 기다림.
   const [mapReady, setMapReady] = useState(false);
 
-  // 지도 초기화 — 위치 권한 결정될 때까지 대기, 깜박임 없이 정확한 중심으로 시작.
+  // 지도 초기화 — 위치 결정 후 사용자 위치 중심으로 시작
   useEffect(() => {
-    if (!userLocation && !locationDenied) return; // 위치 결정 대기
+    if (!userLocation && !locationDenied) return;
     let cancelled = false;
     (async () => {
       try {
         const maps = await loadKakaoMaps();
-        if (cancelled || !containerRef.current || mapRef.current) return;
+        if (cancelled || !containerRef.current || mapInstanceRef.current) return;
         const center = userLocation
           ? new maps.LatLng(userLocation.lat, userLocation.lng)
           : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
-        mapRef.current = new maps.Map(containerRef.current, {
-          center,
-          // 250m 반경 원이 viewport에 적당히 들어갈 줌. 너무 가까우면 매장 마커 가려짐.
-          level: 4,
-        });
-        centeredRef.current = true;
+        mapInstanceRef.current = new maps.Map(containerRef.current, { center, level: 4 });
         setMapReady(true);
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));
@@ -298,28 +406,24 @@ function KakaoMap({
     return () => {
       cancelled = true;
     };
-  }, [onError, userLocation, locationDenied]);
+  }, [onError, userLocation, locationDenied, mapInstanceRef]);
 
-  // 사용자 위치 마커 + 250m 반경 원 — 지도 준비 + 위치 둘 다 갖춰지면 생성/갱신.
+  // 사용자 위치 마커 + 250m 반경 원
   useEffect(() => {
-    if (!mapReady || !userLocation || !mapRef.current) return;
-    const maps = window.kakao?.maps;
+    if (!mapReady || !userLocation || !mapInstanceRef.current) return;
+    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
     if (!maps) return;
     const pos = new maps.LatLng(userLocation.lat, userLocation.lng);
-
-    // 파란 점 마커
     if (userMarkerRef.current) {
       userMarkerRef.current.setPosition(pos);
     } else {
       userMarkerRef.current = new maps.Marker({
         position: pos,
-        map: mapRef.current,
+        map: mapInstanceRef.current,
         image: buildUserMarker(maps),
         zIndex: 30,
       });
     }
-
-    // 250m 반경 원 (도보 가능 범위)
     if (radiusCircleRef.current) {
       radiusCircleRef.current.setPosition(pos);
     } else {
@@ -333,20 +437,14 @@ function KakaoMap({
         fillColor: '#60A5FA',
         fillOpacity: 0.12,
       });
-      radiusCircleRef.current.setMap(mapRef.current);
+      radiusCircleRef.current.setMap(mapInstanceRef.current);
     }
-  }, [mapReady, userLocation]);
+  }, [mapReady, userLocation, mapInstanceRef]);
 
   // 매장 마커 동기화
   useEffect(() => {
-    if (!mapRef.current) {
-      // 지도 아직 안 떴으면 100ms 후 재시도 (1회만)
-      const t = setTimeout(() => {
-        // 의도적으로 빈 effect — deps 바뀌면 다시 실행됨
-      }, 100);
-      return () => clearTimeout(t);
-    }
-    const maps = window.kakao?.maps;
+    if (!mapInstanceRef.current) return;
+    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
     if (!maps) return;
 
     const validStores = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
@@ -358,7 +456,6 @@ function KakaoMap({
       const isSelected = s.id === selectedId;
       const pos = new maps.LatLng(s.lat!, s.lng!);
 
-      // 이미 마커가 있으면 위치만 갱신
       const existing = markersRef.current.get(s.id);
       if (existing) {
         existing.setPosition(pos);
@@ -368,7 +465,7 @@ function KakaoMap({
 
       const marker = new maps.Marker({
         position: pos,
-        map: mapRef.current,
+        map: mapInstanceRef.current,
         title: s.name,
         image: buildMarkerImage(maps, { live, selected: isSelected }),
         zIndex: live > 0 ? 20 : isSelected ? 25 : 10,
@@ -377,70 +474,46 @@ function KakaoMap({
       markersRef.current.set(s.id, marker);
     }
 
-    // 제거된 매장의 마커 정리
     for (const [id, m] of markersRef.current) {
       if (!seen.has(id)) {
         m.setMap(null);
         markersRef.current.delete(id);
       }
     }
-
-    // 자동 bounds 조정은 제거 — 지도는 사용자 위치(또는 기본 서면)에서 시작하므로
-    // 마커들이 viewport 밖에 있으면 사용자가 직접 줌 아웃/팬해서 봄.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stores, liveCountByStore, selectedId, onSelect]);
-
-  // 선택 매장으로 중심 이동
-  useEffect(() => {
-    if (!mapRef.current || !selectedId) return;
-    const target = stores.find((s) => s.id === selectedId);
-    if (!target || target.lat == null || target.lng == null) return;
-    const maps = window.kakao?.maps;
-    if (!maps) return;
-    mapRef.current.panTo(new maps.LatLng(target.lat, target.lng));
-  }, [selectedId, stores]);
+  }, [stores, liveCountByStore, selectedId, onSelect, mapInstanceRef]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }
 
-/** 마커 이미지 HTML overlay 대신 SVG 마커 — LIVE/일반/선택 3가지 상태 */
+/**
+ * 마커 이미지.
+ * LIVE 진행 중 → 빨간 알약 (눈에 띄게).
+ * 일반 홀덤펍 → 다크 핀(표준 location pin) + 흰 원 안에 ♠ 스페이드. 선택 시 골드.
+ * 사이즈는 선택/비선택 통일(28x38) — 색상으로만 강조.
+ */
 function buildMarkerImage(maps: any, opts: { live: number; selected: boolean }) {
   const { live, selected } = opts;
-  let svg: string;
-  let size: { w: number; h: number };
-  let anchor: { x: number; y: number };
 
   if (live > 0) {
-    // LIVE 진행 중 — 빨간 알약
     const label = live > 1 ? `LIVE ${live}` : 'LIVE';
     const width = label.length * 8 + 16;
-    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="28" viewBox="0 0 ${width} 28">
-      <rect x="0" y="0" width="${width}" height="24" rx="12" fill="#D94B3D" stroke="${selected ? '#000' : 'none'}" stroke-width="${selected ? 2 : 0}"/>
-      <circle cx="10" cy="12" r="3" fill="#fff"/>
-      <text x="${width / 2 + 4}" y="16" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="10" font-weight="800" text-anchor="middle">${label}</text>
-      <polygon points="${width / 2 - 4},24 ${width / 2 + 4},24 ${width / 2},28" fill="#D94B3D"/>
-    </svg>`;
-    size = { w: width, h: 28 };
-    anchor = { x: width / 2, y: 28 };
-  } else {
-    // 일반 매장 — 작은 점
-    const r = selected ? 12 : 8;
-    const stroke = selected ? '#000' : '#333';
-    const fill = selected ? '#fff' : '#fff';
-    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r * 2 + 4}" height="${r * 2 + 4}" viewBox="0 0 ${r * 2 + 4} ${r * 2 + 4}">
-      <circle cx="${r + 2}" cy="${r + 2}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 2}"/>
-    </svg>`;
-    size = { w: r * 2 + 4, h: r * 2 + 4 };
-    anchor = { x: r + 2, y: r + 2 };
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="28" viewBox="0 0 ${width} 28"><rect x="0" y="0" width="${width}" height="24" rx="12" fill="#D94B3D" stroke="${selected ? '#000' : 'none'}" stroke-width="${selected ? 2 : 0}"/><circle cx="10" cy="12" r="3" fill="#fff"/><text x="${width / 2 + 4}" y="16" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="10" font-weight="800" text-anchor="middle">${label}</text><polygon points="${width / 2 - 4},24 ${width / 2 + 4},24 ${width / 2},28" fill="#D94B3D"/></svg>`;
+    const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    return new maps.MarkerImage(url, new maps.Size(width, 28), {
+      offset: new maps.Point(width / 2, 28),
+    });
   }
 
+  // 표준 location pin — 단순/검증된 path. 사이즈 28x38 통일, 색상으로 선택 강조.
+  const fill = selected ? '#D97706' : '#1F2937';
+  const stroke = selected ? '#7C2D12' : '#0F172A';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38"><path d="M14 37 C14 37 26 22 26 13 C26 6.4 20.6 1 14 1 C7.4 1 2 6.4 2 13 C2 22 14 37 14 37 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/><circle cx="14" cy="13" r="6" fill="#fff"/><text x="14" y="17" text-anchor="middle" font-size="11" font-weight="800" fill="${fill}" font-family="Arial,sans-serif">♠</text></svg>`;
   const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(size.w, size.h), {
-    offset: new maps.Point(anchor.x, anchor.y),
+  return new maps.MarkerImage(url, new maps.Size(28, 38), {
+    offset: new maps.Point(14, 37),
   });
 }
 
-/** 사용자 현재 위치 마커 — 파란 점 + 흰 외곽 + 펄스 halo */
 function buildUserMarker(maps: any) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
     <circle cx="18" cy="18" r="16" fill="#3B82F6" opacity="0.15">
@@ -456,7 +529,6 @@ function buildUserMarker(maps: any) {
   });
 }
 
-/** 두 좌표 사이 거리 (미터, Haversine). 빠른 근사용. */
 function haversineMeters(a: LatLng, b: LatLng): number {
   const R = 6371_000;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -468,7 +540,6 @@ function haversineMeters(a: LatLng, b: LatLng): number {
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-/** 거리 사람 친화적 포맷 */
 function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)}m`;
   if (meters < 10_000) return `${(meters / 1000).toFixed(1)}km`;

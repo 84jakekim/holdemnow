@@ -48,3 +48,20 @@ self.addEventListener('notificationclick', (event) => {
     }),
   );
 });
+
+// ===== PWA Installability =====
+// 크롬은 fetch 이벤트 핸들러가 있어야 PWA로 설치 가능하다고 판단합니다.
+// 이 핸들러는 네트워크 요청을 가로채지 않고 그대로 통과시키지만,
+// 존재만으로 "이 사이트는 설치 가능한 PWA"라는 신호를 줍니다.
+// v0.2에서 Workbox/Serwist로 본격적인 오프라인 캐시 전략 추가 예정.
+self.addEventListener('fetch', (event) => {
+  // No-op — 그냥 네트워크로 보냄. 캐시는 v0.2.
+});
+
+// 새 SW 즉시 활성화 (배포 후 사용자가 새 버전 빠르게 받게)
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
