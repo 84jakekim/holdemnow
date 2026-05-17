@@ -212,7 +212,7 @@ interface NearbyStore {
 function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
   const [stores, setStores] = useState<NearbyStore[]>([]);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
-  const [viewMode, setViewMode] = useState<NearbyViewMode>('large');
+  const [viewMode, setViewMode] = useState<NearbyViewMode>('album');
 
   // 저장된 뷰 모드 복원
   useEffect(() => {
@@ -266,7 +266,7 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
     });
   }, []);
 
-  // 거리 계산 + 정렬: LIVE 진행 매장 우선, 그 안에서 거리순
+  // 정렬: 거리 가까운 순 (좌표 없는 매장은 맨 뒤). LIVE 여부는 정렬에 영향 X — 카드 배지로만 표시.
   const sorted = useMemo(() => {
     const withDist: NearbyStore[] = stores.map((s) => ({
       ...s,
@@ -276,16 +276,12 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
           : undefined,
     }));
     return withDist.sort((a, b) => {
-      const liveA = liveByStore[a.id] || 0;
-      const liveB = liveByStore[b.id] || 0;
-      if (liveA !== liveB) return liveB - liveA; // LIVE 많은 매장 위로
-      // 거리 있는 매장이 위로, 그 다음 거리순
       if (a.distance != null && b.distance != null) return a.distance - b.distance;
       if (a.distance != null) return -1;
       if (b.distance != null) return 1;
       return 0;
     });
-  }, [stores, liveByStore, userLocation]);
+  }, [stores, userLocation]);
 
   if (stores.length === 0) return null;
 
