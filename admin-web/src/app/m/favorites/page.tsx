@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
+import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import {
   collection,
   doc,
@@ -112,31 +112,7 @@ export default function FavoritesPage() {
     return <div className="p-6 text-center text-sm text-gray-500">로딩 중…</div>;
   }
   if (authState.status === 'anonymous') {
-    return (
-      <div>
-        <div className="px-5 h-14 flex items-center border-b border-gray-100">
-          <span className="text-xl font-extrabold tracking-tight font-serif">
-            즐겨찾기
-          </span>
-        </div>
-        <div className="p-8 text-center">
-          <div className="text-4xl mb-3">⭐</div>
-          <div className="font-bold text-gray-900 mb-2">로그인이 필요합니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed mb-6">
-            매장을 즐겨찾기하고 LIVE 시작 알림을 받으려면 로그인하세요.
-          </div>
-          <button
-            onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
-            className="bg-black text-white px-6 py-3 rounded-xl font-bold text-sm"
-          >
-            Google 로그인
-          </button>
-          <div className="text-[10px] text-gray-400 mt-4">
-            v0.2부터 카카오 로그인 추가
-          </div>
-        </div>
-      </div>
-    );
+    return <AnonymousPrompt title="즐겨찾기" icon="⭐" desc="매장을 즐겨찾기하고 LIVE 시작 알림을 받으려면 로그인하세요." />;
   }
 
   return (

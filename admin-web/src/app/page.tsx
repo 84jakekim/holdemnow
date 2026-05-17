@@ -1,24 +1,25 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { startKakaoLogin } from '@/lib/kakaoAuth';
+import { loginAsPlayerWithGoogle, getLoginIntent, clearLoginIntent } from '@/lib/auth';
 
 export default function Home() {
   const router = useRouter();
   const authState = useAuth();
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
 
-  // 로그인 + role/매장 매핑 결정되면 자동 라우팅
+  // 로그인 후 자동 라우팅
   useEffect(() => {
     if (authState.status !== 'authenticated') return;
-
-    // Kakao uid는 `kakao:XXX` 형식 — userDoc propagation 지연을 피하기 위해 uid prefix로 즉시 판단.
-    // Kakao 사용자가 매장도 운영하는 경우는 storeId가 박혀있을 때만 어드민으로.
     const uid = authState.user.uid;
+
+    // Kakao uid는 항상 player — userDoc propagation 지연을 회피하기 위해 즉시 라우팅
     if (uid.startsWith('kakao:')) {
       if (userDoc && userDoc.storeId) {
         router.replace(`/admin/${userDoc.storeId}`);
@@ -28,47 +29,70 @@ export default function Home() {
       return;
     }
 
-    if (userDoc === undefined) return; // 로딩 중
-    // 본사 관리자 role 있고 매장 미가입이면 본사로
-    if (userDoc && hasRole(userDoc, 'platform_admin') && !userDoc.storeId) {
-      router.replace('/platform');
+    // Google 등 — userDoc 로딩 대기
+    if (userDoc === undefined) return;
+
+    // 문서 있음 — role/storeId 기반 라우팅
+    if (userDoc) {
+      if (hasRole(userDoc, 'platform_admin') && !userDoc.storeId) {
+        router.replace('/platform');
+        return;
+      }
+      if (userDoc.storeId) {
+        router.replace(`/admin/${userDoc.storeId}`);
+        return;
+      }
+      if (userDoc.organizerId) {
+        router.replace(`/organizer/${userDoc.organizerId}`);
+        return;
+      }
+      if (userDoc.role === 'player') {
+        router.replace('/m');
+        return;
+      }
+      // role 미지정 — 의도 기반 폴백 (방어용)
+      router.replace('/signup');
       return;
     }
-    // 매장 가입됨 → 매장 어드민
-    if (userDoc && userDoc.storeId) {
-      router.replace(`/admin/${userDoc.storeId}`);
+
+    // 문서 없음 (Google 첫 로그인) — 의도에 따라 분기
+    const intent = getLoginIntent();
+    if (intent === 'player') {
+      // 사용자로 로그인한 경우 — 자동으로 player 문서 생성 후 /m으로 이동시킴
+      clearLoginIntent();
+      setDoc(
+        doc(db, 'users', uid),
+        {
+          uid,
+          role: 'player',
+          email: authState.user.email ?? null,
+          displayName: authState.user.displayName ?? null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ).catch(() => {});
+      // setDoc 후 onSnapshot이 새 doc을 받아오면 위 분기에서 /m으로 이동
       return;
     }
-    // 대회사만 등록된 경우 → 대회사 어드민
-    if (userDoc && userDoc.organizerId) {
-      router.replace(`/organizer/${userDoc.organizerId}`);
-      return;
-    }
-    // 일반 플레이어 → 모바일 피드
-    if (userDoc && userDoc.role === 'player') {
-      router.replace('/m');
-      return;
-    }
-    // 그 외 (Google 로그인 후 role 미지정) → 가입 마법사
+    // intent === 'store' 또는 없음 — 매장 가입 마법사로
+    clearLoginIntent();
     router.replace('/signup');
   }, [authState, userDoc, router]);
-
-  const handleGoogleLogin = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      alert(`로그인 실패: ${msg}`);
-    }
-  };
 
   const handleKakaoLogin = async () => {
     try {
       await startKakaoLogin('/');
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      alert(`카카오 로그인 시작 실패: ${msg}`);
+      alert(`카카오 로그인 시작 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await loginAsPlayerWithGoogle();
+    } catch (e: unknown) {
+      alert(`로그인 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -81,7 +105,6 @@ export default function Home() {
   }
 
   if (authState.status === 'authenticated') {
-    // useEffect가 라우팅함 — 잠깐 보임
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
         이동 중…
@@ -90,36 +113,58 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-10 max-w-sm w-full text-center">
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <div className="w-3 h-3 rounded-full bg-red-500" />
-          <span className="text-xl font-extrabold tracking-tight">HoldemNow</span>
+    <main className="min-h-screen flex flex-col bg-gradient-to-b from-white to-gray-50 relative">
+      {/* 우상단: 매장 사장 로그인 진입점 */}
+      <div className="absolute top-4 right-4">
+        <Link
+          href="/admin-login"
+          className="text-[11px] text-gray-500 hover:text-gray-900 underline-offset-2 hover:underline"
+        >
+          매장 사장이신가요? →
+        </Link>
+      </div>
+
+      {/* 중앙: 로고 + 앱 이름 + 로그인 */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-8">
+        <div className="flex flex-col items-center mb-12">
+          <div className="w-20 h-20 rounded-3xl bg-[#0A0E0C] flex items-center justify-center mb-5 shadow-lg">
+            <span className="text-3xl font-extrabold text-[#D4AF37] tracking-tight font-serif">H</span>
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight font-serif text-gray-900">
+            HoldemNow
+          </h1>
+          <p className="text-xs text-gray-500 mt-2">전국 홀덤펍 · 토너먼트 디스커버리</p>
         </div>
-        <h1 className="text-lg font-bold text-gray-900 mb-2">로그인</h1>
-        <p className="text-xs text-gray-500 mb-8">v0.1 · 매장 사장님·플레이어 공용</p>
 
-        {/* 카카오 (한국 사용자 친숙도 — 메인) */}
-        <button
-          onClick={handleKakaoLogin}
-          className="w-full bg-[#FEE500] text-[#181600] py-3 rounded-xl font-bold text-sm hover:opacity-90 transition flex items-center justify-center gap-2 mb-2"
-        >
-          <span className="text-base">💬</span>
-          <span>카카오로 시작하기</span>
-        </button>
+        <div className="w-full max-w-xs space-y-2.5">
+          {/* 카카오 (메인) */}
+          <button
+            onClick={handleKakaoLogin}
+            className="w-full bg-[#FEE500] text-[#181600] py-3.5 rounded-xl font-bold text-sm hover:opacity-90 transition flex items-center justify-center gap-2"
+          >
+            <span className="text-base">💬</span>
+            <span>카카오로 시작하기</span>
+          </button>
 
-        {/* Google (보조) */}
-        <button
-          onClick={handleGoogleLogin}
-          className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm hover:bg-gray-900 transition"
-        >
-          Google 로그인
-        </button>
+          {/* Google (보조) */}
+          <button
+            onClick={handleGoogleLogin}
+            className="w-full bg-white border border-gray-300 text-gray-900 py-3.5 rounded-xl font-bold text-sm hover:bg-gray-50 transition flex items-center justify-center gap-2"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            <span>Google로 시작하기</span>
+          </button>
+        </div>
 
-        <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
-          최초 로그인 시 매장 사장님은 가입 마법사로,
+        <p className="text-[10px] text-gray-400 mt-8 leading-relaxed text-center max-w-xs">
+          로그인 시 이용약관 및 개인정보 처리방침에 동의한 것으로 간주합니다.
           <br />
-          플레이어는 바로 모바일 앱으로 이동합니다.
+          v0.1 데모 · 정보 제공 플랫폼 (사행성 매개 X)
         </p>
       </div>
     </main>

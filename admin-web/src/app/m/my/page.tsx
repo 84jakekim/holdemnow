@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-} from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
+import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import {
   doc,
   setDoc,
@@ -89,28 +86,7 @@ export default function MyPage() {
   }
 
   if (authState.status === 'anonymous') {
-    return (
-      <div>
-        <div className="px-5 h-14 flex items-center border-b border-gray-100">
-          <span className="text-xl font-extrabold tracking-tight font-serif">
-            마이
-          </span>
-        </div>
-        <div className="p-8 text-center">
-          <div className="text-4xl mb-3">👤</div>
-          <div className="font-bold text-gray-900 mb-2">로그인이 필요합니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed mb-6">
-            관심 토너 · 즐겨찾기 · 알림 설정을 위해 로그인하세요.
-          </div>
-          <button
-            onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
-            className="bg-black text-white px-6 py-3 rounded-xl font-bold text-sm"
-          >
-            Google 로그인
-          </button>
-        </div>
-      </div>
-    );
+    return <AnonymousPrompt title="마이" icon="👤" desc="관심 토너 · 즐겨찾기 · 알림 설정을 위해 로그인하세요." />;
   }
 
   const user = authState.user;
