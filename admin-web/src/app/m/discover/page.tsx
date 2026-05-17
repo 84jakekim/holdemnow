@@ -270,6 +270,8 @@ function KakaoMap({
   const userMarkerRef = useRef<any>(null);
   const radiusCircleRef = useRef<any>(null);
   const centeredRef = useRef(false);
+  // 지도 인스턴스 생성 완료 신호 — async 초기화 후 false→true. 마커 effect가 이걸 기다림.
+  const [mapReady, setMapReady] = useState(false);
 
   // 지도 초기화 — 위치 권한 결정될 때까지 대기, 깜박임 없이 정확한 중심으로 시작.
   useEffect(() => {
@@ -284,10 +286,11 @@ function KakaoMap({
           : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
         mapRef.current = new maps.Map(containerRef.current, {
           center,
-          // 도보 ~250m 기준. 500m 반경 원이 viewport에 거의 꽉 차게 보임.
-          level: 3,
+          // 250m 반경 원이 viewport에 적당히 들어갈 줌. 너무 가까우면 매장 마커 가려짐.
+          level: 4,
         });
         centeredRef.current = true;
+        setMapReady(true);
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));
       }
@@ -297,9 +300,9 @@ function KakaoMap({
     };
   }, [onError, userLocation, locationDenied]);
 
-  // 사용자 위치 마커 + 500m 반경 원 (사용자 이동 시 위치 갱신)
+  // 사용자 위치 마커 + 250m 반경 원 — 지도 준비 + 위치 둘 다 갖춰지면 생성/갱신.
   useEffect(() => {
-    if (!userLocation || !mapRef.current) return;
+    if (!mapReady || !userLocation || !mapRef.current) return;
     const maps = window.kakao?.maps;
     if (!maps) return;
     const pos = new maps.LatLng(userLocation.lat, userLocation.lng);
@@ -316,23 +319,23 @@ function KakaoMap({
       });
     }
 
-    // 500m 반경 원 (도보 가능 범위)
+    // 250m 반경 원 (도보 가능 범위)
     if (radiusCircleRef.current) {
       radiusCircleRef.current.setPosition(pos);
     } else {
       radiusCircleRef.current = new maps.Circle({
         center: pos,
-        radius: 500,
+        radius: 250,
         strokeWeight: 2,
         strokeColor: '#3B82F6',
-        strokeOpacity: 0.5,
+        strokeOpacity: 0.6,
         strokeStyle: 'solid',
-        fillColor: '#3B82F6',
-        fillOpacity: 0.08,
+        fillColor: '#60A5FA',
+        fillOpacity: 0.12,
       });
       radiusCircleRef.current.setMap(mapRef.current);
     }
-  }, [userLocation]);
+  }, [mapReady, userLocation]);
 
   // 매장 마커 동기화
   useEffect(() => {
