@@ -66,7 +66,7 @@ env:
 
   # Kakao Maps JS SDK key — 도메인 화이트리스트로 보호되므로 평문 노출 OK
   - variable: NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY
-    value: b8ab2290aec7c0bf9453a802259ee338
+    value: 561209a03c266b3fd09f2f41913c60c2
     availability:
       - BUILD
       - RUNTIME
@@ -74,7 +74,7 @@ env:
   # Kakao REST API key — 서버 사이드 전용. NEXT_PUBLIC_ 접두사 X.
   # 현재 사용처: Cloud Functions의 일괄 geocoding (예정). 클라이언트로 절대 안 새어나감.
   - variable: KAKAO_REST_API_KEY
-    value: 2aa9c84fdbee9b7294a2437bd34dfb4d
+    value: 5c8f24f9ea35302bdf7b23c813f686c6
     availability:
       - RUNTIME
 
