@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    hold'emNow Maskable 아이콘 v4
+    ─ 핑크 그라데이션 전체 배경 (OS 마스킹 대응)
+    ─ 흰 카드 슬릿 + 흰 도트
+    ─ 안전 영역(80%) = 중앙 410×410 안에 핵심 요소
+  -->
+  <defs>
+    <linearGradient id="bgGradMK" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1F8F"/>
+      <stop offset="100%" stop-color="#C4006B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 핑크 전체 배경 -->
+  <rect width="512" height="512" fill="url(#bgGradMK)"/>
+
+  <!-- 배경 서클 질감 -->
+  <circle cx="256" cy="256" r="220" fill="#ffffff" opacity="0.06"/>
+
+  <!-- 흰 카드 그래픽 -->
+  <!-- 뒤 카드 (기울기) -->
+  <g transform="translate(256,248) rotate(-6) translate(-78,-95)">
+    <rect width="156" height="190" rx="16" fill="#ffffff" opacity="0.35"/>
+  </g>
+  <!-- 앞 카드 -->
+  <g transform="translate(256,248) rotate(4) translate(-78,-95)">
+    <rect width="156" height="190" rx="16" fill="#ffffff" opacity="0.90"/>
+    <!-- 슬릿 (핑크로 역대비) -->
+    <line x1="18" y1="60" x2="138" y2="60" stroke="#FF1F8F" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
+    <line x1="18" y1="86" x2="110" y2="86" stroke="#FF1F8F" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
+    <line x1="18" y1="112" x2="85" y2="112" stroke="#FF1F8F" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
+  </g>
+
+  <!-- 흰 도트 (우상단, 안전 영역 내) -->
+  <circle cx="345" cy="140" r="52" fill="#ffffff"/>
+  <circle cx="345" cy="140" r="72" fill="#ffffff" opacity="0.20"/>
+</svg>

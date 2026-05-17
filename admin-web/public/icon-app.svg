@@ -1,31 +1,54 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- 다크 배경 -->
-  <rect width="512" height="512" rx="112" fill="#0D1117"/>
+  <!--
+    hold'emNow PWA 앱 아이콘 v4
+    ─ 카드 슬릿 + 핑크 펄스 도트 심볼
+    ─ 흰~핑크틴트 그라데이션 배경
+    ─ 카드 그래픽 중앙 + 우상단 핑크 도트
+  -->
+  <defs>
+    <linearGradient id="bgGradA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FFF0F7"/>
+    </linearGradient>
+    <linearGradient id="dotGradA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1F8F"/>
+      <stop offset="100%" stop-color="#E01077"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#111827" flood-opacity="0.10"/>
+    </filter>
+  </defs>
 
-  <!-- 외부 글로우 링 -->
-  <circle cx="256" cy="220" r="130" fill="none" stroke="#FF1F8F" stroke-width="3" opacity="0.20"/>
-  <!-- 중간 링 -->
-  <circle cx="256" cy="220" r="90" fill="none" stroke="#FF1F8F" stroke-width="2" opacity="0.35"/>
+  <!-- 배경 -->
+  <rect width="512" height="512" fill="url(#bgGradA)"/>
 
-  <!-- 네온 핑크 중앙 도트 -->
-  <circle cx="256" cy="220" r="52" fill="#FF1F8F" opacity="0.15"/>
-  <circle cx="256" cy="220" r="34" fill="#FF1F8F"/>
+  <!-- 배경 서클 질감 -->
+  <circle cx="256" cy="240" r="200" fill="#FF1F8F" opacity="0.04"/>
+
+  <!-- 카드 그래픽 (중앙, 약간 기울어진 느낌) -->
+  <!-- 뒤 카드 (살짝 회전) -->
+  <g transform="translate(256,245) rotate(-6) translate(-90,-110)">
+    <rect width="180" height="220" rx="18" fill="#F3F4F6" stroke="#E5E7EB" stroke-width="2" filter="url(#cardShadow)"/>
+  </g>
+  <!-- 앞 카드 -->
+  <g transform="translate(256,245) rotate(4) translate(-90,-110)">
+    <rect width="180" height="220" rx="18" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="2" filter="url(#cardShadow)"/>
+    <!-- 카드 슬릿 3줄 -->
+    <line x1="22" y1="70" x2="158" y2="70" stroke="#D1D5DB" stroke-width="10" stroke-linecap="round"/>
+    <line x1="22" y1="100" x2="130" y2="100" stroke="#D1D5DB" stroke-width="10" stroke-linecap="round"/>
+    <line x1="22" y1="130" x2="100" y2="130" stroke="#D1D5DB" stroke-width="10" stroke-linecap="round"/>
+  </g>
+
+  <!-- 핑크 LIVE 펄스 도트 — 우상단 강조 -->
+  <circle cx="355" cy="135" r="60" fill="url(#dotGradA)"/>
+  <circle cx="355" cy="135" r="84" fill="#FF1F8F" opacity="0.14"/>
+  <circle cx="355" cy="135" r="104" fill="#FF1F8F" opacity="0.06"/>
 
   <!-- 하단 워드마크 -->
-  <text
-    x="256" y="390"
+  <text x="256" y="456"
     text-anchor="middle"
-    fill="#F0F2F6"
-    font-family="Inter, system-ui, sans-serif"
-    font-size="42" font-weight="800"
+    font-family="'Pretendard', 'Inter', system-ui, -apple-system, sans-serif"
+    font-size="58" font-weight="800"
     letter-spacing="-2"
-  >Holdem</text>
-  <text
-    x="256" y="440"
-    text-anchor="middle"
-    fill="#FF1F8F"
-    font-family="Inter, system-ui, sans-serif"
-    font-size="42" font-weight="800"
-    letter-spacing="-2"
-  >Now</text>
+    fill="#111827">hold<tspan fill="#FF1F8F">'</tspan>em<tspan fill="#FF1F8F">Now</tspan></text>
 </svg>

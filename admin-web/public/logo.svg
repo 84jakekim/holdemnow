@@ -1,23 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" width="200" height="40" role="img" aria-label="HoldemNow">
-  <!-- 심볼: 네온 핑크 펄스 도트 -->
-  <circle cx="14" cy="20" r="5" fill="#FF1F8F" opacity="0.9"/>
-  <circle cx="14" cy="20" r="9" fill="#FF1F8F" opacity="0.18"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 44" width="260" height="44" role="img" aria-label="hold'emNow">
+  <!--
+    hold'emNow 워드마크 v4
+    ─ 심볼: ♠ 스페이드 실루엣(누워서 펄스 도트로 변형) + 카드 슬릿 3줄
+    ─ hold = #111827 ExtraBold, ' = #FF1F8F 핑크, em = #111827, Now = #FF1F8F
+    ─ 좌측 심볼: 카드 슬릿 + 핑크 펄스 도트 (홀덤 카드 + LIVE 이중 메타포)
+  -->
+  <defs>
+    <linearGradient id="dotGradW" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1F8F"/>
+      <stop offset="100%" stop-color="#E01077"/>
+    </linearGradient>
+  </defs>
 
-  <!-- 워드마크: Holdem -->
-  <text
-    x="26" y="26"
-    font-family="Inter, system-ui, -apple-system, sans-serif"
-    font-size="20" font-weight="800"
-    letter-spacing="-0.04em"
-    fill="#F0F2F6"
-  >Holdem</text>
+  <!-- 심볼 영역 (22×44 안에서) -->
+  <!-- 카드 모양 베이스 — 모서리 약간 둥근 사각형 -->
+  <rect x="1" y="7" width="18" height="24" rx="3" fill="none" stroke="#E5E7EB" stroke-width="1.5"/>
+  <!-- 카드 내부 슬릿 3줄 (정보 줄 메타포) -->
+  <line x1="4.5" y1="13" x2="15.5" y2="13" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="4.5" y1="17" x2="13"   y2="17" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="4.5" y1="21" x2="11"   y2="21" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
 
-  <!-- 워드마크: Now (네온 핑크) -->
-  <text
-    x="116" y="26"
-    font-family="Inter, system-ui, -apple-system, sans-serif"
+  <!-- 핑크 LIVE 펄스 도트 — 카드 우상단 (아포스트로피 + LIVE 이중 메타포) -->
+  <circle cx="16" cy="10" r="5" fill="url(#dotGradW)"/>
+  <circle cx="16" cy="10" r="8" fill="#FF1F8F" opacity="0.14"/>
+
+  <!-- "hold" -->
+  <text x="28" y="30"
+    font-family="'Pretendard', 'Inter', system-ui, -apple-system, sans-serif"
+    font-size="24" font-weight="800" letter-spacing="-0.045em"
+    fill="#111827">hold</text>
+
+  <!-- "'" 아포스트로피 핑크 -->
+  <text x="92" y="28"
+    font-family="'Pretendard', 'Inter', system-ui, -apple-system, sans-serif"
     font-size="20" font-weight="800"
-    letter-spacing="-0.04em"
-    fill="#FF1F8F"
-  >Now</text>
+    fill="#FF1F8F">'</text>
+
+  <!-- "em" -->
+  <text x="100" y="30"
+    font-family="'Pretendard', 'Inter', system-ui, -apple-system, sans-serif"
+    font-size="24" font-weight="800" letter-spacing="-0.045em"
+    fill="#111827">em</text>
+
+  <!-- "Now" 핑크 -->
+  <text x="147" y="30"
+    font-family="'Pretendard', 'Inter', system-ui, -apple-system, sans-serif"
+    font-size="24" font-weight="800" letter-spacing="-0.045em"
+    fill="#FF1F8F">Now</text>
 </svg>

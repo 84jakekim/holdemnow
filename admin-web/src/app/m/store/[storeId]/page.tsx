@@ -4,13 +4,7 @@ import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  serverTimestamp,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
@@ -46,20 +40,18 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [tournaments, setTournaments] = useState<TournamentInstance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [photoIndex, setPhotoIndex] = useState(0);
 
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
     return unsub;
   }, [storeId]);
 
-  // 매장 상세 진입 = impression 1회
-  useEffect(() => {
-    trackImpressionOnce(storeId, 'store-detail');
-  }, [storeId]);
+  useEffect(() => { trackImpressionOnce(storeId, 'store-detail'); }, [storeId]);
+
   const [isFav, setIsFav] = useState(false);
   const [favBusy, setFavBusy] = useState(false);
 
-  // 즐겨찾기 상태 구독
   useEffect(() => {
     if (authState.status !== 'authenticated') {
       const tid = setTimeout(() => setIsFav(false), 0);
@@ -75,12 +67,8 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
 
   const toggleFavorite = async () => {
     if (authState.status !== 'authenticated') {
-      try {
-        await signInWithPopup(auth, new GoogleAuthProvider());
-      } catch {
-        return;
-      }
-      return; // 로그인 popup 후 useEffect가 재구독해서 상태 갱신
+      try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch { return; }
+      return;
     }
     if (!store) return;
     setFavBusy(true);
@@ -89,14 +77,8 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       if (isFav) {
         await deleteDoc(favRef);
       } else {
-        await setDoc(favRef, {
-          storeId,
-          storeName: store.name,
-          notifyOnLive: true,
-          createdAt: serverTimestamp(),
-        });
+        await setDoc(favRef, { storeId, storeName: store.name, notifyOnLive: true, createdAt: serverTimestamp() });
         bumpStoreMetric(storeId, 'favoriteAdds');
-        // 즐겨찾기 추가 시 알림 권한 요청 (default 상태에서만 — 이미 거부됐으면 무리하지 않음)
         if (getNotificationPermission() === 'default') {
           enableNotifications(authState.user.uid).catch(() => {});
         }
@@ -113,7 +95,6 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
     })();
   }, [storeId]);
 
-  // 좌표 없는 매장은 주소로 1회 geocoding → Firestore 캐시 + 로컬 반영
   useEffect(() => {
     if (!store || !store.address) return;
     if (store.lat != null && store.lng != null) return;
@@ -123,90 +104,245 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
         const coords = await geocodeAddress(store.address!);
         if (cancelled || !coords) return;
         setStore((prev) => (prev ? { ...prev, lat: coords.lat, lng: coords.lng } : prev));
-        updateDoc(doc(db, 'stores', storeId), { lat: coords.lat, lng: coords.lng }).catch(() => {
-          // owner 아니면 권한 거부 — 메모리만 반영
-        });
-      } catch {
-        // skip
-      }
+        updateDoc(doc(db, 'stores', storeId), { lat: coords.lat, lng: coords.lng }).catch(() => {});
+      } catch { /* skip */ }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [store, storeId]);
 
   useEffect(() => {
     const unsub = subscribeStoreLiveSessions(
       storeId,
-      (items) => {
-        setSessions(items);
-        setLoading(false);
-      },
+      (items) => { setSessions(items); setLoading(false); },
       () => setLoading(false),
     );
     return unsub;
   }, [storeId]);
 
+  /* 로딩 스켈레톤 */
   if (store === undefined) {
-    return <div className="p-10 text-center text-sm text-gray-500">로딩 중…</div>;
+    return (
+      <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
+        <div className="skeleton" style={{ aspectRatio: '3/4', width: '100%' }} />
+        <div className="p-5 space-y-3">
+          <div className="skeleton h-7 w-2/3 rounded-lg" />
+          <div className="skeleton h-4 w-full rounded" />
+          <div className="skeleton h-4 w-4/5 rounded" />
+        </div>
+      </div>
+    );
   }
+
   if (store === null) {
     return (
-      <div className="p-10 text-center">
-        <div className="text-4xl mb-3">⚠️</div>
-        <div className="font-bold mb-2">매장을 찾을 수 없습니다</div>
-        <button onClick={() => router.replace('/m')} className="text-xs text-gray-500 underline">
-          홈으로
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-10" style={{ background: 'var(--bg)' }}>
+        <div className="text-4xl">⚠️</div>
+        <div className="font-bold text-lg" style={{ color: 'var(--text-1)' }}>매장을 찾을 수 없습니다</div>
+        <button
+          onClick={() => router.replace('/m')}
+          className="text-sm px-4 py-2 rounded-xl font-semibold transition active:scale-95"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-2)' }}
+        >
+          홈으로 돌아가기
         </button>
       </div>
     );
   }
 
+  const photos = store.photoUrls ?? [];
+  const hasPhotos = photos.length > 0;
+
   return (
-    <div className="pb-20">
-      {/* 상단 — 뒤로가기 + 매장명 */}
-      <div className="sticky top-0 z-10 bg-white px-5 h-14 flex items-center justify-between border-b border-gray-100">
-        <Link href="/m" className="text-xl">←</Link>
-        <div className="font-bold text-sm truncate">{store.name}</div>
-        <div className="w-6" />
+    <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 80 }}>
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          히어로 사진 영역 — 야놀자 스타일 큰 사진 (3:4 비율)
+          헤더는 사진 위에 오버레이 (투명 그라데이션)
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div className="relative" style={{ aspectRatio: hasPhotos ? '3/4' : '4/3' }}>
+
+        {/* 사진 */}
+        {hasPhotos ? (
+          <div className="absolute inset-0 overflow-hidden">
+            <img
+              src={photos[photoIndex]}
+              alt={`${store.name} 사진 ${photoIndex + 1}`}
+              className="w-full h-full object-cover"
+            />
+            {/* 상단 그라데이션 (헤더 버튼 가독성) */}
+            <div
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 35%, transparent 60%, rgba(0,0,0,0.55) 100%)' }}
+              aria-hidden="true"
+            />
+          </div>
+        ) : (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, var(--brand-pale) 0%, var(--surface-2) 100%)' }}
+          >
+            <div className="text-sm font-bold" style={{ color: 'var(--text-3)' }}>사진 미등록</div>
+          </div>
+        )}
+
+        {/* 헤더 오버레이 — 뒤로/공유 */}
+        <div className="absolute top-0 left-0 right-0 z-20 px-4 flex items-center justify-between" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)', height: 60 }}>
+          <button
+            onClick={() => router.back()}
+            className="w-9 h-9 flex items-center justify-center rounded-xl transition active:scale-90"
+            style={{ background: 'rgba(255,255,255,0.90)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+            aria-label="뒤로"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-1)' }} aria-hidden="true">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+
+          <div className="flex items-center gap-2">
+            {/* 즐겨찾기 */}
+            <button
+              onClick={toggleFavorite}
+              disabled={favBusy}
+              aria-label={isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+              className="w-9 h-9 flex items-center justify-center rounded-xl transition active:scale-90 disabled:opacity-50"
+              style={{ background: isFav ? 'rgba(255,31,143,0.90)' : 'rgba(255,255,255,0.90)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill={isFav ? '#fff' : 'none'} stroke={isFav ? '#fff' : 'var(--text-1)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+              </svg>
+            </button>
+            {/* 공유 */}
+            <button
+              onClick={() => shareContent({ title: store.name, text: `${store.name} — HoldemNow에서 확인` })}
+              className="w-9 h-9 flex items-center justify-center rounded-xl transition active:scale-90"
+              style={{ background: 'rgba(255,255,255,0.90)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+              aria-label="공유"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-1)' }} aria-hidden="true">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* 사진 인디케이터 (여러 장) */}
+        {photos.length > 1 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20">
+            {photos.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setPhotoIndex(i)}
+                aria-label={`사진 ${i + 1}`}
+                className="transition-all"
+                style={{
+                  width: i === photoIndex ? 20 : 6,
+                  height: 6,
+                  borderRadius: 3,
+                  background: i === photoIndex ? '#fff' : 'rgba(255,255,255,0.50)',
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* 가로 스와이프 지원 */}
+        {photos.length > 1 && (
+          <div className="absolute inset-0 flex z-10">
+            <button
+              className="flex-1 h-full"
+              onClick={() => setPhotoIndex((i) => Math.max(0, i - 1))}
+              aria-label="이전 사진"
+              style={{ background: 'transparent' }}
+            />
+            <button
+              className="flex-1 h-full"
+              onClick={() => setPhotoIndex((i) => Math.min(photos.length - 1, i + 1))}
+              aria-label="다음 사진"
+              style={{ background: 'transparent' }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* 매장 사진 (Storage) — 가로 스크롤 */}
-      {store.photoUrls && store.photoUrls.length > 0 ? (
-        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none">
-          {store.photoUrls.map((url, i) => (
-            <div key={url} className="w-full flex-shrink-0 snap-center relative" style={{ aspectRatio: '4/3' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`매장 ${i + 1}`} className="w-full h-full object-cover" />
-              {store.photoUrls && store.photoUrls.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] font-bold rounded-full px-2.5 py-1 backdrop-blur">
-                  {i + 1} / {store.photoUrls.length}
-                </div>
-              )}
-            </div>
-          ))}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          매장 정보 — 토스 스타일 흰 카드 + 강한 위계
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
+        {/* 매장 이름 + LIVE 상태 */}
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <h1 className="text-[22px] font-extrabold tracking-tight leading-tight flex-1" style={{ color: 'var(--text-1)' }}>
+            {store.name}
+          </h1>
+          {sessions.length > 0 && !loading && (
+            <span className="badge-live flex-shrink-0 mt-1" style={{ fontSize: 11, padding: '4px 10px' }}>
+              <span className="dot" />
+              LIVE
+            </span>
+          )}
         </div>
-      ) : (
-        <div className="h-48 bg-gradient-to-br from-amber-100 to-amber-200 flex items-end justify-center pb-4">
-          <div className="text-xs text-amber-900 font-bold opacity-60">사진 미등록</div>
-        </div>
-      )}
 
-      {/* 매장 정보 */}
-      <div className="px-5 py-4 border-b-[6px] border-gray-50">
-        <div className="text-2xl font-extrabold tracking-tight text-gray-900 mb-2 font-serif">
-          {store.name}
+        {store.description && (
+          <p className="text-[14px] leading-relaxed mt-2 mb-4" style={{ color: 'var(--text-2)' }}>
+            {store.description}
+          </p>
+        )}
+
+        {/* 정보 박스 — 토스 스타일 */}
+        <div
+          className="rounded-2xl p-4 mt-3 space-y-3"
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+        >
+          {store.address && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'var(--surface-3)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)' }} aria-hidden="true">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-semibold mb-0.5" style={{ color: 'var(--text-3)' }}>주소</div>
+                <div className="text-[13px] font-medium" style={{ color: 'var(--text-1)' }}>{store.address}</div>
+              </div>
+            </div>
+          )}
+          {store.hours && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'var(--surface-3)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)' }} aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-semibold mb-0.5" style={{ color: 'var(--text-3)' }}>영업시간</div>
+                <div className="text-[13px] font-medium" style={{ color: 'var(--text-1)' }}>{store.hours}</div>
+              </div>
+            </div>
+          )}
+          {store.phone && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'var(--surface-3)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)' }} aria-hidden="true">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012.18 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 8.14a16 16 0 006.29 6.29l1.41-1.41a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 15.42v1.5z"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-semibold mb-0.5" style={{ color: 'var(--text-3)' }}>전화</div>
+                <div className="text-[13px] font-medium" style={{ color: 'var(--text-1)' }}>{store.phone}</div>
+              </div>
+            </div>
+          )}
         </div>
-        {store.description && <div className="text-sm text-gray-600 mb-3">{store.description}</div>}
-        <div className="space-y-1 text-xs text-gray-600">
-          {store.address && <div>📍 {store.address}</div>}
-          {store.hours && <div>🕐 {store.hours}</div>}
-          {store.phone && <div>📞 {store.phone}</div>}
-        </div>
+
+        {/* 시설 태그 */}
         {store.facilities && store.facilities.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-3">
+          <div className="flex flex-wrap gap-1.5 mt-4">
             {store.facilities.map((f) => (
-              <span key={f} className="text-[10px] bg-gray-100 text-gray-700 rounded-full px-2.5 py-1 font-bold">
+              <span
+                key={f}
+                className="text-[12px] font-semibold rounded-full px-3 py-1"
+                style={{ background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
+              >
                 {f}
               </span>
             ))}
@@ -214,70 +350,135 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
         )}
       </div>
 
-      {/* 위치 — 미니맵 (틀 안에서 직접 드래그/줌) */}
-      {store.lat != null && store.lng != null && (
-        <div className="px-5 py-4 border-b-[6px] border-gray-50">
-          <div className="text-xs font-extrabold text-gray-900 tracking-wider mb-3">
-            🗺 위치
-          </div>
-          <StoreMiniMap lat={store.lat} lng={store.lng} name={store.name} />
-          {store.address && (
-            <div className="text-[11px] text-gray-500 mt-2">📍 {store.address}</div>
-          )}
-        </div>
-      )}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          CTA 버튼 — 토스 스타일 (길찾기 풀버튼 + 서브 그리드)
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
+        {/* 길찾기 — 메인 CTA (토스 스타일 큰 버튼) */}
+        <button
+          onClick={() => { bumpStoreMetric(storeId, 'directionsClicks'); openDirections(store.name, store.address); }}
+          className="w-full h-[52px] flex items-center justify-center gap-2.5 rounded-2xl font-bold text-[15px] transition active:scale-[0.98] mb-3"
+          style={{ background: 'var(--text-1)', color: '#fff' }}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+          </svg>
+          길찾기
+        </button>
 
-      {/* LIVE 세션 멀티 타이머 그리드 */}
+        {/* 서브 액션 — 전화 + 공유 */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => { bumpStoreMetric(storeId, 'phoneClicks'); callPhone(store.phone); }}
+            disabled={!store.phone}
+            aria-label={store.phone ? `전화: ${store.phone}` : '전화번호 없음'}
+            className="h-12 flex items-center justify-center gap-2 rounded-2xl font-semibold text-[14px] transition active:scale-[0.97] disabled:opacity-40"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012.18 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 8.14a16 16 0 006.29 6.29l1.41-1.41a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 15.42v1.5z"/>
+            </svg>
+            전화
+          </button>
+          <button
+            onClick={() => shareContent({ title: store.name, text: `${store.name} — HoldemNow에서 확인` })}
+            className="h-12 flex items-center justify-center gap-2 rounded-2xl font-semibold text-[14px] transition active:scale-[0.97]"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            공유
+          </button>
+        </div>
+      </div>
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          LIVE 세션 타이머
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {loading ? (
-        <div className="p-6 text-center text-xs text-gray-500">LIVE 정보 로딩…</div>
+        <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
+          <div className="skeleton h-5 w-24 rounded mb-3" />
+          <div className="skeleton h-24 rounded-2xl" />
+        </div>
       ) : sessions.length === 0 ? (
-        <div className="p-6 text-center text-xs text-gray-500">
-          현재 진행 중인 LIVE가 없습니다
+        <div
+          className="px-5 py-5 flex items-center gap-3"
+          style={{ borderBottom: '8px solid var(--bg-sub)' }}
+        >
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--surface-2)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)' }} aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <div>
+            <div className="text-[13px] font-semibold" style={{ color: 'var(--text-2)' }}>현재 진행 중인 LIVE 없음</div>
+            <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>토너 시작 시 알림을 받으려면 즐겨찾기 추가</div>
+          </div>
         </div>
       ) : (
-        <div className="p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-xs font-extrabold text-red-600 tracking-wider">
-              LIVE 진행 중 {sessions.length > 1 ? `(${sessions.length}개)` : ''}
+        <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-2 h-2 rounded-full flex-shrink-0 pulse-live" style={{ background: 'var(--live)' }} aria-hidden="true" />
+            <span className="text-[14px] font-extrabold" style={{ color: 'var(--text-1)' }}>
+              LIVE 진행 중{sessions.length > 1 ? ` (${sessions.length}개)` : ''}
             </span>
           </div>
           <SessionTimerGrid sessions={sessions} />
         </div>
       )}
 
-      {/* 예정 토너 */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          예정 토너
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {tournaments.length > 0 && (
-        <div className="p-5 border-b-[6px] border-gray-50">
-          <div className="text-xs font-extrabold text-gray-900 tracking-wider mb-3">
-            📅 예정 토너 ({tournaments.length})
+        <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)' }} aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2.5"/><path d="M16 2v4M8 2v4M3 10h18"/>
+            </svg>
+            <span className="text-[14px] font-extrabold" style={{ color: 'var(--text-1)' }}>
+              예정 토너 ({tournaments.length})
+            </span>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {tournaments.map((t) => {
               const poster = posterStyleFor(t.posterStyle);
               const d = t.startsAt.toDate();
               const hh = String(d.getHours()).padStart(2, '0');
               const mm = String(d.getMinutes()).padStart(2, '0');
               return (
-                <div key={t.id} className="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-3">
+                <div
+                  key={t.id}
+                  className="flex items-center gap-3 rounded-2xl p-3.5"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                >
+                  {/* 포스터 미니 */}
                   <div
-                    className="w-10 h-12 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
+                    className="w-10 h-12 rounded-xl flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
                     style={{ background: poster.bg, color: poster.color }}
                   >
                     {t.name.split(' ')[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-gray-900 truncate">{t.name}</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">
-                      <span className="font-mono font-bold text-gray-900">
+                    <div className="text-[14px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{t.name}</div>
+                    <div className="text-[12px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+                      <span className="font-mono font-semibold" style={{ color: 'var(--text-2)' }}>
                         {d.getMonth() + 1}/{d.getDate()} {hh}:{mm}
-                      </span>{' '}
-                      · 바이인 ₩{t.buyIn.toLocaleString()}
+                      </span>
+                      {' '}· 바이인 ₩{t.buyIn.toLocaleString()}
                     </div>
                   </div>
                   {t.guarantee > 0 && (
-                    <div className="text-[10px] font-extrabold text-red-600 bg-red-50 rounded px-1.5 py-0.5 flex-shrink-0">
-                      GTD ₩{(t.guarantee / 10000).toFixed(0)}만
+                    <div
+                      className="text-[10px] font-extrabold rounded-full px-2 py-1 flex-shrink-0"
+                      style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)', color: 'var(--gold)' }}
+                    >
+                      GTD {(t.guarantee / 10000).toFixed(0)}만
                     </div>
                   )}
                   <TournamentInterestStar tournament={t} size="sm" />
@@ -288,65 +489,31 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
         </div>
       )}
 
-      {/* CTA */}
-      <div className="px-5 pb-6 flex gap-2">
-        <button
-          onClick={() => {
-            bumpStoreMetric(storeId, 'directionsClicks');
-            openDirections(store.name, store.address);
-          }}
-          className="flex-1 h-12 bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-1.5"
-        >
-          🗺 길찾기
-        </button>
-        <button
-          onClick={() => {
-            bumpStoreMetric(storeId, 'phoneClicks');
-            callPhone(store.phone);
-          }}
-          disabled={!store.phone}
-          className="w-12 h-12 border-[1.5px] border-gray-200 rounded-xl text-sm flex items-center justify-center disabled:opacity-40"
-          title={store.phone ? `전화: ${store.phone}` : '전화번호 없음'}
-        >
-          📞
-        </button>
-        <button
-          onClick={toggleFavorite}
-          disabled={favBusy}
-          className={`w-12 h-12 border-[1.5px] rounded-xl text-base flex items-center justify-center disabled:opacity-50 ${
-            isFav ? 'bg-red-50 border-red-300 text-red-500' : 'bg-white border-gray-200'
-          }`}
-          title={isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-        >
-          {isFav ? '♥' : '♡'}
-        </button>
-        <button
-          onClick={() => shareContent({ title: store.name, text: `${store.name} — HoldemNow에서 확인` })}
-          className="w-12 h-12 border-[1.5px] border-gray-200 rounded-xl text-sm flex items-center justify-center"
-          title="공유"
-        >
-          ↗
-        </button>
-      </div>
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          위치 미니맵
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {store.lat != null && store.lng != null && (
+        <div className="px-5 py-5">
+          <div className="flex items-center gap-2 mb-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)' }} aria-hidden="true">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span className="text-[14px] font-extrabold" style={{ color: 'var(--text-1)' }}>위치</span>
+          </div>
+          <StoreMiniMap lat={store.lat} lng={store.lng} name={store.name} />
+          {store.address && (
+            <div className="text-[12px] mt-2" style={{ color: 'var(--text-3)' }}>{store.address}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-/**
- * 매장 상세 미니맵.
- * - 틀 안에서 직접 드래그/핀치 줌/더블클릭 줌 가능 — 별도 전체보기 모달 없음.
- * - 우상단 줌 컨트롤(+/-) 노출 — 카카오맵 표준 ZoomControl.
- * - 마커는 매장명 뱃지 SVG (다크 알약 + 흰 텍스트 + 꼬리 핀).
- */
-function StoreMiniMap({
-  lat,
-  lng,
-  name,
-}: {
-  lat: number;
-  lng: number;
-  name: string;
-}) {
+/* ============================================================
+ * 미니맵 — 라이트 테두리
+ * ========================================================== */
+function StoreMiniMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -359,31 +526,20 @@ function StoreMiniMap({
         const maps = await loadKakaoMaps();
         if (cancelled || !containerRef.current || mapRef.current) return;
         const center = new maps.LatLng(lat, lng);
-        mapRef.current = new maps.Map(containerRef.current, {
-          center,
-          level: 3,
-          // 인터랙션 전부 허용 (default가 활성). 명시적으로 활성화 호출은 불필요.
-        });
-        // 줌 컨트롤(+/-) — 우상단
+        mapRef.current = new maps.Map(containerRef.current, { center, level: 3 });
         const zoomControl = new maps.ZoomControl();
         mapRef.current.addControl(zoomControl, maps.ControlPosition.TOPRIGHT);
-        // 매장명 뱃지 마커
         markerRef.current = new maps.Marker({
-          position: center,
-          map: mapRef.current,
-          image: buildNameBadgeMarker(maps, name),
-          title: name,
+          position: center, map: mapRef.current,
+          image: buildNameBadgeMarker(maps, name), title: name,
         });
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : String(e));
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [lat, lng, name]);
 
-  // 좌표 갱신(geocoding 결과 도착 등) — 중심 + 마커 위치
   useEffect(() => {
     const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
     if (!mapRef.current || !maps) return;
@@ -393,10 +549,13 @@ function StoreMiniMap({
   }, [lat, lng]);
 
   return (
-    <div className="relative w-full h-56 rounded-xl overflow-hidden border border-gray-200">
+    <div
+      className="relative w-full overflow-hidden"
+      style={{ height: 200, borderRadius: 'var(--r-xl)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}
+    >
       <div ref={containerRef} className="absolute inset-0" />
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-xs text-gray-500">
+        <div className="absolute inset-0 flex items-center justify-center text-sm" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
           지도 로드 실패
         </div>
       )}
@@ -404,58 +563,40 @@ function StoreMiniMap({
   );
 }
 
-/**
- * 매장명 뱃지 마커 — 다크 알약 + 흰색 매장명 + 아래 꼬리.
- * 너비는 매장명 길이에 맞춰 자동 (한글 약 13px/자, 영문 약 8px/자 보수 추정).
- */
 function buildNameBadgeMarker(maps: any, name: string) {
-  // 글자별 너비 추정 — 정확한 폰트 메트릭 대신 한글/영문 분기로 근사
-  const widthOf = (s: string) =>
-    Array.from(s).reduce((sum, ch) => sum + (/[ -~]/.test(ch) ? 8 : 13), 0);
-  const PAD_X = 14;
-  const TAIL_H = 8;
-  const PILL_H = 28;
+  const widthOf = (s: string) => Array.from(s).reduce((sum, ch) => sum + (/[ -~]/.test(ch) ? 8 : 13), 0);
+  const PAD_X = 14, TAIL_H = 8, PILL_H = 28;
   const width = Math.max(60, widthOf(name) + PAD_X * 2);
   const height = PILL_H + TAIL_H;
   const cx = width / 2;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width - 1}" height="${PILL_H - 1}" rx="${PILL_H / 2}" fill="#1F2937" stroke="#0F172A" stroke-width="1"/><text x="${cx}" y="${PILL_H / 2 + 5}" fill="#fff" font-family="Pretendard,Inter,system-ui,-apple-system,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${escapeSvg(name)}</text><polygon points="${cx - 6},${PILL_H} ${cx + 6},${PILL_H} ${cx},${PILL_H + TAIL_H}" fill="#1F2937" stroke="#0F172A" stroke-width="1"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width-1}" height="${PILL_H-1}" rx="${PILL_H/2}" fill="#FF1F8F" stroke="#CC1072" stroke-width="1.5"/><text x="${cx}" y="${PILL_H/2+5}" fill="#fff" font-family="Pretendard,Inter,system-ui,-apple-system,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${escapeSvg(name)}</text><polygon points="${cx-6},${PILL_H} ${cx+6},${PILL_H} ${cx},${PILL_H+TAIL_H}" fill="#FF1F8F" stroke="#CC1072" stroke-width="1.5"/></svg>`;
   const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(width, height), {
-    offset: new maps.Point(cx, height),
-  });
+  return new maps.MarkerImage(url, new maps.Size(width, height), { offset: new maps.Point(cx, height) });
 }
 
 function escapeSvg(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* ============================================================
+ * 세션 타이머 그리드 — 라이트 카드
+ * ========================================================== */
 function SessionTimerGrid({ sessions }: { sessions: LiveSession[] }) {
   const cols = sessions.length === 1 ? 1 : sessions.length === 2 ? 2 : 3;
   return (
-    <div
-      className="grid gap-2"
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-    >
-      {sessions.map((s) => (
-        <TimerCard key={s.id} session={s} cols={cols} />
-      ))}
+    <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      {sessions.map((s) => <TimerCard key={s.id} session={s} cols={cols} />)}
     </div>
   );
 }
 
 function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
   const sizes = {
-    1: { timer: 56, name: 16, meta: 12, p: 'p-5' },
-    2: { timer: 36, name: 13, meta: 11, p: 'p-3.5' },
-    3: { timer: 24, name: 11, meta: 10, p: 'p-2.5' },
+    1: { timer: 48, name: 15, meta: 12, p: '20px' },
+    2: { timer: 32, name: 13, meta: 11, p: '14px' },
+    3: { timer: 22, name: 11, meta: 10, p: '10px' },
   } as const;
   const sz = sizes[cols as 1 | 2 | 3];
-
   const sec = useLiveCountdown(session);
   const paused = session.status === 'paused';
   const lowTime = sec <= 10 && !paused;
@@ -464,36 +605,48 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
   return (
     <Link
       href={`/m/live/${session.id}`}
-      className={`block bg-red-50 rounded-2xl ${sz.p} active:scale-[0.98] transition`}
+      className="block rounded-2xl transition active:scale-[0.98]"
+      style={{
+        background: paused
+          ? 'rgba(245,158,11,0.06)'
+          : lowTime
+            ? 'rgba(229,62,62,0.06)'
+            : 'var(--surface-2)',
+        border: `1px solid ${paused ? 'rgba(245,158,11,0.20)' : lowTime ? 'rgba(229,62,62,0.20)' : 'var(--border)'}`,
+        padding: sz.p,
+      }}
     >
+      {/* 상태 라벨 */}
       <div className="flex items-center gap-1 mb-1">
         {paused ? (
-          <span className="text-[9px] font-extrabold text-amber-800 tracking-wider">⏸ PAUSED</span>
+          <span className="text-[9px] font-extrabold tracking-wider" style={{ color: 'var(--gold)' }}>⏸ 일시정지</span>
         ) : (
           <>
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[9px] font-extrabold text-red-600 tracking-wider">LIVE</span>
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 pulse-live" style={{ background: 'var(--live)' }} aria-hidden="true" />
+            <span className="text-[9px] font-extrabold tracking-wider" style={{ color: 'var(--live)' }}>LIVE</span>
           </>
         )}
       </div>
-      <div className="font-bold text-gray-900 truncate" style={{ fontSize: `${sz.name}px` }}>
+      {/* 토너 이름 */}
+      <div className="font-bold truncate" style={{ fontSize: sz.name, color: 'var(--text-1)' }}>
         {session.tournamentName}
       </div>
+      {/* 카운트다운 */}
       <div
-        className={`font-mono font-extrabold leading-none mt-1.5 ${
-          lowTime ? 'text-red-500' : paused ? 'text-amber-800' : 'text-gray-900'
-        }`}
-        style={{ fontSize: `${sz.timer}px`, letterSpacing: '-0.03em' }}
+        className="font-mono font-extrabold leading-none mt-1.5"
+        style={{
+          fontSize: sz.timer,
+          letterSpacing: '-0.03em',
+          color: lowTime ? 'var(--live)' : paused ? 'var(--gold)' : 'var(--text-1)',
+        }}
       >
         {fmtTime(sec)}
       </div>
-      <div className="text-gray-500 mt-1.5" style={{ fontSize: `${sz.meta}px` }}>
+      {/* 메타 */}
+      <div className="mt-1.5" style={{ fontSize: sz.meta, color: 'var(--text-3)' }}>
         Lv {session.currentLevel} · {session.playersRemaining}명
         {cols === 1 && (
-          <span>
-            {' '}
-            · {session.lateRegClosed ? '등록 마감' : `등록 ${lateMin}분`}
-          </span>
+          <span> · {session.lateRegClosed ? '등록 마감' : `등록 ${lateMin}분`}</span>
         )}
       </div>
     </Link>

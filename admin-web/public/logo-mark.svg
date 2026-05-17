@@ -1,9 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="HoldemNow">
-  <!-- 다크 배경 원형 -->
-  <rect width="40" height="40" rx="10" fill="#0D1117"/>
-  <!-- 외부 글로우 링 -->
-  <circle cx="20" cy="20" r="13" fill="none" stroke="#FF1F8F" stroke-width="1.5" opacity="0.30"/>
-  <!-- 내부 도트 (LIVE 시그널) -->
-  <circle cx="20" cy="20" r="7" fill="#FF1F8F" opacity="0.15"/>
-  <circle cx="20" cy="20" r="4.5" fill="#FF1F8F"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="hold'emNow">
+  <!--
+    hold'emNow 심볼 마크 v4
+    ─ 카드 슬릿 + 핑크 펄스 도트 조합
+    ─ 흰 배경 + 라이트 그레이 카드 윤곽 + 핑크 도트
+    ─ 헤더 28×28, 파비콘 베이스
+  -->
+  <defs>
+    <linearGradient id="dotGradM" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1F8F"/>
+      <stop offset="100%" stop-color="#E01077"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="40" height="40" rx="10" fill="#F7F7F8"/>
+
+  <!-- 카드 모양 (중앙) -->
+  <rect x="7" y="9" width="19" height="25" rx="3.5" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1.5"/>
+
+  <!-- 카드 내부 슬릿 3줄 -->
+  <line x1="11" y1="16" x2="22" y2="16" stroke="#D1D5DB" stroke-width="1.4" stroke-linecap="round"/>
+  <line x1="11" y1="20" x2="20" y2="20" stroke="#D1D5DB" stroke-width="1.4" stroke-linecap="round"/>
+  <line x1="11" y1="24" x2="17" y2="24" stroke="#D1D5DB" stroke-width="1.4" stroke-linecap="round"/>
+
+  <!-- 핑크 LIVE 펄스 도트 — 우상단 -->
+  <circle cx="28" cy="12" r="7" fill="url(#dotGradM)"/>
+  <!-- 글로우 링 -->
+  <circle cx="28" cy="12" r="10" fill="#FF1F8F" opacity="0.16"/>
 </svg>

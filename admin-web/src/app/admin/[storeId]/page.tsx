@@ -68,9 +68,8 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
       {/* 좌측 사이드바 */}
       <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-5 border-b border-gray-100">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
-            <span className="font-extrabold tracking-tight">HoldemNow</span>
+          <div className="mb-1">
+            <img src="/logo.svg" alt="hold'emNow" width={160} height={27} style={{ display: 'block' }} />
           </div>
           <div className="text-[10px] text-gray-500">어드민 v0.1</div>
         </div>
@@ -92,9 +91,10 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
               onClick={() => setActiveMenu(m.id)}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 mb-0.5 transition ${
                 activeMenu === m.id
-                  ? 'bg-black text-white'
+                  ? 'text-white'
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
+              style={activeMenu === m.id ? { background: '#FF1F8F' } : undefined}
             >
               <span>{m.icon}</span>
               <span>{m.label}</span>
@@ -106,7 +106,8 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
           {isPlatformAdmin && (
             <Link
               href="/platform"
-              className="block text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 hover:bg-amber-100"
+              className="block text-[11px] font-bold rounded-md px-2.5 py-1.5"
+            style={{ color: '#FF1F8F', background: 'rgba(255,31,143,0.08)', border: '1px solid rgba(255,31,143,0.25)' }}
               title="본사 총관리자 화면으로 전환"
             >
               🏢 본사 관리자로 전환
@@ -115,7 +116,8 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
           {userDoc?.organizerId && (
             <Link
               href={`/organizer/${userDoc.organizerId}`}
-              className="block text-[11px] font-bold text-gray-900 bg-amber-100 border border-amber-300 rounded-md px-2.5 py-1.5 hover:bg-amber-200"
+              className="block text-[11px] font-bold rounded-md px-2.5 py-1.5"
+            style={{ color: '#FFB800', background: 'rgba(255,184,0,0.10)', border: '1px solid rgba(255,184,0,0.30)' }}
               title="대회사 어드민"
             >
               🏆 대회사 어드민으로 전환

@@ -91,9 +91,15 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       {/* 좌측 사이드바 — 본사 어드민 톤 (다크 액센트) */}
       <aside className="w-56 bg-gray-900 text-white border-r border-gray-800 flex flex-col">
         <div className="p-5 border-b border-gray-800">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="font-extrabold tracking-tight">HoldemNow</span>
+          {/* 다크 사이드바용 — 흰 필터로 로고 반전 */}
+          <div className="mb-1">
+            <img
+              src="/logo.svg"
+              alt="hold'emNow"
+              width={150}
+              height={25}
+              style={{ display: 'block', filter: 'brightness(0) invert(1)' }}
+            />
           </div>
           <div className="text-[10px] text-amber-400 font-bold tracking-wider">본사 어드민</div>
         </div>

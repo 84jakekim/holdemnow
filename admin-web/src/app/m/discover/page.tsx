@@ -34,10 +34,8 @@ export default function DiscoverPage() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  // 지도 인스턴스 ref — handleUserSelect의 panTo가 KakaoMap 내부 ref를 공유해서 호출.
   const mapInstanceRef = useRef<any>(null);
 
-  // 현재 위치 — watchPosition으로 실시간 추적 (사용자가 이동하면 즉시 재정렬)
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       const tid = setTimeout(() => setLocationDenied(true), 0);
@@ -46,46 +44,24 @@ export default function DiscoverPage() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => setLocationDenied(true),
-      // enableHighAccuracy:false → GPS 대신 셀/와이파이 (배터리 절약 + 빠른 응답)
-      // maximumAge:30s → 30초 이내 캐시된 위치는 재사용
-      // timeout:10s → 10초 안에 못 잡으면 일시 실패 (또는 denied)
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // 매장 데이터
   useEffect(() => {
     let cancelled = false;
     getDocs(collection(db, 'stores'))
       .then((snap) => {
         if (cancelled) return;
-        const list: StoreSummary[] = snap.docs.map((d) => {
-          const data = d.data() as {
-            name: string;
-            address?: string;
-            photoUrls?: string[];
-            lat?: number;
-            lng?: number;
-          };
-          return {
-            id: d.id,
-            name: data.name,
-            address: data.address,
-            photoUrl: data.photoUrls?.[0],
-            lat: data.lat,
-            lng: data.lng,
-          };
-        });
-        setStores(list);
-        list.forEach((s) => trackImpressionOnce(s.id, 'discover-map'));
+        setStores(snap.docs.map((d) => {
+          const data = d.data() as { name: string; address?: string; photoUrls?: string[]; lat?: number; lng?: number };
+          return { id: d.id, name: data.name, address: data.address, photoUrl: data.photoUrls?.[0], lat: data.lat, lng: data.lng };
+        }));
+        snap.docs.forEach((d) => trackImpressionOnce(d.id, 'discover-map'));
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -99,24 +75,30 @@ export default function DiscoverPage() {
     return map;
   }, [sessions]);
 
-  // 거리 정렬 — 거리 필터는 없음 (지도에 전체 매장 표시, 사용자가 줌·팬으로 탐색).
-  // 위치 이동 시 watchPosition이 userLocation 갱신 → useMemo 재계산 → 자동 재정렬.
+  // 지도 마커용 — 좌표 있는 전체 매장. 사용자가 줌 아웃하면 부산·양산·김해 모두 보임.
+  // 클러스터러가 줌 레벨에 따라 자동 그룹화하므로 수천개 대응 OK.
+  const storesWithCoords = useMemo<StoreSummary[]>(() => {
+    return stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
+  }, [stores]);
+
+  // 시트·상단 카운트용 — 10km 반경 + 거리 정렬. LIVE 매장은 거리 무관 항상 포함.
+  const NEARBY_RADIUS_M = 10_000;
   const nearbyStores = useMemo<NearbyStore[]>(() => {
-    const withCoords = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
-    if (!userLocation) return withCoords;
-    return withCoords
+    if (!userLocation) return storesWithCoords;
+    return storesWithCoords
       .map((s) => ({ ...s, _dist: haversineMeters(userLocation, { lat: s.lat!, lng: s.lng! }) }))
+      .filter((s) => (s._dist as number) <= NEARBY_RADIUS_M || (liveCountByStore[s.id] ?? 0) > 0)
       .sort((a, b) => (a._dist as number) - (b._dist as number));
-  }, [stores, userLocation]);
+  }, [storesWithCoords, userLocation, liveCountByStore]);
 
   const totalLive = Object.values(liveCountByStore).reduce((a, b) => a + b, 0);
   const selected = stores.find((s) => s.id === selectedId);
   const selectedLiveCount = selected ? liveCountByStore[selected.id] || 0 : 0;
-  const selectedDist = selected && userLocation && typeof selected.lat === 'number' && typeof selected.lng === 'number'
-    ? haversineMeters(userLocation, { lat: selected.lat, lng: selected.lng })
-    : null;
+  const selectedDist =
+    selected && userLocation && typeof selected.lat === 'number' && typeof selected.lng === 'number'
+      ? haversineMeters(userLocation, { lat: selected.lat, lng: selected.lng })
+      : null;
 
-  // 좌표 없는 매장은 즉시 geocoding (1회). 결과를 Firestore에 캐시.
   useEffect(() => {
     const needsGeocode = stores.filter((s) => s.address && (s.lat == null || s.lng == null));
     if (needsGeocode.length === 0) return;
@@ -128,19 +110,13 @@ export default function DiscoverPage() {
           const coords = await geocodeAddress(s.address!);
           if (!coords) continue;
           updateDoc(doc(db, 'stores', s.id), { lat: coords.lat, lng: coords.lng }).catch(() => {});
-          setStores((prev) => prev.map((x) => (x.id === s.id ? { ...x, lat: coords.lat, lng: coords.lng } : x)));
-        } catch {
-          // skip
-        }
+          setStores((prev) => prev.map((x) => x.id === s.id ? { ...x, lat: coords.lat, lng: coords.lng } : x));
+        } catch { /* skip */ }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [stores]);
 
-  // 사용자 직접 선택 (마커 클릭) — panTo + selectedId 갱신.
-  // 자동 선택은 하지 않음 — 지도 중심을 사용자 위치에 유지하기 위함.
   const handleUserSelect = (id: string) => {
     setSelectedId(id);
     const target = stores.find((s) => s.id === id);
@@ -153,22 +129,36 @@ export default function DiscoverPage() {
 
   const handleSheetItemClick = (id: string) => {
     setSheetOpen(false);
-    bumpStoreMetric(id, 'cardClicks');
-    router.push(`/m/store/${id}`);
+    handleUserSelect(id);
   };
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 80px)' }}>
-      <div className="px-5 h-14 flex items-center justify-between border-b border-gray-100 bg-white">
-        <span className="text-xl font-extrabold tracking-tight font-serif">탐색</span>
-        <Link href="/m/search" className="text-lg" title="검색">
-          🔍
-        </Link>
-      </div>
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 68px)', background: 'var(--bg)' }}>
 
+      {/* ── 헤더 — 라이트 ─────────────────────────────────── */}
+      <header
+        className="px-5 h-14 flex items-center justify-between flex-shrink-0"
+        style={{
+          background: 'rgba(255,255,255,0.94)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <span className="text-[18px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+          지도 탐색
+        </span>
+        <Link href="/m/search" aria-label="검색">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }}>
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+        </Link>
+      </header>
+
+      {/* ── 지도 영역 ───────────────────────────────────────── */}
       <div className="flex-1 relative">
         <KakaoMap
-          stores={nearbyStores}
+          stores={storesWithCoords}
           liveCountByStore={liveCountByStore}
           selectedId={selectedId}
           onSelect={handleUserSelect}
@@ -178,92 +168,122 @@ export default function DiscoverPage() {
           mapInstanceRef={mapInstanceRef}
         />
 
-        {/* 상단 — 터치 가능 버튼. 누르면 거리순 리스트 시트가 열림 */}
+        {/* ── 상단 카운트 버튼 — 라이트 카드 ──────────────── */}
         <button
           onClick={() => setSheetOpen(true)}
           disabled={nearbyStores.length === 0}
-          className="absolute top-3 left-3 right-3 bg-white/95 backdrop-blur rounded-xl px-4 py-3 flex items-center justify-between shadow-md z-30 text-left active:scale-[0.98] transition disabled:opacity-60 disabled:active:scale-100"
+          className="absolute top-3 left-3 right-3 z-30 text-left transition active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
+          style={{
+            background: 'rgba(255,255,255,0.96)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.10)',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
         >
           <div>
-            <div className="text-[11px] text-gray-500">
-              {userLocation ? '내 주변 매장 · 거리순 (실시간)' : locationDenied ? '서면 중심' : '위치 확인 중…'}
+            <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>
+              {userLocation ? '내 주변 매장 · 거리순' : locationDenied ? '서면 중심' : '위치 확인 중…'}
             </div>
-            <div className="text-sm font-bold text-gray-900 mt-0.5 flex items-center gap-1.5">
-              <span>{nearbyStores.length}개</span>
+            <div className="text-[14px] font-bold mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
+              <span>매장 {nearbyStores.length}개</span>
               {nearbyStores.length > 0 && (
-                <span className="text-gray-400 text-[11px] font-normal">전체보기 ›</span>
+                <span className="text-[12px] font-normal" style={{ color: 'var(--text-3)' }}>전체 목록 ›</span>
               )}
             </div>
           </div>
+
           {totalLive > 0 ? (
-            <div className="bg-red-50 text-red-600 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs font-extrabold">LIVE {totalLive}</span>
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
+              style={{ background: 'rgba(229,62,62,0.08)', border: '1px solid rgba(229,62,62,0.25)' }}
+            >
+              <span className="w-2 h-2 rounded-full flex-shrink-0 pulse-live" style={{ background: 'var(--live)' }} />
+              <span className="text-[12px] font-extrabold" style={{ color: 'var(--live)' }}>LIVE {totalLive}</span>
             </div>
           ) : (
-            <div className="text-xs text-gray-500">LIVE 없음</div>
+            <span className="text-[12px]" style={{ color: 'var(--text-3)' }}>LIVE 없음</span>
           )}
         </button>
 
+        {/* 지도 에러 */}
         {mapError && (
-          <div className="absolute top-20 left-3 right-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 z-30">
+          <div
+            className="absolute top-20 left-3 right-3 z-30 p-3 text-xs rounded-xl"
+            style={{ background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E' }}
+          >
             <b>지도 로드 실패:</b> {mapError}
           </div>
         )}
 
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center text-sm pointer-events-none" style={{ color: 'var(--text-3)' }}>
             로딩 중…
           </div>
         )}
 
-        {/* 하단 선택 매장 카드 — 사용자가 마커/시트에서 선택해야 표시 */}
+        {/* ── 하단 선택 매장 카드 — 라이트 ───────────────── */}
         {selected && (
           <button
-            onClick={() => {
-              bumpStoreMetric(selected.id, 'cardClicks');
-              router.push(`/m/store/${selected.id}`);
+            onClick={() => { bumpStoreMetric(selected.id, 'cardClicks'); router.push(`/m/store/${selected.id}`); }}
+            className="absolute bottom-3 left-3 right-3 z-30 flex items-center gap-3 text-left transition active:scale-[0.98]"
+            style={{
+              background: 'rgba(255,255,255,0.97)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-xl)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              padding: '12px',
             }}
-            className="absolute bottom-3 left-3 right-3 bg-white rounded-2xl p-3 shadow-lg flex items-center gap-3 text-left z-30 active:scale-[0.98] transition"
           >
+            {/* 썸네일 */}
             <div
-              className="w-16 h-16 rounded-xl flex-shrink-0 bg-gray-200 overflow-hidden"
-              style={
-                selected.photoUrl
-                  ? undefined
-                  : { background: 'linear-gradient(135deg, #C9B49A 0%, #A8927A 100%)' }
-              }
+              className="w-[60px] h-[60px] rounded-xl flex-shrink-0 overflow-hidden"
+              style={{ background: 'var(--surface-2)' }}
             >
               {selected.photoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={selected.photoUrl} alt={selected.name} className="w-full h-full object-cover" />
               )}
             </div>
+            {/* 정보 */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-1">
-                <div className="text-sm font-bold text-gray-900 truncate">{selected.name}</div>
+                <div className="text-[14px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{selected.name}</div>
                 {selectedLiveCount > 0 && (
-                  <div className="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-md px-1.5 py-0.5">
-                    <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-[9px] font-extrabold">
-                      LIVE{selectedLiveCount > 1 ? ` ${selectedLiveCount}` : ''}
-                    </span>
-                  </div>
+                  <span className="badge-live flex-shrink-0">
+                    <span className="dot" />
+                    LIVE
+                  </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-gray-500 truncate">
+              <div className="flex items-center gap-2 text-[12px] truncate" style={{ color: 'var(--text-3)' }}>
                 {selectedDist != null && (
-                  <span className="font-bold text-gray-700 flex-shrink-0">
+                  <span className="font-semibold flex-shrink-0" style={{ color: 'var(--text-2)' }}>
                     {formatDistance(selectedDist)}
                   </span>
                 )}
-                {selected.address && <span className="truncate">📍 {selected.address}</span>}
+                {selected.address && <span className="truncate">{selected.address}</span>}
               </div>
             </div>
-            <span className="text-xl text-gray-400">›</span>
+            {/* 상세보기 화살표 */}
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: 'var(--brand)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </div>
           </button>
         )}
 
+        {/* 매장 목록 시트 */}
         {sheetOpen && (
           <NearbyStoresSheet
             stores={nearbyStores}
@@ -277,12 +297,11 @@ export default function DiscoverPage() {
   );
 }
 
-/** 내 주변 매장 거리순 리스트 시트 — 상단 카운트 버튼이 트리거. row 터치 시 매장 페이지 이동. */
+/* ============================================================
+ * 매장 목록 바텀 시트 — 라이트
+ * ========================================================== */
 function NearbyStoresSheet({
-  stores,
-  liveCountByStore,
-  onClose,
-  onItemClick,
+  stores, liveCountByStore, onClose, onItemClick,
 }: {
   stores: NearbyStore[];
   liveCountByStore: Record<string, number>;
@@ -291,69 +310,78 @@ function NearbyStoresSheet({
 }) {
   return (
     <div className="absolute inset-0 z-40 flex flex-col justify-end">
-      <button
-        aria-label="닫기"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40"
-      />
-      <div className="relative bg-white rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
+      <button aria-label="닫기" onClick={onClose} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.30)' }} />
+      <div
+        className="relative flex flex-col"
+        style={{
+          background: 'var(--surface-1)',
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          maxHeight: '75vh',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.12)',
+        }}
+      >
+        {/* 핸들 */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-9 h-1 rounded-full" style={{ background: 'var(--surface-3)' }} />
+        </div>
+
+        <div
+          className="flex items-center justify-between px-5 pb-3 pt-2"
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
           <div>
-            <div className="text-[11px] text-gray-500">내 주변 매장 · 거리순 (실시간)</div>
-            <div className="text-base font-extrabold text-gray-900">{stores.length}개</div>
+            <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>내 주변 매장 · 거리순</div>
+            <div className="text-[16px] font-extrabold" style={{ color: 'var(--text-1)' }}>{stores.length}개</div>
           </div>
           <button
             onClick={onClose}
-            className="text-2xl text-gray-400 leading-none px-2"
+            className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-90"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-2)', fontSize: 18 }}
             aria-label="닫기"
           >
             ×
           </button>
         </div>
-        <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+
+        <div className="overflow-y-auto flex-1">
           {stores.map((s) => {
             const live = liveCountByStore[s.id] || 0;
             return (
               <button
                 key={s.id}
                 onClick={() => onItemClick(s.id)}
-                className="w-full flex items-center gap-3 px-5 py-3 text-left active:bg-gray-50"
+                className="w-full flex items-center gap-3 px-5 py-3.5 text-left transition active:bg-gray-50"
+                style={{ borderBottom: '1px solid var(--border)' }}
               >
+                {/* 썸네일 */}
                 <div
-                  className="w-12 h-12 rounded-xl flex-shrink-0 bg-gray-200 overflow-hidden"
-                  style={
-                    s.photoUrl
-                      ? undefined
-                      : { background: 'linear-gradient(135deg, #C9B49A 0%, #A8927A 100%)' }
-                  }
+                  className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden"
+                  style={{ background: 'var(--surface-2)' }}
                 >
-                  {s.photoUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.photoUrl} alt={s.name} className="w-full h-full object-cover" />
-                  )}
+                  {s.photoUrl && <img src={s.photoUrl} alt={s.name} className="w-full h-full object-cover" />}
                 </div>
+                {/* 정보 */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <div className="text-sm font-bold text-gray-900 truncate">{s.name}</div>
+                    <span className="text-[14px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{s.name}</span>
                     {live > 0 && (
-                      <div className="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-md px-1.5 py-0.5">
-                        <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-[9px] font-extrabold">
-                          LIVE{live > 1 ? ` ${live}` : ''}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px] text-gray-500 truncate mt-0.5">
-                    {s._dist != null && (
-                      <span className="font-bold text-gray-700 flex-shrink-0">
-                        {formatDistance(s._dist)}
+                      <span className="badge-live flex-shrink-0">
+                        <span className="dot" />
+                        LIVE
                       </span>
                     )}
-                    {s.address && <span className="truncate">📍 {s.address}</span>}
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+                    {s._dist != null && (
+                      <span className="font-semibold flex-shrink-0" style={{ color: 'var(--text-2)' }}>{formatDistance(s._dist)}</span>
+                    )}
+                    {s.address && <span className="truncate">{s.address}</span>}
                   </div>
                 </div>
-                <span className="text-lg text-gray-400">›</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)', flexShrink: 0 }}>
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
               </button>
             );
           })}
@@ -363,15 +391,11 @@ function NearbyStoresSheet({
   );
 }
 
+/* ============================================================
+ * Kakao 지도 — 마커 로직 그대로 유지, 클러스터 스타일만 라이트로
+ * ========================================================== */
 function KakaoMap({
-  stores,
-  liveCountByStore,
-  selectedId,
-  onSelect,
-  onError,
-  userLocation,
-  locationDenied,
-  mapInstanceRef,
+  stores, liveCountByStore, selectedId, onSelect, onError, userLocation, locationDenied, mapInstanceRef,
 }: {
   stores: StoreSummary[];
   liveCountByStore: Record<string, number>;
@@ -383,16 +407,13 @@ function KakaoMap({
   mapInstanceRef: React.MutableRefObject<any>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // 일반 매장 마커 — MarkerClusterer에 위탁 (멀리서 그룹화, 가까이서 개별)
   const normalMarkersRef = useRef<Map<string, any>>(new Map());
-  // LIVE 매장 마커 — 클러스터에서 제외, 항상 직접 가시 (LIVE는 핵심)
   const liveMarkersRef = useRef<Map<string, any>>(new Map());
   const clustererRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
   const radiusCircleRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
 
-  // 지도 + 클러스터러 초기화 — 위치 결정 후 사용자 위치 중심으로 시작
   useEffect(() => {
     if (!userLocation && !locationDenied) return;
     let cancelled = false;
@@ -404,7 +425,6 @@ function KakaoMap({
           ? new maps.LatLng(userLocation.lat, userLocation.lng)
           : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
         mapInstanceRef.current = new maps.Map(containerRef.current, { center, level: 4 });
-        // MarkerClusterer — level 6 이상(멀리)에서 그룹화. 가까이 줌인하면 개별 매장명 뱃지.
         clustererRef.current = new maps.MarkerClusterer({
           map: mapInstanceRef.current,
           averageCenter: true,
@@ -419,12 +439,9 @@ function KakaoMap({
         onError(e instanceof Error ? e.message : String(e));
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [onError, userLocation, locationDenied, mapInstanceRef]);
 
-  // 사용자 위치 마커 + 250m 반경 원
   useEffect(() => {
     if (!mapReady || !userLocation || !mapInstanceRef.current) return;
     const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
@@ -444,21 +461,14 @@ function KakaoMap({
       radiusCircleRef.current.setPosition(pos);
     } else {
       radiusCircleRef.current = new maps.Circle({
-        center: pos,
-        radius: 250,
-        strokeWeight: 2,
-        strokeColor: '#3B82F6',
-        strokeOpacity: 0.6,
-        strokeStyle: 'solid',
-        fillColor: '#60A5FA',
-        fillOpacity: 0.12,
+        center: pos, radius: 250,
+        strokeWeight: 2, strokeColor: '#FF1F8F', strokeOpacity: 0.5, strokeStyle: 'solid',
+        fillColor: '#FF1F8F', fillOpacity: 0.08,
       });
       radiusCircleRef.current.setMap(mapInstanceRef.current);
     }
   }, [mapReady, userLocation, mapInstanceRef]);
 
-  // 매장 마커 동기화 — LIVE는 직접 map, 일반은 clusterer.
-  // 같은 매장의 LIVE↔일반 전이도 정확히 처리 (한쪽에서 제거 후 반대로 추가).
   useEffect(() => {
     if (!mapInstanceRef.current || !clustererRef.current) return;
     const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
@@ -477,46 +487,23 @@ function KakaoMap({
 
       if (live > 0) {
         seenLive.add(s.id);
-        // 이전에 일반이었다면 클러스터에서 제거
         const wasNormal = normalMarkersRef.current.get(s.id);
-        if (wasNormal) {
-          clustererRef.current.removeMarker(wasNormal);
-          normalMarkersRef.current.delete(s.id);
-        }
+        if (wasNormal) { clustererRef.current.removeMarker(wasNormal); normalMarkersRef.current.delete(s.id); }
         const existing = liveMarkersRef.current.get(s.id);
-        if (existing) {
-          existing.setPosition(pos);
-          existing.setImage(image);
-        } else {
-          const marker = new maps.Marker({
-            position: pos,
-            map: mapInstanceRef.current,
-            title: s.name,
-            image,
-            zIndex: 25,
-          });
+        if (existing) { existing.setPosition(pos); existing.setImage(image); }
+        else {
+          const marker = new maps.Marker({ position: pos, map: mapInstanceRef.current, title: s.name, image, zIndex: 25 });
           maps.event.addListener(marker, 'click', () => onSelect(s.id));
           liveMarkersRef.current.set(s.id, marker);
         }
       } else {
         seenNormal.add(s.id);
-        // 이전에 LIVE였다면 직접 마커 제거
         const wasLive = liveMarkersRef.current.get(s.id);
-        if (wasLive) {
-          wasLive.setMap(null);
-          liveMarkersRef.current.delete(s.id);
-        }
+        if (wasLive) { wasLive.setMap(null); liveMarkersRef.current.delete(s.id); }
         const existing = normalMarkersRef.current.get(s.id);
-        if (existing) {
-          existing.setPosition(pos);
-          existing.setImage(image);
-        } else {
-          const marker = new maps.Marker({
-            position: pos,
-            title: s.name,
-            image,
-            zIndex: isSelected ? 20 : 10,
-          });
+        if (existing) { existing.setPosition(pos); existing.setImage(image); }
+        else {
+          const marker = new maps.Marker({ position: pos, title: s.name, image, zIndex: isSelected ? 20 : 10 });
           maps.event.addListener(marker, 'click', () => onSelect(s.id));
           normalMarkersRef.current.set(s.id, marker);
           newClusterMarkers.push(marker);
@@ -524,34 +511,20 @@ function KakaoMap({
       }
     }
 
-    if (newClusterMarkers.length > 0) {
-      clustererRef.current.addMarkers(newClusterMarkers);
-    }
+    if (newClusterMarkers.length > 0) clustererRef.current.addMarkers(newClusterMarkers);
 
-    // 사라진 매장 정리
     for (const [id, m] of normalMarkersRef.current) {
-      if (!seenNormal.has(id)) {
-        clustererRef.current.removeMarker(m);
-        normalMarkersRef.current.delete(id);
-      }
+      if (!seenNormal.has(id)) { clustererRef.current.removeMarker(m); normalMarkersRef.current.delete(id); }
     }
     for (const [id, m] of liveMarkersRef.current) {
-      if (!seenLive.has(id)) {
-        m.setMap(null);
-        liveMarkersRef.current.delete(id);
-      }
+      if (!seenLive.has(id)) { m.setMap(null); liveMarkersRef.current.delete(id); }
     }
   }, [stores, liveCountByStore, selectedId, onSelect, mapInstanceRef]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }
 
-/**
- * 마커 이미지 — 매장명 뱃지 형식.
- * 일반: 다크 알약 + 흰 매장명 + 꼬리. 선택 시 골드.
- * LIVE: 빨강 알약 + 흰 점 + 흰 'LIVE' 라벨 + 흰 매장명 + 꼬리. 선택 시 진한 빨강 stroke.
- * 매장 수천개 대비 → cache key별로 MarkerImage 재사용.
- */
+/* ── 마커 이미지 (캐시) ── */
 const _markerImageCache = new Map<string, any>();
 function getMarkerImage(maps: any, opts: { name: string; live: number; selected: boolean }) {
   const key = `${opts.live}|${opts.selected ? 's' : ''}|${opts.name}`;
@@ -571,66 +544,68 @@ function buildMarkerImage(maps: any, opts: { name: string; live: number; selecte
   const safeName = escapeSvg(name);
 
   if (live > 0) {
-    // LIVE: 빨강 알약 + ● + LIVE 라벨 + 매장명
     const liveLabel = live > 1 ? `LIVE ${live}` : 'LIVE';
     const liveLabelW = liveLabel.length * 6;
-    const LEFT = 8;
-    const DOT = 6;
-    const G1 = 5;
-    const G2 = 8;
-    const RIGHT = 12;
-    const width = LEFT + DOT + G1 + liveLabelW + G2 + nameW + RIGHT;
-    const cx = width / 2;
+    // ripple 원을 위해 상단 여유 공간 추가
+    const RIPPLE_PAD = 10;
+    const LEFT = 8, DOT = 6, G1 = 5, G2 = 8, RIGHT = 12;
+    const pillWidth = LEFT + DOT + G1 + liveLabelW + G2 + nameW + RIGHT;
+    const totalH = RIPPLE_PAD + PILL_H + TAIL_H;
+    const cx = pillWidth / 2;
     const dotX = LEFT + DOT / 2;
     const liveX = LEFT + DOT + G1;
     const nameX = liveX + liveLabelW + G2;
-    const fill = '#D94B3D';
-    const stroke = selected ? '#7F1D1D' : '#991B1B';
+    const fill = '#E53E3E';
+    const stroke = selected ? '#7F1D1D' : '#C53030';
     const sw = selected ? 2 : 1;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width - 1}" height="${PILL_H - 1}" rx="${PILL_H / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/><circle cx="${dotX}" cy="${PILL_H / 2}" r="${DOT / 2}" fill="#fff"/><text x="${liveX}" y="${PILL_H / 2 + 4}" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="10" font-weight="800">${liveLabel}</text><text x="${nameX}" y="${PILL_H / 2 + 5}" fill="#fff" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800">${safeName}</text><polygon points="${cx - 6},${PILL_H} ${cx + 6},${PILL_H} ${cx},${PILL_H + TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`;
+    // SMIL ripple: 좌측 도트 기준으로 퍼지는 원형 파동
+    const rDotCx = dotX;
+    const rDotCy = RIPPLE_PAD + PILL_H / 2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="${totalH}" viewBox="0 0 ${pillWidth} ${totalH}">
+      <circle cx="${rDotCx}" cy="${rDotCy}" r="3" fill="#E53E3E" opacity="0.6">
+        <animate attributeName="r" values="4;14;4" dur="1.6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.55;0;0.55" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+      <rect x="0.5" y="${RIPPLE_PAD + 0.5}" width="${pillWidth-1}" height="${PILL_H-1}" rx="${PILL_H/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
+      <circle cx="${dotX}" cy="${RIPPLE_PAD + PILL_H/2}" r="${DOT/2}" fill="#fff"/>
+      <text x="${liveX}" y="${RIPPLE_PAD + PILL_H/2+4}" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="10" font-weight="800">${liveLabel}</text>
+      <text x="${nameX}" y="${RIPPLE_PAD + PILL_H/2+5}" fill="#fff" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800">${safeName}</text>
+      <polygon points="${cx-6},${RIPPLE_PAD+PILL_H} ${cx+6},${RIPPLE_PAD+PILL_H} ${cx},${RIPPLE_PAD+PILL_H+TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
+    </svg>`;
     const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-    return new maps.MarkerImage(url, new maps.Size(width, height), {
-      offset: new maps.Point(cx, height),
-    });
+    return new maps.MarkerImage(url, new maps.Size(pillWidth, totalH), { offset: new maps.Point(cx, totalH) });
   }
 
-  // 일반: 다크 알약 + 매장명
   const PAD = 14;
   const width = nameW + PAD * 2;
   const cx = width / 2;
-  const fill = selected ? '#D97706' : '#1F2937';
-  const stroke = selected ? '#7C2D12' : '#0F172A';
-  const sw = selected ? 2 : 1;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width - 1}" height="${PILL_H - 1}" rx="${PILL_H / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/><text x="${cx}" y="${PILL_H / 2 + 5}" fill="#fff" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${safeName}</text><polygon points="${cx - 6},${PILL_H} ${cx + 6},${PILL_H} ${cx},${PILL_H + TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`;
+  // 선택 시 핑크, 기본은 화이트 카드 (라이트 모드 지도에 맞게)
+  const fill = selected ? '#FF1F8F' : '#FFFFFF';
+  const textColor = selected ? '#fff' : '#111827';
+  const stroke = selected ? '#CC1072' : '#E5E7EB';
+  const sw = selected ? 2 : 1.5;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><filter id="s"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.12"/></filter><rect x="0.5" y="0.5" width="${width-1}" height="${PILL_H-1}" rx="${PILL_H/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" filter="url(#s)"/><text x="${cx}" y="${PILL_H/2+5}" fill="${textColor}" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${safeName}</text><polygon points="${cx-6},${PILL_H} ${cx+6},${PILL_H} ${cx},${PILL_H+TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`;
   const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(width, height), {
-    offset: new maps.Point(cx, height),
-  });
+  return new maps.MarkerImage(url, new maps.Size(width, height), { offset: new maps.Point(cx, height) });
 }
 
 function widthOf(s: string): number {
-  // 한글 12px/자, 영문/숫자/기호 7px/자 근사
   return Array.from(s).reduce((sum, ch) => sum + (/[\x00-\x7F]/.test(ch) ? 7 : 12), 0);
 }
-
 function escapeSvg(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/** MarkerClusterer 단계별 스타일 — 다크 원 + 흰 카운트, calculator 단계 수 +1개 필요 */
+/** 클러스터 스타일 — 라이트 + 핑크 테두리 */
 function clusterStyles() {
   const base = {
-    color: '#fff',
+    color: '#FF1F8F',
     textAlign: 'center' as const,
     fontWeight: '800' as const,
     fontFamily: 'Inter,system-ui,sans-serif',
-    border: '2px solid #0F172A',
-    background: '#1F2937',
+    border: '2px solid #FF1F8F',
+    background: '#FFFFFF',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
   };
   return [
     { ...base, width: '36px', height: '36px', borderRadius: '18px', lineHeight: '32px', fontSize: '12px' },
@@ -641,19 +616,18 @@ function clusterStyles() {
   ];
 }
 
+/** 사용자 위치 마커 — 핑크 펄스 (라이트 지도에서도 잘 보임) */
 function buildUserMarker(maps: any) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
-    <circle cx="18" cy="18" r="16" fill="#3B82F6" opacity="0.15">
+    <circle cx="18" cy="18" r="16" fill="#FF1F8F" opacity="0.12">
       <animate attributeName="r" values="10;16;10" dur="2s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.22;0.04;0.22" dur="2s" repeatCount="indefinite"/>
     </circle>
-    <circle cx="18" cy="18" r="7" fill="#fff"/>
-    <circle cx="18" cy="18" r="5" fill="#2563EB"/>
+    <circle cx="18" cy="18" r="7" fill="#fff" filter="drop-shadow(0 1px 3px rgba(0,0,0,0.20))"/>
+    <circle cx="18" cy="18" r="5" fill="#FF1F8F"/>
   </svg>`;
   const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(36, 36), {
-    offset: new maps.Point(18, 18),
-  });
+  return new maps.MarkerImage(url, new maps.Size(36, 36), { offset: new maps.Point(18, 18) });
 }
 
 function haversineMeters(a: LatLng, b: LatLng): number {
@@ -661,9 +635,7 @@ function haversineMeters(a: LatLng, b: LatLng): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
