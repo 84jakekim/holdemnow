@@ -63,6 +63,11 @@ export const kakaoCustomToken = onCall<KakaoTokenInput>(
         params.set('client_id', restKey);
         params.set('redirect_uri', redirectUri);
         params.set('code', code);
+        // Client Secret 기능이 켜진 앱이면 필수. 없으면 KOE010 (Bad client credentials).
+        const clientSecret = process.env.KAKAO_CLIENT_SECRET;
+        if (clientSecret) {
+          params.set('client_secret', clientSecret);
+        }
         const tokenRes = await axios.post(
           'https://kauth.kakao.com/oauth/token',
           params,
