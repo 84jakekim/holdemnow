@@ -13,42 +13,166 @@ import { db } from './firebase';
 
 /**
  * 부산·양산·김해 권역 가상 홀덤펍 100개 시드.
- * 기존 5개(seedStores.ts)와 구분하기 위해 demoBatch='bulk100' 플래그를 함께 박는다.
- * 카운트·삭제 모두 이 플래그로 좁힘 — 5개 시드와 충돌 없음.
+ * 동네별 실제 상권 핫스팟(역세권·중심로) 좌표를 정의해두고, 매장을 핫스팟에 라운드로빈으로 분배.
+ * 좌표 jitter는 ±0.0004(약 40m) — 핫스팟 인근 도로변에 자연스럽게 흩뿌려 보이게.
+ * 도로명·번지는 핫스팟의 실제 도로명을 그대로 사용 (번지만 변형).
+ *
+ * 기존 5개(seedStores.ts)와 구분: demoBatch='bulk100' 플래그.
  */
 const DEMO_BATCH_ID = 'bulk100';
+
+interface Hotspot {
+  /** 핫스팟 라벨 (디버깅용) */
+  label: string;
+  /** 실제 도로명 (예: '서면로', '해운대해변로') */
+  road: string;
+  /** 도로명 주소 시 prefix (시·구·도로명 직전까지) */
+  addrPrefix: string;
+  /** 번지 범위 [min, max] */
+  banjiRange: [number, number];
+  lat: number;
+  lng: number;
+}
 
 interface Area {
   region: '부산' | '양산' | '김해';
   dong: string;
-  addrPrefix: string;
-  lat: number;
-  lng: number;
   count: number;
+  hotspots: Hotspot[];
 }
 
-// 합 = 65 + 17 + 18 = 100
+// 핫스팟 좌표는 실제 행정동의 주요 역세권·상권을 기준으로 잡음.
+// 매장은 area 안에서 idx % hotspots.length로 라운드로빈 분배 → 한쪽에 몰리지 않음.
 const AREAS: Area[] = [
-  // 부산 65
-  { region: '부산', dong: '서면',     addrPrefix: '부산광역시 부산진구 서면로',     lat: 35.1576, lng: 129.0596, count: 14 },
-  { region: '부산', dong: '해운대',   addrPrefix: '부산광역시 해운대구 해운대로',   lat: 35.1631, lng: 129.1635, count: 12 },
-  { region: '부산', dong: '광안리',   addrPrefix: '부산광역시 수영구 광안해변로',   lat: 35.1531, lng: 129.1185, count: 10 },
-  { region: '부산', dong: '동래',     addrPrefix: '부산광역시 동래구 충렬대로',     lat: 35.2052, lng: 129.0832, count: 8 },
-  { region: '부산', dong: '대연',     addrPrefix: '부산광역시 남구 못골로',         lat: 35.1357, lng: 129.1010, count: 7 },
-  { region: '부산', dong: '장전',     addrPrefix: '부산광역시 금정구 장전로',       lat: 35.2306, lng: 129.0867, count: 5 },
-  { region: '부산', dong: '하단',     addrPrefix: '부산광역시 사하구 하단동',       lat: 35.1059, lng: 128.9657, count: 3 },
-  { region: '부산', dong: '사상',     addrPrefix: '부산광역시 사상구 사상로',       lat: 35.1539, lng: 128.9907, count: 2 },
-  { region: '부산', dong: '남포',     addrPrefix: '부산광역시 중구 남포동',         lat: 35.0980, lng: 129.0288, count: 2 },
-  { region: '부산', dong: '연제',     addrPrefix: '부산광역시 연제구 연제로',       lat: 35.1762, lng: 129.0823, count: 1 },
-  { region: '부산', dong: '영도',     addrPrefix: '부산광역시 영도구 봉래동',       lat: 35.0917, lng: 129.0676, count: 1 },
-  // 양산 17
-  { region: '양산', dong: '물금',     addrPrefix: '경상남도 양산시 물금읍 물금로',  lat: 35.3034, lng: 128.9931, count: 9 },
-  { region: '양산', dong: '양산중부', addrPrefix: '경상남도 양산시 중부동',         lat: 35.3373, lng: 129.0381, count: 5 },
-  { region: '양산', dong: '양주',     addrPrefix: '경상남도 양산시 양주동',         lat: 35.3500, lng: 129.0500, count: 3 },
-  // 김해 18
-  { region: '김해', dong: '장유',     addrPrefix: '경상남도 김해시 장유로',         lat: 35.2010, lng: 128.8138, count: 9 },
-  { region: '김해', dong: '내외동',   addrPrefix: '경상남도 김해시 내외중앙로',     lat: 35.2310, lng: 128.8898, count: 6 },
-  { region: '김해', dong: '진영',     addrPrefix: '경상남도 김해시 진영읍 진영로',  lat: 35.2814, lng: 128.7383, count: 3 },
+  // ===== 부산 65개 =====
+  {
+    region: '부산', dong: '서면', count: 14,
+    hotspots: [
+      { label: '서면역 NC',    road: '가야대로',   addrPrefix: '부산광역시 부산진구', banjiRange: [690, 780], lat: 35.1576, lng: 129.0593 },
+      { label: '서면 메디컬',  road: '서전로',     addrPrefix: '부산광역시 부산진구', banjiRange: [10, 70],   lat: 35.1565, lng: 129.0610 },
+      { label: '부전역',       road: '동천로',     addrPrefix: '부산광역시 부산진구', banjiRange: [100, 180], lat: 35.1592, lng: 129.0590 },
+      { label: '영광도서',     road: '중앙대로',   addrPrefix: '부산광역시 부산진구', banjiRange: [780, 870], lat: 35.1559, lng: 129.0568 },
+      { label: '서면시장',     road: '부전로',     addrPrefix: '부산광역시 부산진구', banjiRange: [40, 110],  lat: 35.1545, lng: 129.0613 },
+    ],
+  },
+  {
+    region: '부산', dong: '해운대', count: 12,
+    hotspots: [
+      { label: '해운대역',     road: '구남로',         addrPrefix: '부산광역시 해운대구', banjiRange: [10, 90],   lat: 35.1631, lng: 129.1635 },
+      { label: '해운대해변',   road: '해운대해변로',   addrPrefix: '부산광역시 해운대구', banjiRange: [200, 320], lat: 35.1592, lng: 129.1605 },
+      { label: '미포 달맞이',  road: '달맞이길',       addrPrefix: '부산광역시 해운대구', banjiRange: [30, 130],  lat: 35.1593, lng: 129.1718 },
+      { label: '센텀시티',     road: '센텀중앙로',     addrPrefix: '부산광역시 해운대구', banjiRange: [55, 145],  lat: 35.1696, lng: 129.1306 },
+    ],
+  },
+  {
+    region: '부산', dong: '광안리', count: 10,
+    hotspots: [
+      { label: '광안역',       road: '광남로',         addrPrefix: '부산광역시 수영구', banjiRange: [40, 120],  lat: 35.1551, lng: 129.1186 },
+      { label: '광안리해변',   road: '광안해변로',     addrPrefix: '부산광역시 수영구', banjiRange: [180, 280], lat: 35.1531, lng: 129.1185 },
+      { label: '민락동',       road: '민락로',         addrPrefix: '부산광역시 수영구', banjiRange: [55, 140],  lat: 35.1490, lng: 129.1240 },
+      { label: '남천동',       road: '수영로',         addrPrefix: '부산광역시 수영구', banjiRange: [300, 410], lat: 35.1450, lng: 129.1110 },
+    ],
+  },
+  {
+    region: '부산', dong: '동래', count: 8,
+    hotspots: [
+      { label: '동래역',       road: '충렬대로',     addrPrefix: '부산광역시 동래구', banjiRange: [88, 170],  lat: 35.2052, lng: 129.0832 },
+      { label: '명륜동',       road: '명륜로',       addrPrefix: '부산광역시 동래구', banjiRange: [80, 160],  lat: 35.2061, lng: 129.0844 },
+      { label: '사직동',       road: '사직북로',     addrPrefix: '부산광역시 동래구', banjiRange: [20, 90],   lat: 35.1981, lng: 129.0593 },
+    ],
+  },
+  {
+    region: '부산', dong: '대연', count: 7,
+    hotspots: [
+      { label: '대연역',       road: '못골로',       addrPrefix: '부산광역시 남구',   banjiRange: [40, 110],  lat: 35.1357, lng: 129.1010 },
+      { label: '부경대',       road: '용소로',       addrPrefix: '부산광역시 남구',   banjiRange: [30, 95],   lat: 35.1336, lng: 129.1057 },
+      { label: '못골',         road: '진남로',       addrPrefix: '부산광역시 남구',   banjiRange: [25, 90],   lat: 35.1325, lng: 129.0980 },
+    ],
+  },
+  {
+    region: '부산', dong: '장전', count: 5,
+    hotspots: [
+      { label: '부산대역',     road: '장전온천천로', addrPrefix: '부산광역시 금정구', banjiRange: [40, 110],  lat: 35.2306, lng: 129.0867 },
+      { label: '부산대정문',   road: '부산대학로',   addrPrefix: '부산광역시 금정구', banjiRange: [40, 120],  lat: 35.2330, lng: 129.0900 },
+    ],
+  },
+  {
+    region: '부산', dong: '하단', count: 3,
+    hotspots: [
+      { label: '하단역',       road: '낙동남로',     addrPrefix: '부산광역시 사하구', banjiRange: [1300, 1380], lat: 35.1059, lng: 128.9657 },
+      { label: '동아대',       road: '하신중앙로',   addrPrefix: '부산광역시 사하구', banjiRange: [200, 280],   lat: 35.1085, lng: 128.9700 },
+    ],
+  },
+  {
+    region: '부산', dong: '사상', count: 2,
+    hotspots: [
+      { label: '사상역',       road: '사상로',       addrPrefix: '부산광역시 사상구', banjiRange: [300, 380], lat: 35.1539, lng: 128.9907 },
+    ],
+  },
+  {
+    region: '부산', dong: '남포', count: 2,
+    hotspots: [
+      { label: '남포역',       road: '광복로',       addrPrefix: '부산광역시 중구',   banjiRange: [40, 90],   lat: 35.0980, lng: 129.0288 },
+    ],
+  },
+  {
+    region: '부산', dong: '연제', count: 1,
+    hotspots: [
+      { label: '연산역',       road: '연제로',       addrPrefix: '부산광역시 연제구', banjiRange: [10, 80],   lat: 35.1841, lng: 129.0826 },
+    ],
+  },
+  {
+    region: '부산', dong: '영도', count: 1,
+    hotspots: [
+      { label: '영도구청',     road: '태종로',       addrPrefix: '부산광역시 영도구', banjiRange: [40, 110],  lat: 35.0911, lng: 129.0676 },
+    ],
+  },
+
+  // ===== 양산 17개 =====
+  {
+    region: '양산', dong: '물금', count: 9,
+    hotspots: [
+      { label: '물금역',       road: '물금로',       addrPrefix: '경상남도 양산시 물금읍', banjiRange: [80, 160],  lat: 35.3034, lng: 128.9931 },
+      { label: '범어동',       road: '황산공원로',   addrPrefix: '경상남도 양산시 물금읍', banjiRange: [120, 200], lat: 35.3140, lng: 128.9905 },
+      { label: '증산리',       road: '증산역로',     addrPrefix: '경상남도 양산시 물금읍', banjiRange: [40, 110],  lat: 35.3155, lng: 128.9870 },
+    ],
+  },
+  {
+    region: '양산', dong: '양산중부', count: 5,
+    hotspots: [
+      { label: '양산시청',     road: '중앙로',       addrPrefix: '경상남도 양산시',       banjiRange: [60, 130],  lat: 35.3373, lng: 129.0381 },
+      { label: '양산역',       road: '양산대로',     addrPrefix: '경상남도 양산시',       banjiRange: [1400, 1500], lat: 35.3304, lng: 129.0264 },
+    ],
+  },
+  {
+    region: '양산', dong: '양주', count: 3,
+    hotspots: [
+      { label: '양주동',       road: '양주로',       addrPrefix: '경상남도 양산시',       banjiRange: [30, 100],  lat: 35.3500, lng: 129.0500 },
+    ],
+  },
+
+  // ===== 김해 18개 =====
+  {
+    region: '김해', dong: '장유', count: 9,
+    hotspots: [
+      { label: '장유1동',      road: '장유로',       addrPrefix: '경상남도 김해시',       banjiRange: [100, 180], lat: 35.2010, lng: 128.8138 },
+      { label: '율하동',       road: '율하1로',      addrPrefix: '경상남도 김해시',       banjiRange: [70, 150],  lat: 35.1869, lng: 128.8001 },
+      { label: '부원동',       road: '부원로',       addrPrefix: '경상남도 김해시',       banjiRange: [40, 120],  lat: 35.2280, lng: 128.8870 },
+    ],
+  },
+  {
+    region: '김해', dong: '내외동', count: 6,
+    hotspots: [
+      { label: '김해시청',     road: '내외중앙로',   addrPrefix: '경상남도 김해시',       banjiRange: [40, 110],  lat: 35.2310, lng: 128.8898 },
+      { label: '외동',         road: '외동로',       addrPrefix: '경상남도 김해시',       banjiRange: [40, 110],  lat: 35.2260, lng: 128.8820 },
+    ],
+  },
+  {
+    region: '김해', dong: '진영', count: 3,
+    hotspots: [
+      { label: '진영읍',       road: '진영로',       addrPrefix: '경상남도 김해시 진영읍', banjiRange: [180, 260], lat: 35.2814, lng: 128.7383 },
+    ],
+  },
 ];
 
 const THEMES = [
@@ -76,8 +200,6 @@ const DESCRIPTION_TEMPLATES = [
   '{dong} 인근 직장인·동호회 단골 매장. 식사 메뉴 다양.',
 ];
 
-// Unsplash 공개 photo URL 풀 (다크 바·라운지·게임 분위기).
-// 작동 안 하는 URL은 이 배열만 교체하면 모든 매장 photoUrls가 자동 갱신됨.
 const PHOTO_POOL = [
   'https://images.unsplash.com/photo-1606167668584-78701c57f13d?w=800&q=70&auto=format',
   'https://images.unsplash.com/photo-1511193311914-0346f16efe90?w=800&q=70&auto=format',
@@ -85,8 +207,6 @@ const PHOTO_POOL = [
   'https://images.unsplash.com/photo-1538488881038-e252a119ace7?w=800&q=70&auto=format',
   'https://images.unsplash.com/photo-1545486332-9e0999c535b2?w=800&q=70&auto=format',
   'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&q=70&auto=format',
-  'https://images.unsplash.com/photo-1572116469696-31de0f17cc34?w=800&q=70&auto=format',
-  'https://images.unsplash.com/photo-1572116469696-31de0f17cc34?w=800&q=70&auto=format',
 ];
 
 /** mulberry32 — 결정론적 PRNG. 같은 seed → 같은 시퀀스 (멱등성 유지). */
@@ -141,15 +261,22 @@ function buildBulkDemoStores(ownerUid: string): BulkDemoStoreSeed[] {
     for (let i = 0; i < area.count; i++) {
       idx++;
       const r = rng(idx * 9973);
+      // 핫스팟 라운드로빈 분배 — 한 area 안에서 골고루 흩어짐
+      const hotspot = area.hotspots[i % area.hotspots.length];
+
       const theme = pick(THEMES, r);
       const shopType = pick(SHOP_TYPES, r);
       const baseName = `${area.dong} ${theme}${shopType}`;
       const name = r() < 0.3 ? `${baseName} ${i + 1}호점` : baseName;
-      // 좌표 jitter ~ ±0.0025 (약 250m)
-      const lat = area.lat + (r() - 0.5) * 0.005;
-      const lng = area.lng + (r() - 0.5) * 0.005;
-      const addrNum = Math.floor(r() * 200) + 1;
-      const address = `${area.addrPrefix} ${addrNum}`;
+
+      // 핫스팟 인근 ±40m jitter (lat 0.0004 ≈ 44m, lng 0.0004 ≈ 36m)
+      const lat = hotspot.lat + (r() - 0.5) * 0.0008;
+      const lng = hotspot.lng + (r() - 0.5) * 0.0008;
+
+      const [minBanji, maxBanji] = hotspot.banjiRange;
+      const banji = Math.floor(r() * (maxBanji - minBanji + 1)) + minBanji;
+      const address = `${hotspot.addrPrefix} ${hotspot.road} ${banji}`;
+
       const floorRoll = r();
       const addressDetail =
         floorRoll < 0.5 ? `${Math.floor(r() * 7) + 1}층`

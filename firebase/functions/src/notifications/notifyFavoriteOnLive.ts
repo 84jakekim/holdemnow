@@ -65,16 +65,28 @@ export const notifyFavoriteOnLive = onDocumentCreated(
       return;
     }
 
-    // 2. uid 목록 추출 + notifyOnLive=true 한 번 더 필터 (폴백 대비)
-    const uids: string[] = [];
+    // 2. uid 목록 추출 + 매장별 notifyOnLive=true 폴백 필터
+    const candidateUids: string[] = [];
     favSnap.forEach((d) => {
       const v = d.data() as { notifyOnLive?: boolean };
       if (v.notifyOnLive === false) return;
       // 경로: users/{uid}/favorites/{storeId}
       const parts = d.ref.path.split('/');
       const uidIdx = parts.indexOf('users') + 1;
-      if (uidIdx > 0 && parts[uidIdx]) uids.push(parts[uidIdx]);
+      if (uidIdx > 0 && parts[uidIdx]) candidateUids.push(parts[uidIdx]);
     });
+    if (candidateUids.length === 0) return;
+
+    // 2b. 사용자 글로벌 prefs.favLive 체크 — 마이 페이지 토글로 끄면 받지 않음.
+    //     기본값은 true (prefs 없거나 favLive 미설정이면 발송).
+    const uids: string[] = [];
+    await Promise.all(
+      candidateUids.map(async (uid) => {
+        const u = await db.collection('users').doc(uid).get();
+        const prefs = (u.data()?.notificationPrefs as { favLive?: boolean } | undefined);
+        if (prefs?.favLive !== false) uids.push(uid);
+      }),
+    );
     if (uids.length === 0) return;
 
     // 3. 각 uid의 fcmTokens 모음
