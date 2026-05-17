@@ -150,6 +150,14 @@ service cloud.firestore {
       allow write: if isPlatformAdmin();
     }
 
+    // ===== Collection Group 쿼리용 recursive 와일드카드 규칙 =====
+    // stores/{storeId}/tournaments/{tournamentId} 같이 중첩된 path에 대해
+    // collectionGroup('tournaments') 쿼리도 허용.
+    // 기존 nested path 규칙(stores/{storeId}/tournaments)도 유효하며 둘 다 매칭됨.
+    match /{path=**}/tournaments/{tournamentId} {
+      allow read: if true;  // 모바일 캘린더는 전체 토너 조회 (collectionGroup)
+    }
+
     // ===== 그 외 모두 차단 (default deny) =====
     match /{document=**} {
       allow read, write: if false;
