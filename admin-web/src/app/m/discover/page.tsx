@@ -27,6 +27,26 @@ export default function DiscoverPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
+
+  // 현재 위치 가져오기 (Permission 거부 시 기본 중심 사용)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setLocationDenied(true);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        // 권한 거부 또는 실패 — 기본 중심(서면)으로 fallback
+        setLocationDenied(true);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 },
+    );
+  }, []);
 
   // 매장 데이터 로드
   useEffect(() => {
@@ -69,9 +89,27 @@ export default function DiscoverPage() {
     return map;
   }, [sessions]);
 
+  // 거리 계산 (Haversine, m 단위) — 사용자 위치 없으면 0
+  const storesSorted = useMemo(() => {
+    if (!userLocation) return stores;
+    return [...stores]
+      .filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number')
+      .map((s) => ({ ...s, _dist: haversineMeters(userLocation, { lat: s.lat!, lng: s.lng! }) }))
+      .sort((a, b) => a._dist - b._dist);
+  }, [stores, userLocation]);
+
+  // 사용자 위치 잡히고 selectedId 없으면 가장 가까운 매장 자동 선택
+  useEffect(() => {
+    if (selectedId || !userLocation || storesSorted.length === 0) return;
+    setSelectedId(storesSorted[0].id);
+  }, [userLocation, storesSorted, selectedId]);
+
   const totalLive = Object.values(liveCountByStore).reduce((a, b) => a + b, 0);
   const selected = stores.find((s) => s.id === selectedId);
   const selectedLiveCount = selected ? liveCountByStore[selected.id] || 0 : 0;
+  const selectedDist = selected && userLocation && typeof selected.lat === 'number' && typeof selected.lng === 'number'
+    ? haversineMeters(userLocation, { lat: selected.lat, lng: selected.lng })
+    : null;
 
   // 좌표 없는 매장은 즉시 geocoding (1회). 결과를 Firestore에 캐시.
   useEffect(() => {
@@ -118,12 +156,16 @@ export default function DiscoverPage() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           onError={setMapError}
+          userLocation={userLocation}
+          locationDenied={locationDenied}
         />
 
         {/* 상단 정보 카드 */}
         <div className="absolute top-3 left-3 right-3 bg-white/95 backdrop-blur rounded-xl px-4 py-3 flex items-center justify-between shadow-md z-30 pointer-events-none">
           <div>
-            <div className="text-[11px] text-gray-500">전체 매장</div>
+            <div className="text-[11px] text-gray-500">
+              {userLocation ? '내 주변 매장' : locationDenied ? '서면 중심' : '위치 확인 중…'}
+            </div>
             <div className="text-sm font-bold text-gray-900 mt-0.5">{stores.length}개</div>
           </div>
           {totalLive > 0 ? (
@@ -182,9 +224,14 @@ export default function DiscoverPage() {
                   </div>
                 )}
               </div>
-              {selected.address && (
-                <div className="text-[11px] text-gray-500 truncate">📍 {selected.address}</div>
-              )}
+              <div className="flex items-center gap-2 text-[11px] text-gray-500 truncate">
+                {selectedDist != null && (
+                  <span className="font-bold text-gray-700 flex-shrink-0">
+                    {formatDistance(selectedDist)}
+                  </span>
+                )}
+                {selected.address && <span className="truncate">📍 {selected.address}</span>}
+              </div>
             </div>
             <span className="text-xl text-gray-400">›</span>
           </button>
@@ -204,28 +251,40 @@ function KakaoMap({
   selectedId,
   onSelect,
   onError,
+  userLocation,
+  locationDenied,
 }: {
   stores: StoreSummary[];
   liveCountByStore: Record<string, number>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onError: (msg: string | null) => void;
+  userLocation: LatLng | null;
+  locationDenied: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
+  const userMarkerRef = useRef<any>(null);
+  const centeredRef = useRef(false);
 
-  // 지도 초기화
+  // 지도 초기화 — 가능하면 사용자 위치에서 시작, 아니면 기본 중심
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const maps = await loadKakaoMaps();
         if (cancelled || !containerRef.current) return;
+        if (mapRef.current) return; // 이미 초기화됨
+        const center = userLocation
+          ? new maps.LatLng(userLocation.lat, userLocation.lng)
+          : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
         mapRef.current = new maps.Map(containerRef.current, {
-          center: new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
-          level: 6,
+          center,
+          // 도보 반경 ~500m 기준 — 매장이 빽빽한 도심에 적합
+          level: 4,
         });
+        if (userLocation || locationDenied) centeredRef.current = true;
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));
       }
@@ -233,7 +292,34 @@ function KakaoMap({
     return () => {
       cancelled = true;
     };
+    // 최초 1회만 — userLocation 변화는 다음 effect에서 처리
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onError]);
+
+  // 사용자 위치 잡힌 후 한 번 중심 이동 + 파란 점 마커
+  useEffect(() => {
+    if (!userLocation || !mapRef.current) return;
+    const maps = window.kakao?.maps;
+    if (!maps) return;
+    const pos = new maps.LatLng(userLocation.lat, userLocation.lng);
+    if (!centeredRef.current) {
+      mapRef.current.setCenter(pos);
+      mapRef.current.setLevel(4);
+      centeredRef.current = true;
+    }
+    // 사용자 위치 마커 (파란 점)
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setPosition(pos);
+    } else {
+      const img = buildUserMarker(maps);
+      userMarkerRef.current = new maps.Marker({
+        position: pos,
+        map: mapRef.current,
+        image: img,
+        zIndex: 30,
+      });
+    }
+  }, [userLocation]);
 
   // 매장 마커 동기화
   useEffect(() => {
@@ -283,19 +369,17 @@ function KakaoMap({
       }
     }
 
-    // 최초 1회 viewport 자동 조정
-    if (validStores.length > 0 && mapRef.current) {
+    // 사용자 위치 없을 때만 자동 bounds 조정 — 위치 있으면 그 중심·줌 유지.
+    if (!userLocation && !centeredRef.current && validStores.length > 0 && mapRef.current) {
       const bounds = new maps.LatLngBounds();
       validStores.forEach((s) => bounds.extend(new maps.LatLng(s.lat!, s.lng!)));
-      // 한 곳만 있으면 너무 줌인되니 최소 레벨 유지
       if (validStores.length === 1) {
         mapRef.current.setCenter(new maps.LatLng(validStores[0].lat!, validStores[0].lng!));
       } else {
         mapRef.current.setBounds(bounds);
       }
+      centeredRef.current = true;
     }
-    // bounds는 매번 다시 계산하면 사용자가 줌·팬한 게 리셋됨.
-    // 의도적으로 최초 1회만 — stores.length 변화에만 반응하도록 deps 좁힘.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stores, liveCountByStore, selectedId, onSelect]);
 
@@ -347,4 +431,39 @@ function buildMarkerImage(maps: any, opts: { live: number; selected: boolean }) 
   return new maps.MarkerImage(url, new maps.Size(size.w, size.h), {
     offset: new maps.Point(anchor.x, anchor.y),
   });
+}
+
+/** 사용자 현재 위치 마커 — 파란 점 + 흰 외곽 + 펄스 halo */
+function buildUserMarker(maps: any) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+    <circle cx="18" cy="18" r="16" fill="#3B82F6" opacity="0.15">
+      <animate attributeName="r" values="10;16;10" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="18" cy="18" r="7" fill="#fff"/>
+    <circle cx="18" cy="18" r="5" fill="#2563EB"/>
+  </svg>`;
+  const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  return new maps.MarkerImage(url, new maps.Size(36, 36), {
+    offset: new maps.Point(18, 18),
+  });
+}
+
+/** 두 좌표 사이 거리 (미터, Haversine). 빠른 근사용. */
+function haversineMeters(a: LatLng, b: LatLng): number {
+  const R = 6371_000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+/** 거리 사람 친화적 포맷 */
+function formatDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  if (meters < 10_000) return `${(meters / 1000).toFixed(1)}km`;
+  return `${Math.round(meters / 1000)}km`;
 }
