@@ -43,9 +43,10 @@ export async function startKakaoLogin(returnTo: string = '/') {
   const redirectUri = `${window.location.origin}/auth/kakao/callback`;
   // returnTo를 state로 전달 (콜백 이후 어디로 보낼지)
   const state = encodeURIComponent(returnTo);
+  // account_email은 비즈니스 인증 필요 — 일반 개발 앱에선 비활성. 빼고 진행.
   kakao.Auth.authorize({
     redirectUri,
-    scope: 'profile_nickname,profile_image,account_email',
+    scope: 'profile_nickname,profile_image',
     state,
   });
 }
