@@ -38,17 +38,8 @@ export default function SignupPage() {
   const [addrSearching, setAddrSearching] = useState(false);
   const addrSeqRef = useRef(0);
 
-  if (authState.status === 'loading') {
-    return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
-  }
-  if (authState.status === 'anonymous') {
-    if (typeof window !== 'undefined') router.replace('/');
-    return null;
-  }
-
-  const update = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm((f) => ({ ...f, [k]: v }));
-
-  // 카카오 키워드/주소 검색 — 디바운스 300ms
+  // 카카오 키워드/주소 검색 — 디바운스 300ms.
+  // ⚠️ 반드시 모든 useEffect/useState/useRef는 early return 위에 — Rules of Hooks.
   useEffect(() => {
     const q = form.addressQuery.trim();
     if (q.length < 2) {
@@ -83,6 +74,16 @@ export default function SignupPage() {
     }, 300);
     return () => clearTimeout(t);
   }, [form.addressQuery]);
+
+  if (authState.status === 'loading') {
+    return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
+  }
+  if (authState.status === 'anonymous') {
+    if (typeof window !== 'undefined') router.replace('/');
+    return null;
+  }
+
+  const update = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const canProceed = (() => {
     if (step === 1) return form.name.trim() && form.addressSelected && form.phone.trim();

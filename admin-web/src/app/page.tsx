@@ -15,6 +15,19 @@ export default function Home() {
   // 로그인 + role/매장 매핑 결정되면 자동 라우팅
   useEffect(() => {
     if (authState.status !== 'authenticated') return;
+
+    // Kakao uid는 `kakao:XXX` 형식 — userDoc propagation 지연을 피하기 위해 uid prefix로 즉시 판단.
+    // Kakao 사용자가 매장도 운영하는 경우는 storeId가 박혀있을 때만 어드민으로.
+    const uid = authState.user.uid;
+    if (uid.startsWith('kakao:')) {
+      if (userDoc && userDoc.storeId) {
+        router.replace(`/admin/${userDoc.storeId}`);
+        return;
+      }
+      router.replace('/m');
+      return;
+    }
+
     if (userDoc === undefined) return; // 로딩 중
     // 본사 관리자 role 있고 매장 미가입이면 본사로
     if (userDoc && hasRole(userDoc, 'platform_admin') && !userDoc.storeId) {
@@ -31,7 +44,7 @@ export default function Home() {
       router.replace(`/organizer/${userDoc.organizerId}`);
       return;
     }
-    // 카카오 로그인 등 일반 플레이어 → 모바일 피드
+    // 일반 플레이어 → 모바일 피드
     if (userDoc && userDoc.role === 'player') {
       router.replace('/m');
       return;
