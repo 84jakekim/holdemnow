@@ -89,20 +89,22 @@ export default function DiscoverPage() {
     return map;
   }, [sessions]);
 
-  // 거리 계산 (Haversine, m 단위) — 사용자 위치 없으면 0
-  const storesSorted = useMemo(() => {
-    if (!userLocation) return stores;
-    return [...stores]
-      .filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number')
+  // 10km 반경 매장만 + 거리 정렬 (사용자 위치 없으면 전체)
+  const NEARBY_RADIUS_M = 10_000;
+  const nearbyStores = useMemo(() => {
+    const withCoords = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
+    if (!userLocation) return withCoords;
+    return withCoords
       .map((s) => ({ ...s, _dist: haversineMeters(userLocation, { lat: s.lat!, lng: s.lng! }) }))
+      .filter((s) => s._dist <= NEARBY_RADIUS_M)
       .sort((a, b) => a._dist - b._dist);
   }, [stores, userLocation]);
 
   // 사용자 위치 잡히고 selectedId 없으면 가장 가까운 매장 자동 선택
   useEffect(() => {
-    if (selectedId || !userLocation || storesSorted.length === 0) return;
-    setSelectedId(storesSorted[0].id);
-  }, [userLocation, storesSorted, selectedId]);
+    if (selectedId || !userLocation || nearbyStores.length === 0) return;
+    setSelectedId(nearbyStores[0].id);
+  }, [userLocation, nearbyStores, selectedId]);
 
   const totalLive = Object.values(liveCountByStore).reduce((a, b) => a + b, 0);
   const selected = stores.find((s) => s.id === selectedId);
@@ -149,9 +151,9 @@ export default function DiscoverPage() {
       </div>
 
       <div className="flex-1 relative">
-        {/* 카카오맵 */}
+        {/* 카카오맵 — 10km 반경 안 매장만 마커, 사용자 반경 500m 원 오버레이 */}
         <KakaoMap
-          stores={stores}
+          stores={nearbyStores}
           liveCountByStore={liveCountByStore}
           selectedId={selectedId}
           onSelect={setSelectedId}
@@ -164,9 +166,9 @@ export default function DiscoverPage() {
         <div className="absolute top-3 left-3 right-3 bg-white/95 backdrop-blur rounded-xl px-4 py-3 flex items-center justify-between shadow-md z-30 pointer-events-none">
           <div>
             <div className="text-[11px] text-gray-500">
-              {userLocation ? '내 주변 매장' : locationDenied ? '서면 중심' : '위치 확인 중…'}
+              {userLocation ? '내 주변 매장 · 10km' : locationDenied ? '서면 중심' : '위치 확인 중…'}
             </div>
-            <div className="text-sm font-bold text-gray-900 mt-0.5">{stores.length}개</div>
+            <div className="text-sm font-bold text-gray-900 mt-0.5">{nearbyStores.length}개</div>
           </div>
           {totalLive > 0 ? (
             <div className="bg-red-50 text-red-600 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
@@ -266,25 +268,26 @@ function KakaoMap({
   const mapRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
   const userMarkerRef = useRef<any>(null);
+  const radiusCircleRef = useRef<any>(null);
   const centeredRef = useRef(false);
 
-  // 지도 초기화 — 가능하면 사용자 위치에서 시작, 아니면 기본 중심
+  // 지도 초기화 — 위치 권한 결정될 때까지 대기, 깜박임 없이 정확한 중심으로 시작.
   useEffect(() => {
+    if (!userLocation && !locationDenied) return; // 위치 결정 대기
     let cancelled = false;
     (async () => {
       try {
         const maps = await loadKakaoMaps();
-        if (cancelled || !containerRef.current) return;
-        if (mapRef.current) return; // 이미 초기화됨
+        if (cancelled || !containerRef.current || mapRef.current) return;
         const center = userLocation
           ? new maps.LatLng(userLocation.lat, userLocation.lng)
           : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
         mapRef.current = new maps.Map(containerRef.current, {
           center,
-          // 도보 반경 ~500m 기준 — 매장이 빽빽한 도심에 적합
-          level: 4,
+          // 도보 ~250m 기준. 500m 반경 원이 viewport에 거의 꽉 차게 보임.
+          level: 3,
         });
-        if (userLocation || locationDenied) centeredRef.current = true;
+        centeredRef.current = true;
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));
       }
@@ -292,32 +295,42 @@ function KakaoMap({
     return () => {
       cancelled = true;
     };
-    // 최초 1회만 — userLocation 변화는 다음 effect에서 처리
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onError]);
+  }, [onError, userLocation, locationDenied]);
 
-  // 사용자 위치 잡힌 후 한 번 중심 이동 + 파란 점 마커
+  // 사용자 위치 마커 + 500m 반경 원 (사용자 이동 시 위치 갱신)
   useEffect(() => {
     if (!userLocation || !mapRef.current) return;
     const maps = window.kakao?.maps;
     if (!maps) return;
     const pos = new maps.LatLng(userLocation.lat, userLocation.lng);
-    if (!centeredRef.current) {
-      mapRef.current.setCenter(pos);
-      mapRef.current.setLevel(4);
-      centeredRef.current = true;
-    }
-    // 사용자 위치 마커 (파란 점)
+
+    // 파란 점 마커
     if (userMarkerRef.current) {
       userMarkerRef.current.setPosition(pos);
     } else {
-      const img = buildUserMarker(maps);
       userMarkerRef.current = new maps.Marker({
         position: pos,
         map: mapRef.current,
-        image: img,
+        image: buildUserMarker(maps),
         zIndex: 30,
       });
+    }
+
+    // 500m 반경 원 (도보 가능 범위)
+    if (radiusCircleRef.current) {
+      radiusCircleRef.current.setPosition(pos);
+    } else {
+      radiusCircleRef.current = new maps.Circle({
+        center: pos,
+        radius: 500,
+        strokeWeight: 2,
+        strokeColor: '#3B82F6',
+        strokeOpacity: 0.5,
+        strokeStyle: 'solid',
+        fillColor: '#3B82F6',
+        fillOpacity: 0.08,
+      });
+      radiusCircleRef.current.setMap(mapRef.current);
     }
   }, [userLocation]);
 
@@ -369,17 +382,8 @@ function KakaoMap({
       }
     }
 
-    // 사용자 위치 없을 때만 자동 bounds 조정 — 위치 있으면 그 중심·줌 유지.
-    if (!userLocation && !centeredRef.current && validStores.length > 0 && mapRef.current) {
-      const bounds = new maps.LatLngBounds();
-      validStores.forEach((s) => bounds.extend(new maps.LatLng(s.lat!, s.lng!)));
-      if (validStores.length === 1) {
-        mapRef.current.setCenter(new maps.LatLng(validStores[0].lat!, validStores[0].lng!));
-      } else {
-        mapRef.current.setBounds(bounds);
-      }
-      centeredRef.current = true;
-    }
+    // 자동 bounds 조정은 제거 — 지도는 사용자 위치(또는 기본 서면)에서 시작하므로
+    // 마커들이 viewport 밖에 있으면 사용자가 직접 줌 아웃/팬해서 봄.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stores, liveCountByStore, selectedId, onSelect]);
 
