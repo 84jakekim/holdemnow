@@ -150,10 +150,15 @@ function EventRow({ ev, onEdit, onDelete }: { ev: EventDoc; onEdit: () => void; 
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
           <span className="text-[10px] font-bold bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">
             {EVENT_CATEGORY_LABEL[ev.category]}
           </span>
+          {ev.city && (
+            <span className="text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5">
+              📍 {ev.city}
+            </span>
+          )}
           <span
             className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${
               ev.status === 'upcoming'
@@ -203,6 +208,7 @@ interface FormState {
   startDate: string; // yyyy-mm-dd
   endDate: string;
   registrationDeadline: string;
+  city: string;
   venueName: string;
   venueAddress: string;
   buyIn: string;
@@ -222,12 +228,16 @@ function emptyForm(): FormState {
     name: '', shortName: '', description: '',
     category: 'domestic', status: 'upcoming',
     startDate: '', endDate: '', registrationDeadline: '',
-    venueName: '', venueAddress: '',
+    city: '', venueName: '', venueAddress: '',
     buyIn: '', guaranteedPrize: '', prizePool: '', expectedPlayers: '',
     contactName: '', contactPhone: '', contactEmail: '',
     registrationUrl: '', officialUrl: '', livestreamUrl: '',
   };
 }
+
+/** 도시 추천 — 국내 (광역시·도) + 국외 주요 홀덤 도시 */
+const DOMESTIC_CITIES = ['서울', '부산', '인천', '대구', '대전', '광주', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+const INTL_CITIES = ['라스베이거스', '마카오', '마닐라', '체주', '도쿄', '바르셀로나', '몬테카를로', '런던'];
 
 function tsToInput(ts?: Timestamp): string {
   if (!ts) return '';
@@ -255,6 +265,7 @@ function fromEvent(e: EventDoc): FormState {
     startDate: tsToInput(e.startDate),
     endDate: tsToInput(e.endDate),
     registrationDeadline: tsToInput(e.registrationDeadline),
+    city: e.city ?? '',
     venueName: e.venueName ?? '',
     venueAddress: e.venueAddress ?? '',
     buyIn: e.buyIn != null ? String(e.buyIn) : '',
@@ -344,6 +355,7 @@ function EventFormModal({
         startDate: startTs,
         endDate: inputToTs(form.endDate),
         registrationDeadline: inputToTs(form.registrationDeadline),
+        city: form.city.trim() || undefined,
         venueName: form.venueName.trim() || undefined,
         venueAddress: form.venueAddress.trim() || undefined,
         lat,
@@ -506,12 +518,26 @@ function EventFormModal({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="도시 (지역 뱃지)">
+              <input
+                className="form-input"
+                value={form.city}
+                onChange={(e) => update('city', e.target.value)}
+                placeholder={form.category === 'international' ? '예: 라스베이거스' : '예: 부산'}
+                list="event-city-suggestions"
+              />
+              <datalist id="event-city-suggestions">
+                {(form.category === 'international' ? INTL_CITIES : DOMESTIC_CITIES).map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </Field>
             <Field label="대회장 이름">
               <input className="form-input" value={form.venueName} onChange={(e) => update('venueName', e.target.value)} placeholder="파라다이스 시티" />
             </Field>
-            <Field label="대회장 주소">
-              <input className="form-input" value={form.venueAddress} onChange={(e) => update('venueAddress', e.target.value)} placeholder="인천 중구 ..." />
+            <Field label="대회장 주소 (전체)">
+              <input className="form-input" value={form.venueAddress} onChange={(e) => update('venueAddress', e.target.value)} placeholder="인천 중구 영종해안남로 321" />
             </Field>
           </div>
 

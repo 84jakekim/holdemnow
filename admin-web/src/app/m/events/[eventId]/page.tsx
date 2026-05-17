@@ -70,10 +70,15 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
           </div>
         )}
         {/* 상태 배지 */}
-        <div className="absolute top-4 left-4 flex items-center gap-1.5">
+        <div className="absolute top-4 left-4 flex items-center gap-1.5 flex-wrap max-w-[80%]">
           <span className="bg-black/60 backdrop-blur text-white text-[10px] font-bold rounded-full px-2.5 py-1">
             {EVENT_CATEGORY_LABEL[event.category]}
           </span>
+          {event.city && (
+            <span className="bg-blue-500/90 backdrop-blur text-white text-[10px] font-bold rounded-full px-2.5 py-1">
+              📍 {event.city}
+            </span>
+          )}
           {event.status === 'upcoming' && d > 0 && (
             <span className="bg-red-500 text-white text-[10px] font-extrabold rounded-full px-2.5 py-1">
               D-{d}

@@ -24,6 +24,7 @@ export default function EventsPage() {
   const [category, setCategory] = useState<EventCategory | 'all'>('all');
   const [status, setStatus] = useState<EventStatus | 'all'>('upcoming');
   const [viewMode, setViewMode] = useState<ViewMode>('large');
+  const [cityFilter, setCityFilter] = useState<string | 'all'>('all');
 
   // 저장된 뷰 모드 복원
   useEffect(() => {
@@ -54,7 +55,19 @@ export default function EventsPage() {
     return unsub;
   }, [category, status]);
 
-  const sortedEvents = useMemo(() => events, [events]);
+  // 도시 옵션 자동 추출 (현재 목록에 존재하는 도시만)
+  const availableCities = useMemo(() => {
+    const set = new Set<string>();
+    events.forEach((e) => {
+      if (e.city) set.add(e.city);
+    });
+    return Array.from(set).sort();
+  }, [events]);
+
+  const sortedEvents = useMemo(() => {
+    if (cityFilter === 'all') return events;
+    return events.filter((e) => e.city === cityFilter);
+  }, [events, cityFilter]);
 
   return (
     <div className="pb-24">
@@ -102,6 +115,31 @@ export default function EventsPage() {
           </button>
         ))}
       </div>
+
+      {/* 도시 필터 — 등록된 도시가 있을 때만 표시 */}
+      {availableCities.length > 0 && (
+        <div className="px-5 pb-3 flex gap-1.5 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setCityFilter('all')}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap flex-shrink-0 border ${
+              cityFilter === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200'
+            }`}
+          >
+            전체 지역
+          </button>
+          {availableCities.map((c) => (
+            <button
+              key={c}
+              onClick={() => setCityFilter(c)}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap flex-shrink-0 border ${
+                cityFilter === c ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200'
+              }`}
+            >
+              📍 {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 결과 */}
       {loading ? (
@@ -194,7 +232,14 @@ function CompactList({ items }: { items: EventDoc[] }) {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-gray-900 truncate">{e.name}</div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                {e.city && (
+                  <span className="text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5">
+                    {e.city}
+                  </span>
+                )}
+                <span className="text-sm font-bold text-gray-900 truncate">{e.name}</span>
+              </div>
               <div className="text-[11px] text-gray-500 mt-0.5">
                 {formatEventDateRange(e.startDate, e.endDate)}
                 {e.venueName ? ` · ${e.venueName}` : ''}
@@ -247,10 +292,15 @@ function LargeList({ items }: { items: EventDoc[] }) {
               </div>
               {/* 정보 */}
               <div className="flex-1 min-w-0 p-3 flex flex-col">
-                <div className="flex items-center gap-1.5 mb-1">
+                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                   <span className="text-[10px] font-bold bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">
                     {EVENT_CATEGORY_LABEL[e.category]}
                   </span>
+                  {e.city && (
+                    <span className="text-[10px] font-bold bg-blue-50 text-blue-700 rounded px-1.5 py-0.5">
+                      📍 {e.city}
+                    </span>
+                  )}
                   {e.status === 'upcoming' && d > 0 && (
                     <span className="text-[10px] font-extrabold text-red-500">D-{d}</span>
                   )}
@@ -312,6 +362,12 @@ function AlbumGrid({ items }: { items: EventDoc[] }) {
                 <img src={e.posterUrl} alt={e.name} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-5xl opacity-40">🏆</span>
+              )}
+              {/* 좌상단 도시 뱃지 */}
+              {e.city && (
+                <div className="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] font-bold rounded-full px-2 py-0.5">
+                  📍 {e.city}
+                </div>
               )}
               {e.status === 'upcoming' && d > 0 && d <= 30 && (
                 <div className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-extrabold rounded-full px-2 py-0.5">

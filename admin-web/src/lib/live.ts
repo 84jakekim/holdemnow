@@ -260,7 +260,10 @@ export async function nextLevelTick(s: LiveSession) {
   // 카운트다운 0 도달 시 자동 다음 레벨
   const next = s.blindStructure.find((l) => l.level === s.currentLevel + 1);
   if (!next) {
-    await patchSession(s.id, { levelSecondsLeft: 0, levelEndsAt: null });
+    // 마지막 레벨까지 모두 소진 → 자동 라이브 종료.
+    // status='completed'가 되면 subscribeAllLiveSessions의 in 쿼리에서 자동 제외되어
+    // 모바일/지도/매장 LIVE 표시 모두 자동으로 사라짐.
+    await stopLiveSession(s, 0);
     return false;
   }
   await patchSession(s.id, {

@@ -48,6 +48,8 @@ export interface EventDoc {
   endDate?: Timestamp;
   registrationDeadline?: Timestamp;
 
+  /** 개최 도시 — 지역 뱃지 표시용. 국내: 서울/부산/제주 등, 국외: 라스베이거스/마카오/마닐라 등 */
+  city?: string;
   venueName?: string;
   venueAddress?: string;
   lat?: number;
