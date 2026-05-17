@@ -8,6 +8,7 @@ import { subscribeAllLiveSessions, type LiveSession, fmtTime, useLiveCountdown }
 import { subscribeAllSeries, type Series } from '@/lib/series';
 import { posterStyleFor } from '@/lib/templates';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
+import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
 
 interface StoreGroup {
   storeId: string;
@@ -192,21 +193,63 @@ export default function MobileHome() {
   );
 }
 
+type NearbyViewMode = 'list' | 'large' | 'album';
+const NEARBY_VIEW_STORAGE_KEY = 'hn-home-nearby-view';
+
+interface NearbyStore {
+  id: string;
+  name: string;
+  address?: string;
+  photoUrl?: string;
+  facilities?: string[];
+  tier?: string;
+  lat?: number;
+  lng?: number;
+  /** 사용자 위치 있을 때만 — 미터 */
+  distance?: number;
+}
+
 function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
-  const [stores, setStores] = useState<{
-    id: string;
-    name: string;
-    address?: string;
-    photoUrl?: string;
-    facilities?: string[];
-    tier?: string;
-  }[]>([]);
+  const [stores, setStores] = useState<NearbyStore[]>([]);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [viewMode, setViewMode] = useState<NearbyViewMode>('large');
+
+  // 저장된 뷰 모드 복원
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(NEARBY_VIEW_STORAGE_KEY) as NearbyViewMode | null;
+    if (saved === 'list' || saved === 'large' || saved === 'album') setViewMode(saved);
+  }, []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(NEARBY_VIEW_STORAGE_KEY, viewMode);
+  }, [viewMode]);
+
+  // 사용자 위치 (정밀도 낮음 — 빠른 응답 우선)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {
+        /* 권한 거부 — 거리 없이 표시 */
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 },
+    );
+  }, []);
+
+  // 매장 fetch
   useEffect(() => {
     getDocs(collection(db, 'stores')).then((snap) => {
       setStores(
         snap.docs.map((d) => {
           const data = d.data() as {
-            name: string; address?: string; photoUrls?: string[]; facilities?: string[]; tier?: string;
+            name: string;
+            address?: string;
+            photoUrls?: string[];
+            facilities?: string[];
+            tier?: string;
+            lat?: number;
+            lng?: number;
           };
           return {
             id: d.id,
@@ -215,83 +258,232 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
             photoUrl: data.photoUrls?.[0],
             facilities: data.facilities,
             tier: data.tier,
+            lat: data.lat,
+            lng: data.lng,
           };
         }),
       );
     });
   }, []);
 
-  if (stores.length === 0) return null;
+  // 거리 계산 + 정렬: LIVE 진행 매장 우선, 그 안에서 거리순
+  const sorted = useMemo(() => {
+    const withDist: NearbyStore[] = stores.map((s) => ({
+      ...s,
+      distance:
+        userLocation && typeof s.lat === 'number' && typeof s.lng === 'number'
+          ? haversineMeters(userLocation, { lat: s.lat, lng: s.lng })
+          : undefined,
+    }));
+    return withDist.sort((a, b) => {
+      const liveA = liveByStore[a.id] || 0;
+      const liveB = liveByStore[b.id] || 0;
+      if (liveA !== liveB) return liveB - liveA; // LIVE 많은 매장 위로
+      // 거리 있는 매장이 위로, 그 다음 거리순
+      if (a.distance != null && b.distance != null) return a.distance - b.distance;
+      if (a.distance != null) return -1;
+      if (b.distance != null) return 1;
+      return 0;
+    });
+  }, [stores, liveByStore, userLocation]);
 
-  // LIVE 진행 중 매장 우선 정렬
-  const sorted = [...stores].sort((a, b) => (liveByStore[b.id] || 0) - (liveByStore[a.id] || 0));
+  if (stores.length === 0) return null;
 
   return (
     <>
-      <div className="px-5 pt-8 pb-3 flex items-baseline justify-between">
-        <span className="text-xl font-extrabold tracking-tight font-serif">주변 매장</span>
-        <span className="text-xs text-gray-500">{stores.length}개</span>
+      <div className="px-5 pt-8 pb-3 flex items-center justify-between">
+        <div className="flex items-baseline gap-2">
+          <span className="text-xl font-extrabold tracking-tight font-serif">주변 매장</span>
+          <span className="text-xs text-gray-500">{stores.length}개</span>
+        </div>
+        <ViewModeToggle value={viewMode} onChange={setViewMode} />
       </div>
-      <div className="px-5 pb-2 space-y-2.5">
-        {sorted.map((st) => {
-          const live = liveByStore[st.id] || 0;
-          return (
-            <NearbyStoreCard
-              key={st.id}
-              store={st}
-              live={live}
-            />
-          );
-        })}
-      </div>
+
+      {viewMode === 'album' ? (
+        <div className="px-5 pb-2 grid grid-cols-2 gap-3">
+          {sorted.map((st) => (
+            <NearbyStoreAlbumCard key={st.id} store={st} live={liveByStore[st.id] || 0} />
+          ))}
+        </div>
+      ) : viewMode === 'list' ? (
+        <div className="divide-y divide-gray-100">
+          {sorted.map((st) => (
+            <NearbyStoreCompactRow key={st.id} store={st} live={liveByStore[st.id] || 0} />
+          ))}
+        </div>
+      ) : (
+        <div className="px-5 pb-2 space-y-2.5">
+          {sorted.map((st) => (
+            <NearbyStoreLargeCard key={st.id} store={st} live={liveByStore[st.id] || 0} />
+          ))}
+        </div>
+      )}
     </>
   );
 }
 
-function NearbyStoreCard({
-  store: st,
-  live,
-}: {
-  store: { id: string; name: string; address?: string; photoUrl?: string; facilities?: string[]; tier?: string };
-  live: number;
-}) {
+/* ============================================================
+ * 뷰 모드 토글
+ * ========================================================== */
+
+function ViewModeToggle({ value, onChange }: { value: NearbyViewMode; onChange: (v: NearbyViewMode) => void }) {
+  return (
+    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+      <button onClick={() => onChange('list')} className={`w-7 h-7 rounded text-sm flex items-center justify-center ${value === 'list' ? 'bg-white shadow-sm' : 'opacity-50'}`} title="목록">☰</button>
+      <button onClick={() => onChange('large')} className={`w-7 h-7 rounded text-sm flex items-center justify-center ${value === 'large' ? 'bg-white shadow-sm' : 'opacity-50'}`} title="큰 목록">☷</button>
+      <button onClick={() => onChange('album')} className={`w-7 h-7 rounded text-sm flex items-center justify-center ${value === 'album' ? 'bg-white shadow-sm' : 'opacity-50'}`} title="앨범">▦</button>
+    </div>
+  );
+}
+
+/* ============================================================
+ * 뷰 1: 압축 목록 — 한 줄, 정보 밀도 ↑
+ * ========================================================== */
+
+function NearbyStoreCompactRow({ store: st, live }: { store: NearbyStore; live: number }) {
   useEffect(() => {
     trackImpressionOnce(st.id, 'home-nearby');
   }, [st.id]);
   return (
-            <Link
-              href={`/m/store/${st.id}`}
-              onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
-              className="flex bg-white border border-gray-200 rounded-2xl overflow-hidden active:scale-[0.99] transition"
-            >
-              <div className="w-28 h-28 bg-gray-100 flex-shrink-0 relative overflow-hidden">
-                {st.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-amber-100 to-amber-200" />
-                )}
-                {st.tier === 'vip' && (
-                  <div className="absolute top-1.5 left-1.5 bg-yellow-500 text-white text-[8px] font-extrabold rounded px-1.5 py-0.5">
-                    VIP
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0 p-3 flex flex-col justify-between">
-                <div>
-                  <div className="text-sm font-bold text-gray-900 truncate">{st.name}</div>
-                  {live > 0 && (
-                    <div className="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-md px-1.5 py-0.5 mt-1.5">
-                      <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-                      <span className="text-[9px] font-extrabold">LIVE{live > 1 ? ` ${live}` : ''}</span>
-                    </div>
-                  )}
-                </div>
-                {st.address && (
-                  <div className="text-[11px] text-gray-500 truncate">📍 {st.address.split(' ').slice(1).join(' ')}</div>
-                )}
-              </div>
-            </Link>
+    <Link
+      href={`/m/store/${st.id}`}
+      onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
+      className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 active:bg-gray-100 transition"
+    >
+      <div className="w-12 h-12 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden relative">
+        {st.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-amber-100 to-amber-200" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <div className="text-sm font-bold text-gray-900 truncate">{st.name}</div>
+          {st.tier === 'vip' && (
+            <span className="text-[9px] font-extrabold bg-yellow-100 text-yellow-800 rounded px-1 py-0.5">
+              VIP
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] text-gray-500 truncate mt-0.5">
+          {st.distance != null && (
+            <span className="font-bold text-gray-700">{formatDistance(st.distance)}</span>
+          )}
+          {st.distance != null && st.address ? ' · ' : ''}
+          {st.address ? `📍 ${st.address.split(' ').slice(1).join(' ')}` : ''}
+        </div>
+      </div>
+      {live > 0 && (
+        <div className="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-md px-1.5 py-1 flex-shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-[10px] font-extrabold">LIVE{live > 1 ? ` ${live}` : ''}</span>
+        </div>
+      )}
+    </Link>
+  );
+}
+
+/* ============================================================
+ * 뷰 2: 큰 목록 — 사진 + 상세 정보 (기본)
+ * ========================================================== */
+
+function NearbyStoreLargeCard({ store: st, live }: { store: NearbyStore; live: number }) {
+  useEffect(() => {
+    trackImpressionOnce(st.id, 'home-nearby');
+  }, [st.id]);
+  return (
+    <Link
+      href={`/m/store/${st.id}`}
+      onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
+      className="flex bg-white border border-gray-200 rounded-2xl overflow-hidden active:scale-[0.99] transition"
+    >
+      <div className="w-28 h-28 bg-gray-100 flex-shrink-0 relative overflow-hidden">
+        {st.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-amber-100 to-amber-200" />
+        )}
+        {st.tier === 'vip' && (
+          <div className="absolute top-1.5 left-1.5 bg-yellow-500 text-white text-[8px] font-extrabold rounded px-1.5 py-0.5">
+            VIP
+          </div>
+        )}
+        {st.distance != null && (
+          <div className="absolute bottom-1.5 left-1.5 bg-black/60 backdrop-blur text-white text-[9px] font-bold rounded px-1.5 py-0.5">
+            {formatDistance(st.distance)}
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0 p-3 flex flex-col justify-between">
+        <div>
+          <div className="text-sm font-bold text-gray-900 truncate">{st.name}</div>
+          {live > 0 && (
+            <div className="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-md px-1.5 py-0.5 mt-1.5">
+              <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[9px] font-extrabold">LIVE{live > 1 ? ` ${live}` : ''}</span>
+            </div>
+          )}
+        </div>
+        {st.address && (
+          <div className="text-[11px] text-gray-500 truncate">📍 {st.address.split(' ').slice(1).join(' ')}</div>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+/* ============================================================
+ * 뷰 3: 앨범 그리드 — 2열, 사진 중심
+ * ========================================================== */
+
+function NearbyStoreAlbumCard({ store: st, live }: { store: NearbyStore; live: number }) {
+  useEffect(() => {
+    trackImpressionOnce(st.id, 'home-nearby');
+  }, [st.id]);
+  return (
+    <Link
+      href={`/m/store/${st.id}`}
+      onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
+      className="block bg-white border border-gray-200 rounded-xl overflow-hidden active:scale-[0.98] transition"
+    >
+      <div className="aspect-square bg-gray-100 relative overflow-hidden">
+        {st.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-amber-100 to-amber-200" />
+        )}
+        {/* 좌상단 — 거리 + VIP */}
+        <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+          {st.distance != null && (
+            <span className="bg-black/60 backdrop-blur text-white text-[10px] font-bold rounded-full px-2 py-0.5">
+              {formatDistance(st.distance)}
+            </span>
+          )}
+          {st.tier === 'vip' && (
+            <span className="bg-yellow-500 text-white text-[9px] font-extrabold rounded-full px-2 py-0.5">
+              VIP
+            </span>
+          )}
+        </div>
+        {/* 우상단 — LIVE */}
+        {live > 0 && (
+          <div className="absolute top-2 right-2 bg-red-500 text-white rounded-full px-2 py-0.5 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+            <span className="text-[9px] font-extrabold">LIVE{live > 1 ? ` ${live}` : ''}</span>
+          </div>
+        )}
+      </div>
+      <div className="p-2.5">
+        <div className="text-sm font-bold text-gray-900 truncate">{st.name}</div>
+        {st.address && (
+          <div className="text-[10px] text-gray-500 truncate mt-0.5">📍 {st.address.split(' ').slice(1).join(' ')}</div>
+        )}
+      </div>
+    </Link>
   );
 }
 

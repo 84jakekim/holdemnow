@@ -174,7 +174,9 @@ function SessionTab({
       }`}
     >
       <div className="flex items-center gap-1.5 text-[10px] font-extrabold tracking-wider mb-1">
-        {session.status === 'paused' ? (
+        {session.status === 'ready' ? (
+          <span className={active ? 'text-emerald-300' : 'text-emerald-700'}>● READY</span>
+        ) : session.status === 'paused' ? (
           <span className={active ? 'text-amber-300' : 'text-amber-700'}>⏸ PAUSED</span>
         ) : (
           <>
@@ -196,16 +198,19 @@ function SessionTab({
 
 function SessionControls({ session }: { session: LiveSession }) {
   const seconds = useLiveCountdown(session);
+  const isReady = session.status === 'ready';
   const isPaused = session.status === 'paused';
-  const lowTime = seconds <= 10 && !isPaused;
+  const isRunning = session.status === 'running';
+  const lowTime = seconds <= 10 && isRunning;
   const structure = session.blindStructure;
   const nextBlind = structure.find((l) => l.level === session.currentLevel + 1);
   const lateMin = computeLateRegMinutes(session, seconds);
 
-  // 0 도달 시 자동 다음 레벨 (한 클라이언트만 실행하는 것이 이상적 — v0.1은 first-write-wins)
+  // 0 도달 시 자동 다음 레벨 (한 클라이언트만 실행하는 것이 이상적 — v0.1은 first-write-wins).
+  // ready/paused 상태에서는 절대 자동 진행 금지.
   const advanceLockRef = useRef(false);
   useEffect(() => {
-    if (isPaused) return;
+    if (!isRunning) return;
     if (seconds > 0) {
       advanceLockRef.current = false;
       return;
@@ -215,19 +220,24 @@ function SessionControls({ session }: { session: LiveSession }) {
     nextLevelTick(session).catch(() => {
       advanceLockRef.current = false;
     });
-  }, [seconds, isPaused, session]);
+  }, [seconds, isRunning, session]);
+
+  // ready/paused → '시작' 버튼이 가장 눈에 띄게. running → '일시정지'.
+  const primaryLabel = isReady ? '▶ 시작' : isPaused ? '▶ 재개' : '⏸ 일시정지';
+  const primaryVariant: 'primary' | 'ghost' = isRunning ? 'ghost' : 'primary';
 
   return (
     <div className="space-y-3">
       {/* 거대 타이머 */}
       <div className="bg-white border-[1.5px] border-gray-200 rounded-2xl p-6 text-center">
         <div className="text-[10px] font-bold text-gray-500 tracking-widest mb-1">
+          {isReady && <span className="text-emerald-700 mr-2">● 시작 대기</span>}
           LEVEL {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
           {session.ante ? ` · ante ${session.ante}` : ''}
         </div>
         <div
           className={`font-mono font-extrabold leading-none transition-colors ${
-            lowTime ? 'text-red-500' : isPaused ? 'text-gray-400' : 'text-gray-900'
+            lowTime ? 'text-red-500' : isRunning ? 'text-gray-900' : 'text-gray-400'
           }`}
           style={{ fontSize: '64px', letterSpacing: '-0.04em' }}
         >
@@ -238,15 +248,20 @@ function SessionControls({ session }: { session: LiveSession }) {
             다음: Lv {nextBlind.level} · {nextBlind.sb}/{nextBlind.bb}
           </div>
         )}
+        {isReady && (
+          <div className="text-[11px] text-emerald-700 mt-2 font-bold">
+            ▶ 시작을 누르면 카운트다운이 시작되고 모바일·지도에 LIVE로 노출됩니다
+          </div>
+        )}
       </div>
 
       {/* 컨트롤 그리드 */}
       <div className="grid grid-cols-3 gap-2">
         <ControlBtn
-          variant={isPaused ? 'primary' : 'ghost'}
+          variant={primaryVariant}
           onClick={() => togglePauseSession(session, seconds)}
         >
-          {isPaused ? '▶ 재개' : '⏸ 일시정지'}
+          {primaryLabel}
         </ControlBtn>
         <ControlBtn
           disabled={session.currentLevel <= 1}

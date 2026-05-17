@@ -17,7 +17,15 @@ import { useEffect, useState } from 'react';
 import { db } from './firebase';
 import type { BlindLevel, TournamentTemplate } from './templates';
 
-export type LiveStatus = 'running' | 'paused' | 'break' | 'completed';
+/**
+ * LIVE 세션 상태.
+ * - ready: 토너 생성됨, 사장이 아직 시작 버튼을 누르지 않은 대기 상태. 모바일/지도 LIVE 피드에는 노출 X.
+ * - running: 진행 중 (deadline 기반 카운트다운).
+ * - paused: 일시정지 (deadline=null, levelSecondsLeft 보존).
+ * - break: 브레이크.
+ * - completed: 종료 (LIVE 피드에서 제외).
+ */
+export type LiveStatus = 'ready' | 'running' | 'paused' | 'break' | 'completed';
 
 export interface LiveSession {
   id: string;
@@ -133,7 +141,7 @@ export function subscribeLiveSession(
   );
 }
 
-/** 매장의 진행 중(또는 일시정지) 세션 실시간 구독 */
+/** 매장의 활성 세션 실시간 구독 — 매장 어드민은 'ready'(시작 대기)도 봐야 시작 버튼을 누를 수 있음. */
 export function subscribeStoreLiveSessions(
   storeId: string,
   onChange: (items: LiveSession[]) => void,
@@ -142,7 +150,7 @@ export function subscribeStoreLiveSessions(
   const q = query(
     liveSessionsCol(),
     where('storeId', '==', storeId),
-    where('status', 'in', ['running', 'paused', 'break']),
+    where('status', 'in', ['ready', 'running', 'paused', 'break']),
   );
   return onSnapshot(
     q,
@@ -156,6 +164,13 @@ export function subscribeStoreLiveSessions(
   );
 }
 
+/**
+ * 새 LIVE 세션 생성 — 대기(ready) 상태로.
+ * 카운트다운은 자동으로 출발하지 않음. 사장이 LivePanel에서 "▶ 시작"을 눌러야
+ * togglePauseSession이 ready→running 전환하며 levelEndsAt(=deadline)을 박는다.
+ * 모바일/지도 LIVE 피드(subscribeAllLiveSessions)는 ready를 제외하므로,
+ * 사장이 실제 시작을 누르기 전까진 외부에 노출되지 않음.
+ */
 export async function startLiveSession(
   storeId: string,
   storeName: string,
@@ -173,10 +188,10 @@ export async function startLiveSession(
     totalPlayers: template.totalPlayers,
     blindStructure: template.blindStructure,
     lateRegEndLevel: template.lateRegEndLevel,
-    status: 'running' as LiveStatus,
+    status: 'ready' as LiveStatus,
     currentLevel: first.level,
     levelSecondsLeft: first.durationSec,
-    levelEndsAt: deadlineFromNow(first.durationSec),
+    levelEndsAt: null,
     smallBlind: first.sb,
     bigBlind: first.bb,
     ante: first.ante,
@@ -185,7 +200,8 @@ export async function startLiveSession(
     prizePool: template.prizePool || template.buyIn * template.totalPlayers,
     lateRegClosed: false,
     viewerCount: 0,
-    startedAt: serverTimestamp(),
+    // startedAt은 첫 'ready'→'running' 전환 시 togglePauseSession에서 박음 (실제 진행 시작 시각).
+    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
   return ref.id;
@@ -198,13 +214,21 @@ export async function patchSession(sessionId: string, updates: Partial<LiveSessi
   });
 }
 
+/**
+ * 시작/일시정지 토글.
+ * - ready 또는 paused → running: 남은 시간만큼 새 deadline 박음.
+ * - ready→running 첫 전환: startedAt(실제 진행 시작 시각)도 같이 박음.
+ * - running → paused: deadline=null, 남은 초만 보존.
+ */
 export async function togglePauseSession(s: LiveSession, currentSecondsLeft: number) {
-  const newStatus: LiveStatus = s.status === 'paused' ? 'running' : 'paused';
+  const isStarting = s.status === 'ready' || s.status === 'paused';
+  const newStatus: LiveStatus = isStarting ? 'running' : 'paused';
+  const wasReady = s.status === 'ready';
   await patchSession(s.id, {
     status: newStatus,
     levelSecondsLeft: currentSecondsLeft,
-    // 일시정지 → null로 deadline 제거. 재개 → 남은 시간만큼 새 deadline.
-    levelEndsAt: newStatus === 'running' ? deadlineFromNow(currentSecondsLeft) : null,
+    levelEndsAt: isStarting ? deadlineFromNow(currentSecondsLeft) : null,
+    ...(wasReady && newStatus === 'running' ? { startedAt: serverTimestamp() } : {}),
   });
 }
 
