@@ -44,7 +44,9 @@ export interface Notice {
 
 const NOTICES = 'notices';
 
-/** 활성 공지 실시간 구독 — 모바일 팝업이 사용. priority 우선 + 신규 우선. */
+/** 활성 공지 실시간 구독 — 모바일 팝업이 사용. priority 우선 + 신규 우선.
+ * v0.1: where + orderBy 단일 사용으로 자동 인덱스만으로 동작.
+ * priority 동률 시의 createdAt 정렬은 클라이언트에서 처리. */
 export function subscribeActiveNotices(
   onChange: (items: Notice[]) => void,
   onError: (e: Error) => void,
@@ -53,14 +55,19 @@ export function subscribeActiveNotices(
     collection(db, NOTICES),
     where('active', '==', true),
     orderBy('priority', 'desc'),
-    orderBy('createdAt', 'desc'),
   );
   return onSnapshot(
     q,
     (snap) => {
-      onChange(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Notice, 'id'>) })),
-      );
+      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Notice, 'id'>) }));
+      // priority 동률 시 신규 우선 (createdAt desc) — 클라이언트 정렬
+      items.sort((a, b) => {
+        if (a.priority !== b.priority) return (b.priority ?? 0) - (a.priority ?? 0);
+        const ta = a.createdAt?.toMillis?.() ?? 0;
+        const tb = b.createdAt?.toMillis?.() ?? 0;
+        return tb - ta;
+      });
+      onChange(items);
     },
     (e) => onError(e as Error),
   );

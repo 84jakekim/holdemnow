@@ -52,7 +52,10 @@ export default function NoticePopup() {
     const tid = setTimeout(() => setDismissed(readDismissed()), 0);
     const unsub = subscribeActiveNotices(
       (items) => setNotices(items),
-      () => {},
+      (e) => {
+        // 인덱스 누락·권한 문제로 팝업이 안 뜨는 사고를 silent로 묻지 않음.
+        console.warn('[NoticePopup] subscribeActiveNotices failed:', e?.message ?? e);
+      },
     );
     return () => {
       clearTimeout(tid);
