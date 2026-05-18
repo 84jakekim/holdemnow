@@ -30,6 +30,8 @@ export default function PlayerSignupPage() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [nickname, setNickname] = useState('');
+  const [realName, setRealName] = useState('');
+  const [phone, setPhone] = useState('');
   const [passwordHint, setPasswordHint] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [showPwConfirm, setShowPwConfirm] = useState(false);
@@ -68,6 +70,22 @@ export default function PlayerSignupPage() {
     nickname && (nickname.length < 2 || nickname.length > 16)
       ? '닉네임은 2~16자로 입력해 주세요.'
       : null;
+  const realNameError =
+    realName && (realName.trim().length < 2 || realName.trim().length > 10)
+      ? '실명은 2~10자로 입력해 주세요.'
+      : null;
+  const phoneRaw = phone.replace(/[^0-9]/g, '');
+  const phoneError =
+    phone && (phoneRaw.length < 8 || phoneRaw.length > 11)
+      ? '휴대폰 번호를 정확히 입력해 주세요.'
+      : null;
+
+  const formatPhone = (raw: string): string => {
+    const digits = raw.replace(/[^0-9]/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  };
 
   const canSubmit =
     email.trim() &&
@@ -76,6 +94,10 @@ export default function PlayerSignupPage() {
     password === passwordConfirm &&
     nickname.trim().length >= 2 &&
     nickname.trim().length <= 16 &&
+    realName.trim().length >= 2 &&
+    realName.trim().length <= 10 &&
+    phoneRaw.length >= 8 &&
+    !phoneError &&
     agreeService &&
     agreePrivacy &&
     !submitting;
@@ -90,6 +112,8 @@ export default function PlayerSignupPage() {
         email,
         password,
         nickname: nickname.trim(),
+        realName: realName.trim(),
+        phone: phone.trim(),
         passwordHint: passwordHint.trim() || undefined,
         agreeService,
         agreePrivacy,
@@ -236,6 +260,54 @@ export default function PlayerSignupPage() {
             />
             {nicknameError && (
               <p className="text-[12px] text-red-600 mt-1.5 leading-snug">{nicknameError}</p>
+            )}
+          </div>
+
+          {/* 본인 확인 안내 */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 text-[12px] text-amber-800 leading-relaxed">
+            본인 확인을 위해 실명·휴대폰 정보를 수집합니다 (필수)
+          </div>
+
+          {/* 실명 */}
+          <div>
+            <label className="block text-[13px] font-bold text-gray-700 mb-1.5" htmlFor="real-name">
+              실명 <span className="text-[#FF1F8F]" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="real-name"
+              type="text"
+              autoComplete="name"
+              required
+              maxLength={10}
+              value={realName}
+              onChange={(e) => setRealName(e.target.value)}
+              placeholder="2~10자 (한글 또는 영문)"
+              className="player-input"
+            />
+            {realNameError && (
+              <p className="text-[12px] text-red-600 mt-1.5 leading-snug">{realNameError}</p>
+            )}
+          </div>
+
+          {/* 휴대폰 번호 */}
+          <div>
+            <label className="block text-[13px] font-bold text-gray-700 mb-1.5" htmlFor="phone">
+              휴대폰 번호 <span className="text-[#FF1F8F]" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="phone"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              required
+              value={phone}
+              onChange={(e) => setPhone(formatPhone(e.target.value))}
+              placeholder="010-0000-0000"
+              className="player-input"
+              maxLength={13}
+            />
+            {phoneError && (
+              <p className="text-[12px] text-red-600 mt-1.5 leading-snug">{phoneError}</p>
             )}
           </div>
 

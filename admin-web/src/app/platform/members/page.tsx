@@ -14,11 +14,11 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
-  where,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
+import MembersTabExportButton from '@/components/platform/MembersTabExportButton';
 
 // =====================================================================
 // 타입
@@ -252,7 +252,7 @@ function MembersPageInner() {
       {/* ── Tab 1: 일반 사용자 ── */}
       {activeTab === 'players' && !loading && (
         <div>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <input
               className="form-input max-w-xs"
               value={playerSearch}
@@ -260,6 +260,20 @@ function MembersPageInner() {
               placeholder="이메일 또는 이름 검색"
             />
             <span className="text-xs text-gray-500">{filteredPlayers.length}명</span>
+            <div className="ml-auto">
+              <MembersTabExportButton
+                tab="players"
+                users={filteredPlayers.map((p) => ({
+                  uid: p.id,
+                  email: p.email,
+                  displayName: p.displayName,
+                  providers: p.providers,
+                  signupSource: p.signupSource,
+                  status: p.status,
+                  signupAt: p.createdAt,
+                }))}
+              />
+            </div>
           </div>
 
           {filteredPlayers.length === 0 ? (
@@ -278,7 +292,11 @@ function MembersPageInner() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredPlayers.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50">
+                    <tr
+                      key={p.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/platform/members/user/${p.id}`)}
+                    >
                       <td className="p-3">
                         <div className="font-bold text-gray-900">{p.displayName ?? '(이름 없음)'}</div>
                         <div className="text-[11px] text-gray-500 font-mono">{p.email ?? p.id.slice(0, 16) + '…'}</div>
@@ -328,7 +346,7 @@ function MembersPageInner() {
       {/* ── Tab 2: 매장 ── */}
       {activeTab === 'stores' && !loading && (
         <div>
-          <div className="flex gap-1.5 mb-4 flex-wrap">
+          <div className="flex gap-1.5 mb-4 flex-wrap items-center">
             {(
               [
                 { id: 'pending', label: `심사 대기 (${stores.filter((s) => s.status === 'pending').length})` },
@@ -348,6 +366,22 @@ function MembersPageInner() {
                 {f.label}
               </button>
             ))}
+            <div className="ml-auto">
+              <MembersTabExportButton
+                tab="stores"
+                stores={filteredStores.map((s) => ({
+                  id: s.id,
+                  ownerEmail: s.ownerEmail,
+                  representativeName: s.representativeName,
+                  representativePhone: s.representativePhone,
+                  name: s.name,
+                  address: s.address,
+                  phone: s.phone,
+                  status: s.status,
+                  createdAt: s.createdAt,
+                }))}
+              />
+            </div>
           </div>
 
           {filteredStores.length === 0 ? (
@@ -362,6 +396,7 @@ function MembersPageInner() {
                   onReject={() => setRejectModal({ id: s.id, type: 'store', name: s.name })}
                   onSuspend={() => { if (window.confirm(`"${s.name}" 매장을 정지하시겠습니까?`)) suspendStore(s.id); }}
                   onReactivate={() => approveStore(s.id)}
+                  onCardClick={() => router.push(`/platform/members/store/${s.id}`)}
                 />
               ))}
             </div>
@@ -372,7 +407,7 @@ function MembersPageInner() {
       {/* ── Tab 3: 대회사 ── */}
       {activeTab === 'organizers' && !loading && (
         <div>
-          <div className="flex gap-1.5 mb-4 flex-wrap">
+          <div className="flex gap-1.5 mb-4 flex-wrap items-center">
             {(
               [
                 { id: 'pending', label: `심사 대기 (${organizers.filter((o) => o.status === 'pending').length})` },
@@ -391,6 +426,19 @@ function MembersPageInner() {
                 {f.label}
               </button>
             ))}
+            <div className="ml-auto">
+              <MembersTabExportButton
+                tab="organizers"
+                organizers={filteredOrgs.map((o) => ({
+                  id: o.id,
+                  companyName: o.companyName,
+                  representativeName: o.representativeName,
+                  contactPerson: o.contactPerson,
+                  status: o.status,
+                  createdAt: o.createdAt,
+                }))}
+              />
+            </div>
           </div>
 
           {filteredOrgs.length === 0 ? (
@@ -405,6 +453,7 @@ function MembersPageInner() {
                   onReject={() => setRejectModal({ id: o.id, type: 'organizer', name: o.companyName ?? o.name ?? o.id })}
                   onSuspend={() => { if (window.confirm(`"${o.companyName ?? o.name}" 대회사를 정지하시겠습니까?`)) suspendOrg(o.id); }}
                   onReactivate={() => approveOrg(o.id)}
+                  onCardClick={() => router.push(`/platform/members/organizer/${o.id}`)}
                 />
               ))}
             </div>
@@ -484,15 +533,20 @@ function StoreCard({
   onReject,
   onSuspend,
   onReactivate,
+  onCardClick,
 }: {
   store: StoreRow;
   onApprove: () => void;
   onReject: () => void;
   onSuspend: () => void;
   onReactivate: () => void;
+  onCardClick?: () => void;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
+    <div
+      className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-gray-300 transition"
+      onClick={onCardClick}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -512,7 +566,7 @@ function StoreCard({
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
+        <div className="flex flex-col gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {store.status === 'pending' && (
             <>
               <button onClick={onApprove} className="text-[10px] font-bold bg-green-600 text-white rounded-lg px-3 py-1.5 hover:bg-green-700 whitespace-nowrap">
@@ -538,6 +592,7 @@ function StoreCard({
             target="_blank"
             rel="noopener"
             className="text-[10px] font-bold border border-gray-200 text-gray-700 rounded-lg px-3 py-1.5 hover:bg-gray-50 whitespace-nowrap text-center"
+            onClick={(e) => e.stopPropagation()}
           >
             어드민 ↗
           </a>
@@ -553,16 +608,21 @@ function OrganizerCard({
   onReject,
   onSuspend,
   onReactivate,
+  onCardClick,
 }: {
   org: OrganizerRow;
   onApprove: () => void;
   onReject: () => void;
   onSuspend: () => void;
   onReactivate: () => void;
+  onCardClick?: () => void;
 }) {
   const displayName = org.companyName ?? org.name ?? '(이름 없음)';
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
+    <div
+      className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-gray-300 transition"
+      onClick={onCardClick}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -578,7 +638,7 @@ function OrganizerCard({
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
+        <div className="flex flex-col gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {org.status === 'pending' && (
             <>
               <button onClick={onApprove} className="text-[10px] font-bold bg-green-600 text-white rounded-lg px-3 py-1.5 hover:bg-green-700 whitespace-nowrap">
@@ -604,6 +664,7 @@ function OrganizerCard({
             target="_blank"
             rel="noopener"
             className="text-[10px] font-bold border border-gray-200 text-gray-700 rounded-lg px-3 py-1.5 hover:bg-gray-50 whitespace-nowrap text-center"
+            onClick={(e) => e.stopPropagation()}
           >
             어드민 ↗
           </a>

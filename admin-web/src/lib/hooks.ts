@@ -32,6 +32,15 @@ export interface UserDoc {
   nickname?: string;
   email?: string;
   displayName?: string;
+  realName?: string;
+  phone?: string;
+  kycCompletedAt?: { toDate: () => Date } | null;
+  kycSource?: 'signup' | 'migration' | 'oauth-onboarding';
+  status?: 'active' | 'suspended';
+  providers?: string[];
+  signupSource?: string;
+  passwordHint?: string;
+  recoveryLast4?: string;
 }
 
 export function hasRole(user: UserDoc | null | undefined, target: UserRole): boolean {

@@ -258,6 +258,8 @@ export interface PlayerSignupPayload {
   email: string;
   password: string;
   nickname: string;
+  realName: string;   // 필수 — 본인 확인용 실명
+  phone: string;      // 필수 — 010-XXXX-XXXX 형식
   passwordHint?: string;
   agreeService: boolean;
   agreePrivacy: boolean;
@@ -285,6 +287,10 @@ export async function signupAsPlayer(payload: PlayerSignupPayload): Promise<void
     status: 'active',
     displayName: payload.nickname.trim(),
     nickname: payload.nickname.trim(),
+    realName: payload.realName.trim(),
+    phone: payload.phone.trim(),
+    kycCompletedAt: serverTimestamp(),
+    kycSource: 'signup',
     ...(payload.passwordHint?.trim() ? { passwordHint: payload.passwordHint.trim() } : {}),
     agreeMarketing: payload.agreeMarketing,
     signupAt: serverTimestamp(),

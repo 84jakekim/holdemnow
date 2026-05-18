@@ -283,6 +283,16 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // ===== 감사 로그 (auditLogs) =====
+    // platform_admin만 read/create. 생성 시 actor == 본인 uid 강제.
+    // update/delete 불가 — 감사 로그는 불변.
+    match /auditLogs/{logId} {
+      allow read: if isPlatformAdmin();
+      allow create: if isPlatformAdmin()
+        && request.resource.data.actor == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // ===== 그 외 모두 차단 (default deny) =====
     match /{document=**} {
       allow read, write: if false;
