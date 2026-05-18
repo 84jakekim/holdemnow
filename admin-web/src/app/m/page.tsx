@@ -10,6 +10,7 @@ import { posterStyleFor } from '@/lib/templates';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
 import { loadPopularStores, loadRecentlyJoinedStores, type PopularityStore } from '@/lib/popularity';
+import { useAuth } from '@/lib/hooks';
 
 interface StoreGroup {
   storeId: string;
@@ -44,11 +45,18 @@ interface NearbyStore {
  * 7. 콘텐츠 영역 (추후 SNS 확장 자리)
  * ========================================================== */
 export default function MobileHome() {
+  const authState = useAuth();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
   const [storeSummaries, setStoreSummaries] = useState<Record<string, StoreSummary>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 환영 메시지용 사용자 이름 — displayName 없으면 이메일 prefix, 비로그인이면 일반 인사
+  const displayName =
+    authState.status === 'authenticated'
+      ? authState.user.displayName ?? authState.user.email?.split('@')[0] ?? '플레이어'
+      : null;
 
   useEffect(() => {
     const unsub = subscribeAllLiveSessions(
@@ -103,7 +111,7 @@ export default function MobileHome() {
           브랜드 핑크 그라데이션 배경, 흰 로고·아이콘, 위치도 핑크 안
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <header className="sticky top-0 z-30 header-brand-card">
-        {/* 1단 — 브랜드 (흰 로고마크 + 흰 워드마크) + 우측 액션 */}
+        {/* 1단 — 브랜드 (좌) + 위치 칩 (우, 위치 표시임을 명확히) */}
         <div className="px-4 h-14 flex items-center justify-between">
           <Link href="/m" aria-label="HoldemNow 홈" className="flex items-center gap-2 transition active:opacity-75">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -120,12 +128,61 @@ export default function MobileHome() {
             <img
               src="/logo-white.svg"
               alt="HoldemNow"
-              height={22}
+              height={18}
               style={{ width: 'auto', display: 'block' }}
             />
           </Link>
 
-          <div className="flex items-center gap-1.5">
+          {/* 위치 칩 — 둥근 알약 + 흰 핀 아이콘 + 흰 텍스트. 위치 표시임을 한눈에. */}
+          <button
+            aria-label="위치 변경"
+            className="flex items-center gap-1 transition active:scale-95"
+            style={{
+              background: 'rgba(255,255,255,0.18)',
+              border: '1px solid rgba(255,255,255,0.30)',
+              borderRadius: 999,
+              padding: '6px 10px 6px 8px',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span className="text-[12px] font-extrabold tracking-tight text-white">
+              부산 서면
+            </span>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* 2단 — 환영 메시지 (좌, 토스 스타일 큰 글씨) + 검색·알림 (우) */}
+        <div className="px-4 pb-3 -mt-1 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            {displayName ? (
+              <>
+                <div className="text-[18px] font-extrabold tracking-tight text-white truncate">
+                  {displayName}님,
+                </div>
+                <div className="text-[13px] font-semibold text-white" style={{ opacity: 0.85 }}>
+                  환영합니다 👋
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-[18px] font-extrabold tracking-tight text-white">
+                  지금 LIVE한 매장,
+                </div>
+                <div className="text-[13px] font-semibold text-white" style={{ opacity: 0.85 }}>
+                  내 주변에서 찾아보세요
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <Link
               href="/m/search"
               aria-label="검색"
@@ -145,22 +202,6 @@ export default function MobileHome() {
               </svg>
             </button>
           </div>
-        </div>
-
-        {/* 2단 — 위치 헤딩 (핑크 헤더 안 흰색, 토스 스타일) */}
-        <div className="px-4 pb-3 -mt-1">
-          <button className="flex items-center gap-1.5 transition active:opacity-70">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.90)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
-            <span className="text-[16px] font-extrabold tracking-tight header-location-text">
-              부산 서면
-            </span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.70)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </button>
         </div>
 
         {/* 하단 페이드 구분 — 본문과 자연스럽게 분리 */}

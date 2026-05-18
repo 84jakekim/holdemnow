@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import {
   subscribeAllLiveSessions,
   type LiveSession,
@@ -47,8 +48,11 @@ function regionFromAddress(address?: string): string {
 }
 
 export default function PlatformLivePage() {
+  const authState = useAuth();
+  const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [stores, setStores] = useState<Record<string, StoreInfo>>({});
+  const [storesError, setStoresError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsedRegions, setCollapsedRegions] = useState<Record<string, boolean>>({});
   const [showStartModal, setShowStartModal] = useState(false);
@@ -79,8 +83,12 @@ export default function PlatformLivePage() {
           };
         });
         setStores(map);
-      } catch {
-        /* skip */
+        setStoresError(null);
+        console.log('[platform/live] stores loaded:', Object.keys(map).length);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setStoresError(msg);
+        console.error('[platform/live] stores fetch failed:', e);
       }
     })();
   }, []);
@@ -106,7 +114,7 @@ export default function PlatformLivePage() {
   return (
     <div>
       {/* 헤더 */}
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🎬 전국 LIVE 모니터링</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -114,12 +122,33 @@ export default function PlatformLivePage() {
           </p>
         </div>
         <button
-          onClick={() => setShowStartModal(true)}
+          onClick={() => {
+            console.log('[platform/live] "+ 새 LIVE 시작" clicked. stores:', Object.keys(stores).length, 'user role:', userDoc?.role, 'roles:', userDoc?.roles);
+            setShowStartModal(true);
+          }}
           className="bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-red-600"
         >
           + 새 LIVE 시작
         </button>
       </div>
+
+      {/* 진단 패널 — v0.1 디버그용 */}
+      <details className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs">
+        <summary className="cursor-pointer font-bold text-amber-900">🔍 진단 정보 (클릭하여 펼침)</summary>
+        <div className="mt-2 space-y-1 text-amber-800 font-mono text-[11px]">
+          <div>로그인 uid: {authState.status === 'authenticated' ? authState.user.uid : '미로그인'}</div>
+          <div>이메일: {authState.status === 'authenticated' ? authState.user.email : '-'}</div>
+          <div>role(단일): {userDoc?.role ?? 'unset'}</div>
+          <div>roles(배열): {JSON.stringify(userDoc?.roles ?? [])}</div>
+          <div>platform_admin: {hasRole(userDoc, 'platform_admin') ? '✓ 있음' : '✗ 없음'}</div>
+          <div>storeId: {userDoc?.storeId ?? '-'}</div>
+          <div>매장 fetched: {Object.keys(stores).length}개</div>
+          <div>활성 세션: {sessions.length}개</div>
+          {storesError && (
+            <div className="text-red-700">❌ 매장 fetch 실패: {storesError}</div>
+          )}
+        </div>
+      </details>
 
       {/* 요약 */}
       <div className="grid grid-cols-4 gap-3 mb-6">
