@@ -89,7 +89,12 @@ export function computeReadyExpirySec(s: LiveSession): number | null {
   return Math.floor((endsMs - Date.now()) / 1000);
 }
 
-/** 세션이 그레이스 만료(finishingAt) 또는 ready 만료(createdAt+5분)된 상태인지. */
+/** 세션이 만료 상태인지 — 세 가지 케이스 통합:
+ *  ① 그레이스 만료 (finishingAt + 180초)
+ *  ② ready 만료 (createdAt + 5분)
+ *  ③ 좀비 running (levelEndsAt + 180초) — nextLevelTick 호출자가 부재해
+ *    finishingAt도 박히지 않은 채 timer가 끝나버린 경우. 서버 cron이 1분 내 정리하지만
+ *    클라이언트도 즉시 가려야 잔상이 없다. */
 function isSessionExpired(s: LiveSession): boolean {
   if (s.finishingAt) {
     const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
@@ -101,6 +106,10 @@ function isSessionExpired(s: LiveSession): boolean {
       const endsMs = created.toMillis() + READY_EXPIRY_SEC * 1000;
       if (endsMs <= Date.now()) return true;
     }
+  }
+  if (s.status === 'running' && s.levelEndsAt) {
+    const staleMs = s.levelEndsAt.toMillis() + FINISHING_GRACE_SEC * 1000;
+    if (staleMs <= Date.now()) return true;
   }
   return false;
 }
