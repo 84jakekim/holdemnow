@@ -29,17 +29,17 @@ interface NearbyStore extends StoreSummary {
 const NEARBY_RADIUS_M = 10_000;
 
 /** 카카오 맵 줌 레벨(1=가장 확대, 14=가장 축소)에 맞춰 시각적으로 적절한 원 반경(m) 산출.
- *  최대는 NEARBY_RADIUS_M(=매장 필터링 반경)이라 줌 아웃하면 정확히 검색 범위가 보임.
- *  줌인 시엔 원이 화면 안에 들어오도록 작은 반경을 사용. */
+ *  지도 화면을 너무 덮지 않도록 이전 매핑의 50%로 조정 — 매장 필터링은 여전히
+ *  NEARBY_RADIUS_M(10km) 기준이고, 원은 "사용자 주변 도보권/탐색권" 시각화에 집중. */
 function radiusForZoomLevel(level: number): number {
-  if (level <= 2) return 250;
-  if (level === 3) return 500;
-  if (level === 4) return 1000;
-  if (level === 5) return 2000;
-  if (level === 6) return 3500;
-  if (level === 7) return 5000;
-  if (level === 8) return 7500;
-  return NEARBY_RADIUS_M;
+  if (level <= 2) return 125;
+  if (level === 3) return 250;
+  if (level === 4) return 500;
+  if (level === 5) return 1000;
+  if (level === 6) return 1750;
+  if (level === 7) return 2500;
+  if (level === 8) return 3750;
+  return Math.floor(NEARBY_RADIUS_M / 2);
 }
 
 export default function DiscoverPage() {
