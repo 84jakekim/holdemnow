@@ -9,7 +9,7 @@ import {
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
-import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveCountdown } from '@/lib/live';
+import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveCountdown, computeReadyExpirySec } from '@/lib/live';
 import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { posterStyleFor } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
@@ -17,6 +17,7 @@ import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
 import { loadKakaoMaps, geocodeAddress } from '@/lib/kakao';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
+import { subscribeStoreActivePost, type StorePost } from '@/lib/posts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,9 +42,16 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [tournaments, setTournaments] = useState<TournamentInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [activePost, setActivePost] = useState<StorePost | null>(null);
 
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
+    return unsub;
+  }, [storeId]);
+
+  // 매장 데일리 홍보 — 활성(미만료, published) 최신 1건
+  useEffect(() => {
+    const unsub = subscribeStoreActivePost(storeId, setActivePost, () => {});
     return unsub;
   }, [storeId]);
 
@@ -433,6 +441,11 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       )}
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          오늘의 홍보 — 매장이 직접 올린 24h 한정 글
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {activePost && <ActivePostCard post={activePost} />}
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           예정 토너
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {tournaments.length > 0 && (
@@ -599,26 +612,32 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
   const sz = sizes[cols as 1 | 2 | 3];
   const sec = useLiveCountdown(session);
   const paused = session.status === 'paused';
-  const lowTime = sec <= 10 && !paused;
+  const ready = session.status === 'ready';
+  const lowTime = sec <= 10 && !paused && !ready;
   const lateMin = computeLateRegMinutes(session, sec);
+  const readyLeft = ready ? Math.max(0, computeReadyExpirySec(session) ?? 0) : 0;
 
   return (
     <Link
       href={`/m/live/${session.id}`}
       className="block rounded-2xl transition active:scale-[0.98]"
       style={{
-        background: paused
-          ? 'rgba(245,158,11,0.06)'
-          : lowTime
-            ? 'rgba(229,62,62,0.06)'
-            : 'var(--surface-2)',
-        border: `1px solid ${paused ? 'rgba(245,158,11,0.20)' : lowTime ? 'rgba(229,62,62,0.20)' : 'var(--border)'}`,
+        background: ready
+          ? 'rgba(59,130,246,0.06)'
+          : paused
+            ? 'rgba(245,158,11,0.06)'
+            : lowTime
+              ? 'rgba(229,62,62,0.06)'
+              : 'var(--surface-2)',
+        border: `1px solid ${ready ? 'rgba(59,130,246,0.25)' : paused ? 'rgba(245,158,11,0.20)' : lowTime ? 'rgba(229,62,62,0.20)' : 'var(--border)'}`,
         padding: sz.p,
       }}
     >
       {/* 상태 라벨 */}
       <div className="flex items-center gap-1 mb-1">
-        {paused ? (
+        {ready ? (
+          <span className="text-[9px] font-extrabold tracking-wider" style={{ color: '#2563eb' }}>⏳ 곧 게임 시작</span>
+        ) : paused ? (
           <span className="text-[9px] font-extrabold tracking-wider" style={{ color: 'var(--gold)' }}>⏸ 일시정지</span>
         ) : (
           <>
@@ -631,24 +650,101 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
       <div className="font-bold truncate" style={{ fontSize: sz.name, color: 'var(--text-1)' }}>
         {session.tournamentName}
       </div>
-      {/* 카운트다운 */}
+      {/* 카운트다운 — ready면 시작 만료까지 시간, 그 외엔 현재 레벨 남은 시간 */}
       <div
         className="font-mono font-extrabold leading-none mt-1.5"
         style={{
           fontSize: sz.timer,
           letterSpacing: '-0.03em',
-          color: lowTime ? 'var(--live)' : paused ? 'var(--gold)' : 'var(--text-1)',
+          color: ready ? '#2563eb' : lowTime ? 'var(--live)' : paused ? 'var(--gold)' : 'var(--text-1)',
         }}
       >
-        {fmtTime(sec)}
+        {ready ? fmtTime(readyLeft) : fmtTime(sec)}
       </div>
       {/* 메타 */}
       <div className="mt-1.5" style={{ fontSize: sz.meta, color: 'var(--text-3)' }}>
-        Lv {session.currentLevel} · {session.playersRemaining}명
-        {cols === 1 && (
-          <span> · {session.lateRegClosed ? '등록 마감' : `등록 ${lateMin}분`}</span>
+        {ready ? (
+          <span>{cols === 1 ? '시작 대기 — 만료까지 ' : ''}자동 취소까지</span>
+        ) : (
+          <>
+            Lv {session.currentLevel} · {session.playersRemaining}명
+            {cols === 1 && (
+              <span> · {session.lateRegClosed ? '등록 마감' : `등록 ${lateMin}분`}</span>
+            )}
+          </>
         )}
       </div>
     </Link>
+  );
+}
+
+/* ============================================================
+ * 오늘의 홍보 카드 — 매장이 직접 올린 24h 한정 글
+ * ========================================================== */
+function ActivePostCard({ post }: { post: StorePost }) {
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const expMs = post.expiresAt?.toMillis() ?? 0;
+  const hoursLeft = expMs > Date.now() ? Math.max(0, Math.floor((expMs - Date.now()) / (60 * 60 * 1000))) : 0;
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => setPhotoIdx(Math.round(el.scrollLeft / el.clientWidth));
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const openLink = () => post.ctaUrl && window.open(post.ctaUrl, '_blank', 'noopener,noreferrer');
+
+  return (
+    <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[16px]" aria-hidden="true">📢</span>
+        <span className="text-[14px] font-extrabold" style={{ color: 'var(--text-1)' }}>오늘의 홍보</span>
+        <span className="text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: 'rgba(255,31,143,0.10)', color: 'var(--brand)' }}>
+          {hoursLeft}시간 남음
+        </span>
+      </div>
+
+      <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
+        {post.imageUrls.length > 0 && (
+          <div className="relative">
+            <div ref={scrollRef} className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none" style={{ aspectRatio: '4/3' }}>
+              {post.imageUrls.map((url, i) => (
+                <div key={url} className="w-full flex-shrink-0 snap-center" style={{ background: 'var(--surface-2)' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`${i + 1}`} className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+            {post.imageUrls.length > 1 && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold rounded-full px-2 py-1" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }}>
+                {photoIdx + 1} / {post.imageUrls.length}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="px-4 py-4">
+          <div className="text-[14px] whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--text-1)' }}>{post.body}</div>
+          {post.eventTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {post.eventTags.slice(0, 8).map((t) => (
+                <span key={t} className="text-[11px] font-bold rounded-full px-2 py-0.5" style={{ background: 'rgba(255,31,143,0.10)', color: 'var(--brand)' }}>#{t}</span>
+              ))}
+            </div>
+          )}
+          {post.ctaUrl && (
+            <button
+              onClick={openLink}
+              className="mt-4 w-full py-3 rounded-xl bg-black text-white font-bold text-[13px] flex items-center justify-center gap-1.5 active:opacity-80"
+            >
+              <span>{post.ctaLabel || '자세히 보기'}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

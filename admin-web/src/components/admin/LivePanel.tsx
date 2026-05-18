@@ -17,6 +17,7 @@ import {
   useLiveCountdown,
   FINISHING_GRACE_SEC,
   computeFinishingGraceSec,
+  computeReadyExpirySec,
 } from '@/lib/live';
 import {
   type TournamentTemplate,
@@ -210,6 +211,7 @@ function SessionControls({ session }: { session: LiveSession }) {
   // useLiveCountdown 1초 tick에 묻어 매초 재계산됨 (running 동안). isFinishing 동안에도 표시 갱신.
   const graceSec = computeFinishingGraceSec(session);
   const isFinishing = graceSec != null && graceSec > 0;
+  const readyLeftSec = isReady ? computeReadyExpirySec(session) : null;
 
   // 0 도달 시 자동 다음 레벨 (한 클라이언트만 실행하는 것이 이상적 — v0.1은 first-write-wins).
   // ready/paused 상태에서는 절대 자동 진행 금지.
@@ -275,8 +277,13 @@ function SessionControls({ session }: { session: LiveSession }) {
           </div>
         )}
         {isReady && (
-          <div className="text-[11px] text-emerald-700 mt-2 font-bold">
-            ▶ 시작을 누르면 카운트다운이 시작되고 모바일·지도에 LIVE로 노출됩니다
+          <div className="text-[11px] text-emerald-700 mt-2 font-bold leading-relaxed">
+            ▶ 시작을 누르면 카운트다운이 시작되고 모바일·지도에 LIVE로 노출됩니다.
+            {readyLeftSec != null && readyLeftSec > 0 && (
+              <div className="mt-1 text-amber-700">
+                ⏳ {fmtTime(readyLeftSec)} 안에 시작하지 않으면 자동 취소됩니다
+              </div>
+            )}
           </div>
         )}
         {isFinishing && (

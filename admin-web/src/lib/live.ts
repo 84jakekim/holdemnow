@@ -57,6 +57,7 @@ export interface LiveSession {
   prizePool: number;
   lateRegClosed: boolean;
   viewerCount: number;
+  createdAt?: Timestamp;
   startedAt?: unknown;
   endedAt?: unknown;
   /** 마지막 레벨까지 모두 진행되어 자동 종료 카운트다운 시작 시각.
@@ -69,11 +70,39 @@ export interface LiveSession {
 /** 마지막 레벨 종료 후 자동 정리까지의 그레이스(초). */
 export const FINISHING_GRACE_SEC = 180;
 
+/** ready 상태로 등록만 되고 시작 안 한 세션의 자동 정리까지 만료(초). */
+export const READY_EXPIRY_SEC = 300;
+
 /** 남은 그레이스 초. finishingAt 없으면 null, 만료 시 0 이하. */
 export function computeFinishingGraceSec(s: LiveSession): number | null {
   if (!s.finishingAt) return null;
   const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
   return Math.floor((endsMs - Date.now()) / 1000);
+}
+
+/** ready 만료까지 남은 초. ready 아니거나 createdAt 없으면 null. 만료 시 0 이하. */
+export function computeReadyExpirySec(s: LiveSession): number | null {
+  if (s.status !== 'ready') return null;
+  const created = s.createdAt as Timestamp | undefined;
+  if (!created || typeof created.toMillis !== 'function') return null;
+  const endsMs = created.toMillis() + READY_EXPIRY_SEC * 1000;
+  return Math.floor((endsMs - Date.now()) / 1000);
+}
+
+/** 세션이 그레이스 만료(finishingAt) 또는 ready 만료(createdAt+5분)된 상태인지. */
+function isSessionExpired(s: LiveSession): boolean {
+  if (s.finishingAt) {
+    const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
+    if (endsMs <= Date.now()) return true;
+  }
+  if (s.status === 'ready') {
+    const created = s.createdAt as Timestamp | undefined;
+    if (created && typeof created.toMillis === 'function') {
+      const endsMs = created.toMillis() + READY_EXPIRY_SEC * 1000;
+      if (endsMs <= Date.now()) return true;
+    }
+  }
+  return false;
 }
 
 export function liveSessionsCol() {
@@ -96,7 +125,9 @@ export function computeRemainingSec(s: LiveSession): number {
   return Math.max(0, s.levelSecondsLeft);
 }
 
-/** 표시용 카운트다운 훅 — 1초 tick + 세션 변화 시 재동기화. */
+/** 표시용 카운트다운 훅 — 1초 tick + 세션 변화 시 재동기화.
+ *  running: levelEndsAt 기반 sec 갱신. ready/finishing: sec는 0이지만 매초 재렌더해서
+ *  부르는 측의 computeReadyExpirySec / computeFinishingGraceSec 가 갱신되도록 함. */
 export function useLiveCountdown(session: LiveSession | null | undefined): number {
   const [sec, setSec] = useState(() => (session ? computeRemainingSec(session) : 0));
   useEffect(() => {
@@ -105,7 +136,8 @@ export function useLiveCountdown(session: LiveSession | null | undefined): numbe
       return;
     }
     setSec(computeRemainingSec(session));
-    if (session.status !== 'running') return;
+    // ready/running: 매초 tick (ready는 sec=0 고정이지만 컴포넌트 재렌더로 외부 만료 카운트 갱신 유도)
+    if (session.status !== 'running' && session.status !== 'ready') return;
     const t = setInterval(() => setSec(computeRemainingSec(session)), 1000);
     return () => clearInterval(t);
     // 세션의 정체성 + 타이머 상태가 바뀌면 재구성
@@ -138,13 +170,7 @@ export function subscribeAllLiveSessions(
     : ['running', 'paused', 'break'];
   const q = query(liveSessionsCol(), where('status', 'in', statuses));
   let last: LiveSession[] = [];
-  const filterExpired = (items: LiveSession[]) =>
-    items.filter((s) => {
-      if (!s.finishingAt) return true;
-      const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
-      return endsMs > Date.now();
-    });
-  const emit = () => onChange(filterExpired(last));
+  const emit = () => onChange(last.filter((s) => !isSessionExpired(s)));
   const unsubFs = onSnapshot(
     q,
     (snap) => {
@@ -179,7 +205,9 @@ export function subscribeLiveSession(
   );
 }
 
-/** 매장의 활성 세션 실시간 구독 — 매장 어드민은 'ready'(시작 대기)도 봐야 시작 버튼을 누를 수 있음. */
+/** 매장의 활성 세션 실시간 구독 — 매장 어드민은 'ready'(시작 대기)도 봐야 시작 버튼을 누를 수 있음.
+ *  안전망: finishingAt 그레이스 만료 + ready 5분 만료 세션을 즉시 화면에서 가림.
+ *  Cloud Function autoStopExpiredSessions가 DB도 정리하지만, 그 사이 잔상 제거. */
 export function subscribeStoreLiveSessions(
   storeId: string,
   onChange: (items: LiveSession[]) => void,
@@ -190,16 +218,21 @@ export function subscribeStoreLiveSessions(
     where('storeId', '==', storeId),
     where('status', 'in', ['ready', 'running', 'paused', 'break']),
   );
-  return onSnapshot(
+  let last: LiveSession[] = [];
+  const emit = () => onChange(last.filter((s) => !isSessionExpired(s)));
+  const unsubFs = onSnapshot(
     q,
     (snap) => {
-      const items = snap.docs.map(
-        (d) => ({ id: d.id, ...(d.data() as Omit<LiveSession, 'id'>) }),
-      );
-      onChange(items);
+      last = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LiveSession, 'id'>) }));
+      emit();
     },
     (err) => onError(err as Error),
   );
+  const tick = setInterval(emit, 30_000);
+  return () => {
+    unsubFs();
+    clearInterval(tick);
+  };
 }
 
 /**
