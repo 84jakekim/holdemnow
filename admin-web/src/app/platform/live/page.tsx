@@ -498,17 +498,28 @@ function StartLiveModal({
   const selectedStore = selectedStoreId ? storesMap[selectedStoreId] : null;
 
   const handleStart = async (template: TournamentTemplate) => {
-    if (!selectedStoreId || !selectedStore) return;
-    if (!window.confirm(`[${selectedStore.name}] "${template.name}" LIVE를 시작할까요?`)) return;
+    console.log('[platform/live] handleStart called', { storeId: selectedStoreId, templateId: template.id, templateName: template.name });
+    if (!selectedStoreId || !selectedStore) {
+      console.warn('[platform/live] no store selected');
+      return;
+    }
+    const ok = window.confirm(`[${selectedStore.name}] "${template.name}" LIVE를 시작할까요?`);
+    console.log('[platform/live] confirm result:', ok);
+    if (!ok) return;
     setStarting(true);
     setStartError(null);
     try {
-      await startLiveSession(selectedStoreId, selectedStore.name, template);
+      console.log('[platform/live] calling startLiveSession...');
+      const id = await startLiveSession(selectedStoreId, selectedStore.name, template);
+      console.log('[platform/live] startLiveSession succeeded, id:', id);
       onClose();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error('[platform/live] startLiveSession failed:', e);
-      setStartError(msg);
+      const code = (e as { code?: string })?.code;
+      console.error('[platform/live] startLiveSession failed:', e, 'code:', code);
+      setStartError(`${code ? `[${code}] ` : ''}${msg}`);
+      // 모달 하단 빨간 박스를 못 본 경우 대비 알림창도 띄움.
+      window.alert(`LIVE 시작 실패\n${code ? `[${code}]\n` : ''}${msg}`);
     } finally {
       setStarting(false);
     }
