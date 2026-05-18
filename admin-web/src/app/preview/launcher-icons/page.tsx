@@ -1,642 +1,567 @@
 'use client';
 
 /**
- * /preview/launcher-icons — PWA 런처 아이콘 3차 정제 (16개)
+ * /preview/launcher-icons — PWA 런처 아이콘 5차 / 라인아트 토끼 머리 (디자이너 자존심)
  *
- * 직전 20개 시안 약점:
- *  - 토끼 path가 어색 (덩어리진 윤곽, 부자연스러운 등 라인)
- *  - 그라데이션이 흔함 (단조로운 핑크 linear 위주)
- *  - 디테일 없음 (림 라이트 / drop shadow / inner glow 부재)
- *  - 자세 변화만 있을 뿐 시그너처 없음
+ * 4차까지 누적 거절. 핵심 패인:
+ *  - 귀-얼굴 path가 자기교차로 누더기 → 64px에서 토끼로 안 보임
+ *  - stroke 두께가 1.5~4px 5종 분산 → 시리즈 일관성 깨짐
+ *  - 12개가 좌표만 미세 조정한 양산물 → 카테고리·시그너처 부재
  *
- * 이번 3차 원칙:
- *  - bezier curve로 토끼 윤곽 우아하게 다듬음
- *  - 그라데이션 다양화: Soft glow / Triple-stop / Aurora / Soft single / Warm accent
- *  - SVG filter(feGaussianBlur)로 light source / glow / drop shadow
- *  - 시안마다 디테일 1~2가지만 정제해서 적용 (overengineering 방지)
- *
- * 16개 = 5개 시그너처 자세 × 2~4가지 디테일 변형
- *  - 자세 1: 측면 앉은 토끼 (클래식) × 4
- *  - 자세 2: 측면 머리 + 두 귀 클로즈업 × 3
- *  - 자세 3: 측면 점프 (dynamic) × 3
- *  - 자세 4: 측면 풀바디 일어선 × 3
- *  - 자세 5: 추상 (귀 두 개 + 둥근 머리) × 3
- *
- * viewBox 192×192, 안전영역 38~154 (중앙 60%).
+ * 5차 재설계 원칙:
+ *  1. 외곽선(귀-얼굴-귀) = 한 줄 연속 path. 귀 안쪽 곡선은 별도 path 2개로 분리 (자기교차 금지)
+ *  2. stroke 두께 3종으로만 분산: 2 (가는) / 2.5 (보통) / 3.5 (굵은)
+ *  3. 12개를 3 Tier로 의도 분리:
+ *      Tier S 클래식 (#1~#4) — 안전한 정면·측면 라인아트
+ *      Tier A 변형   (#5~#8) — 굵기·자세·접힘 변주
+ *      Tier B 추상   (#9~#12) — 기하학·연속선·롱이어 등 실험
+ *  4. 빨간 눈 #E53E3E, r=3.5
+ *  5. 핑크 그라데이션 12종 (linear 5 / radial 4 / multi 3)
+ *  6. 모든 곡선은 cubic bezier (C/S) — 직선 path 금지
+ *  7. stroke-linecap/linejoin="round" 일관 적용
  */
 
 import { useState, type ReactNode } from 'react';
 
-type Pose =
-  | 'A. 측면 앉은 토끼'
-  | 'B. 측면 머리 + 두 귀'
-  | 'C. 측면 점프'
-  | 'D. 측면 일어선 풀바디'
-  | 'E. 추상 (귀+머리)';
+type Tier = 'Tier S · 클래식' | 'Tier A · 변형' | 'Tier B · 추상';
 
 type IconDef = {
   id: number;
-  pose: Pose;
-  detail: string;     // 적용된 디테일 한 줄 라벨
-  gradient: string;   // 그라데이션 종류 라벨
+  tier: Tier;
+  label: string;
+  signature: string;     // 디자인 시그너처 한 줄
+  hasEye: boolean;
+  strokeWidth: number;
+  gradient: string;
   svg: ReactNode;
 };
 
 const W = '#FFFFFF';
+const EYE = '#E53E3E';
 
 /* ──────────────────────────────────────────────────────────────────────────
- *  공통 SVG defs — 토끼 path / 그라데이션 / 필터
- *
- *  자세별 토끼 path는 정제한 한 줄 path로 모듈화. id에 시안 번호 붙여 충돌 방지.
+ *  핑크 그라데이션 12종 — 라인아트가 주인공, 배경은 보조
+ *  분산: linear 5 / radial 4 / multi-stop 3
  * ────────────────────────────────────────────────────────────────────────── */
 
-/* ── 자세 A: 측면 앉은 토끼 — 정제된 한 줄 path
- *  - 머리(오른쪽) → 등 → 엉덩이(왼쪽 둥글게) → 앞다리 살짝
- *  - bezier로 부드럽게, 어색한 직각 제거
- *  - 귀 한 줄로 따로
- *  - 안전영역 38~154 안
- */
-const RABBIT_A_BODY =
-  'M 130 138 ' +
-  'C 144 138 152 130 152 116 ' +
-  'C 152 100 142 88 124 84 ' +
-  'C 118 82 112 80 108 76 ' +              // 어깨 - 머리 연결
-  'C 108 64 104 56 96 56 ' +                // 머리 위
-  'C 84 56 78 68 80 84 ' +                  // 머리 측면 - 등 시작
-  'C 64 88 50 100 46 116 ' +                // 등 라인 → 엉덩이
-  'C 44 128 50 138 60 138 Z';
-const RABBIT_A_EAR_BACK =
-  'M 90 60 C 86 36 92 20 100 22 C 108 24 106 44 102 64 Z';
-const RABBIT_A_EAR_FRONT =
-  'M 100 62 C 100 38 110 22 116 26 C 122 30 114 50 110 66 Z';
-const RABBIT_A_TAIL_CX = 48;
-const RABBIT_A_TAIL_CY = 122;
-
-/* ── 자세 B: 측면 머리 + 두 귀 클로즈업
- *  - 머리 윤곽이 측면(왼쪽 코, 오른쪽 뒤통수)으로 살짝 타원
- *  - 코끝이 살짝 뾰족, 턱 라인은 부드럽게
- *  - 두 귀는 위로, 한쪽이 앞 (depth)
- */
-const RABBIT_B_HEAD =
-  'M 56 124 ' +
-  'C 50 110 56 92 74 84 ' +                 // 위 곡선 (이마)
-  'C 92 76 116 78 132 88 ' +                // 뒤통수
-  'C 144 96 144 116 132 126 ' +             // 뒤통수 → 턱
-  'C 116 134 96 134 80 132 ' +              // 턱 라인
-  'C 66 130 60 130 56 124 Z';               // 코끝 (살짝 뾰족하게 닫힘)
-const RABBIT_B_EAR_BACK =
-  'M 84 86 C 76 54 82 32 92 32 C 102 32 100 60 96 88 Z';
-const RABBIT_B_EAR_FRONT =
-  'M 104 82 C 100 50 112 28 122 30 C 132 34 122 58 116 84 Z';
-
-/* ── 자세 C: 측면 점프 — 다이내믹
- *  - 몸은 활처럼 휘어진 호
- *  - 앞다리 펴짐, 뒷다리 접힘
- *  - 귀는 뒤로 휘날림
- */
-const RABBIT_C_BODY =
-  'M 36 120 ' +
-  'C 32 110 40 100 56 98 ' +                // 뒷다리 아래
-  'C 70 80 92 70 116 74 ' +                 // 등의 호 (점프 활)
-  'C 134 78 148 90 152 104 ' +              // 앞쪽 어깨
-  'C 154 116 146 122 134 120 ' +            // 머리 아래
-  'L 122 116 ' +
-  'L 124 124 ' +
-  'C 124 132 116 134 110 128 ' +
-  'L 96 120 ' +
-  'L 70 124 ' +
-  'L 56 132 ' +
-  'C 46 134 38 130 36 120 Z';
-const RABBIT_C_EAR_BACK =
-  'M 116 76 C 104 60 84 50 72 54 C 64 56 66 64 76 70 C 88 74 102 76 116 76 Z';
-const RABBIT_C_EAR_FRONT =
-  'M 124 72 C 116 56 100 42 88 44 C 80 46 82 54 92 62 C 102 68 114 72 124 72 Z';
-
-/* ── 자세 D: 측면 일어선 풀바디 — 우아하게
- *  - 일어선 토끼, 몸이 세로로 길게 호
- *  - 머리 위로 올라옴, 두 귀 길게
- *  - 발은 살짝만
- */
-const RABBIT_D_BODY =
-  'M 88 152 ' +
-  'C 76 152 70 144 70 132 ' +
-  'C 70 116 76 102 82 92 ' +                // 몸 측면
-  'C 78 84 78 76 84 70 ' +                  // 어깨 → 목
-  'C 88 60 96 56 102 58 ' +
-  'C 110 60 112 70 108 80 ' +               // 머리 옆
-  'C 114 88 116 100 116 116 ' +             // 등 라인
-  'C 116 134 110 148 100 152 Z';
-const RABBIT_D_EAR_BACK =
-  'M 96 58 C 90 36 92 22 98 22 C 104 22 106 38 102 60 Z';
-const RABBIT_D_EAR_FRONT =
-  'M 102 60 C 102 38 110 24 116 28 C 122 32 116 50 110 64 Z';
-const RABBIT_D_FOOT =
-  'M 80 152 C 76 152 74 154 76 158 L 110 158 C 112 154 110 152 106 152 Z';
-
-/* ── 자세 E: 추상 — 큰 머리 + 두 귀
- *  - 머리는 살짝 측면 느낌의 둥근 형태 (정원 X, 한쪽 살짝 평평)
- *  - 두 귀는 균형 있는 길이, 한쪽이 더 앞에 (depth)
- */
-const RABBIT_E_HEAD =
-  'M 60 116 ' +
-  'C 56 96 70 78 96 76 ' +
-  'C 122 76 138 92 138 114 ' +
-  'C 138 134 122 150 96 150 ' +
-  'C 72 150 64 134 60 116 Z';
-const RABBIT_E_EAR_BACK =
-  'M 84 78 C 78 50 84 28 92 28 C 100 28 100 54 96 80 Z';
-const RABBIT_E_EAR_FRONT =
-  'M 100 80 C 100 52 110 28 118 30 C 126 34 114 58 110 82 Z';
-
-/* ──────────────────────────────────────────────────────────────────────────
- *  공통 그라데이션 + 필터 빌더
- * ────────────────────────────────────────────────────────────────────────── */
-
-/** Soft glow radial — 토끼 뒤에서 빛이 새어 나오는 듯 */
-function GradSoftGlow({ id }: { id: string }) {
+function GradLinearA({ id }: { id: string }) {
   return (
-    <radialGradient id={id} cx="0.5" cy="0.42" r="0.72">
-      <stop offset="0%" stopColor="#FFB5DB" />
-      <stop offset="38%" stopColor="#FF4D9E" />
-      <stop offset="100%" stopColor="#8C0E4F" />
+    <linearGradient id={id} x1="0" y1="0" x2="0" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF4A95" />
+      <stop offset="1" stopColor="#9A0E59" />
+    </linearGradient>
+  );
+}
+function GradLinearB({ id }: { id: string }) {
+  return (
+    <linearGradient id={id} x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF5BA0" />
+      <stop offset="1" stopColor="#7F0A4C" />
+    </linearGradient>
+  );
+}
+function GradLinearC({ id }: { id: string }) {
+  return (
+    <linearGradient id={id} x1="0" y1="192" x2="192" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#D71575" />
+      <stop offset="1" stopColor="#FF77B4" />
+    </linearGradient>
+  );
+}
+function GradLinearD({ id }: { id: string }) {
+  return (
+    <linearGradient id={id} x1="192" y1="0" x2="0" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF3A8F" />
+      <stop offset="1" stopColor="#6B0941" />
+    </linearGradient>
+  );
+}
+function GradLinearE({ id }: { id: string }) {
+  return (
+    <linearGradient id={id} x1="0" y1="0" x2="0" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF6FB0" />
+      <stop offset="1" stopColor="#B0125F" />
+    </linearGradient>
+  );
+}
+
+function GradRadialA({ id }: { id: string }) {
+  return (
+    <radialGradient id={id} cx="96" cy="60" r="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF8AC0" />
+      <stop offset="1" stopColor="#7A0846" />
+    </radialGradient>
+  );
+}
+function GradRadialB({ id }: { id: string }) {
+  return (
+    <radialGradient id={id} cx="96" cy="96" r="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF1F8F" />
+      <stop offset="1" stopColor="#6B0941" />
+    </radialGradient>
+  );
+}
+function GradRadialC({ id }: { id: string }) {
+  return (
+    <radialGradient id={id} cx="60" cy="140" r="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF6BAA" />
+      <stop offset="1" stopColor="#8C0F54" />
+    </radialGradient>
+  );
+}
+function GradRadialD({ id }: { id: string }) {
+  return (
+    <radialGradient id={id} cx="140" cy="50" r="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF7DB7" />
+      <stop offset="1" stopColor="#9A0E59" />
     </radialGradient>
   );
 }
 
-/** Triple-stop — 핑크 → 또 다른 핑크 → 핑크 (subtle) */
-function GradTripleStop({ id }: { id: string }) {
+function GradMultiA({ id }: { id: string }) {
   return (
-    <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stopColor="#FF80BC" />
-      <stop offset="48%" stopColor="#E81E83" />
-      <stop offset="100%" stopColor="#9C0F58" />
+    <linearGradient id={id} x1="0" y1="0" x2="0" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF8AC0" />
+      <stop offset="0.5" stopColor="#E01077" />
+      <stop offset="1" stopColor="#6B0941" />
     </linearGradient>
   );
 }
-
-/** Aurora — 핑크 + 자홍·코랄 살짝 */
-function GradAurora({ id }: { id: string }) {
+function GradMultiB({ id }: { id: string }) {
   return (
-    <linearGradient id={id} x1="0.1" y1="0" x2="0.9" y2="1">
-      <stop offset="0%" stopColor="#FF8A9E" />
-      <stop offset="35%" stopColor="#FF3D8E" />
-      <stop offset="68%" stopColor="#C81B7E" />
-      <stop offset="100%" stopColor="#6E0C56" />
+    <linearGradient id={id} x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FFA0C8" />
+      <stop offset="0.5" stopColor="#D71575" />
+      <stop offset="1" stopColor="#7A0846" />
     </linearGradient>
   );
 }
-
-/** Single-direction soft — 한 방향 매우 부드럽게 */
-function GradSoftSingle({ id }: { id: string }) {
+function GradMultiC({ id }: { id: string }) {
   return (
-    <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stopColor="#FFA8C8" />
-      <stop offset="100%" stopColor="#D11876" />
-    </linearGradient>
-  );
-}
-
-/** Pink + warm accent (코랄·골드 한 점) */
-function GradWarmAccent({ id }: { id: string }) {
-  return (
-    <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stopColor="#FFB888" />
-      <stop offset="22%" stopColor="#FF6A9E" />
-      <stop offset="100%" stopColor="#A8125C" />
-    </linearGradient>
-  );
-}
-
-/** 토끼 자체에 white → soft pink 안쪽 미세 그라데이션 */
-function GradRabbitSubtle({ id }: { id: string }) {
-  return (
-    <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stopColor="#FFFFFF" />
-      <stop offset="100%" stopColor="#FFE6F2" />
-    </linearGradient>
-  );
-}
-
-/** Inner glow filter (토끼 안쪽에 옅은 핑크 림) */
-function FilterInnerGlow({ id }: { id: string }) {
-  return (
-    <filter id={id} x="-10%" y="-10%" width="120%" height="120%">
-      <feGaussianBlur stdDeviation="2" result="blur" />
-      <feFlood floodColor="#FF7AB6" floodOpacity="0.55" />
-      <feComposite in2="blur" operator="in" result="glow" />
-      <feComposite in="SourceGraphic" in2="glow" operator="over" />
-    </filter>
-  );
-}
-
-/** Drop shadow filter (토끼 발치 옅은 그림자) */
-function FilterDropShadow({ id }: { id: string }) {
-  return (
-    <filter id={id} x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
-      <feOffset dx="0" dy="3" result="offsetblur" />
-      <feComponentTransfer>
-        <feFuncA type="linear" slope="0.32" />
-      </feComponentTransfer>
-      <feMerge>
-        <feMergeNode />
-        <feMergeNode in="SourceGraphic" />
-      </feMerge>
-    </filter>
-  );
-}
-
-/** Soft background light source (왼쪽 위 하이라이트) */
-function FilterLightSource({ id }: { id: string }) {
-  return (
-    <filter id={id} x="0" y="0" width="100%" height="100%">
-      <feGaussianBlur stdDeviation="12" />
-    </filter>
+    <radialGradient id={id} cx="96" cy="80" r="130" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#FF8AC0" />
+      <stop offset="0.55" stopColor="#D81B73" />
+      <stop offset="1" stopColor="#7A0846" />
+    </radialGradient>
   );
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
- *  아이콘 16개
- *
- *  각 아이콘은 자세 path + 그라데이션 1종 + 디테일 1~2가지
+ *  SVG wrapper
  * ────────────────────────────────────────────────────────────────────────── */
 
-/* ─────────── 자세 A: 측면 앉은 토끼 × 4 ─────────── */
-
-/* #1 — 앉은 토끼 + Soft glow + 림 라이트 */
-const Icon1 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradSoftGlow id="g1-bg" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g1-bg)" />
-    {/* 토끼 본체 */}
-    <g>
-      <path d={RABBIT_A_BODY} fill={W} />
-      <path d={RABBIT_A_EAR_BACK} fill={W} />
-      <path d={RABBIT_A_EAR_FRONT} fill={W} />
-      <circle cx={RABBIT_A_TAIL_CX} cy={RABBIT_A_TAIL_CY} r="7" fill={W} />
-    </g>
-    {/* 림 라이트 — 등 위쪽 한 줄, 흰 stroke 옅게 */}
-    <path
-      d="M 80 84 C 64 88 50 100 46 116"
-      fill="none"
-      stroke="#FFFFFF"
-      strokeOpacity="0.75"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-    <path
-      d="M 90 60 C 86 40 92 24 100 26"
-      fill="none"
-      stroke="#FFFFFF"
-      strokeOpacity="0.6"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-/* #2 — 앉은 토끼 + Triple-stop + Drop shadow (떠 있는 느낌) */
-const Icon2 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradTripleStop id="g2-bg" />
-      <FilterDropShadow id="g2-shadow" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g2-bg)" />
-    {/* 발치 옅은 그림자 (토끼 밑) */}
-    <ellipse cx="98" cy="156" rx="48" ry="5" fill="#000000" fillOpacity="0.25" />
-    <g filter="url(#g2-shadow)">
-      <path d={RABBIT_A_BODY} fill={W} />
-      <path d={RABBIT_A_EAR_BACK} fill={W} />
-      <path d={RABBIT_A_EAR_FRONT} fill={W} />
-      <circle cx={RABBIT_A_TAIL_CX} cy={RABBIT_A_TAIL_CY} r="7" fill={W} />
-    </g>
-  </svg>
-);
-
-/* #3 — 앉은 토끼 + Aurora + 토끼 자체 그라데이션 (subtle) */
-const Icon3 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradAurora id="g3-bg" />
-      <GradRabbitSubtle id="g3-rabbit" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g3-bg)" />
-    <g>
-      <path d={RABBIT_A_BODY} fill="url(#g3-rabbit)" />
-      <path d={RABBIT_A_EAR_BACK} fill="url(#g3-rabbit)" />
-      <path d={RABBIT_A_EAR_FRONT} fill="url(#g3-rabbit)" />
-      <circle cx={RABBIT_A_TAIL_CX} cy={RABBIT_A_TAIL_CY} r="7" fill="url(#g3-rabbit)" />
-    </g>
-  </svg>
-);
-
-/* #4 — 앉은 토끼 + Warm accent + dual silhouette (뒤에 흐릿한 토끼) */
-const Icon4 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradWarmAccent id="g4-bg" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g4-bg)" />
-    {/* 뒤에 흐릿한 토끼 (depth) — 살짝 어긋난 위치, 낮은 opacity */}
-    <g transform="translate(-6 -4) scale(1.04 1.04) translate(-4 -4)" opacity="0.22">
-      <path d={RABBIT_A_BODY} fill={W} />
-      <path d={RABBIT_A_EAR_BACK} fill={W} />
-      <path d={RABBIT_A_EAR_FRONT} fill={W} />
-    </g>
-    <g>
-      <path d={RABBIT_A_BODY} fill={W} />
-      <path d={RABBIT_A_EAR_BACK} fill={W} />
-      <path d={RABBIT_A_EAR_FRONT} fill={W} />
-      <circle cx={RABBIT_A_TAIL_CX} cy={RABBIT_A_TAIL_CY} r="7" fill={W} />
-    </g>
-  </svg>
-);
-
-/* ─────────── 자세 B: 측면 머리 + 두 귀 × 3 ─────────── */
-
-/* #5 — 머리 클로즈업 + Soft glow + 림 라이트 */
-const Icon5 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradSoftGlow id="g5-bg" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g5-bg)" />
-    <g>
-      <path d={RABBIT_B_HEAD} fill={W} />
-      <path d={RABBIT_B_EAR_BACK} fill={W} />
-      <path d={RABBIT_B_EAR_FRONT} fill={W} />
-    </g>
-    {/* 림 라이트 — 머리 위쪽 곡선 따라 흰 stroke */}
-    <path
-      d="M 56 124 C 50 110 56 92 74 84 C 92 76 116 78 132 88"
-      fill="none"
-      stroke="#FFFFFF"
-      strokeOpacity="0.7"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-/* #6 — 머리 클로즈업 + Aurora + drop shadow */
-const Icon6 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradAurora id="g6-bg" />
-      <FilterDropShadow id="g6-shadow" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g6-bg)" />
-    <ellipse cx="96" cy="142" rx="44" ry="4" fill="#000000" fillOpacity="0.22" />
-    <g filter="url(#g6-shadow)">
-      <path d={RABBIT_B_HEAD} fill={W} />
-      <path d={RABBIT_B_EAR_BACK} fill={W} />
-      <path d={RABBIT_B_EAR_FRONT} fill={W} />
-    </g>
-  </svg>
-);
-
-/* #7 — 머리 클로즈업 + Triple-stop + 토끼 자체 그라데이션 */
-const Icon7 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradTripleStop id="g7-bg" />
-      <GradRabbitSubtle id="g7-rabbit" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g7-bg)" />
-    <g>
-      <path d={RABBIT_B_HEAD} fill="url(#g7-rabbit)" />
-      <path d={RABBIT_B_EAR_BACK} fill="url(#g7-rabbit)" />
-      <path d={RABBIT_B_EAR_FRONT} fill="url(#g7-rabbit)" />
-    </g>
-  </svg>
-);
-
-/* ─────────── 자세 C: 측면 점프 × 3 ─────────── */
-
-/* #8 — 점프 + Aurora + 림 라이트 */
-const Icon8 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradAurora id="g8-bg" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g8-bg)" />
-    <g>
-      <path d={RABBIT_C_BODY} fill={W} />
-      <path d={RABBIT_C_EAR_BACK} fill={W} />
-      <path d={RABBIT_C_EAR_FRONT} fill={W} />
-    </g>
-    {/* 점프 활 위쪽 림 라이트 */}
-    <path
-      d="M 56 98 C 70 80 92 70 116 74"
-      fill="none"
-      stroke="#FFFFFF"
-      strokeOpacity="0.75"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-/* #9 — 점프 + Soft glow + drop shadow (날아오르는 느낌) */
-const Icon9 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradSoftGlow id="g9-bg" />
-      <FilterDropShadow id="g9-shadow" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g9-bg)" />
-    {/* 그림자 — 토끼보다 한참 아래 (공중에 떠 있는 느낌) */}
-    <ellipse cx="96" cy="166" rx="50" ry="4" fill="#000000" fillOpacity="0.28" />
-    <g filter="url(#g9-shadow)">
-      <path d={RABBIT_C_BODY} fill={W} />
-      <path d={RABBIT_C_EAR_BACK} fill={W} />
-      <path d={RABBIT_C_EAR_FRONT} fill={W} />
-    </g>
-  </svg>
-);
-
-/* #10 — 점프 + Warm accent + 토끼 자체 그라데이션 */
-const Icon10 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradWarmAccent id="g10-bg" />
-      <GradRabbitSubtle id="g10-rabbit" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g10-bg)" />
-    <g>
-      <path d={RABBIT_C_BODY} fill="url(#g10-rabbit)" />
-      <path d={RABBIT_C_EAR_BACK} fill="url(#g10-rabbit)" />
-      <path d={RABBIT_C_EAR_FRONT} fill="url(#g10-rabbit)" />
-    </g>
-  </svg>
-);
-
-/* ─────────── 자세 D: 측면 일어선 풀바디 × 3 ─────────── */
-
-/* #11 — 일어선 + Soft single + 림 라이트 */
-const Icon11 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradSoftSingle id="g11-bg" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g11-bg)" />
-    <g>
-      <path d={RABBIT_D_BODY} fill={W} />
-      <path d={RABBIT_D_FOOT} fill={W} />
-      <path d={RABBIT_D_EAR_BACK} fill={W} />
-      <path d={RABBIT_D_EAR_FRONT} fill={W} />
-    </g>
-    {/* 림 라이트 — 측면 한 줄 */}
-    <path
-      d="M 82 92 C 78 84 78 76 84 70 C 88 60 96 56 102 58"
-      fill="none"
-      stroke="#FFFFFF"
-      strokeOpacity="0.68"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-/* #12 — 일어선 + Aurora + drop shadow */
-const Icon12 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradAurora id="g12-bg" />
-      <FilterDropShadow id="g12-shadow" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g12-bg)" />
-    <ellipse cx="93" cy="162" rx="28" ry="4" fill="#000000" fillOpacity="0.25" />
-    <g filter="url(#g12-shadow)">
-      <path d={RABBIT_D_BODY} fill={W} />
-      <path d={RABBIT_D_FOOT} fill={W} />
-      <path d={RABBIT_D_EAR_BACK} fill={W} />
-      <path d={RABBIT_D_EAR_FRONT} fill={W} />
-    </g>
-  </svg>
-);
-
-/* #13 — 일어선 + Triple-stop + dual silhouette */
-const Icon13 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradTripleStop id="g13-bg" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g13-bg)" />
-    {/* 흐릿한 뒤 실루엣 */}
-    <g transform="translate(8 4)" opacity="0.2">
-      <path d={RABBIT_D_BODY} fill={W} />
-      <path d={RABBIT_D_EAR_BACK} fill={W} />
-      <path d={RABBIT_D_EAR_FRONT} fill={W} />
-    </g>
-    <g>
-      <path d={RABBIT_D_BODY} fill={W} />
-      <path d={RABBIT_D_FOOT} fill={W} />
-      <path d={RABBIT_D_EAR_BACK} fill={W} />
-      <path d={RABBIT_D_EAR_FRONT} fill={W} />
-    </g>
-  </svg>
-);
-
-/* ─────────── 자세 E: 추상 (귀+머리) × 3 ─────────── */
-
-/* #14 — 추상 + Soft glow + 림 라이트 */
-const Icon14 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradSoftGlow id="g14-bg" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g14-bg)" />
-    <g>
-      <path d={RABBIT_E_HEAD} fill={W} />
-      <path d={RABBIT_E_EAR_BACK} fill={W} />
-      <path d={RABBIT_E_EAR_FRONT} fill={W} />
-    </g>
-    {/* 림 라이트 — 머리 윗부분 호 */}
-    <path
-      d="M 60 116 C 56 96 70 78 96 76 C 122 76 138 92 138 114"
-      fill="none"
-      stroke="#FFFFFF"
-      strokeOpacity="0.72"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-/* #15 — 추상 + Warm accent + drop shadow */
-const Icon15 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradWarmAccent id="g15-bg" />
-      <FilterDropShadow id="g15-shadow" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g15-bg)" />
-    <ellipse cx="98" cy="160" rx="48" ry="5" fill="#000000" fillOpacity="0.22" />
-    <g filter="url(#g15-shadow)">
-      <path d={RABBIT_E_HEAD} fill={W} />
-      <path d={RABBIT_E_EAR_BACK} fill={W} />
-      <path d={RABBIT_E_EAR_FRONT} fill={W} />
-    </g>
-  </svg>
-);
-
-/* #16 — 추상 + Soft single + 토끼 자체 그라데이션 */
-const Icon16 = (
-  <svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <GradSoftSingle id="g16-bg" />
-      <GradRabbitSubtle id="g16-rabbit" />
-    </defs>
-    <rect width="192" height="192" fill="url(#g16-bg)" />
-    <g>
-      <path d={RABBIT_E_HEAD} fill="url(#g16-rabbit)" />
-      <path d={RABBIT_E_EAR_BACK} fill="url(#g16-rabbit)" />
-      <path d={RABBIT_E_EAR_FRONT} fill="url(#g16-rabbit)" />
-    </g>
-  </svg>
-);
-
-const ICONS: IconDef[] = [
-  { id: 1,  pose: 'A. 측면 앉은 토끼',     detail: '림 라이트',                gradient: 'Soft glow',     svg: Icon1 },
-  { id: 2,  pose: 'A. 측면 앉은 토끼',     detail: 'Drop shadow (부유)',       gradient: 'Triple-stop',   svg: Icon2 },
-  { id: 3,  pose: 'A. 측면 앉은 토끼',     detail: '토끼 자체 그라데이션',     gradient: 'Aurora',        svg: Icon3 },
-  { id: 4,  pose: 'A. 측면 앉은 토끼',     detail: 'Dual silhouette (depth)',  gradient: 'Warm accent',   svg: Icon4 },
-  { id: 5,  pose: 'B. 측면 머리 + 두 귀', detail: '림 라이트',                gradient: 'Soft glow',     svg: Icon5 },
-  { id: 6,  pose: 'B. 측면 머리 + 두 귀', detail: 'Drop shadow',              gradient: 'Aurora',        svg: Icon6 },
-  { id: 7,  pose: 'B. 측면 머리 + 두 귀', detail: '토끼 자체 그라데이션',     gradient: 'Triple-stop',   svg: Icon7 },
-  { id: 8,  pose: 'C. 측면 점프',         detail: '림 라이트',                gradient: 'Aurora',        svg: Icon8 },
-  { id: 9,  pose: 'C. 측면 점프',         detail: 'Drop shadow (공중)',       gradient: 'Soft glow',     svg: Icon9 },
-  { id: 10, pose: 'C. 측면 점프',         detail: '토끼 자체 그라데이션',     gradient: 'Warm accent',   svg: Icon10 },
-  { id: 11, pose: 'D. 측면 일어선 풀바디', detail: '림 라이트',               gradient: 'Soft single',   svg: Icon11 },
-  { id: 12, pose: 'D. 측면 일어선 풀바디', detail: 'Drop shadow',             gradient: 'Aurora',        svg: Icon12 },
-  { id: 13, pose: 'D. 측면 일어선 풀바디', detail: 'Dual silhouette',         gradient: 'Triple-stop',   svg: Icon13 },
-  { id: 14, pose: 'E. 추상 (귀+머리)',    detail: '림 라이트',                gradient: 'Soft glow',     svg: Icon14 },
-  { id: 15, pose: 'E. 추상 (귀+머리)',    detail: 'Drop shadow',              gradient: 'Warm accent',   svg: Icon15 },
-  { id: 16, pose: 'E. 추상 (귀+머리)',    detail: '토끼 자체 그라데이션',     gradient: 'Soft single',   svg: Icon16 },
-];
-
-const POSE_COLOR: Record<Pose, string> = {
-  'A. 측면 앉은 토끼':     'bg-rose-100 text-rose-800',
-  'B. 측면 머리 + 두 귀':  'bg-violet-100 text-violet-800',
-  'C. 측면 점프':           'bg-amber-100 text-amber-800',
-  'D. 측면 일어선 풀바디': 'bg-emerald-100 text-emerald-800',
-  'E. 추상 (귀+머리)':     'bg-slate-100 text-slate-700',
-};
-
-const POSE_ORDER: Pose[] = [
-  'A. 측면 앉은 토끼',
-  'B. 측면 머리 + 두 귀',
-  'C. 측면 점프',
-  'D. 측면 일어선 풀바디',
-  'E. 추상 (귀+머리)',
-];
+function IconFrame({
+  id,
+  gradientNode,
+  gradientId,
+  children,
+}: {
+  id: number;
+  gradientNode: ReactNode;
+  gradientId: string;
+  children: ReactNode;
+}) {
+  return (
+    <svg
+      viewBox="0 0 192 192"
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-full h-full block"
+      role="img"
+      aria-label={`라인아트 토끼 머리 아이콘 #${id}`}
+    >
+      <defs>{gradientNode}</defs>
+      <rect width="192" height="192" fill={`url(#${gradientId})`} />
+      {children}
+    </svg>
+  );
+}
 
 /* ──────────────────────────────────────────────────────────────────────────
- *  더미 홈 화면 mock-up — 우리 토끼 옆에 다른 앱 (회색)
+ *  공통 외곽선 helper
+ *
+ *  Front Classic (정면 클래식) — 모든 정면 시안의 base.
+ *
+ *  좌표 설계:
+ *   - 왼귀 끝:    (74, 38)   — 살짝 안쪽으로 기울어진 끝
+ *   - 왼귀 베이스 외측: (62, 92)  → 얼굴 왼쪽으로 흐름
+ *   - 얼굴 왼:    (46, 116)
+ *   - 턱 아래:    (96, 158)
+ *   - 얼굴 오른:  (146, 116)
+ *   - 오른귀 베이스 외측: (130, 92)
+ *   - 오른귀 끝:  (118, 38)
+ *
+ *  귀 안쪽 곡선 (별도 path 2개 — 자기교차 방지):
+ *   - 왼귀 안쪽:  끝(78,40) → 베이스 안(86,90)
+ *   - 오른귀 안쪽: 끝(114,40) → 베이스 안(106,90)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+function FrontClassic({ sw }: { sw: number }) {
+  return (
+    <>
+      {/* 외곽선 — 한 줄 연속 path */}
+      <path
+        d="M 74 38
+           C 66 64, 60 84, 62 92
+           C 50 100, 42 110, 46 122
+           C 50 144, 70 158, 96 158
+           C 122 158, 142 144, 146 122
+           C 150 110, 142 100, 130 92
+           C 132 84, 126 64, 118 38
+           C 116 32, 110 32, 108 40
+           C 104 60, 104 80, 110 92
+           C 100 88, 92 88, 82 92
+           C 88 80, 88 60, 84 40
+           C 82 32, 76 32, 74 38 Z"
+        fill="none"
+        stroke={W}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  );
+}
+
+/* 길쭉한 얼굴 + 곧은 귀 — 정면 변형용 */
+function FrontElongated({ sw }: { sw: number }) {
+  return (
+    <path
+      d="M 76 36
+         C 70 60, 66 82, 70 92
+         C 58 100, 52 114, 56 128
+         C 60 148, 76 158, 96 158
+         C 116 158, 132 148, 136 128
+         C 140 114, 134 100, 122 92
+         C 126 82, 122 60, 116 36
+         C 114 30, 109 30, 107 38
+         C 104 58, 104 80, 110 92
+         C 100 88, 92 88, 82 92
+         C 88 80, 88 58, 85 38
+         C 83 30, 78 30, 76 36 Z"
+      fill="none"
+      stroke={W}
+      strokeWidth={sw}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
+}
+
+/* 측면 (왼쪽이 코, 오른쪽이 뒤통수) — 길쭉한 얼굴 + 한쪽 귀가 뒤로 살짝 */
+function SideProfile({ sw }: { sw: number }) {
+  return (
+    <>
+      {/* 외곽: 앞 귀(왼쪽 곧은) → 코(아래왼) → 턱 → 뒤통수 → 뒤귀 베이스 */}
+      <path
+        d="M 70 36
+           C 64 60, 64 82, 72 92
+           C 56 96, 42 108, 40 124
+           C 40 144, 56 156, 76 156
+           C 110 156, 144 148, 152 130
+           C 158 114, 148 96, 130 90
+           C 122 84, 116 70, 110 50
+           C 106 38, 100 38, 100 52
+           C 100 72, 104 88, 112 94
+           C 102 92, 92 92, 82 92
+           C 90 82, 88 60, 82 38
+           C 80 30, 74 30, 70 36 Z"
+        fill="none"
+        stroke={W}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  );
+}
+
+/* 3/4 뷰 — 살짝 오른쪽으로 돌아본 자세 (양 귀 다 보이되 비대칭) */
+function ThreeQuarter({ sw }: { sw: number }) {
+  return (
+    <path
+      d="M 70 44
+         C 64 64, 64 82, 72 90
+         C 60 96, 50 110, 52 124
+         C 54 146, 72 158, 100 158
+         C 130 158, 148 142, 146 122
+         C 144 108, 132 96, 120 92
+         C 124 78, 124 58, 120 38
+         C 117 32, 112 32, 110 40
+         C 106 58, 106 78, 112 92
+         C 102 90, 92 90, 82 92
+         C 88 80, 86 60, 82 44
+         C 80 38, 74 38, 70 44 Z"
+      fill="none"
+      stroke={W}
+      strokeWidth={sw}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
+}
+
+/* 한쪽 귀 접힘 — 왼귀 곧음, 오른귀 베이스에서 옆으로 꺾여 끝이 떨어짐 */
+function OneEarFolded({ sw }: { sw: number }) {
+  return (
+    <>
+      {/* 외곽: 왼귀 끝 → 왼귀 외측 → 얼굴 왼 → 턱 → 얼굴 오른 → 오른귀 베이스 →
+              꺾여서 옆으로 → 접힌 귀 끝 → 다시 베이스 안쪽으로 → 왼귀 안쪽 → 왼귀 끝 닫음 */}
+      <path
+        d="M 74 38
+           C 66 64, 60 84, 62 92
+           C 50 100, 42 110, 46 122
+           C 50 144, 70 158, 96 158
+           C 122 158, 142 144, 146 122
+           C 150 110, 142 100, 130 92
+           C 130 82, 134 74, 144 70
+           C 156 66, 162 78, 156 88
+           C 148 96, 134 96, 126 94
+           C 120 92, 114 90, 110 92
+           C 100 88, 92 88, 82 92
+           C 88 80, 88 60, 84 40
+           C 82 32, 76 32, 74 38 Z"
+        fill="none"
+        stroke={W}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  );
+}
+
+/* Geometric pure — 원(얼굴) + 타원 두 개(귀) */
+function Geometric({ sw }: { sw: number }) {
+  return (
+    <>
+      <ellipse cx="74" cy="62" rx="10" ry="28" fill="none" stroke={W} strokeWidth={sw} strokeLinecap="round" />
+      <ellipse cx="118" cy="62" rx="10" ry="28" fill="none" stroke={W} strokeWidth={sw} strokeLinecap="round" />
+      <circle cx="96" cy="118" r="40" fill="none" stroke={W} strokeWidth={sw} />
+    </>
+  );
+}
+
+/* Ears only — 두 귀가 V자처럼 안쪽으로 모이되 끝점은 화면 중앙 하단에 약간 떨어짐 */
+function EarsOnly({ sw }: { sw: number }) {
+  return (
+    <>
+      <path
+        d="M 60 44
+           C 58 70, 70 104, 88 124
+           C 92 128, 96 126, 94 120
+           C 88 96, 78 64, 72 42
+           C 70 36, 62 36, 60 44 Z"
+        fill="none"
+        stroke={W}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M 132 44
+           C 134 70, 122 104, 104 124
+           C 100 128, 96 126, 98 120
+           C 104 96, 114 64, 120 42
+           C 122 36, 130 36, 132 44 Z"
+        fill="none"
+        stroke={W}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  );
+}
+
+/* Continuous line — 귀와 얼굴이 끊김 없이 한 path. 귀 안쪽 곡선이 얼굴 윤곽이 됨. */
+function ContinuousLine({ sw }: { sw: number }) {
+  return (
+    <path
+      d="M 84 40
+         C 78 64, 78 84, 86 94
+         C 70 98, 52 112, 52 130
+         C 52 150, 70 160, 96 160
+         C 122 160, 140 150, 140 130
+         C 140 112, 122 98, 106 94
+         C 114 84, 114 64, 108 40
+         C 105 32, 100 32, 96 42
+         C 92 56, 92 78, 96 94
+         C 92 78, 92 56, 88 42
+         C 86 32, 87 32, 84 40 Z"
+      fill="none"
+      stroke={W}
+      strokeWidth={sw}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
+}
+
+/* Long ears drama — 길쭉한 귀(얼굴 높이의 1.4배), 작은 얼굴 */
+function LongEars({ sw }: { sw: number }) {
+  return (
+    <path
+      d="M 78 30
+         C 70 54, 68 90, 76 106
+         C 66 110, 60 120, 62 132
+         C 64 152, 80 162, 96 162
+         C 112 162, 128 152, 130 132
+         C 132 120, 126 110, 116 106
+         C 124 90, 122 54, 114 30
+         C 112 24, 107 24, 106 32
+         C 104 56, 104 88, 108 106
+         C 100 104, 92 104, 84 106
+         C 88 88, 88 56, 86 32
+         C 85 24, 80 24, 78 30 Z"
+      fill="none"
+      stroke={W}
+      strokeWidth={sw}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  12개 시안
+ *
+ *  Tier S 클래식 (#1~#4)
+ *   #1 정면 클래식                stroke 2.5  눈 없음
+ *   #2 정면 클래식 + 빨간 눈 2개  stroke 2.5  눈 있음
+ *   #3 측면 우아한 옆모습          stroke 2.5  눈 없음
+ *   #4 측면 + 빨간 눈 1개          stroke 2.5  눈 있음
+ *
+ *  Tier A 변형 (#5~#8)
+ *   #5 정면 굵은 stroke           stroke 3.5  눈 없음
+ *   #6 정면 굵은 + 빨간 눈 2개    stroke 3.5  눈 있음
+ *   #7 3/4 뷰 + 빨간 눈 1개       stroke 2.5  눈 있음
+ *   #8 한쪽 귀 접힘 (curious)      stroke 2.5  눈 없음
+ *
+ *  Tier B 추상 (#9~#12)
+ *   #9 Geometric (원+타원)         stroke 2.5  빨간 눈
+ *   #10 Ears Only (V자)            stroke 2.5  눈 없음
+ *   #11 Continuous Line            stroke 2.5  눈 없음
+ *   #12 Long Ears Drama            stroke 2.5  빨간 눈
+ * ────────────────────────────────────────────────────────────────────────── */
+
+const Icon1 = (
+  <IconFrame id={1} gradientId="g1" gradientNode={<GradRadialB id="g1" />}>
+    <FrontClassic sw={2.5} />
+  </IconFrame>
+);
+
+const Icon2 = (
+  <IconFrame id={2} gradientId="g2" gradientNode={<GradLinearA id="g2" />}>
+    <FrontClassic sw={2.5} />
+    <circle cx="82" cy="122" r="3.5" fill={EYE} />
+    <circle cx="110" cy="122" r="3.5" fill={EYE} />
+  </IconFrame>
+);
+
+const Icon3 = (
+  <IconFrame id={3} gradientId="g3" gradientNode={<GradMultiC id="g3" />}>
+    <SideProfile sw={2.5} />
+  </IconFrame>
+);
+
+const Icon4 = (
+  <IconFrame id={4} gradientId="g4" gradientNode={<GradLinearB id="g4" />}>
+    <SideProfile sw={2.5} />
+    {/* 측면 한쪽 눈 — 코(왼쪽)을 향한 위치 */}
+    <circle cx="72" cy="118" r="3.5" fill={EYE} />
+  </IconFrame>
+);
+
+const Icon5 = (
+  <IconFrame id={5} gradientId="g5" gradientNode={<GradRadialA id="g5" />}>
+    <FrontClassic sw={3.5} />
+  </IconFrame>
+);
+
+const Icon6 = (
+  <IconFrame id={6} gradientId="g6" gradientNode={<GradMultiA id="g6" />}>
+    <FrontClassic sw={3.5} />
+    <circle cx="82" cy="122" r="3.5" fill={EYE} />
+    <circle cx="110" cy="122" r="3.5" fill={EYE} />
+  </IconFrame>
+);
+
+const Icon7 = (
+  <IconFrame id={7} gradientId="g7" gradientNode={<GradLinearD id="g7" />}>
+    <ThreeQuarter sw={2.5} />
+    {/* 돌아본 쪽 눈 강조 (오른쪽) */}
+    <circle cx="118" cy="118" r="3.5" fill={EYE} />
+  </IconFrame>
+);
+
+const Icon8 = (
+  <IconFrame id={8} gradientId="g8" gradientNode={<GradMultiB id="g8" />}>
+    <OneEarFolded sw={2.5} />
+  </IconFrame>
+);
+
+const Icon9 = (
+  <IconFrame id={9} gradientId="g9" gradientNode={<GradRadialD id="g9" />}>
+    <Geometric sw={2.5} />
+    <circle cx="86" cy="118" r="3.5" fill={EYE} />
+    <circle cx="106" cy="118" r="3.5" fill={EYE} />
+  </IconFrame>
+);
+
+const Icon10 = (
+  <IconFrame id={10} gradientId="g10" gradientNode={<GradLinearE id="g10" />}>
+    <EarsOnly sw={2.5} />
+  </IconFrame>
+);
+
+const Icon11 = (
+  <IconFrame id={11} gradientId="g11" gradientNode={<GradLinearC id="g11" />}>
+    <ContinuousLine sw={2.5} />
+  </IconFrame>
+);
+
+const Icon12 = (
+  <IconFrame id={12} gradientId="g12" gradientNode={<GradRadialC id="g12" />}>
+    <LongEars sw={2.5} />
+    <circle cx="86" cy="130" r="3.5" fill={EYE} />
+    <circle cx="106" cy="130" r="3.5" fill={EYE} />
+  </IconFrame>
+);
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  메타데이터
+ * ────────────────────────────────────────────────────────────────────────── */
+
+const ICONS: IconDef[] = [
+  // Tier S — 클래식
+  { id: 1,  tier: 'Tier S · 클래식', label: '정면 클래식',                     signature: '양쪽 곧은 귀 · 둥근 얼굴',         hasEye: false, strokeWidth: 2.5, gradient: 'radial · deep pink',       svg: Icon1  },
+  { id: 2,  tier: 'Tier S · 클래식', label: '정면 + 빨간 눈 2개',              signature: '양쪽 곧은 귀 + 빨간 눈',           hasEye: true,  strokeWidth: 2.5, gradient: 'linear · top-bottom',      svg: Icon2  },
+  { id: 3,  tier: 'Tier S · 클래식', label: '측면 우아한 옆모습',              signature: '길쭉 얼굴 · 앞뒤 귀 분리',         hasEye: false, strokeWidth: 2.5, gradient: 'radial · top-glow',        svg: Icon3  },
+  { id: 4,  tier: 'Tier S · 클래식', label: '측면 + 빨간 눈 1개',              signature: '측면 + 코쪽 빨간 눈',              hasEye: true,  strokeWidth: 2.5, gradient: 'linear · diagonal',        svg: Icon4  },
+
+  // Tier A — 변형
+  { id: 5,  tier: 'Tier A · 변형',   label: '정면 굵은 stroke',                signature: '정면 클래식 + 굵은 외곽',          hasEye: false, strokeWidth: 3.5, gradient: 'radial · upper bloom',     svg: Icon5  },
+  { id: 6,  tier: 'Tier A · 변형',   label: '정면 굵은 + 빨간 눈 2개',         signature: '굵은 외곽 + 또렷한 빨간 눈',       hasEye: true,  strokeWidth: 3.5, gradient: 'multi · 3-stop linear',    svg: Icon6  },
+  { id: 7,  tier: 'Tier A · 변형',   label: '3/4 뷰 + 빨간 눈 1개',            signature: '살짝 돌아본 자세 · 비대칭 귀',     hasEye: true,  strokeWidth: 2.5, gradient: 'linear · reverse',         svg: Icon7  },
+  { id: 8,  tier: 'Tier A · 변형',   label: '한쪽 귀 접힘 (curious)',          signature: '오른귀가 옆으로 접힘',             hasEye: false, strokeWidth: 2.5, gradient: 'multi · diagonal',         svg: Icon8  },
+
+  // Tier B — 추상
+  { id: 9,  tier: 'Tier B · 추상',   label: 'Geometric · 원+타원',             signature: '원(얼굴) + 타원 2개(귀)',          hasEye: true,  strokeWidth: 2.5, gradient: 'radial · upper right',     svg: Icon9  },
+  { id: 10, tier: 'Tier B · 추상',   label: 'Ears Only · V자',                 signature: '얼굴 생략 · 두 귀만',              hasEye: false, strokeWidth: 2.5, gradient: 'linear · soft pink',       svg: Icon10 },
+  { id: 11, tier: 'Tier B · 추상',   label: 'Continuous Line',                 signature: '귀→얼굴 한 줄 연속',               hasEye: false, strokeWidth: 2.5, gradient: 'linear · up-right',        svg: Icon11 },
+  { id: 12, tier: 'Tier B · 추상',   label: 'Long Ears Drama',                 signature: '길쭉한 귀 + 작은 얼굴 + 눈',       hasEye: true,  strokeWidth: 2.5, gradient: 'radial · lower-left',      svg: Icon12 },
+];
+
+const TIER_COLOR: Record<Tier, string> = {
+  'Tier S · 클래식': 'bg-rose-100 text-rose-800',
+  'Tier A · 변형':   'bg-violet-100 text-violet-800',
+  'Tier B · 추상':   'bg-slate-100 text-slate-700',
+};
+
+const TIER_ORDER: Tier[] = ['Tier S · 클래식', 'Tier A · 변형', 'Tier B · 추상'];
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  더미 홈 화면 mock-up
  * ────────────────────────────────────────────────────────────────────────── */
 
 function HomeMock({ icon }: { icon: ReactNode }) {
@@ -645,14 +570,12 @@ function HomeMock({ icon }: { icon: ReactNode }) {
     <div className="rounded-2xl bg-gradient-to-b from-sky-900 to-indigo-950 p-3">
       <p className="text-[10px] text-white/60 mb-2 text-center">폰 홈 화면 미리보기</p>
       <div className="grid grid-cols-4 gap-3">
-        {/* 우리 아이콘 — 첫 자리 */}
         <div className="flex flex-col items-center gap-1">
           <div className="w-full aspect-square rounded-[28%] overflow-hidden shadow-md">
             {icon}
           </div>
           <span className="text-[9px] text-white/90 font-semibold">홀덤나우</span>
         </div>
-        {/* 더미 회색 아이콘들 */}
         {dummy.map((name) => (
           <div key={name} className="flex flex-col items-center gap-1">
             <div className="w-full aspect-square rounded-[28%] bg-neutral-300/60" />
@@ -664,6 +587,10 @@ function HomeMock({ icon }: { icon: ReactNode }) {
   );
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ *  메인 페이지
+ * ────────────────────────────────────────────────────────────────────────── */
+
 export default function LauncherIconsPreviewPage() {
   const [selected, setSelected] = useState<IconDef | null>(null);
 
@@ -672,30 +599,26 @@ export default function LauncherIconsPreviewPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-10 bg-white border-b border-neutral-200">
         <div className="max-w-md mx-auto px-4 py-4">
-          <h1 className="text-lg font-bold tracking-tight">런처 아이콘 — 3차 정제</h1>
+          <h1 className="text-lg font-bold tracking-tight">런처 아이콘</h1>
           <p className="text-xs text-neutral-500 mt-1">
-            심플 × 토끼 실루엣 × 핑크 그라데이션 — 16개 (자세 5종 × 디테일 변형)
+            5차 / 라인아트 토끼 머리 (디자이너 자존심 걸고)
           </p>
         </div>
       </header>
 
-      {/* 자세별 그룹 */}
+      {/* Tier별 그룹 */}
       <section className="max-w-md mx-auto px-3 py-4">
-        {POSE_ORDER.map((pose) => {
-          const items = ICONS.filter((i) => i.pose === pose);
+        {TIER_ORDER.map((tier) => {
+          const items = ICONS.filter((i) => i.tier === tier);
           return (
-            <div key={pose} className="mb-7">
-              {/* 섹션 라벨 */}
+            <div key={tier} className="mb-7">
               <div className="flex items-center gap-2 mb-3 px-1">
-                <span
-                  className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${POSE_COLOR[pose]}`}
-                >
-                  {pose}
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${TIER_COLOR[tier]}`}>
+                  {tier}
                 </span>
                 <span className="text-[10px] text-neutral-400">{items.length}개</span>
               </div>
 
-              {/* 2열 그리드 */}
               <div className="grid grid-cols-2 gap-3">
                 {items.map((icon) => (
                   <button
@@ -710,10 +633,15 @@ export default function LauncherIconsPreviewPage() {
                     <div className="mt-2 flex items-center gap-1.5">
                       <span className="text-[11px] font-bold text-neutral-900">#{icon.id}</span>
                       <span className="text-[10px] text-neutral-400">·</span>
-                      <span className="text-[10px] text-neutral-500">{icon.gradient}</span>
+                      <span className="text-[10px] text-neutral-500">
+                        {icon.hasEye ? '눈 있음' : '눈 없음'} · {icon.strokeWidth}px
+                      </span>
                     </div>
-                    <p className="mt-1 text-[11px] leading-snug text-neutral-600 text-left">
-                      {icon.detail}
+                    <p className="mt-1 text-[11px] leading-snug text-neutral-700 text-left font-medium">
+                      {icon.label}
+                    </p>
+                    <p className="text-[10px] leading-snug text-neutral-400 text-left mt-0.5">
+                      {icon.signature}
                     </p>
                   </button>
                 ))}
@@ -727,7 +655,7 @@ export default function LauncherIconsPreviewPage() {
         </p>
       </section>
 
-      {/* 모달 — 큰 미리보기 + 마스킹 + 홈 화면 */}
+      {/* 모달 */}
       {selected && (
         <div
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto"
@@ -742,10 +670,8 @@ export default function LauncherIconsPreviewPage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold">#{selected.id}</span>
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${POSE_COLOR[selected.pose]}`}
-                >
-                  {selected.pose}
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${TIER_COLOR[selected.tier]}`}>
+                  {selected.tier}
                 </span>
               </div>
               <button
@@ -757,12 +683,10 @@ export default function LauncherIconsPreviewPage() {
               </button>
             </div>
 
-            {/* 큰 미리보기 */}
             <div className="w-full aspect-square rounded-3xl overflow-hidden border border-neutral-200">
               {selected.svg}
             </div>
 
-            {/* 마스킹 비교 */}
             <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="flex flex-col items-center gap-1">
                 <div className="w-full aspect-square rounded-[28%] overflow-hidden border border-neutral-200">
@@ -784,23 +708,35 @@ export default function LauncherIconsPreviewPage() {
               </div>
             </div>
 
-            {/* 홈 화면 mock-up */}
             <div className="mt-5">
               <HomeMock icon={selected.svg} />
             </div>
 
-            {/* 메타 정보 */}
             <div className="mt-4 space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-neutral-400 font-semibold w-16">자세</span>
-                <span className="text-[11px] text-neutral-700">{selected.pose}</span>
+                <span className="text-[10px] text-neutral-400 font-semibold w-16">Tier</span>
+                <span className="text-[11px] text-neutral-700">{selected.tier}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-neutral-400 font-semibold w-16">디테일</span>
-                <span className="text-[11px] text-neutral-700">{selected.detail}</span>
+                <span className="text-[10px] text-neutral-400 font-semibold w-16">라벨</span>
+                <span className="text-[11px] text-neutral-700">{selected.label}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-neutral-400 font-semibold w-16">그라데이션</span>
+                <span className="text-[10px] text-neutral-400 font-semibold w-16">시그너처</span>
+                <span className="text-[11px] text-neutral-700">{selected.signature}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-neutral-400 font-semibold w-16">눈</span>
+                <span className="text-[11px] text-neutral-700">
+                  {selected.hasEye ? '빨간 눈 (#E53E3E)' : '없음'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-neutral-400 font-semibold w-16">stroke</span>
+                <span className="text-[11px] text-neutral-700">{selected.strokeWidth}px (round cap/join)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-neutral-400 font-semibold w-16">배경</span>
                 <span className="text-[11px] text-neutral-700">{selected.gradient}</span>
               </div>
             </div>
