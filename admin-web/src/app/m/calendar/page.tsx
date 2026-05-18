@@ -2,12 +2,23 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { subscribeAllLiveSessions, type LiveSession, fmtTime, useLiveCountdown } from '@/lib/live';
 import { subscribeAllTournaments, type TournamentInstance } from '@/lib/tournaments';
 import Link from 'next/link';
 import { posterStyleFor } from '@/lib/templates';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
 import { bumpStoreMetric } from '@/lib/analytics';
+import { haversineMeters, type LatLng } from '@/lib/geo';
+
+/** 캘린더 "내 주변" 반경 (m). 위치 거부/미동의 시 전국 폴백. */
+const NEARBY_RADIUS_M = 20_000;
+
+interface StoreCoord {
+  lat?: number;
+  lng?: number;
+}
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -18,6 +29,40 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(today.getDate());
   type FilterId = 'all' | 'gtd-large' | 'buyin-low' | 'satellite';
   const [filter, setFilter] = useState<FilterId>('all');
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
+  const [storesById, setStoresById] = useState<Record<string, StoreCoord>>({});
+
+  // 사용자 위치 (watchPosition — 이동 중에도 갱신)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setLocationDenied(true);
+      return;
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setLocationDenied(true),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // 매장 좌표 일괄 fetch (1회) — 토너 거리 필터용
+  useEffect(() => {
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, 'stores'));
+        const map: Record<string, StoreCoord> = {};
+        snap.forEach((d) => {
+          const data = d.data() as { lat?: number; lng?: number };
+          map[d.id] = { lat: data.lat, lng: data.lng };
+        });
+        setStoresById(map);
+      } catch {
+        /* 거리 정보 없이 폴백 */
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeAllLiveSessions(
@@ -35,8 +80,18 @@ export default function CalendarPage() {
     return unsub;
   }, []);
 
-  const upcomingForDay = useMemo(() => {
+  // 위치 반경 필터 적용된 토너 (위치 거부 시 전체 폴백)
+  const nearbyTournaments = useMemo<TournamentInstance[]>(() => {
+    if (!userLocation) return tournaments;
     return tournaments.filter((t) => {
+      const coord = storesById[t.storeId];
+      if (typeof coord?.lat !== 'number' || typeof coord?.lng !== 'number') return true; // 좌표 없으면 통과(매장 좌표 누락 보호)
+      return haversineMeters(userLocation, { lat: coord.lat, lng: coord.lng }) <= NEARBY_RADIUS_M;
+    });
+  }, [tournaments, userLocation, storesById]);
+
+  const upcomingForDay = useMemo(() => {
+    return nearbyTournaments.filter((t) => {
       const d = t.startsAt.toDate();
       if (d.getDate() !== selectedDay || t.status !== 'scheduled') return false;
       if (filter === 'gtd-large' && t.guarantee < 1000000) return false;
@@ -44,7 +99,7 @@ export default function CalendarPage() {
       if (filter === 'satellite' && t.type !== 'satellite') return false;
       return true;
     });
-  }, [tournaments, selectedDay, filter]);
+  }, [nearbyTournaments, selectedDay, filter]);
 
   const days = useMemo(() => {
     const list = [] as { n: number; dow: string; isToday: boolean; isWeekend: boolean }[];
@@ -81,6 +136,26 @@ export default function CalendarPage() {
           </svg>
         </Link>
       </header>
+
+      {/* ── 위치 범위 안내 ── */}
+      <div
+        className="px-5 pt-3 pb-1 text-[11px] font-bold flex items-center gap-1.5"
+        style={{ color: 'var(--text-3)' }}
+      >
+        {userLocation ? (
+          <>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span style={{ color: 'var(--brand)' }}>내 주변 {NEARBY_RADIUS_M / 1000}km</span>
+            <span>· 거리 기준</span>
+          </>
+        ) : locationDenied ? (
+          <span>📍 위치 권한 거부 — 전국 토너 표시</span>
+        ) : (
+          <span>📍 위치 확인 중…</span>
+        )}
+      </div>
 
       {/* ── 필터 칩 ── */}
       <div className="px-4 py-3 flex gap-1.5 overflow-x-auto scrollbar-none">
