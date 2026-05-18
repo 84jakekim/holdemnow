@@ -123,6 +123,10 @@ export function useLiveCountdown(session: LiveSession | null | undefined): numbe
  * 전체 LIVE 세션 구독.
  * - 기본: running/paused/break (모바일/지도/홈 피드용 — 사장이 ▶ 시작 누른 뒤만 노출)
  * - includeReady=true: ready도 포함 (본사 모니터링 — 본사가 미리 등록한 대기 세션 제어용)
+ *
+ * 안전망: finishingAt 그레이스 만료된 세션을 클라이언트 측에서 즉시 가림.
+ * Cloud Function autoStopFinishedSessions가 1분 cron으로 DB도 정리하지만,
+ * 그 사이 60초 동안의 잔상까지 제거하기 위해 30초마다 재평가하여 onChange 재호출.
  */
 export function subscribeAllLiveSessions(
   onChange: (items: LiveSession[]) => void,
@@ -133,14 +137,27 @@ export function subscribeAllLiveSessions(
     ? ['ready', 'running', 'paused', 'break']
     : ['running', 'paused', 'break'];
   const q = query(liveSessionsCol(), where('status', 'in', statuses));
-  return onSnapshot(
+  let last: LiveSession[] = [];
+  const filterExpired = (items: LiveSession[]) =>
+    items.filter((s) => {
+      if (!s.finishingAt) return true;
+      const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
+      return endsMs > Date.now();
+    });
+  const emit = () => onChange(filterExpired(last));
+  const unsubFs = onSnapshot(
     q,
     (snap) => {
-      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LiveSession, 'id'>) }));
-      onChange(items);
+      last = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LiveSession, 'id'>) }));
+      emit();
     },
     (err) => onError(err as Error),
   );
+  const tick = setInterval(emit, 30_000);
+  return () => {
+    unsubFs();
+    clearInterval(tick);
+  };
 }
 
 /** 단일 LIVE 세션 실시간 구독 (풀스크린·TV용) */

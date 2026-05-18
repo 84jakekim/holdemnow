@@ -98,14 +98,9 @@ export default function LiveFeedListPage() {
     })();
   }, []);
 
-  // 30km 필터 + 거리 정렬 + 그레이스 만료된 세션 가림
+  // 30km 필터 + 거리 정렬 (그레이스 만료 세션은 subscribeAllLiveSessions에서 이미 제외됨)
   const filteredSessions = useMemo(() => {
-    // 그레이스 만료(<=0) 세션은 화면에서 제외 — DB 정리는 매장 사장 LivePanel이 담당.
-    const live = sessions.filter((s) => {
-      const grace = computeFinishingGraceSec(s);
-      return grace == null || grace > 0;
-    });
-    const enriched = live.map((s) => {
+    const enriched = sessions.map((s) => {
       const meta = storesById[s.storeId];
       const distance =
         userLocation && typeof meta?.lat === 'number' && typeof meta?.lng === 'number'
