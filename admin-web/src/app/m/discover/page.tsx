@@ -24,6 +24,24 @@ interface NearbyStore extends StoreSummary {
   _dist?: number;
 }
 
+/** "내 주변" 매장 필터링 반경 (미터). 지도 원 오버레이의 최대 반경과 동기화.
+ *  단일 source of truth — 시각적 원 / 시트 카운트 / 정렬 모두 이 값 기준. */
+const NEARBY_RADIUS_M = 10_000;
+
+/** 카카오 맵 줌 레벨(1=가장 확대, 14=가장 축소)에 맞춰 시각적으로 적절한 원 반경(m) 산출.
+ *  최대는 NEARBY_RADIUS_M(=매장 필터링 반경)이라 줌 아웃하면 정확히 검색 범위가 보임.
+ *  줌인 시엔 원이 화면 안에 들어오도록 작은 반경을 사용. */
+function radiusForZoomLevel(level: number): number {
+  if (level <= 2) return 250;
+  if (level === 3) return 500;
+  if (level === 4) return 1000;
+  if (level === 5) return 2000;
+  if (level === 6) return 3500;
+  if (level === 7) return 5000;
+  if (level === 8) return 7500;
+  return NEARBY_RADIUS_M;
+}
+
 export default function DiscoverPage() {
   const router = useRouter();
   const [stores, setStores] = useState<StoreSummary[]>([]);
@@ -81,8 +99,7 @@ export default function DiscoverPage() {
     return stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
   }, [stores]);
 
-  // 시트·상단 카운트용 — 10km 반경 + 거리 정렬. LIVE 매장은 거리 무관 항상 포함.
-  const NEARBY_RADIUS_M = 10_000;
+  // 시트·상단 카운트용 — NEARBY_RADIUS_M 반경 + 거리 정렬. LIVE 매장은 거리 무관 항상 포함.
   const nearbyStores = useMemo<NearbyStore[]>(() => {
     if (!userLocation) return storesWithCoords;
     return storesWithCoords
@@ -211,13 +228,23 @@ export default function DiscoverPage() {
           )}
         </button>
 
-        {/* 지도 에러 */}
+        {/* 지도 로드 실패 시 — 안내 + 시트 열기 유도 (지도 없이도 매장 탐색 가능) */}
         {mapError && (
-          <div
-            className="absolute top-20 left-3 right-3 z-30 p-3 text-xs rounded-xl"
-            style={{ background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E' }}
-          >
-            <b>지도 로드 실패:</b> {mapError}
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 px-8 text-center" style={{ background: 'var(--bg-sub)' }}>
+            <div className="text-4xl mb-3" aria-hidden="true">🗺️</div>
+            <div className="text-[15px] font-bold mb-2" style={{ color: 'var(--text-1)' }}>
+              지도가 일시적으로 표시되지 않습니다
+            </div>
+            <div className="text-[12px] leading-relaxed mb-5" style={{ color: 'var(--text-3)' }}>
+              매장 목록은 정상 사용 가능합니다.
+            </div>
+            <button
+              onClick={() => setSheetOpen(true)}
+              className="px-5 h-11 rounded-2xl text-[13px] font-extrabold text-white"
+              style={{ background: 'var(--brand)' }}
+            >
+              내 주변 매장 목록 보기
+            </button>
           </div>
         )}
 
@@ -425,15 +452,19 @@ function KakaoMap({
           ? new maps.LatLng(userLocation.lat, userLocation.lng)
           : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
         mapInstanceRef.current = new maps.Map(containerRef.current, { center, level: 4 });
-        clustererRef.current = new maps.MarkerClusterer({
-          map: mapInstanceRef.current,
-          averageCenter: true,
-          minLevel: 6,
-          gridSize: 80,
-          disableClickZoom: false,
-          calculator: [10, 30, 100, 300],
-          styles: clusterStyles(),
-        });
+        // MarkerClusterer는 카카오 SDK `libraries=clusterer` 옵션이 있을 때만 존재.
+        // 없으면 fallback — 모든 매장 마커를 그대로 표시 (클러스터링 X).
+        if (maps.MarkerClusterer) {
+          clustererRef.current = new maps.MarkerClusterer({
+            map: mapInstanceRef.current,
+            averageCenter: true,
+            minLevel: 6,
+            gridSize: 80,
+            disableClickZoom: false,
+            calculator: [10, 30, 100, 300],
+            styles: clusterStyles(),
+          });
+        }
         setMapReady(true);
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));
@@ -457,11 +488,13 @@ function KakaoMap({
         zIndex: 30,
       });
     }
+    const initialRadius = radiusForZoomLevel(mapInstanceRef.current.getLevel());
     if (radiusCircleRef.current) {
       radiusCircleRef.current.setPosition(pos);
+      radiusCircleRef.current.setRadius(initialRadius);
     } else {
       radiusCircleRef.current = new maps.Circle({
-        center: pos, radius: 250,
+        center: pos, radius: initialRadius,
         strokeWeight: 2, strokeColor: '#FF1F8F', strokeOpacity: 0.5, strokeStyle: 'solid',
         fillColor: '#FF1F8F', fillOpacity: 0.08,
       });
@@ -469,10 +502,29 @@ function KakaoMap({
     }
   }, [mapReady, userLocation, mapInstanceRef]);
 
+  // 줌 변경 시 원 반경을 줌 레벨에 맞춰 갱신 — 매장 검색 범위(최대 NEARBY_RADIUS_M)의
+  // 시각적 표현을 줌 인/아웃에 따라 자연스럽게 따라가게 함.
   useEffect(() => {
-    if (!mapInstanceRef.current || !clustererRef.current) return;
+    if (!mapReady || !mapInstanceRef.current) return;
     const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
     if (!maps) return;
+    const map = mapInstanceRef.current;
+    const onZoom = () => {
+      if (!radiusCircleRef.current) return;
+      radiusCircleRef.current.setRadius(radiusForZoomLevel(map.getLevel()));
+    };
+    maps.event.addListener(map, 'zoom_changed', onZoom);
+    return () => {
+      maps.event.removeListener(map, 'zoom_changed', onZoom);
+    };
+  }, [mapReady]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
+    if (!maps) return;
+    // clusterer가 없으면 직접 map에 마커 부착(fallback). 있으면 일반 마커는 clusterer 위탁.
+    const clusterer = clustererRef.current;
 
     const validStores = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
     const seenNormal = new Set<string>();
@@ -488,7 +540,11 @@ function KakaoMap({
       if (live > 0) {
         seenLive.add(s.id);
         const wasNormal = normalMarkersRef.current.get(s.id);
-        if (wasNormal) { clustererRef.current.removeMarker(wasNormal); normalMarkersRef.current.delete(s.id); }
+        if (wasNormal) {
+          if (clusterer) clusterer.removeMarker(wasNormal);
+          else wasNormal.setMap(null);
+          normalMarkersRef.current.delete(s.id);
+        }
         const existing = liveMarkersRef.current.get(s.id);
         if (existing) { existing.setPosition(pos); existing.setImage(image); }
         else {
@@ -503,18 +559,29 @@ function KakaoMap({
         const existing = normalMarkersRef.current.get(s.id);
         if (existing) { existing.setPosition(pos); existing.setImage(image); }
         else {
-          const marker = new maps.Marker({ position: pos, title: s.name, image, zIndex: isSelected ? 20 : 10 });
+          const marker = new maps.Marker({
+            position: pos,
+            // clusterer 있으면 그쪽에서 표시 관리. 없으면 직접 map 붙임.
+            map: clusterer ? undefined : mapInstanceRef.current,
+            title: s.name,
+            image,
+            zIndex: isSelected ? 20 : 10,
+          });
           maps.event.addListener(marker, 'click', () => onSelect(s.id));
           normalMarkersRef.current.set(s.id, marker);
-          newClusterMarkers.push(marker);
+          if (clusterer) newClusterMarkers.push(marker);
         }
       }
     }
 
-    if (newClusterMarkers.length > 0) clustererRef.current.addMarkers(newClusterMarkers);
+    if (clusterer && newClusterMarkers.length > 0) clusterer.addMarkers(newClusterMarkers);
 
     for (const [id, m] of normalMarkersRef.current) {
-      if (!seenNormal.has(id)) { clustererRef.current.removeMarker(m); normalMarkersRef.current.delete(id); }
+      if (!seenNormal.has(id)) {
+        if (clusterer) clusterer.removeMarker(m);
+        else m.setMap(null);
+        normalMarkersRef.current.delete(id);
+      }
     }
     for (const [id, m] of liveMarkersRef.current) {
       if (!seenLive.has(id)) { m.setMap(null); liveMarkersRef.current.delete(id); }
