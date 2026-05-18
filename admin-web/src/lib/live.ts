@@ -104,15 +104,20 @@ export function useLiveCountdown(session: LiveSession | null | undefined): numbe
   return sec;
 }
 
-/** 전체 진행 중 LIVE 세션 구독 (모바일 피드용) */
+/**
+ * 전체 LIVE 세션 구독.
+ * - 기본: running/paused/break (모바일/지도/홈 피드용 — 사장이 ▶ 시작 누른 뒤만 노출)
+ * - includeReady=true: ready도 포함 (본사 모니터링 — 본사가 미리 등록한 대기 세션 제어용)
+ */
 export function subscribeAllLiveSessions(
   onChange: (items: LiveSession[]) => void,
   onError: (e: Error) => void,
+  options?: { includeReady?: boolean },
 ) {
-  const q = query(
-    liveSessionsCol(),
-    where('status', 'in', ['running', 'paused', 'break']),
-  );
+  const statuses = options?.includeReady
+    ? ['ready', 'running', 'paused', 'break']
+    : ['running', 'paused', 'break'];
+  const q = query(liveSessionsCol(), where('status', 'in', statuses));
   return onSnapshot(
     q,
     (snap) => {
@@ -166,18 +171,16 @@ export function subscribeStoreLiveSessions(
 }
 
 /**
- * 새 LIVE 세션 생성.
- * - 기본(autoStart=false): 'ready'로 생성. 매장 사장이 LivePanel에서 ▶ 시작을 누르면
- *   togglePauseSession이 ready→running 전환하며 levelEndsAt(=deadline)을 박음.
- *   subscribeAllLiveSessions는 ready를 제외하므로 그 전까진 외부에 노출 X.
- * - autoStart=true: 즉시 'running'으로 생성 + deadline·startedAt 박음.
- *   본사 모니터링 페이지(/platform/live)에서 매장 사장 부재 시 대체 운영용.
+ * 새 LIVE 세션 생성 — 항상 'ready' 상태로.
+ * 카운트다운은 자동 출발하지 않음. 매장 사장(LivePanel) 또는 본사(/platform/live)가
+ * ▶ 시작 버튼을 눌러 togglePauseSession으로 ready→running 전환해야 함.
+ * subscribeAllLiveSessions 기본 구독은 ready를 제외 → 사장/본사가 실제 시작 누르기 전까진
+ * 모바일/지도/홈 피드에 노출되지 않음.
  */
 export async function startLiveSession(
   storeId: string,
   storeName: string,
   template: TournamentTemplate,
-  options?: { autoStart?: boolean },
 ): Promise<string> {
   // 누적 운영 카운터 — 인기 점수의 핵심 신호. 실패해도 세션 생성은 진행.
   updateDoc(doc(db, 'stores', storeId), {
@@ -187,7 +190,6 @@ export async function startLiveSession(
     // 권한 없음 등 — popularity 신호만 누락
   });
   const first = template.blindStructure[0];
-  const autoStart = options?.autoStart === true;
   const ref = await addDoc(liveSessionsCol(), {
     storeId,
     storeName,
@@ -199,10 +201,10 @@ export async function startLiveSession(
     totalPlayers: template.totalPlayers,
     blindStructure: template.blindStructure,
     lateRegEndLevel: template.lateRegEndLevel,
-    status: (autoStart ? 'running' : 'ready') as LiveStatus,
+    status: 'ready' as LiveStatus,
     currentLevel: first.level,
     levelSecondsLeft: first.durationSec,
-    levelEndsAt: autoStart ? deadlineFromNow(first.durationSec) : null,
+    levelEndsAt: null,
     smallBlind: first.sb,
     bigBlind: first.bb,
     ante: first.ante,
@@ -213,7 +215,6 @@ export async function startLiveSession(
     viewerCount: 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    ...(autoStart ? { startedAt: serverTimestamp() } : {}),
   });
   return ref.id;
 }

@@ -64,6 +64,7 @@ export default function PlatformLivePage() {
         setLoading(false);
       },
       () => setLoading(false),
+      { includeReady: true }, // 본사 모니터링은 대기 중인 세션도 표시 (▶ 시작 버튼 제공)
     );
     return unsub;
   }, []);
@@ -110,6 +111,7 @@ export default function PlatformLivePage() {
   const totalCount = sessions.length;
   const totalRunning = sessions.filter((s) => s.status === 'running').length;
   const totalPaused = sessions.filter((s) => s.status === 'paused').length;
+  const totalReady = sessions.filter((s) => s.status === 'ready').length;
 
   return (
     <div>
@@ -151,8 +153,9 @@ export default function PlatformLivePage() {
       </details>
 
       {/* 요약 */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-5 gap-3 mb-6">
         <Summary label="총 LIVE" value={totalCount} highlight />
+        <Summary label="대기" value={totalReady} color="blue" />
         <Summary label="진행 중" value={totalRunning} color="green" />
         <Summary label="일시정지" value={totalPaused} color="amber" />
         <Summary label="지역" value={grouped.length} />
@@ -183,6 +186,7 @@ export default function PlatformLivePage() {
             const collapsed = collapsedRegions[region] ?? false;
             const running = list.filter((s) => s.status === 'running').length;
             const paused = list.filter((s) => s.status === 'paused').length;
+            const ready = list.filter((s) => s.status === 'ready').length;
             return (
               <section key={region} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
                 <button
@@ -196,6 +200,7 @@ export default function PlatformLivePage() {
                     <span className="font-extrabold text-gray-900">{region}</span>
                     <span className="text-xs text-gray-500">
                       {list.length}개 LIVE
+                      {ready > 0 ? ` · 대기 ${ready}` : ''}
                       {running > 0 ? ` · 진행 ${running}` : ''}
                       {paused > 0 ? ` · 일시정지 ${paused}` : ''}
                     </span>
@@ -231,9 +236,14 @@ function Summary({
   label: string;
   value: number;
   highlight?: boolean;
-  color?: 'green' | 'amber';
+  color?: 'green' | 'amber' | 'blue';
 }) {
-  const valColor = color === 'green' ? 'text-green-600' : color === 'amber' ? 'text-amber-600' : highlight ? 'text-red-600' : 'text-gray-900';
+  const valColor =
+    color === 'green' ? 'text-green-600'
+    : color === 'amber' ? 'text-amber-600'
+    : color === 'blue' ? 'text-blue-600'
+    : highlight ? 'text-red-600'
+    : 'text-gray-900';
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
       <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{label}</div>
@@ -249,6 +259,7 @@ function Summary({
 function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddress?: string }) {
   const sec = useLiveCountdown(session);
   const [busy, setBusy] = useState(false);
+  const isReady = session.status === 'ready';
   const isPaused = session.status === 'paused';
   const isRunning = session.status === 'running';
   const lateMin = computeLateRegMinutes(session, sec);
@@ -265,8 +276,9 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
   };
 
   const handleStop = async () => {
-    if (!window.confirm(`[${session.storeName}] ${session.tournamentName} LIVE를 종료할까요?`)) return;
-    await wrap(() => stopLiveSession(session, sec), '종료');
+    const verb = isReady ? '취소' : '종료';
+    if (!window.confirm(`[${session.storeName}] ${session.tournamentName} LIVE를 ${verb}할까요?`)) return;
+    await wrap(() => stopLiveSession(session, sec), verb);
   };
 
   return (
@@ -274,7 +286,9 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
       {/* 매장 + 토너 — 4열 */}
       <div className="col-span-4 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          {isPaused ? (
+          {isReady ? (
+            <span className="text-[10px] font-extrabold tracking-wider text-blue-700">⏳ READY</span>
+          ) : isPaused ? (
             <span className="text-[10px] font-extrabold tracking-wider text-amber-700">⏸ PAUSED</span>
           ) : (
             <>
@@ -318,60 +332,83 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
 
       {/* 컨트롤 — 3열 */}
       <div className="col-span-3 flex flex-wrap gap-1 justify-end">
-        <button
-          onClick={() => wrap(() => togglePauseSession(session, sec), isPaused ? '재개' : '일시정지')}
-          disabled={busy}
-          className={`px-2.5 py-1.5 rounded text-[11px] font-bold disabled:opacity-40 ${
-            isPaused ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-amber-500 text-white hover:bg-amber-600'
-          }`}
-          title={isPaused ? '재개' : '일시정지'}
-        >
-          {isPaused ? '▶ 재개' : '⏸ 일시정지'}
-        </button>
-        <button
-          onClick={() => wrap(() => goToLevelInSession(session, -1, sec), '이전 레벨')}
-          disabled={busy || session.currentLevel <= 1}
-          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
-          title="이전 레벨"
-        >
-          ◀ Lv
-        </button>
-        <button
-          onClick={() => wrap(() => goToLevelInSession(session, 1, sec), '다음 레벨')}
-          disabled={busy}
-          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
-          title="다음 레벨"
-        >
-          Lv ▶
-        </button>
-        <button
-          onClick={() => wrap(() => addSecondsToSession(session, sec, 60), '시간 +60s')}
-          disabled={busy}
-          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
-          title="+60초"
-        >
-          +60s
-        </button>
-        <button
-          onClick={() => wrap(() => addSecondsToSession(session, sec, -60), '시간 -60s')}
-          disabled={busy || sec <= 60}
-          className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
-          title="-60초"
-        >
-          -60s
-        </button>
-        <button
-          onClick={handleStop}
-          disabled={busy}
-          className="px-2.5 py-1.5 rounded text-[11px] font-bold bg-red-50 hover:bg-red-100 text-red-700 disabled:opacity-40"
-          title="LIVE 종료"
-        >
-          ⏹ 종료
-        </button>
-        {!session.lateRegClosed && lateMin > 0 && (
-          <div className="text-[10px] text-gray-500 mt-1 w-full text-right">
-            등록 {lateMin}분 남음
-          </div>
+        {isReady ? (
+          <>
+            <button
+              onClick={() => wrap(() => togglePauseSession(session, sec), '시작')}
+              disabled={busy}
+              className="px-3 py-1.5 rounded text-[11px] font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+              title="타이머 시작 (ready → running)"
+            >
+              ▶ 타이머 시작
+            </button>
+            <button
+              onClick={handleStop}
+              disabled={busy}
+              className="px-2.5 py-1.5 rounded text-[11px] font-bold bg-red-50 hover:bg-red-100 text-red-700 disabled:opacity-40"
+              title="대기 LIVE 취소"
+            >
+              ⏹ 취소
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => wrap(() => togglePauseSession(session, sec), isPaused ? '재개' : '일시정지')}
+              disabled={busy}
+              className={`px-2.5 py-1.5 rounded text-[11px] font-bold disabled:opacity-40 ${
+                isPaused ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-amber-500 text-white hover:bg-amber-600'
+              }`}
+              title={isPaused ? '재개' : '일시정지'}
+            >
+              {isPaused ? '▶ 재개' : '⏸ 일시정지'}
+            </button>
+            <button
+              onClick={() => wrap(() => goToLevelInSession(session, -1, sec), '이전 레벨')}
+              disabled={busy || session.currentLevel <= 1}
+              className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+              title="이전 레벨"
+            >
+              ◀ Lv
+            </button>
+            <button
+              onClick={() => wrap(() => goToLevelInSession(session, 1, sec), '다음 레벨')}
+              disabled={busy}
+              className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+              title="다음 레벨"
+            >
+              Lv ▶
+            </button>
+            <button
+              onClick={() => wrap(() => addSecondsToSession(session, sec, 60), '시간 +60s')}
+              disabled={busy}
+              className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+              title="+60초"
+            >
+              +60s
+            </button>
+            <button
+              onClick={() => wrap(() => addSecondsToSession(session, sec, -60), '시간 -60s')}
+              disabled={busy || sec <= 60}
+              className="px-2 py-1.5 rounded text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-900 disabled:opacity-40"
+              title="-60초"
+            >
+              -60s
+            </button>
+            <button
+              onClick={handleStop}
+              disabled={busy}
+              className="px-2.5 py-1.5 rounded text-[11px] font-bold bg-red-50 hover:bg-red-100 text-red-700 disabled:opacity-40"
+              title="LIVE 종료"
+            >
+              ⏹ 종료
+            </button>
+            {!session.lateRegClosed && lateMin > 0 && isRunning && (
+              <div className="text-[10px] text-gray-500 mt-1 w-full text-right">
+                등록 {lateMin}분 남음
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -439,7 +476,7 @@ function StartLiveModal({
     setStarting(true);
     setStartError(null);
     try {
-      await startLiveSession(selectedStoreId, selectedStore.name, template, { autoStart: true });
+      await startLiveSession(selectedStoreId, selectedStore.name, template);
       onClose();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
