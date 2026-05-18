@@ -234,6 +234,14 @@ function NoticeEditModal({
   onClose: () => void;
 }) {
   const isNew = notice === null;
+  // 'choose': 새 공지 진입 직후 모드 선택. 'poster': 이미지만, 'full': 제목+본문 포함.
+  // 기존 공지 수정 시: 제목·본문 비어있고 이미지 있으면 자동 poster, 그 외 full.
+  const initialMode: 'choose' | 'poster' | 'full' = isNew
+    ? 'choose'
+    : (!notice?.title && !notice?.body && (notice?.imageUrls?.length ?? 0) > 0)
+      ? 'poster'
+      : 'full';
+  const [mode, setMode] = useState<'choose' | 'poster' | 'full'>(initialMode);
   const [title, setTitle] = useState(notice?.title ?? '');
   const [body, setBody] = useState(notice?.body ?? '');
   const [active, setActive] = useState(notice?.active ?? true);
@@ -288,12 +296,24 @@ function NoticeEditModal({
   };
 
   const save = async () => {
-    // 제목·본문·이미지 모두 비어있으면 의미 있는 공지가 아니므로 거부.
-    // 포스터만 업로드도 허용 (이미지가 있으면 OK).
-    if (!title.trim() && !body.trim() && imageUrls.length === 0) {
-      setError('제목·본문·이미지 중 최소 하나는 입력해야 합니다');
+    // 모드별 검증.
+    if (mode === 'poster') {
+      if (imageUrls.length === 0) {
+        setError('포스터 모드는 이미지를 1장 이상 업로드해야 합니다');
+        return;
+      }
+    } else if (mode === 'full') {
+      if (!title.trim() && !body.trim() && imageUrls.length === 0) {
+        setError('제목·본문·이미지 중 최소 하나는 입력해야 합니다');
+        return;
+      }
+    } else {
+      // 'choose' — 모드 선택 단계에선 저장 불가
       return;
     }
+    // 포스터 모드 저장 시 title/body는 빈 문자열로 강제 (사용자가 모드 전환했어도 안전).
+    const finalTitle = mode === 'poster' ? '' : title.trim();
+    const finalBody = mode === 'poster' ? '' : body.trim();
     const startDate = startAt ? new Date(startAt) : null;
     const endDate = endAt ? new Date(endAt) : null;
     if (startDate && endDate && endDate.getTime() <= startDate.getTime()) {
@@ -305,8 +325,8 @@ function NoticeEditModal({
     try {
       if (isNew) {
         await createNotice({
-          title: title.trim(),
-          body: body.trim(),
+          title: finalTitle,
+          body: finalBody,
           imageUrls,
           active,
           priority,
@@ -317,8 +337,8 @@ function NoticeEditModal({
         });
       } else {
         await updateNotice(notice!.id, {
-          title: title.trim(),
-          body: body.trim(),
+          title: finalTitle,
+          body: finalBody,
           imageUrls,
           active,
           priority,
@@ -345,35 +365,90 @@ function NoticeEditModal({
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
       >
-        <div className="px-6 py-4 border-b border-gray-100">
-          <div className="font-extrabold text-gray-900">{isNew ? '새 공지' : '공지 수정'}</div>
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+          <div className="font-extrabold text-gray-900 flex-1">
+            {isNew ? '새 공지' : '공지 수정'}
+            {mode !== 'choose' && (
+              <span className="ml-2 text-[10px] font-bold tracking-wider px-2 py-0.5 rounded bg-gray-100 text-gray-600 align-middle">
+                {mode === 'poster' ? '포스터' : '내용 포함'}
+              </span>
+            )}
+          </div>
+          {/* 모드 변경 — 새 공지 작성 중에도 위쪽에서 다시 선택 가능 */}
+          {mode !== 'choose' && isNew && (
+            <button
+              type="button"
+              onClick={() => { setMode('choose'); setError(null); }}
+              className="text-[11px] font-bold text-gray-500 underline"
+            >
+              모드 변경
+            </button>
+          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">제목 (선택)</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm"
-              placeholder="예: HoldemNow 베타 OPEN"
-            />
+        {/* ───── choose 단계 ───── */}
+        {mode === 'choose' && (
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="text-sm font-bold text-gray-700 mb-3">어떤 형식으로 등록할까요?</div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setMode('poster')}
+                className="border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50 rounded-2xl p-5 text-left transition"
+              >
+                <div className="text-3xl mb-2">🖼️</div>
+                <div className="font-extrabold text-gray-900 mb-1">포스터만</div>
+                <div className="text-[11px] text-gray-500 leading-relaxed">
+                  포스터 이미지 1장 이상만 업로드. 제목·본문 없이 이미지로 메시지 전달.
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('full')}
+                className="border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50 rounded-2xl p-5 text-left transition"
+              >
+                <div className="text-3xl mb-2">📝</div>
+                <div className="font-extrabold text-gray-900 mb-1">내용 포함</div>
+                <div className="text-[11px] text-gray-500 leading-relaxed">
+                  제목·본문 + 이미지(선택). 상세 안내가 필요한 공지.
+                </div>
+              </button>
+            </div>
           </div>
+        )}
 
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">본문</label>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={4}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm resize-none"
-              placeholder="공지 내용 (선택). 이미지만으로 충분하면 비워두세요."
-            />
-          </div>
+        {/* ───── poster / full 폼 ───── */}
+        {mode !== 'choose' && (
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {mode === 'full' && (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">제목 (선택)</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm"
+                  placeholder="예: HoldemNow 베타 OPEN"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">본문</label>
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm resize-none"
+                  placeholder="공지 내용 (선택). 이미지만으로 충분하면 비워두세요."
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">
-              이미지 ({imageUrls.length}장)
+              {mode === 'poster' ? '포스터 이미지' : '이미지'} ({imageUrls.length}장)
+              {mode === 'poster' && <span className="text-red-500 ml-1">*</span>}
             </label>
             <div className="grid grid-cols-3 gap-2 mb-2">
               {imageUrls.map((url, i) => (
@@ -509,7 +584,9 @@ function NoticeEditModal({
             </div>
           )}
         </div>
+        )}
 
+        {/* 푸터 — choose 단계에선 취소만, 그 외 취소+저장 */}
         <div className="px-6 py-4 border-t border-gray-100 flex gap-2">
           <button
             onClick={onClose}
@@ -518,13 +595,15 @@ function NoticeEditModal({
           >
             취소
           </button>
-          <button
-            onClick={save}
-            disabled={busy}
-            className="flex-1 py-2.5 rounded-lg bg-black text-white font-bold text-sm disabled:opacity-40"
-          >
-            {busy ? '저장 중…' : '저장'}
-          </button>
+          {mode !== 'choose' && (
+            <button
+              onClick={save}
+              disabled={busy}
+              className="flex-1 py-2.5 rounded-lg bg-black text-white font-bold text-sm disabled:opacity-40"
+            >
+              {busy ? '저장 중…' : '저장'}
+            </button>
+          )}
         </div>
       </div>
     </div>
