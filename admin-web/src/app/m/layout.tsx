@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import NoticePopup from '@/components/mobile/NoticePopup';
+import AuthGate from '@/components/AuthGate';
 
 /* ============================================================
  * 탭 정의 — 5탭 (대회 → 토너 흡수, 즐겨찾기 유지)
@@ -62,7 +63,7 @@ const TABS = [
   {
     id: 'my',
     href: '/m/my',
-    label: '마이',
+    label: '내정보',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth={active ? 2.2 : 1.7} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="8" r="4" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.12 : 0} />
@@ -82,13 +83,15 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     pathname.startsWith('/m/events/');
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
-      <div className="max-w-md mx-auto min-h-screen relative" style={{ background: 'var(--bg)' }}>
-        <div className={isFullscreen ? '' : 'pb-[68px]'}>{children}</div>
-        {!isFullscreen && <TabBar pathname={pathname} />}
-        <NoticePopup />
+    <AuthGate>
+      <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
+        <div className="max-w-md mx-auto min-h-screen relative" style={{ background: 'var(--bg)' }}>
+          <div className={isFullscreen ? '' : 'pb-[68px]'}>{children}</div>
+          {!isFullscreen && <TabBar pathname={pathname} />}
+          <NoticePopup />
+        </div>
       </div>
-    </div>
+    </AuthGate>
   );
 }
 
