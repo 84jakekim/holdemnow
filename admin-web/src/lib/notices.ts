@@ -38,15 +38,33 @@ export interface Notice {
   priority: number;
   /** 외부 링크 (선택). 클릭 시 새 창. */
   linkUrl?: string;
+  /** 노출 시작 시각. 없으면 즉시 시작. 모바일 팝업은 now>=startAt일 때만 표시. */
+  startAt?: Timestamp | null;
+  /** 노출 종료 시각. 없으면 무기한. 모바일 팝업은 now<=endAt일 때만 표시.
+   *  active 토글을 끄지 않아도 종료일 지나면 자동으로 안 보임. */
+  endAt?: Timestamp | null;
+  /** 팝업 너비 사이즈. sm: 320, md: 384(기본), lg: 448 (px max-width). */
+  size?: 'sm' | 'md' | 'lg';
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+export type NoticeSize = 'sm' | 'md' | 'lg';
+
+/** 노출 기간 안에 있는지 — startAt/endAt 미설정 시 통과. */
+export function isNoticeInWindow(n: Notice, nowMs: number = Date.now()): boolean {
+  if (n.startAt && typeof n.startAt.toMillis === 'function' && n.startAt.toMillis() > nowMs) return false;
+  if (n.endAt && typeof n.endAt.toMillis === 'function' && n.endAt.toMillis() < nowMs) return false;
+  return true;
 }
 
 const NOTICES = 'notices';
 
 /** 활성 공지 실시간 구독 — 모바일 팝업이 사용. priority 우선 + 신규 우선.
  * v0.1: where + orderBy 단일 사용으로 자동 인덱스만으로 동작.
- * priority 동률 시의 createdAt 정렬은 클라이언트에서 처리. */
+ * priority 동률 시의 createdAt 정렬은 클라이언트에서 처리.
+ * 노출 기간(startAt/endAt) 필터는 클라이언트에서 처리하고 1분마다 재평가해
+ * 시작 시각 도달·종료 시각 만료를 자동 반영. */
 export function subscribeActiveNotices(
   onChange: (items: Notice[]) => void,
   onError: (e: Error) => void,
@@ -56,21 +74,30 @@ export function subscribeActiveNotices(
     where('active', '==', true),
     orderBy('priority', 'desc'),
   );
-  return onSnapshot(
+  let last: Notice[] = [];
+  const emit = () => {
+    const inWindow = last.filter((n) => isNoticeInWindow(n));
+    inWindow.sort((a, b) => {
+      if (a.priority !== b.priority) return (b.priority ?? 0) - (a.priority ?? 0);
+      const ta = a.createdAt?.toMillis?.() ?? 0;
+      const tb = b.createdAt?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    onChange(inWindow);
+  };
+  const unsubFs = onSnapshot(
     q,
     (snap) => {
-      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Notice, 'id'>) }));
-      // priority 동률 시 신규 우선 (createdAt desc) — 클라이언트 정렬
-      items.sort((a, b) => {
-        if (a.priority !== b.priority) return (b.priority ?? 0) - (a.priority ?? 0);
-        const ta = a.createdAt?.toMillis?.() ?? 0;
-        const tb = b.createdAt?.toMillis?.() ?? 0;
-        return tb - ta;
-      });
-      onChange(items);
+      last = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Notice, 'id'>) }));
+      emit();
     },
     (e) => onError(e as Error),
   );
+  const tick = setInterval(emit, 60_000);
+  return () => {
+    unsubFs();
+    clearInterval(tick);
+  };
 }
 
 /** 본사 관리 페이지용 — 전체 공지 (활성/비활성 모두). createdAt desc 정렬. */
@@ -97,6 +124,9 @@ export async function createNotice(input: {
   active?: boolean;
   priority?: number;
   linkUrl?: string;
+  startAt?: Date | null;
+  endAt?: Date | null;
+  size?: NoticeSize;
 }): Promise<string> {
   const ref = await addDoc(collection(db, NOTICES), {
     title: input.title,
@@ -105,6 +135,9 @@ export async function createNotice(input: {
     active: input.active ?? true,
     priority: input.priority ?? 0,
     linkUrl: input.linkUrl ?? '',
+    startAt: input.startAt ? Timestamp.fromDate(input.startAt) : null,
+    endAt: input.endAt ? Timestamp.fromDate(input.endAt) : null,
+    size: input.size ?? 'md',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

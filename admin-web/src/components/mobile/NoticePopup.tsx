@@ -97,6 +97,14 @@ export default function NoticePopup() {
 
   if (!open || visibleCount === 0) return null;
 
+  // 여러 공지 동시 노출 시 가장 큰 사이즈 기준으로 셸을 잡아 가로 슬라이드가 잘리지 않게.
+  const sizeRank = { sm: 0, md: 1, lg: 2 } as const;
+  const maxSize = visible.reduce<'sm' | 'md' | 'lg'>(
+    (acc, n) => (sizeRank[n.size ?? 'md'] > sizeRank[acc] ? (n.size ?? 'md') : acc),
+    'sm',
+  );
+  const maxWClass = maxSize === 'sm' ? 'max-w-xs' : maxSize === 'lg' ? 'max-w-md' : 'max-w-sm';
+
   const dismissForToday = (noticeId: string) => {
     // event handler — 실행 시점의 절대 시간 사용 (render와 무관).
     // eslint-disable-next-line react-hooks/purity
@@ -115,7 +123,7 @@ export default function NoticePopup() {
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         tabIndex={-1}
       />
-      <div className="relative w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl">
+      <div className={`relative w-full ${maxWClass} bg-white rounded-2xl overflow-hidden shadow-2xl`}>
         {/* 팝업 핑크 띠 헤더 */}
         <div className="brand-band flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">

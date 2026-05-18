@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   type Notice,
+  type NoticeSize,
   subscribeAllNotices,
   createNotice,
   updateNotice,
@@ -10,6 +11,15 @@ import {
   uploadNoticeImage,
   deleteNoticeImageByUrl,
 } from '@/lib/notices';
+import { Timestamp } from 'firebase/firestore';
+
+/** Timestamp → datetime-local input value (YYYY-MM-DDTHH:mm). */
+function toLocalInput(t?: Timestamp | null): string {
+  if (!t || typeof t.toDate !== 'function') return '';
+  const d = t.toDate();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function PlatformNoticesPage() {
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -94,8 +104,19 @@ export default function PlatformNoticesPage() {
   );
 }
 
+/** Timestamp를 "MM/DD HH:mm" 한 줄로. */
+function fmtTs(t?: Timestamp | null): string {
+  if (!t || typeof t.toDate !== 'function') return '';
+  const d = t.toDate();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function NoticeRow({ notice, onEdit }: { notice: Notice; onEdit: () => void }) {
   const [busy, setBusy] = useState(false);
+  const now = Date.now();
+  const isFuture = notice.startAt && notice.startAt.toMillis() > now;
+  const isExpired = notice.endAt && notice.endAt.toMillis() < now;
 
   const toggle = async () => {
     setBusy(true);
@@ -150,6 +171,16 @@ function NoticeRow({ notice, onEdit }: { notice: Notice; onEdit: () => void }) {
               우선 {notice.priority}
             </span>
           )}
+          {isFuture && (
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+              ⏳ 예약됨
+            </span>
+          )}
+          {isExpired && (
+            <span className="text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+              기간 만료
+            </span>
+          )}
         </div>
         {notice.body && (
           <div className="text-xs text-gray-500 line-clamp-2">{notice.body}</div>
@@ -157,6 +188,13 @@ function NoticeRow({ notice, onEdit }: { notice: Notice; onEdit: () => void }) {
         <div className="text-[11px] text-gray-400 mt-1">
           이미지 {notice.imageUrls.length}장
           {notice.linkUrl ? ' · 🔗 외부링크' : ''}
+          {notice.size && notice.size !== 'md' ? ` · 사이즈 ${notice.size}` : ''}
+          {(notice.startAt || notice.endAt) && (
+            <span>
+              {' · 🗓 '}
+              {notice.startAt ? fmtTs(notice.startAt) : '즉시'} ~ {notice.endAt ? fmtTs(notice.endAt) : '무기한'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -200,6 +238,9 @@ function NoticeEditModal({
   const [priority, setPriority] = useState(notice?.priority ?? 0);
   const [linkUrl, setLinkUrl] = useState(notice?.linkUrl ?? '');
   const [imageUrls, setImageUrls] = useState<string[]>(notice?.imageUrls ?? []);
+  const [startAt, setStartAt] = useState<string>(toLocalInput(notice?.startAt));
+  const [endAt, setEndAt] = useState<string>(toLocalInput(notice?.endAt));
+  const [size, setSize] = useState<NoticeSize>(notice?.size ?? 'md');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -249,6 +290,12 @@ function NoticeEditModal({
       setError('제목을 입력해주세요');
       return;
     }
+    const startDate = startAt ? new Date(startAt) : null;
+    const endDate = endAt ? new Date(endAt) : null;
+    if (startDate && endDate && endDate.getTime() <= startDate.getTime()) {
+      setError('종료일은 시작일보다 이후여야 합니다');
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -260,6 +307,9 @@ function NoticeEditModal({
           active,
           priority,
           linkUrl: linkUrl.trim(),
+          startAt: startDate,
+          endAt: endDate,
+          size,
         });
       } else {
         await updateNotice(notice!.id, {
@@ -269,6 +319,9 @@ function NoticeEditModal({
           active,
           priority,
           linkUrl: linkUrl.trim(),
+          startAt: startDate ? Timestamp.fromDate(startDate) : null,
+          endAt: endDate ? Timestamp.fromDate(endDate) : null,
+          size,
         });
       }
       onClose();
@@ -377,6 +430,52 @@ function NoticeEditModal({
               placeholder="https://..."
             />
             <div className="text-[11px] text-gray-400 mt-1">팝업 클릭 시 새 창으로 열림</div>
+          </div>
+
+          {/* 노출 기간 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">노출 시작</label>
+              <input
+                type="datetime-local"
+                value={startAt}
+                onChange={(e) => setStartAt(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              />
+              <div className="text-[11px] text-gray-400 mt-1">비워두면 즉시 시작</div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">노출 종료</label>
+              <input
+                type="datetime-local"
+                value={endAt}
+                onChange={(e) => setEndAt(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              />
+              <div className="text-[11px] text-gray-400 mt-1">비워두면 무기한</div>
+            </div>
+          </div>
+
+          {/* 팝업 사이즈 */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">팝업 사이즈</label>
+            <div className="flex gap-2">
+              {(['sm', 'md', 'lg'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSize(s)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border ${
+                    size === s
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : 'border-gray-200 text-gray-700'
+                  }`}
+                >
+                  {s === 'sm' ? '작게 (320)' : s === 'md' ? '보통 (384)' : '크게 (448)'}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-gray-400 mt-1">모바일 팝업의 최대 가로 너비 (px)</div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
