@@ -69,7 +69,7 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
       <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-5 border-b border-gray-100">
           <div className="mb-1">
-            <img src="/logo.svg" alt="hold'emNow" width={160} height={27} style={{ display: 'block' }} />
+            <img src="/logo.svg" alt="HoldemNow" width={160} height={27} style={{ display: 'block' }} />
           </div>
           <div className="text-[10px] text-gray-500">어드민 v0.1</div>
         </div>

@@ -12,6 +12,7 @@ import {
   query,
   where,
   orderBy,
+  increment,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { db } from './firebase';
@@ -176,6 +177,13 @@ export async function startLiveSession(
   storeName: string,
   template: TournamentTemplate,
 ): Promise<string> {
+  // 누적 운영 카운터 — 인기 점수의 핵심 신호. 실패해도 세션 생성은 진행.
+  updateDoc(doc(db, 'stores', storeId), {
+    liveSessionCount: increment(1),
+    lastLiveAt: serverTimestamp(),
+  }).catch(() => {
+    // 권한 없음 등 — popularity 신호만 누락
+  });
   const first = template.blindStructure[0];
   const ref = await addDoc(liveSessionsCol(), {
     storeId,

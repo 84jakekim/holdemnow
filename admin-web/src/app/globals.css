@@ -408,6 +408,68 @@ html, body {
     rgba(255,255,255,0.96) 100%);
 }
 
+/* ── 홈 브랜드 헤더 — 핑크 그라데이션 카드 v6 ─────────── */
+/*
+ * 모바일 홈 상단 전용. 헤더 1단(브랜드+액션)을 핑크 카드형으로.
+ * - 상단: 진한 핑크(#C4006A) / 중앙: 브랜드 핑크(#FF1F8F) / 우하: 밝은 핑크(#FF5AAD)
+ * - 좌상단 radial 흰 글로우로 입체(볼록) 효과
+ * - 하단 자연스러운 그림자로 본문과 분리
+ */
+
+/* 헤더 1단 핑크 그라데이션 배경 카드 */
+.header-brand-card {
+  /* 베이스: 135° 선형 그라데이션 — 진한핑크→브랜드핑크→밝은핑크 */
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 55%),
+    linear-gradient(135deg, #C4006A 0%, #E8107C 35%, #FF1F8F 60%, #FF5AAD 100%);
+  /* 하단 그림자 — 본문 분리 + 핑크 글로우 */
+  box-shadow:
+    0 4px 20px rgba(200,0,106,0.28),
+    0 1px 0 rgba(255,255,255,0.10) inset,
+    0 -1px 0 rgba(0,0,0,0.06) inset;
+  position: relative;
+  overflow: hidden;
+}
+/* 우상단 반투명 글로우 장식 (입체감 보조) */
+.header-brand-card::after {
+  content: '';
+  position: absolute;
+  top: -20px; right: -20px;
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%);
+  pointer-events: none;
+}
+/* 하단 페이드 구분 띠 */
+.header-brand-card-footer {
+  background: linear-gradient(to bottom,
+    #FF1F8F 0%,
+    rgba(255,31,143,0.82) 40%,
+    rgba(255,31,143,0.55) 70%,
+    rgba(255,31,143,0.12) 90%,
+    transparent 100%);
+  height: 6px;
+}
+
+/* 헤더 내 흰 액션 버튼 (검색/알림) */
+.header-action-btn-white {
+  background: rgba(255,255,255,0.20);
+  border: 1px solid rgba(255,255,255,0.28);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background 100ms, transform 80ms;
+}
+.header-action-btn-white:active {
+  background: rgba(255,255,255,0.32);
+  transform: scale(0.91);
+}
+
+/* 위치 텍스트 흰색 (헤더 내부용) */
+.header-location-text {
+  color: #FFFFFF;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
 /* ── 어드민 / 플랫폼 — 다크 오버라이드 유지 ──────────── */
 /* admin, platform, organizer 라우트는 별도 다크 처리 */
 .admin-scope {

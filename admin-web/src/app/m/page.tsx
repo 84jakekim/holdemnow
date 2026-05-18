@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { collection, getDocs, query, where, documentId, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, documentId } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { subscribeAllLiveSessions, type LiveSession, fmtTime, useLiveCountdown } from '@/lib/live';
 import { subscribeAllSeries, type Series } from '@/lib/series';
 import { posterStyleFor } from '@/lib/templates';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
+import { loadPopularStores, loadRecentlyJoinedStores, type PopularityStore } from '@/lib/popularity';
 
 interface StoreGroup {
   storeId: string;
@@ -98,19 +99,13 @@ export default function MobileHome() {
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          1. 상단 헤더 — 위치 + 로고 + 알림
+          1. 상단 헤더 v6 — 핑크 그라데이션 카드형
+          브랜드 핑크 그라데이션 배경, 흰 로고·아이콘, 위치도 핑크 안
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <header
-        className="sticky top-0 z-30 header-brand-accent"
-        style={{
-          background: 'rgba(255,255,255,0.95)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-        }}
-      >
-        {/* 1단 — 브랜드 (로고마크 + 워드마크 hold'emNow) + 우측 액션 */}
+      <header className="sticky top-0 z-30 header-brand-card">
+        {/* 1단 — 브랜드 (흰 로고마크 + 흰 워드마크) + 우측 액션 */}
         <div className="px-4 h-14 flex items-center justify-between">
-          <Link href="/m" aria-label="HoldemNow 홈" className="flex items-center gap-2 transition active:opacity-70">
+          <Link href="/m" aria-label="HoldemNow 홈" className="flex items-center gap-2 transition active:opacity-75">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo-mark.svg"
@@ -118,13 +113,13 @@ export default function MobileHome() {
               width={30}
               height={30}
               className="flex-shrink-0"
-              style={{ borderRadius: 8 }}
+              style={{ borderRadius: 8, boxShadow: '0 1px 6px rgba(0,0,0,0.18)' }}
               aria-hidden="true"
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo.svg"
-              alt="hold'emNow"
+              src="/logo-white.svg"
+              alt="HoldemNow"
               height={22}
               style={{ width: 'auto', display: 'block' }}
             />
@@ -134,19 +129,17 @@ export default function MobileHome() {
             <Link
               href="/m/search"
               aria-label="검색"
-              className="w-9 h-9 flex items-center justify-center rounded-xl transition active:scale-90"
-              style={{ background: 'var(--surface-2)' }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl header-action-btn-white"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
             </Link>
             <button
               aria-label="알림"
-              className="w-9 h-9 flex items-center justify-center rounded-xl relative transition active:scale-90"
-              style={{ background: 'var(--surface-2)' }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl relative header-action-btn-white"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                 <path d="M13.73 21a2 2 0 01-3.46 0"/>
               </svg>
@@ -154,21 +147,24 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* 2단 — 위치 헤딩 (토스 스타일: 큰 글씨, 별도 줄) */}
+        {/* 2단 — 위치 헤딩 (핑크 헤더 안 흰색, 토스 스타일) */}
         <div className="px-4 pb-3 -mt-1">
           <button className="flex items-center gap-1.5 transition active:opacity-70">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)', flexShrink: 0 }} aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.90)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
               <circle cx="12" cy="10" r="3"/>
             </svg>
-            <span className="text-[16px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+            <span className="text-[16px] font-extrabold tracking-tight header-location-text">
               부산 서면
             </span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)' }} aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.70)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M6 9l6 6 6-6"/>
             </svg>
           </button>
         </div>
+
+        {/* 하단 페이드 구분 — 본문과 자연스럽게 분리 */}
+        <div className="header-brand-card-footer" aria-hidden="true" />
       </header>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -313,6 +309,14 @@ export default function MobileHome() {
           4. 인기 매장 아바타 가로 스크롤 — lun 인기 유튜버 패턴
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <PopularStoresAvatarScroll liveByStore={liveByStore} />
+
+      {/* 섹션 구분 — 브랜드 핑크 스트립 */}
+      <div className="brand-strip-divider" />
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          🆕 새로 합류한 매장 — 가입 30일 이내, cold-start 노출 보장
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <NewlyJoinedStoresSection liveByStore={liveByStore} />
 
       {/* 섹션 구분 — 브랜드 핑크 스트립 */}
       <div className="brand-strip-divider" />
@@ -572,33 +576,65 @@ function LiveHeroSkeleton() {
 }
 
 /* ============================================================
- * 인기 매장 아바타 가로 스크롤 — lun 인기 유튜버 패턴 변형
+ * 인기 매장 아바타 가로 스크롤 — popularity 점수 + 위치 10km 자동 확장
+ * 정책: project_holdemnow_popularity (LIVE×2 + favoriteAdds + directionsClicks + 신규부스트 − 거리감점)
  * ========================================================== */
 function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string, number> }) {
-  const [stores, setStores] = useState<NearbyStore[]>([]);
+  const [stores, setStores] = useState<PopularityStore[]>([]);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [appliedRadiusKm, setAppliedRadiusKm] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    getDocs(query(collection(db, 'stores'), limit(15))).then((snap) => {
-      setStores(snap.docs.map((d) => {
-        const data = d.data() as {
-          name: string; photoUrls?: string[]; tier?: string;
-        };
-        return { id: d.id, name: data.name, photoUrl: data.photoUrls?.[0], tier: data.tier };
-      }));
-    });
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      const tid = setTimeout(() => setUserLocation(null), 0);
+      return () => clearTimeout(tid);
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setUserLocation(null),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  if (stores.length === 0) return null;
+  useEffect(() => {
+    let cancelled = false;
+    loadPopularStores(userLocation)
+      .then((res) => {
+        if (cancelled) return;
+        setStores(res.stores);
+        setExpanded(res.expanded);
+        setAppliedRadiusKm(res.appliedRadiusM > 0 ? Math.round(res.appliedRadiusM / 1000) : null);
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, [userLocation]);
+
+  if (loaded && stores.length === 0) return null;
 
   return (
-    <section aria-label="인기 매장" className="py-5">
-      <div className="px-4 flex items-center justify-between mb-3">
-        <div className="text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-          인기 매장
+    <section aria-label="내 주변 인기 매장" className="py-5">
+      <div className="px-4 flex items-end justify-between mb-3">
+        <div>
+          <div className="text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+            내 주변 인기 매장
+          </div>
+          {appliedRadiusKm != null && (
+            <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+              {expanded
+                ? `주변 매장이 적어 ${appliedRadiusKm}km까지 범위를 넓혔어요`
+                : `반경 ${appliedRadiusKm}km · LIVE 운영 활발한 매장 우선`}
+            </div>
+          )}
         </div>
         <Link
           href="/m/discover"
-          className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60"
+          className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60 mb-0.5"
           style={{ color: 'var(--brand)' }}
         >
           전체보기
@@ -608,20 +644,22 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
       <div className="pl-4 flex gap-4 overflow-x-auto scrollbar-none pb-1">
         {stores.map((st) => {
           const isLive = (liveByStore[st.id] || 0) > 0;
+          const photo = st.photoUrls[0];
           return (
             <Link
               key={st.id}
               href={`/m/store/${st.id}`}
+              onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
               className="flex flex-col items-center gap-1.5 flex-shrink-0 transition active:scale-95"
               style={{ width: 64 }}
             >
-              {/* 아바타 원형 */}
               <div
                 className={`store-avatar-ring${isLive ? ' live-ring' : ''}`}
                 style={{ width: 60, height: 60, position: 'relative' }}
               >
-                {st.photoUrl ? (
-                  <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" style={{ borderRadius: '50%' }} />
+                {photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photo} alt={st.name} className="w-full h-full object-cover" style={{ borderRadius: '50%' }} />
                 ) : (
                   <div
                     className="w-full h-full flex items-center justify-center"
@@ -632,7 +670,6 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
                     </span>
                   </div>
                 )}
-                {/* LIVE 도트 */}
                 {isLive && (
                   <span
                     className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white pulse-live"
@@ -641,13 +678,115 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
                   />
                 )}
               </div>
-              {/* 매장명 */}
               <span
                 className="text-[11px] font-semibold text-center leading-tight"
                 style={{ color: 'var(--text-2)', width: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               >
                 {st.name}
               </span>
+            </Link>
+          );
+        })}
+        <div className="w-3 flex-shrink-0" aria-hidden="true" />
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+ * 🆕 새로 합류한 매장 — 가입 30일 이내, 거리순
+ * 인기 신호와 무관 — 신규 매장 노출 보장 (카톡방 사장님 retention)
+ * ========================================================== */
+function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
+  const [stores, setStores] = useState<PopularityStore[]>([]);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      const tid = setTimeout(() => setUserLocation(null), 0);
+      return () => clearTimeout(tid);
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setUserLocation(null),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadRecentlyJoinedStores(userLocation)
+      .then((list) => {
+        if (cancelled) return;
+        setStores(list);
+        setLoaded(true);
+      })
+      .catch(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, [userLocation]);
+
+  if (loaded && stores.length === 0) return null;
+
+  return (
+    <section aria-label="새로 합류한 매장" className="py-5">
+      <div className="px-4 flex items-end justify-between mb-3">
+        <div>
+          <div className="text-[17px] font-extrabold tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
+            <span>🆕</span>
+            <span>새로 합류한 매장</span>
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+            최근 30일 가입 · {userLocation ? '거리순' : '가입 최신순'}
+          </div>
+        </div>
+      </div>
+      <div className="pl-4 flex gap-3 overflow-x-auto scrollbar-none pb-2">
+        {stores.map((st) => {
+          const isLive = (liveByStore[st.id] || 0) > 0;
+          const photo = st.photoUrls[0];
+          return (
+            <Link
+              key={st.id}
+              href={`/m/store/${st.id}`}
+              onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
+              className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover"
+              style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}
+            >
+              <div className="relative overflow-hidden" style={{ aspectRatio: '1', background: 'var(--surface-2)' }}>
+                {photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photo} alt={st.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}>
+                    <span className="text-[20px] font-extrabold" style={{ color: 'var(--brand)' }}>{st.name.charAt(0)}</span>
+                  </div>
+                )}
+                <span
+                  className="absolute top-2 left-2 text-[9px] font-extrabold rounded-full px-2 py-0.5"
+                  style={{ background: 'var(--brand)', color: '#fff' }}
+                >
+                  NEW
+                </span>
+                {isLive && (
+                  <div className="absolute top-2 right-2">
+                    <span className="badge-live" style={{ fontSize: 9, padding: '2px 6px' }}>
+                      <span className="dot" />
+                      LIVE
+                    </span>
+                  </div>
+                )}
+                <div className="absolute bottom-0 left-0 right-0 h-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 100%)' }} aria-hidden="true" />
+              </div>
+              <div className="px-2.5 pt-2.5 pb-2">
+                <div className="text-[13px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{st.name}</div>
+                {st.address && (
+                  <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>
+                    {st.address.split(' ').slice(1, 3).join(' ')}
+                  </div>
+                )}
+              </div>
             </Link>
           );
         })}

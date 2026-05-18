@@ -95,11 +95,11 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           {/* 다크 사이드바용 — 흰 필터로 로고 반전 */}
           <div className="mb-1">
             <img
-              src="/logo.svg"
-              alt="hold'emNow"
+              src="/logo-white.svg"
+              alt="HoldemNow"
               width={150}
               height={25}
-              style={{ display: 'block', filter: 'brightness(0) invert(1)' }}
+              style={{ display: 'block' }}
             />
           </div>
           <div className="text-[10px] text-amber-400 font-bold tracking-wider">본사 어드민</div>

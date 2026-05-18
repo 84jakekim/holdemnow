@@ -14,7 +14,9 @@ import {
   goToLevelInSession,
   addSecondsToSession,
   stopLiveSession,
+  startLiveSession,
 } from '@/lib/live';
+import { subscribeTemplates, type TournamentTemplate } from '@/lib/templates';
 
 /**
  * 본사 모니터링 — 전국 모든 매장의 LIVE 세션을 지역별로 모아서 표시.
@@ -49,6 +51,7 @@ export default function PlatformLivePage() {
   const [stores, setStores] = useState<Record<string, StoreInfo>>({});
   const [loading, setLoading] = useState(true);
   const [collapsedRegions, setCollapsedRegions] = useState<Record<string, boolean>>({});
+  const [showStartModal, setShowStartModal] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeAllLiveSessions(
@@ -103,11 +106,19 @@ export default function PlatformLivePage() {
   return (
     <div>
       {/* 헤더 */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🎬 전국 LIVE 모니터링</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          모든 매장의 진행 중인 LIVE 세션을 본사가 직접 모니터링·제어합니다.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🎬 전국 LIVE 모니터링</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            모든 매장의 진행 중인 LIVE 세션을 본사가 직접 모니터링·제어합니다.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowStartModal(true)}
+          className="bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-red-600"
+        >
+          + 새 LIVE 시작
+        </button>
       </div>
 
       {/* 요약 */}
@@ -117,6 +128,14 @@ export default function PlatformLivePage() {
         <Summary label="일시정지" value={totalPaused} color="amber" />
         <Summary label="지역" value={grouped.length} />
       </div>
+
+      {/* 새 LIVE 시작 모달 */}
+      {showStartModal && (
+        <StartLiveModal
+          storesMap={stores}
+          onClose={() => setShowStartModal(false)}
+        />
+      )}
 
       {/* 결과 */}
       {loading ? (
@@ -325,6 +344,188 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
             등록 {lateMin}분 남음
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+ * 새 LIVE 시작 모달 — 매장 선택 → 템플릿 선택 → 시작
+ * ========================================================== */
+
+function StartLiveModal({
+  storesMap,
+  onClose,
+}: {
+  storesMap: Record<string, StoreInfo>;
+  onClose: () => void;
+}) {
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [search, setSearch] = useState('');
+  const [starting, setStarting] = useState(false);
+
+  // 선택된 매장의 템플릿 구독
+  useEffect(() => {
+    if (!selectedStoreId) {
+      setTemplates([]);
+      return;
+    }
+    setLoadingTemplates(true);
+    const unsub = subscribeTemplates(
+      selectedStoreId,
+      (items) => {
+        setTemplates(items);
+        setLoadingTemplates(false);
+      },
+      () => setLoadingTemplates(false),
+    );
+    return unsub;
+  }, [selectedStoreId]);
+
+  // 매장 검색 필터
+  const filteredStores = useMemo(() => {
+    const list = Object.entries(storesMap);
+    const term = search.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter(([, info]) =>
+      info.name.toLowerCase().includes(term) ||
+      (info.address ?? '').toLowerCase().includes(term),
+    );
+  }, [storesMap, search]);
+
+  const selectedStore = selectedStoreId ? storesMap[selectedStoreId] : null;
+
+  const handleStart = async (template: TournamentTemplate) => {
+    if (!selectedStoreId || !selectedStore) return;
+    if (!window.confirm(`[${selectedStore.name}] "${template.name}" LIVE를 시작할까요?`)) return;
+    setStarting(true);
+    try {
+      await startLiveSession(selectedStoreId, selectedStore.name, template);
+      onClose();
+    } catch (e: unknown) {
+      alert(`LIVE 시작 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-extrabold text-gray-900">새 LIVE 시작</h2>
+            <p className="text-xs text-gray-500 mt-0.5">매장 선택 → 토너 템플릿 선택 → 즉시 시작</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-900 text-xl">✕</button>
+        </div>
+
+        <div className="flex-1 grid grid-cols-2 divide-x divide-gray-100 overflow-hidden">
+          {/* 좌측: 매장 목록 */}
+          <div className="flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="🔍 매장명·주소 검색"
+                className="w-full bg-gray-100 rounded-lg px-3 py-2 text-sm outline-none"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {filteredStores.length === 0 ? (
+                <div className="p-6 text-center text-xs text-gray-500">매장 없음</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {filteredStores.map(([id, info]) => (
+                    <button
+                      key={id}
+                      onClick={() => setSelectedStoreId(id)}
+                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 ${
+                        selectedStoreId === id ? 'bg-amber-50' : ''
+                      }`}
+                    >
+                      <div className="text-sm font-bold text-gray-900 truncate">{info.name}</div>
+                      <div className="text-[11px] text-gray-500 truncate mt-0.5">
+                        📍 {info.address ?? '주소 없음'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 우측: 템플릿 목록 */}
+          <div className="flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <div className="text-[10px] font-bold text-gray-500 tracking-wider">선택된 매장</div>
+              <div className="text-sm font-bold text-gray-900 truncate mt-0.5">
+                {selectedStore ? selectedStore.name : '좌측에서 매장을 선택하세요'}
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {!selectedStoreId ? (
+                <div className="p-8 text-center text-xs text-gray-500">매장을 먼저 선택하세요</div>
+              ) : loadingTemplates ? (
+                <div className="p-8 text-center text-xs text-gray-500">템플릿 로딩 중…</div>
+              ) : templates.length === 0 ? (
+                <div className="p-8 text-center text-xs text-gray-500">
+                  이 매장에 등록된 토너 템플릿이 없습니다.
+                  <div className="mt-2 text-[10px] text-gray-400">
+                    매장 사장이 먼저 토너 템플릿을 등록해야 합니다.
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 space-y-2">
+                  {templates.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => handleStart(t)}
+                      disabled={starting}
+                      className="w-full text-left bg-white border border-gray-200 hover:border-red-400 hover:bg-red-50 rounded-xl p-3 transition disabled:opacity-50"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="text-sm font-extrabold text-gray-900">{t.name}</div>
+                        <span className="text-[10px] bg-gray-100 text-gray-700 rounded px-1.5 py-0.5 font-bold">
+                          {t.type}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-600 grid grid-cols-3 gap-2">
+                        <div>
+                          <div className="text-[9px] font-bold text-gray-400">바이인</div>
+                          <div className="font-mono font-bold">₩{t.buyIn.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] font-bold text-gray-400">총인원</div>
+                          <div className="font-bold">{t.totalPlayers}명</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] font-bold text-gray-400">레벨 수</div>
+                          <div className="font-bold">{t.blindStructure.length}</div>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[10px] text-red-600 font-bold">▶ 클릭하면 LIVE 시작</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-gray-100 flex items-center justify-between">
+          <div className="text-[11px] text-gray-500">
+            💡 본사 권한으로 시작 — 매장에 사장 부재 시 대체 운영용
+          </div>
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-lg border-[1.5px] border-gray-200 font-bold text-sm"
+          >
+            취소
+          </button>
+        </div>
       </div>
     </div>
   );

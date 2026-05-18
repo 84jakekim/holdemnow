@@ -38,11 +38,28 @@ function metricsRef(storeId: string) {
 }
 
 /**
- * 카운터 +1.
+ * 카운터 +1. sessionStorage 기반 클라이언트 dedup — 같은 (storeId, field) 조합은
+ * 브라우저 세션 내 1회만 카운트(베타 어뷰징 1차 방어). 새 탭/리로드 시 리셋.
+ * v0.2 Cloud Function 이관 시 서버측 uid dedup으로 강화 예정.
  * fire-and-forget — 트래킹 실패가 UX를 막으면 안 됨. 에러는 silent.
  */
+const DEDUPE_KEY_PREFIX = 'holdemnow:metric:';
+function alreadyBumped(storeId: string, field: StoreMetricField): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const key = `${DEDUPE_KEY_PREFIX}${storeId}:${field}`;
+    if (window.sessionStorage.getItem(key)) return true;
+    window.sessionStorage.setItem(key, '1');
+    return false;
+  } catch {
+    return false; // storage 사용 불가 — dedup skip
+  }
+}
+
 export function bumpStoreMetric(storeId: string, field: StoreMetricField) {
   if (!storeId) return;
+  // 같은 세션 중복 카운트 방지 (favoriteAdds/directionsClicks 등). impressions는 trackImpressionOnce가 별도 처리.
+  if (field !== 'impressions' && alreadyBumped(storeId, field)) return;
   setDoc(
     metricsRef(storeId),
     { [field]: increment(1), updatedAt: serverTimestamp() },
