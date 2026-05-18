@@ -22,14 +22,28 @@ import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
 
 const NEARBY_RADIUS_M = 30_000;
 
-interface StoreCoord {
+interface StoreMeta {
   lat?: number;
   lng?: number;
+  address?: string;
+}
+
+/** 주소에서 "구·시 + 동" 정도만 추출. 광역/도 prefix 제거.
+ *  예) "부산광역시 부산진구 부전동 123" → "부산진구 부전동"
+ *  예) "경기도 성남시 분당구 정자동" → "성남시 분당구" */
+function localityFromAddress(address?: string): string {
+  if (!address) return '';
+  const parts = address.trim().split(/\s+/);
+  if (parts.length === 0) return '';
+  const first = parts[0];
+  const isMetroOrProvince = /광역시$|특별시$|특별자치시$|특별자치도$|도$/.test(first);
+  const rest = isMetroOrProvince ? parts.slice(1) : parts;
+  return rest.slice(0, 2).join(' ');
 }
 
 export default function LiveFeedListPage() {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
-  const [storesById, setStoresById] = useState<Record<string, StoreCoord>>({});
+  const [storesById, setStoresById] = useState<Record<string, StoreMeta>>({});
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -60,35 +74,36 @@ export default function LiveFeedListPage() {
     return unsub;
   }, []);
 
-  // 매장 좌표 fetch (1회)
+  // 매장 좌표·주소 fetch (1회)
   useEffect(() => {
     (async () => {
       try {
         const snap = await getDocs(collection(db, 'stores'));
-        const map: Record<string, StoreCoord> = {};
+        const map: Record<string, StoreMeta> = {};
         snap.forEach((d) => {
-          const data = d.data() as { lat?: number; lng?: number };
-          map[d.id] = { lat: data.lat, lng: data.lng };
+          const data = d.data() as { lat?: number; lng?: number; address?: string };
+          map[d.id] = { lat: data.lat, lng: data.lng, address: data.address };
         });
         setStoresById(map);
       } catch {
-        /* skip — 거리 정보 없음으로 폴백 */
+        /* skip — 거리·지역 정보 없음으로 폴백 */
       }
     })();
   }, []);
 
   // 30km 필터 + 거리 정렬
   const filteredSessions = useMemo(() => {
-    const withDist = sessions.map((s) => {
-      const coord = storesById[s.storeId];
+    const enriched = sessions.map((s) => {
+      const meta = storesById[s.storeId];
       const distance =
-        userLocation && typeof coord?.lat === 'number' && typeof coord?.lng === 'number'
-          ? haversineMeters(userLocation, { lat: coord.lat, lng: coord.lng })
+        userLocation && typeof meta?.lat === 'number' && typeof meta?.lng === 'number'
+          ? haversineMeters(userLocation, { lat: meta.lat, lng: meta.lng })
           : undefined;
-      return { session: s, distance };
+      const locality = localityFromAddress(meta?.address);
+      return { session: s, distance, locality };
     });
-    if (!userLocation) return withDist; // 위치 없으면 전부 표시
-    return withDist
+    if (!userLocation) return enriched; // 위치 없으면 전부 표시
+    return enriched
       .filter(({ distance }) => distance == null || distance <= NEARBY_RADIUS_M)
       .sort((a, b) => {
         if (a.distance != null && b.distance != null) return a.distance - b.distance;
@@ -139,8 +154,8 @@ export default function LiveFeedListPage() {
         </div>
       ) : (
         <div className="px-5 space-y-3">
-          {filteredSessions.map(({ session, distance }) => (
-            <LiveCard key={session.id} session={session} distance={distance} />
+          {filteredSessions.map(({ session, distance, locality }) => (
+            <LiveCard key={session.id} session={session} distance={distance} locality={locality} />
           ))}
         </div>
       )}
@@ -152,7 +167,7 @@ export default function LiveFeedListPage() {
  * LIVE 카드 — 정보 풍부한 한 줄. 타이머 + 레벨 + 블라인드 + 인원 + 상금
  * ========================================================== */
 
-function LiveCard({ session, distance }: { session: LiveSession; distance?: number }) {
+function LiveCard({ session, distance, locality }: { session: LiveSession; distance?: number; locality?: string }) {
   const sec = useLiveCountdown(session);
   const poster = posterStyleFor(session.posterStyle);
   const isPaused = session.status === 'paused';
@@ -165,21 +180,29 @@ function LiveCard({ session, distance }: { session: LiveSession; distance?: numb
       onClick={() => bumpStoreMetric(session.storeId, 'liveOpens')}
       className="block bg-white border border-gray-200 rounded-2xl overflow-hidden active:scale-[0.99] transition"
     >
-      {/* 상단 — 매장명·거리 */}
-      <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          {isPaused ? (
-            <span className="text-[10px] font-extrabold tracking-wider text-amber-700">⏸ PAUSED</span>
-          ) : (
-            <>
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[10px] font-extrabold tracking-wider text-red-600">LIVE</span>
-            </>
+      {/* 상단 — 매장명·거리·지역 (앱 테마 핑크) */}
+      <div
+        className="px-4 pt-3 pb-2.5 flex items-start justify-between gap-2"
+        style={{ background: '#FF1F8F' }}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            {isPaused ? (
+              <span className="text-[10px] font-extrabold tracking-wider text-white/85">⏸ PAUSED</span>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span className="text-[10px] font-extrabold tracking-wider text-white">LIVE</span>
+              </>
+            )}
+            <span className="text-sm font-extrabold text-white truncate">{session.storeName}</span>
+          </div>
+          {locality && (
+            <div className="text-[11px] font-medium text-white/85 mt-0.5 truncate">📍 {locality}</div>
           )}
-          <span className="text-sm font-bold text-gray-900 truncate">{session.storeName}</span>
         </div>
         {distance != null && (
-          <span className="text-[11px] font-bold text-gray-500 flex-shrink-0">{formatDistance(distance)}</span>
+          <span className="text-xs font-extrabold text-white flex-shrink-0 mt-0.5">{formatDistance(distance)}</span>
         )}
       </div>
 
