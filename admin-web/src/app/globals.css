@@ -382,7 +382,7 @@ html, body {
 
 /* 섹션 분리 띠 — 브랜드 핑크 그라데이션 (좌→우 페이드) */
 .brand-strip-divider {
-  height: 4px;
+  height: 2px;
   background: linear-gradient(90deg, var(--brand) 0%, rgba(255,31,143,0.35) 60%, transparent 100%);
   border: none;
 }

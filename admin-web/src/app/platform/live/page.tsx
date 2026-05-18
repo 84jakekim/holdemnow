@@ -363,23 +363,30 @@ function StartLiveModal({
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   // 선택된 매장의 템플릿 구독
   useEffect(() => {
     if (!selectedStoreId) {
       setTemplates([]);
+      setTemplatesError(null);
       return;
     }
     setLoadingTemplates(true);
+    setTemplatesError(null);
     const unsub = subscribeTemplates(
       selectedStoreId,
       (items) => {
         setTemplates(items);
         setLoadingTemplates(false);
       },
-      () => setLoadingTemplates(false),
+      (err) => {
+        setTemplatesError(err?.message ?? String(err));
+        setLoadingTemplates(false);
+      },
     );
     return unsub;
   }, [selectedStoreId]);
@@ -401,11 +408,14 @@ function StartLiveModal({
     if (!selectedStoreId || !selectedStore) return;
     if (!window.confirm(`[${selectedStore.name}] "${template.name}" LIVE를 시작할까요?`)) return;
     setStarting(true);
+    setStartError(null);
     try {
       await startLiveSession(selectedStoreId, selectedStore.name, template);
       onClose();
     } catch (e: unknown) {
-      alert(`LIVE 시작 실패: ${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[platform/live] startLiveSession failed:', e);
+      setStartError(msg);
     } finally {
       setStarting(false);
     }
@@ -470,6 +480,17 @@ function StartLiveModal({
                 <div className="p-8 text-center text-xs text-gray-500">매장을 먼저 선택하세요</div>
               ) : loadingTemplates ? (
                 <div className="p-8 text-center text-xs text-gray-500">템플릿 로딩 중…</div>
+              ) : templatesError ? (
+                <div className="p-4 mx-3 my-3 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 leading-relaxed">
+                  <b>템플릿 로딩 실패:</b><br />{templatesError}
+                  <div className="text-[10px] text-red-500 mt-2">
+                    📌 본사 권한이 firestore.rules에 적용 안 됐을 수 있습니다.
+                    아래 절차로 확인:<br />
+                    1. 로그아웃 후 다시 로그인 (토큰 갱신)<br />
+                    2. /platform 사이드바 메뉴에서 다른 페이지 갔다가 다시 옴<br />
+                    3. 새 rules 배포가 끝났는지 확인
+                  </div>
+                </div>
               ) : templates.length === 0 ? (
                 <div className="p-8 text-center text-xs text-gray-500">
                   이 매장에 등록된 토너 템플릿이 없습니다.
@@ -514,6 +535,12 @@ function StartLiveModal({
             </div>
           </div>
         </div>
+
+        {startError && (
+          <div className="mx-4 mb-3 bg-red-50 border border-red-200 rounded-lg p-3 text-[11px] text-red-700">
+            <b>LIVE 시작 실패:</b> {startError}
+          </div>
+        )}
 
         <div className="p-4 border-t border-gray-100 flex items-center justify-between">
           <div className="text-[11px] text-gray-500">

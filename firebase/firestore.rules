@@ -29,14 +29,13 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.organizerId == orgId;
     }
     // v0.1: Custom Claims 미적용 — Firestore users/{uid} 문서의 role/roles 필드로 검증.
-    // (Cloud Function이 claims 설정하기 전엔 토큰 기반 hasRole이 작동 안 함)
-    // 각 호출당 1번의 추가 get() 비용 발생 — 베타에선 무시 가능, v0.2에서 Custom Claims로 이관.
+    // Firestore rules는 list membership을 'x' in [...] 가 아닌 .hasAny([...])로 검사해야 함.
     function isPlatformAdmin() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && (
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'platform_admin'
-          || ('platform_admin' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('roles', []))
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('roles', []).hasAny(['platform_admin'])
         );
     }
 
