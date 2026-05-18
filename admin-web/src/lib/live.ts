@@ -166,16 +166,18 @@ export function subscribeStoreLiveSessions(
 }
 
 /**
- * 새 LIVE 세션 생성 — 대기(ready) 상태로.
- * 카운트다운은 자동으로 출발하지 않음. 사장이 LivePanel에서 "▶ 시작"을 눌러야
- * togglePauseSession이 ready→running 전환하며 levelEndsAt(=deadline)을 박는다.
- * 모바일/지도 LIVE 피드(subscribeAllLiveSessions)는 ready를 제외하므로,
- * 사장이 실제 시작을 누르기 전까진 외부에 노출되지 않음.
+ * 새 LIVE 세션 생성.
+ * - 기본(autoStart=false): 'ready'로 생성. 매장 사장이 LivePanel에서 ▶ 시작을 누르면
+ *   togglePauseSession이 ready→running 전환하며 levelEndsAt(=deadline)을 박음.
+ *   subscribeAllLiveSessions는 ready를 제외하므로 그 전까진 외부에 노출 X.
+ * - autoStart=true: 즉시 'running'으로 생성 + deadline·startedAt 박음.
+ *   본사 모니터링 페이지(/platform/live)에서 매장 사장 부재 시 대체 운영용.
  */
 export async function startLiveSession(
   storeId: string,
   storeName: string,
   template: TournamentTemplate,
+  options?: { autoStart?: boolean },
 ): Promise<string> {
   // 누적 운영 카운터 — 인기 점수의 핵심 신호. 실패해도 세션 생성은 진행.
   updateDoc(doc(db, 'stores', storeId), {
@@ -185,6 +187,7 @@ export async function startLiveSession(
     // 권한 없음 등 — popularity 신호만 누락
   });
   const first = template.blindStructure[0];
+  const autoStart = options?.autoStart === true;
   const ref = await addDoc(liveSessionsCol(), {
     storeId,
     storeName,
@@ -196,10 +199,10 @@ export async function startLiveSession(
     totalPlayers: template.totalPlayers,
     blindStructure: template.blindStructure,
     lateRegEndLevel: template.lateRegEndLevel,
-    status: 'ready' as LiveStatus,
+    status: (autoStart ? 'running' : 'ready') as LiveStatus,
     currentLevel: first.level,
     levelSecondsLeft: first.durationSec,
-    levelEndsAt: null,
+    levelEndsAt: autoStart ? deadlineFromNow(first.durationSec) : null,
     smallBlind: first.sb,
     bigBlind: first.bb,
     ante: first.ante,
@@ -208,9 +211,9 @@ export async function startLiveSession(
     prizePool: template.prizePool || template.buyIn * template.totalPlayers,
     lateRegClosed: false,
     viewerCount: 0,
-    // startedAt은 첫 'ready'→'running' 전환 시 togglePauseSession에서 박음 (실제 진행 시작 시각).
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    ...(autoStart ? { startedAt: serverTimestamp() } : {}),
   });
   return ref.id;
 }

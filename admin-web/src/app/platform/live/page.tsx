@@ -439,7 +439,7 @@ function StartLiveModal({
     setStarting(true);
     setStartError(null);
     try {
-      await startLiveSession(selectedStoreId, selectedStore.name, template);
+      await startLiveSession(selectedStoreId, selectedStore.name, template, { autoStart: true });
       onClose();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
