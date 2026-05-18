@@ -10,6 +10,7 @@ import {
   fmtTime,
   computeLateRegMinutes,
   useLiveCountdown,
+  computeFinishingGraceSec,
 } from '@/lib/live';
 import { posterStyleFor } from '@/lib/templates';
 import { bumpStoreMetric } from '@/lib/analytics';
@@ -47,6 +48,12 @@ export default function LiveFeedListPage() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [loading, setLoading] = useState(true);
+  // 1초 tick — finishingAt 그레이스 만료를 매초 재평가하기 위함
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // 사용자 위치 (실시간 추적)
   useEffect(() => {
@@ -91,9 +98,14 @@ export default function LiveFeedListPage() {
     })();
   }, []);
 
-  // 30km 필터 + 거리 정렬
+  // 30km 필터 + 거리 정렬 + 그레이스 만료된 세션 가림
   const filteredSessions = useMemo(() => {
-    const enriched = sessions.map((s) => {
+    // 그레이스 만료(<=0) 세션은 화면에서 제외 — DB 정리는 매장 사장 LivePanel이 담당.
+    const live = sessions.filter((s) => {
+      const grace = computeFinishingGraceSec(s);
+      return grace == null || grace > 0;
+    });
+    const enriched = live.map((s) => {
       const meta = storesById[s.storeId];
       const distance =
         userLocation && typeof meta?.lat === 'number' && typeof meta?.lng === 'number'
@@ -173,12 +185,14 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
   const isPaused = session.status === 'paused';
   const lowTime = sec <= 10 && !isPaused;
   const lateMin = computeLateRegMinutes(session, sec);
+  const graceSec = computeFinishingGraceSec(session);
+  const isFinishing = graceSec != null && graceSec > 0;
 
   return (
     <Link
       href={`/m/live/${session.id}`}
       onClick={() => bumpStoreMetric(session.storeId, 'liveOpens')}
-      className="block bg-white border border-gray-200 rounded-2xl overflow-hidden active:scale-[0.99] transition"
+      className={`block bg-white border border-gray-200 rounded-2xl overflow-hidden active:scale-[0.99] transition ${isFinishing ? 'animate-pulse' : ''}`}
     >
       {/* 상단 — 매장명·거리·지역 (앱 테마 핑크) */}
       <div
@@ -186,8 +200,12 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         style={{ background: '#FF1F8F' }}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            {isPaused ? (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {isFinishing ? (
+              <span className="text-[10px] font-extrabold tracking-wider text-white bg-black/30 rounded px-1.5 py-0.5">
+                ⚠ 곧 종료 {fmtTime(graceSec)}
+              </span>
+            ) : isPaused ? (
               <span className="text-[10px] font-extrabold tracking-wider text-white/85">⏸ PAUSED</span>
             ) : (
               <>

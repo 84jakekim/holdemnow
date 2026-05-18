@@ -15,6 +15,8 @@ import {
   computeLateRegMinutes,
   fmtTime,
   useLiveCountdown,
+  FINISHING_GRACE_SEC,
+  computeFinishingGraceSec,
 } from '@/lib/live';
 import {
   type TournamentTemplate,
@@ -205,6 +207,9 @@ function SessionControls({ session }: { session: LiveSession }) {
   const structure = session.blindStructure;
   const nextBlind = structure.find((l) => l.level === session.currentLevel + 1);
   const lateMin = computeLateRegMinutes(session, seconds);
+  // useLiveCountdown 1초 tick에 묻어 매초 재계산됨 (running 동안). isFinishing 동안에도 표시 갱신.
+  const graceSec = computeFinishingGraceSec(session);
+  const isFinishing = graceSec != null && graceSec > 0;
 
   // 0 도달 시 자동 다음 레벨 (한 클라이언트만 실행하는 것이 이상적 — v0.1은 first-write-wins).
   // ready/paused 상태에서는 절대 자동 진행 금지.
@@ -222,6 +227,23 @@ function SessionControls({ session }: { session: LiveSession }) {
     });
   }, [seconds, isRunning, session]);
 
+  // 마지막 레벨 종료 후 그레이스 만료 시 자동 stopLiveSession 호출.
+  // 매장 사장 클라이언트가 권한을 가지고 있어, 이 페이지가 켜져 있는 동안 정리됨.
+  // 만료 후 진입 시(remainMs<=0) 즉시 호출.
+  const finishingMs = session.finishingAt?.toMillis?.();
+  useEffect(() => {
+    if (!finishingMs) return;
+    const remainMs = finishingMs + FINISHING_GRACE_SEC * 1000 - Date.now();
+    if (remainMs <= 0) {
+      stopLiveSession(session, 0).catch(() => {});
+      return;
+    }
+    const t = setTimeout(() => {
+      stopLiveSession(session, 0).catch(() => {});
+    }, remainMs);
+    return () => clearTimeout(t);
+  }, [finishingMs, session]);
+
   // ready/paused → '시작' 버튼이 가장 눈에 띄게. running → '일시정지'.
   const primaryLabel = isReady ? '▶ 시작' : isPaused ? '▶ 재개' : '⏸ 일시정지';
   const primaryVariant: 'primary' | 'ghost' = isRunning ? 'ghost' : 'primary';
@@ -229,21 +251,25 @@ function SessionControls({ session }: { session: LiveSession }) {
   return (
     <div className="space-y-3">
       {/* 거대 타이머 */}
-      <div className="bg-white border-[1.5px] border-gray-200 rounded-2xl p-6 text-center">
+      <div className={`bg-white border-[1.5px] rounded-2xl p-6 text-center ${isFinishing ? 'border-orange-300 bg-orange-50 animate-pulse' : 'border-gray-200'}`}>
         <div className="text-[10px] font-bold text-gray-500 tracking-widest mb-1">
-          {isReady && <span className="text-emerald-700 mr-2">● 시작 대기</span>}
+          {isFinishing ? (
+            <span className="text-orange-700 mr-2">⚠ 모든 레벨 종료 · 자동 정리까지 {fmtTime(graceSec ?? 0)}</span>
+          ) : isReady ? (
+            <span className="text-emerald-700 mr-2">● 시작 대기</span>
+          ) : null}
           LEVEL {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
           {session.ante ? ` · ante ${session.ante}` : ''}
         </div>
         <div
           className={`font-mono font-extrabold leading-none transition-colors ${
-            lowTime ? 'text-red-500' : isRunning ? 'text-gray-900' : 'text-gray-400'
+            isFinishing ? 'text-orange-600' : lowTime ? 'text-red-500' : isRunning ? 'text-gray-900' : 'text-gray-400'
           }`}
           style={{ fontSize: '64px', letterSpacing: '-0.04em' }}
         >
-          {fmtTime(seconds)}
+          {isFinishing ? fmtTime(graceSec ?? 0) : fmtTime(seconds)}
         </div>
-        {nextBlind && (
+        {nextBlind && !isFinishing && (
           <div className="text-[10px] text-gray-400 mt-2">
             다음: Lv {nextBlind.level} · {nextBlind.sb}/{nextBlind.bb}
           </div>
@@ -251,6 +277,12 @@ function SessionControls({ session }: { session: LiveSession }) {
         {isReady && (
           <div className="text-[11px] text-emerald-700 mt-2 font-bold">
             ▶ 시작을 누르면 카운트다운이 시작되고 모바일·지도에 LIVE로 노출됩니다
+          </div>
+        )}
+        {isFinishing && (
+          <div className="text-[11px] text-orange-700 mt-2 font-bold">
+            토너가 끝났습니다. 위 시간 후 자동으로 LIVE 표시가 사라집니다.<br />
+            즉시 마치려면 아래 ⏹ 종료를 누르세요.
           </div>
         )}
       </div>

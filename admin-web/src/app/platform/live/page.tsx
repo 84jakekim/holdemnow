@@ -16,6 +16,8 @@ import {
   addSecondsToSession,
   stopLiveSession,
   startLiveSession,
+  computeFinishingGraceSec,
+  FINISHING_GRACE_SEC,
 } from '@/lib/live';
 import { subscribeTemplates, type TournamentTemplate } from '@/lib/templates';
 
@@ -263,6 +265,23 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
   const isPaused = session.status === 'paused';
   const isRunning = session.status === 'running';
   const lateMin = computeLateRegMinutes(session, sec);
+  const graceSec = computeFinishingGraceSec(session);
+  const isFinishing = graceSec != null && graceSec > 0;
+
+  // 본사 권한으로 그레이스 만료 시 자동 정리 시도 (매장 사장 부재 안전망).
+  const finishingMs = session.finishingAt?.toMillis?.();
+  useEffect(() => {
+    if (!finishingMs) return;
+    const remainMs = finishingMs + FINISHING_GRACE_SEC * 1000 - Date.now();
+    if (remainMs <= 0) {
+      stopLiveSession(session, 0).catch(() => {});
+      return;
+    }
+    const t = setTimeout(() => {
+      stopLiveSession(session, 0).catch(() => {});
+    }, remainMs);
+    return () => clearTimeout(t);
+  }, [finishingMs, session]);
 
   const wrap = async (fn: () => Promise<unknown>, label: string) => {
     setBusy(true);
@@ -282,11 +301,15 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
   };
 
   return (
-    <div className="px-5 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50">
+    <div className={`px-5 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50 ${isFinishing ? 'animate-pulse bg-orange-50' : ''}`}>
       {/* 매장 + 토너 — 4열 */}
       <div className="col-span-4 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          {isReady ? (
+          {isFinishing ? (
+            <span className="text-[10px] font-extrabold tracking-wider text-orange-700">
+              ⚠ 곧 종료 {fmtTime(graceSec)}
+            </span>
+          ) : isReady ? (
             <span className="text-[10px] font-extrabold tracking-wider text-blue-700">⏳ READY</span>
           ) : isPaused ? (
             <span className="text-[10px] font-extrabold tracking-wider text-amber-700">⏸ PAUSED</span>

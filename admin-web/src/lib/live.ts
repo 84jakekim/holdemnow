@@ -59,6 +59,21 @@ export interface LiveSession {
   viewerCount: number;
   startedAt?: unknown;
   endedAt?: unknown;
+  /** 마지막 레벨까지 모두 진행되어 자동 종료 카운트다운 시작 시각.
+   *  설정되면 FINISHING_GRACE_SEC 동안 "곧 종료" 깜빡임 노출 후 stopLiveSession으로 정리.
+   *  매장 사장 LivePanel(권한 보유 클라이언트)이 만료 시 자동 호출.
+   *  모바일/지도는 그레이스 만료된 세션을 클라이언트 필터로 가림 (안전망). */
+  finishingAt?: Timestamp | null;
+}
+
+/** 마지막 레벨 종료 후 자동 정리까지의 그레이스(초). */
+export const FINISHING_GRACE_SEC = 180;
+
+/** 남은 그레이스 초. finishingAt 없으면 null, 만료 시 0 이하. */
+export function computeFinishingGraceSec(s: LiveSession): number | null {
+  if (!s.finishingAt) return null;
+  const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
+  return Math.floor((endsMs - Date.now()) / 1000);
 }
 
 export function liveSessionsCol() {
@@ -296,10 +311,16 @@ export async function nextLevelTick(s: LiveSession) {
   // 카운트다운 0 도달 시 자동 다음 레벨
   const next = s.blindStructure.find((l) => l.level === s.currentLevel + 1);
   if (!next) {
-    // 마지막 레벨까지 모두 소진 → 자동 라이브 종료.
-    // status='completed'가 되면 subscribeAllLiveSessions의 in 쿼리에서 자동 제외되어
-    // 모바일/지도/매장 LIVE 표시 모두 자동으로 사라짐.
-    await stopLiveSession(s, 0);
+    // 마지막 레벨까지 모두 소진 → 즉시 종료하지 않고 finishingAt 박음.
+    // FINISHING_GRACE_SEC 동안 "곧 종료" 깜빡임 노출 후 stopLiveSession으로 정리.
+    // 매장 사장 LivePanel(권한 보유)이 만료 시 자동 호출. 모바일은 클라이언트 필터로 가림.
+    if (!s.finishingAt) {
+      await patchSession(s.id, {
+        finishingAt: serverTimestamp() as unknown as Timestamp,
+        levelSecondsLeft: 0,
+        levelEndsAt: null,
+      });
+    }
     return false;
   }
   await patchSession(s.id, {
