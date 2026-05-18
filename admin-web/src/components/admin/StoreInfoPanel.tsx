@@ -10,6 +10,7 @@ import {
   deleteStorePhotoByUrl,
 } from '@/lib/storeInfo';
 import { geocodeAddress } from '@/lib/kakao';
+import BusinessHoursPicker from '@/components/common/BusinessHoursPicker';
 
 interface Props {
   storeId: string;
@@ -223,23 +224,21 @@ export default function StoreInfoPanel({ storeId }: Props) {
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="전화">
-            <input
-              className="form-input font-mono"
-              value={form.phone}
-              onChange={(e) => update('phone', e.target.value)}
-              placeholder="051-000-0000"
-            />
-          </Field>
-          <Field label="영업시간">
-            <input
-              className="form-input"
-              value={form.hours}
-              onChange={(e) => update('hours', e.target.value)}
-            />
-          </Field>
-        </div>
+        <Field label="전화">
+          <input
+            className="form-input font-mono"
+            value={form.phone}
+            onChange={(e) => update('phone', e.target.value)}
+            placeholder="051-000-0000"
+          />
+        </Field>
+
+        <Field label="영업시간">
+          <BusinessHoursPicker
+            value={form.hours}
+            onChange={(v) => update('hours', v)}
+          />
+        </Field>
 
         <Field label="매장 소개">
           <textarea

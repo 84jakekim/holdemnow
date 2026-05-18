@@ -14,6 +14,7 @@ import {
   validatePassword,
   type StoreSignupPayload,
 } from '@/lib/emailAuth';
+import BusinessHoursPicker from '@/components/common/BusinessHoursPicker';
 
 // =====================================================================
 // 타입
@@ -365,11 +366,9 @@ export default function StoreSignupPage() {
               </Field>
 
               <Field label="영업시간">
-                <input
-                  className="form-input"
+                <BusinessHoursPicker
                   value={form.storeHours}
-                  onChange={(e) => update('storeHours', e.target.value)}
-                  placeholder="예: 매일 18:00 - 익일 05:00"
+                  onChange={(v) => update('storeHours', v)}
                 />
               </Field>
 
