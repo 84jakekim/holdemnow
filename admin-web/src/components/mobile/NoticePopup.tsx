@@ -49,9 +49,14 @@ export default function NoticePopup() {
   const [dismissed, setDismissed] = useState<DismissMap>({});
 
   useEffect(() => {
-    const tid = setTimeout(() => setDismissed(readDismissed()), 0);
+    const initialDismissed = readDismissed();
+    const tid = setTimeout(() => setDismissed(initialDismissed), 0);
+    console.log('[NoticePopup] mounted. dismissed keys (still valid):', Object.keys(initialDismissed));
     const unsub = subscribeActiveNotices(
-      (items) => setNotices(items),
+      (items) => {
+        console.log('[NoticePopup] active notices received:', items.length, items.map((n) => ({ id: n.id, title: n.title, active: n.active, priority: n.priority })));
+        setNotices(items);
+      },
       (e) => {
         // 인덱스 누락·권한 문제로 팝업이 안 뜨는 사고를 silent로 묻지 않음.
         console.warn('[NoticePopup] subscribeActiveNotices failed:', e?.message ?? e);
@@ -66,6 +71,16 @@ export default function NoticePopup() {
   // readDismissed가 만료된 항목을 이미 필터링하므로, 컴포넌트 본문에서는 키 존재 여부만 본다.
   const visible = notices.filter((n) => !dismissed[n.id]);
   const visibleCount = visible.length;
+
+  useEffect(() => {
+    if (notices.length > 0) {
+      console.log('[NoticePopup] visibility check:', {
+        totalActive: notices.length,
+        dismissedCount: notices.filter((n) => dismissed[n.id]).length,
+        visibleCount,
+      });
+    }
+  }, [notices, dismissed, visibleCount]);
 
   useEffect(() => {
     if (visibleCount > 0) {
