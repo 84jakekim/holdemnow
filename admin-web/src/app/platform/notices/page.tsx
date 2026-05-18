@@ -158,7 +158,9 @@ function NoticeRow({ notice, onEdit }: { notice: Notice; onEdit: () => void }) {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <div className="font-bold text-gray-900 truncate">{notice.title}</div>
+          <div className="font-bold text-gray-900 truncate">
+            {notice.title || <span className="italic text-gray-400">(제목 없음 — 이미지만)</span>}
+          </div>
           <span
             className={`text-[10px] font-extrabold tracking-wider px-2 py-0.5 rounded ${
               notice.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'
@@ -286,8 +288,10 @@ function NoticeEditModal({
   };
 
   const save = async () => {
-    if (!title.trim()) {
-      setError('제목을 입력해주세요');
+    // 제목·본문·이미지 모두 비어있으면 의미 있는 공지가 아니므로 거부.
+    // 포스터만 업로드도 허용 (이미지가 있으면 OK).
+    if (!title.trim() && !body.trim() && imageUrls.length === 0) {
+      setError('제목·본문·이미지 중 최소 하나는 입력해야 합니다');
       return;
     }
     const startDate = startAt ? new Date(startAt) : null;
@@ -347,7 +351,7 @@ function NoticeEditModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">제목 *</label>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">제목 (선택)</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}

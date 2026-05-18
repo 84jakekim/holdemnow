@@ -229,28 +229,32 @@ function NoticeCard({
         </div>
       )}
 
-      {/* 제목 + 본문 */}
-      <div className="px-5 py-4 flex-1">
-        <div className="font-extrabold text-lg text-gray-900 mb-2">{notice.title}</div>
-        {notice.body && (
-          <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {notice.body}
-          </div>
-        )}
-        {notice.linkUrl && (
-          <button
-            onClick={openLink}
-            className="mt-3 text-xs font-bold text-blue-600 active:text-blue-800"
-          >
-            자세히 보기 ›
-          </button>
-        )}
-        {totalCount > 1 && (
-          <div className="mt-3 text-[11px] text-gray-400 text-center">
-            ← 옆으로 넘겨 다음 공지 확인 →
-          </div>
-        )}
-      </div>
+      {/* 제목 + 본문 — 이미지만 있는 공지는 이 영역 전체 생략 */}
+      {(notice.title || notice.body || notice.linkUrl || totalCount > 1) && (
+        <div className="px-5 py-4 flex-1">
+          {notice.title && (
+            <div className="font-extrabold text-lg text-gray-900 mb-2">{notice.title}</div>
+          )}
+          {notice.body && (
+            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {notice.body}
+            </div>
+          )}
+          {notice.linkUrl && (
+            <button
+              onClick={openLink}
+              className="mt-3 text-xs font-bold text-blue-600 active:text-blue-800"
+            >
+              자세히 보기 ›
+            </button>
+          )}
+          {totalCount > 1 && (
+            <div className="mt-3 text-[11px] text-gray-400 text-center">
+              ← 옆으로 넘겨 다음 공지 확인 →
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 하단 액션 */}
       <div className="flex border-t border-gray-100">
