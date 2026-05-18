@@ -17,8 +17,17 @@ import * as admin from 'firebase-admin';
 
 const FINISHING_GRACE_MS = 180 * 1000;
 const READY_EXPIRY_MS = 300 * 1000;
-const STALE_RUNNING_MS = 180 * 1000; // levelEndsAt 만료 후 이만큼 지나면 좀비
-const FINISHING_ACTIVE_STATUSES = ['running', 'paused', 'break'];
+const STALE_TIMER_MS = 180 * 1000;       // levelEndsAt 만료 후 이만큼 지나면 좀비
+const STALE_NULL_TIMER_MS = 30 * 60_000; // levelEndsAt 없을 때 updatedAt 기준 30분
+const ACTIVE_STATUSES = ['running', 'paused', 'break', 'ready'];
+
+type Maybe<T> = T | null | undefined;
+type TsLike = admin.firestore.Timestamp;
+
+function tsMs(t: Maybe<TsLike>): number | null {
+  if (!t || typeof (t as TsLike).toMillis !== 'function') return null;
+  return (t as TsLike).toMillis();
+}
 
 export const autoStopFinishedSessions = onSchedule(
   {
@@ -29,77 +38,104 @@ export const autoStopFinishedSessions = onSchedule(
   async () => {
     const db = admin.firestore();
     const now = Date.now();
-    const finishingCutoff = admin.firestore.Timestamp.fromMillis(now - FINISHING_GRACE_MS);
-    const readyCutoff = admin.firestore.Timestamp.fromMillis(now - READY_EXPIRY_MS);
-    const staleCutoff = admin.firestore.Timestamp.fromMillis(now - STALE_RUNNING_MS);
 
-    // 세 쿼리 병렬 — 각 인덱스로 동작 (status+createdAt, status+levelEndsAt 복합 인덱스 정의됨).
-    const [finishingSnap, readySnap, staleSnap] = await Promise.all([
-      db.collection('liveSessions').where('finishingAt', '<', finishingCutoff).get(),
-      db
-        .collection('liveSessions')
-        .where('status', '==', 'ready')
-        .where('createdAt', '<', readyCutoff)
-        .get(),
-      db
-        .collection('liveSessions')
-        .where('status', '==', 'running')
-        .where('levelEndsAt', '<', staleCutoff)
-        .get(),
-    ]);
+    // 단일 쿼리로 active 세션 모두 fetch (running/paused/break/ready).
+    // 베타 규모(수십 개)에서 충분히 효율적이고, 인덱스/필드 형태 문제에 견고.
+    const snap = await db
+      .collection('liveSessions')
+      .where('status', 'in', ACTIVE_STATUSES)
+      .get();
 
     const batch = db.batch();
-    const touched = new Set<string>();
     let finishingCount = 0;
     let readyCount = 0;
-    let staleCount = 0;
+    let staleTimerCount = 0;
+    let staleNullCount = 0;
 
-    finishingSnap.forEach((doc) => {
-      const data = doc.data() as { status?: string };
-      if (!FINISHING_ACTIVE_STATUSES.includes(data.status ?? '')) return; // 이미 completed면 skip
-      if (touched.has(doc.id)) return;
-      touched.add(doc.id);
+    snap.forEach((doc) => {
+      const data = doc.data() as {
+        status?: string;
+        storeName?: string;
+        tournamentName?: string;
+        finishingAt?: TsLike | null;
+        createdAt?: TsLike | null;
+        levelEndsAt?: TsLike | null;
+        updatedAt?: TsLike | null;
+      };
+      const status = data.status ?? '';
+      const finishingMs = tsMs(data.finishingAt);
+      const createdMs = tsMs(data.createdAt);
+      const levelEndsMs = tsMs(data.levelEndsAt);
+      const updatedMs = tsMs(data.updatedAt);
+
+      // 진단용 raw 덤프 — 모든 active 세션의 시간 필드를 ISO로 찍음.
+      console.log(
+        `[autoStop:scan] ${doc.id} store="${data.storeName ?? '?'}" status=${status} ` +
+          `lvlEnds=${data.levelEndsAt?.toDate?.()?.toISOString() ?? 'null'} ` +
+          `updated=${data.updatedAt?.toDate?.()?.toISOString() ?? 'null'} ` +
+          `finishing=${data.finishingAt?.toDate?.()?.toISOString() ?? 'null'} ` +
+          `created=${data.createdAt?.toDate?.()?.toISOString() ?? 'null'}`,
+      );
+
+      let reason = '';
+
+      // 1. finishingAt 그레이스 만료
+      if (finishingMs != null && finishingMs + FINISHING_GRACE_MS < now) {
+        reason = 'finishingGrace';
+      }
+      // 2. ready 만료
+      else if (status === 'ready' && createdMs != null && createdMs + READY_EXPIRY_MS < now) {
+        reason = 'readyExpiry';
+      }
+      // 3. 좀비 timer 만료 (running OR paused — paused도 levelEndsAt이 만료 후 3분 지나면 좀비)
+      else if (
+        (status === 'running' || status === 'paused' || status === 'break') &&
+        levelEndsMs != null &&
+        levelEndsMs + STALE_TIMER_MS < now
+      ) {
+        reason = 'staleTimer';
+      }
+      // 4. levelEndsAt 없는 채 updatedAt이 오래된 좀비
+      // paused로 잠시 멈춘 것일 수 있어 임계값 길게 (30분) — 의도된 휴식 시간 보호
+      else if (
+        (status === 'running' || status === 'paused' || status === 'break') &&
+        levelEndsMs == null &&
+        updatedMs != null &&
+        updatedMs + STALE_NULL_TIMER_MS < now
+      ) {
+        reason = 'staleNullTimer';
+      }
+
+      if (!reason) return;
+
+      console.log(
+        `[autoStop] reaping ${doc.id} status=${status} reason=${reason} store="${data.storeName ?? '?'}" tourney="${data.tournamentName ?? '?'}"`,
+      );
+
       batch.update(doc.ref, {
         status: 'completed',
         levelEndsAt: null,
         endedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      finishingCount++;
+
+      if (reason === 'finishingGrace') finishingCount++;
+      else if (reason === 'readyExpiry') readyCount++;
+      else if (reason === 'staleTimer') staleTimerCount++;
+      else if (reason === 'staleNullTimer') staleNullCount++;
     });
 
-    readySnap.forEach((doc) => {
-      if (touched.has(doc.id)) return;
-      touched.add(doc.id);
-      batch.update(doc.ref, {
-        status: 'completed',
-        levelEndsAt: null,
-        endedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      readyCount++;
-    });
-
-    staleSnap.forEach((doc) => {
-      if (touched.has(doc.id)) return;
-      touched.add(doc.id);
-      batch.update(doc.ref, {
-        status: 'completed',
-        levelEndsAt: null,
-        endedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      staleCount++;
-    });
-
-    if (finishingCount === 0 && readyCount === 0 && staleCount === 0) {
-      console.log('[autoStopFinishedSessions] no expired sessions to clean');
+    const total = finishingCount + readyCount + staleTimerCount + staleNullCount;
+    if (total === 0) {
+      console.log(
+        `[autoStopFinishedSessions] scanned=${snap.size} no expired sessions to clean`,
+      );
       return;
     }
 
     await batch.commit();
     console.log(
-      `[autoStopFinishedSessions] stopped finishing=${finishingCount}, expiredReady=${readyCount}, staleRunning=${staleCount}`,
+      `[autoStopFinishedSessions] scanned=${snap.size} stopped total=${total} (finishing=${finishingCount} ready=${readyCount} staleTimer=${staleTimerCount} staleNull=${staleNullCount})`,
     );
   },
 );

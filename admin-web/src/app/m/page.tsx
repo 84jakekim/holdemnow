@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { collection, getDocs, query, where, documentId } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -11,6 +11,13 @@ import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
 import { loadPopularStores, loadRecentlyJoinedStores, type PopularityStore } from '@/lib/popularity';
 import { useAuth } from '@/lib/hooks';
+import { coordToRegionLabel } from '@/lib/kakao';
+import {
+  loadActivePostsAll,
+  subscribeActivePinnedPosts,
+  type StorePost,
+  type PinnedPost,
+} from '@/lib/posts';
 
 interface StoreGroup {
   storeId: string;
@@ -57,6 +64,62 @@ export default function MobileHome() {
     authState.status === 'authenticated'
       ? authState.user.displayName ?? authState.user.email?.split('@')[0] ?? '플레이어'
       : null;
+
+  // 사용자 위치 → 행정구역 라벨. localStorage 24h 캐싱 — 카카오 호출량 절약.
+  // 좌표 100m 이상 이동하지 않는 한 같은 동/구. 캐시 만료 또는 위치 변동 시에만 카카오 호출.
+  const REGION_CACHE_KEY = 'holdemnow:regionLabel';
+  const REGION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  const REGION_CACHE_RADIUS_M = 500; // 이 반경 내면 같은 행정동으로 간주, 호출 안 함
+  const [regionLabel, setRegionLabel] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem(REGION_CACHE_KEY);
+      if (!raw) return null;
+      const cached = JSON.parse(raw) as { label: string; lat: number; lng: number; ts: number };
+      if (Date.now() - cached.ts > REGION_CACHE_TTL_MS) return null;
+      return cached.label;
+    } catch { return null; }
+  });
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return;
+        // 캐시 검사: 기존 좌표와 가까우면 카카오 호출 안 함
+        try {
+          const raw = window.localStorage.getItem(REGION_CACHE_KEY);
+          if (raw) {
+            const c = JSON.parse(raw) as { label: string; lat: number; lng: number; ts: number };
+            if (Date.now() - c.ts < REGION_CACHE_TTL_MS) {
+              const dLat = (pos.coords.latitude - c.lat) * 111_000;
+              const dLng = (pos.coords.longitude - c.lng) * 88_000;
+              const distM = Math.sqrt(dLat * dLat + dLng * dLng);
+              if (distM < REGION_CACHE_RADIUS_M) {
+                setRegionLabel(c.label);
+                return; // 카카오 호출 skip
+              }
+            }
+          }
+        } catch { /* fall through */ }
+        // 캐시 miss 또는 위치 이동 — 카카오 호출 1회
+        coordToRegionLabel(pos.coords.latitude, pos.coords.longitude)
+          .then((label) => {
+            if (cancelled || !label) return;
+            setRegionLabel(label);
+            try {
+              window.localStorage.setItem(REGION_CACHE_KEY, JSON.stringify({
+                label, lat: pos.coords.latitude, lng: pos.coords.longitude, ts: Date.now(),
+              }));
+            } catch { /* ignore */ }
+          })
+          .catch(() => {});
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60_000 },
+    );
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeAllLiveSessions(
@@ -107,112 +170,96 @@ export default function MobileHome() {
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          1. 상단 헤더 v6 — 핑크 그라데이션 카드형
-          브랜드 핑크 그라데이션 배경, 흰 로고·아이콘, 위치도 핑크 안
+          1. 상단 헤더 v7 — 1단 미니멀 (당근+토스 DNA)
+          흰 배경 + 핑크 하단 액센트라인. 요소 3개만: 워드마크, 위치, 아이콘.
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <header className="sticky top-0 z-30 header-brand-card">
-        {/* 1단 — 브랜드 (좌) + 위치 칩 (우, 위치 표시임을 명확히) */}
-        <div className="px-4 h-14 flex items-center justify-between">
-          <Link href="/m" aria-label="HoldemNow 홈" className="flex items-center gap-2 transition active:opacity-75">
+      <header className="sticky top-0 z-30 header-minimal">
+        <div className="px-4 h-14 flex items-center justify-between gap-3">
+
+          {/* 좌: 워드마크 (홈 링크) */}
+          <Link
+            href="/m"
+            aria-label="HoldemNow 홈"
+            className="flex-shrink-0 transition active:opacity-60"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo-mark.svg"
-              alt=""
-              width={30}
-              height={30}
-              className="flex-shrink-0"
-              style={{ borderRadius: 8, boxShadow: '0 1px 6px rgba(0,0,0,0.18)' }}
-              aria-hidden="true"
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-white.svg"
+              src="/logo.svg"
               alt="HoldemNow"
-              height={18}
+              height={20}
               style={{ width: 'auto', display: 'block' }}
             />
           </Link>
 
-          {/* 위치 칩 — 둥근 알약 + 흰 핀 아이콘 + 흰 텍스트. 위치 표시임을 한눈에. */}
-          <button
-            aria-label="위치 변경"
-            className="flex items-center gap-1 transition active:scale-95"
-            style={{
-              background: 'rgba(255,255,255,0.18)',
-              border: '1px solid rgba(255,255,255,0.30)',
-              borderRadius: 999,
-              padding: '6px 10px 6px 8px',
-              backdropFilter: 'blur(8px)',
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
-            <span className="text-[12px] font-extrabold tracking-tight text-white">
-              부산 서면
-            </span>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* 2단 — 환영 메시지 (좌, 토스 스타일 큰 글씨) + 검색·알림 (우) */}
-        <div className="px-4 pb-3 -mt-1 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            {displayName ? (
-              <>
-                <div className="text-[18px] font-extrabold tracking-tight text-white truncate">
-                  {displayName}님,
-                </div>
-                <div className="text-[13px] font-semibold text-white" style={{ opacity: 0.85 }}>
-                  환영합니다 👋
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-[18px] font-extrabold tracking-tight text-white">
-                  지금 LIVE한 매장,
-                </div>
-                <div className="text-[13px] font-semibold text-white" style={{ opacity: 0.85 }}>
-                  내 주변에서 찾아보세요
-                </div>
-              </>
-            )}
+          {/* 중앙: 환영 + 위치 (작게, 한 줄·두 줄 자동 조정) */}
+          <div className="flex-1 min-w-0 flex flex-col items-center justify-center leading-tight">
+            <div className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-1)' }}>
+              {displayName ? `${displayName}님 환영합니다` : '오늘도 환영합니다'}
+            </div>
+            <button
+              aria-label="위치 변경"
+              className="flex items-center gap-0.5 mt-0.5 max-w-full transition active:opacity-60"
+            >
+              <svg
+                width="10" height="10" viewBox="0 0 24 24"
+                fill="none" stroke="var(--brand)" strokeWidth="2.4"
+                strokeLinecap="round" strokeLinejoin="round"
+                aria-hidden="true" style={{ flexShrink: 0 }}
+              >
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              <span
+                className="text-[11px] font-normal truncate"
+                style={{ color: 'var(--text-2)' }}
+              >
+                {regionLabel ?? '위치 확인 중'}
+              </span>
+              <svg
+                width="9" height="9" viewBox="0 0 24 24"
+                fill="none" stroke="var(--text-3)" strokeWidth="2.4"
+                strokeLinecap="round" strokeLinejoin="round"
+                aria-hidden="true" style={{ flexShrink: 0 }}
+              >
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </button>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* 우: 검색 + 알림 아이콘 */}
+          <div className="flex items-center gap-1 flex-shrink-0">
             <Link
               href="/m/search"
               aria-label="검색"
-              className="w-9 h-9 flex items-center justify-center rounded-xl header-action-btn-white"
+              className="w-10 h-10 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)]"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
             </Link>
             <button
               aria-label="알림"
-              className="w-9 h-9 flex items-center justify-center rounded-xl relative header-action-btn-white"
+              className="w-10 h-10 flex items-center justify-center rounded-full relative transition active:bg-[var(--surface-2)]"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                 <path d="M13.73 21a2 2 0 01-3.46 0"/>
               </svg>
+              {/* 알림 뱃지 자리 예약 — 미읽음 있을 때만 노출 */}
+              {/* <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: 'var(--live)' }} /> */}
             </button>
           </div>
         </div>
 
-        {/* 하단 페이드 구분 — 본문과 자연스럽게 분리 */}
-        <div className="header-brand-card-footer" aria-hidden="true" />
+        {/* 하단 핑크 액센트 라인 — 브랜드 존재감, 구분선 역할 동시 */}
+        <div className="header-minimal-line" aria-hidden="true" />
       </header>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           2. 히어로 LIVE 카드 — lun 강도 수준
           GTD/진행 인원 숫자 강조 + 강한 포스터 분위기
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section aria-label="지금 LIVE" className="pt-4">
+      <section aria-label="지금 LIVE" className="pt-5">
         {/* 섹션 헤더 */}
         <div className="px-4 flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -277,71 +324,212 @@ export default function MobileHome() {
           5개 즉시 진입점: 매장찾기 / LIVE중 / 토너 / 시리즈 / 즐겨찾기
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section aria-label="빠른 메뉴" className="px-4 py-5">
+        {/* 공유 SVG defs — 5개 아이콘이 같은 그라데이션/필터를 공유 (light source 일관성) */}
+        <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+          <defs>
+            {/* 카드 흰 면 — 위 밝고 아래 옅은 회색 */}
+            <linearGradient id="cardFace" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FFFFFF" />
+              <stop offset="55%" stopColor="#FFF4F9" />
+              <stop offset="100%" stopColor="#FFD9EA" />
+            </linearGradient>
+            {/* 슈트 — 짙은 자홍 그라데이션 (위 밝음) */}
+            <linearGradient id="suitDark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#5A0830" />
+              <stop offset="100%" stopColor="#2E0418" />
+            </linearGradient>
+            {/* 슈트 — 빨강 (LIVE) */}
+            <linearGradient id="suitRed" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FFE2E2" />
+              <stop offset="60%" stopColor="#FF4848" />
+              <stop offset="100%" stopColor="#7A0808" />
+            </linearGradient>
+            {/* 골드 — 메이저 시리즈 */}
+            <linearGradient id="goldFace" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FFF1B5" />
+              <stop offset="45%" stopColor="#FFC845" />
+              <stop offset="100%" stopColor="#A55F08" />
+            </linearGradient>
+            {/* 칩 — 위 밝고 아래 어두운 빨강 */}
+            <radialGradient id="chipRed" cx="35%" cy="30%" r="80%">
+              <stop offset="0%" stopColor="#FFD0D0" />
+              <stop offset="55%" stopColor="#E53E3E" />
+              <stop offset="100%" stopColor="#5A0808" />
+            </radialGradient>
+            {/* 위치 빔 — 빛이 퍼지는 콘 */}
+            <linearGradient id="beamLight" x1="0.5" y1="0" x2="0.5" y2="1">
+              <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+            </linearGradient>
+            {/* inner shadow 필터 — 살짝 파인 느낌 */}
+            <filter id="innerShade" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="0.8" />
+              <feOffset dx="0" dy="0.6" result="offsetblur" />
+              <feFlood floodColor="#3A0218" floodOpacity="0.6" />
+              <feComposite in2="offsetblur" operator="in" />
+              <feComposite in2="SourceGraphic" operator="arithmetic" k2="-1" k3="1" />
+            </filter>
+            {/* 골드 inner shadow */}
+            <filter id="innerShadeGold" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="0.8" />
+              <feOffset dx="0" dy="0.6" result="offsetblur" />
+              <feFlood floodColor="#5C2F00" floodOpacity="0.55" />
+              <feComposite in2="offsetblur" operator="in" />
+              <feComposite in2="SourceGraphic" operator="arithmetic" k2="-1" k3="1" />
+            </filter>
+          </defs>
+        </svg>
+
         <div className="grid grid-cols-5 gap-1">
-          {/* 매장찾기 */}
+          {/* 1. 매장찾기 — 비스듬히 떠 있는 카드 + 스페이드(매장 핀) + 위에서 내려오는 위치 빛줄기 */}
           <Link href="/m/discover" className="flex flex-col items-center gap-2 transition active:scale-95">
             <div className="cat-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M14.5 9.5l-5 2-2 5 5-2 2-5z"/>
-                <circle cx="12" cy="12" r="1.2" fill="#fff" stroke="none"/>
+              <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
+                {/* 위치 빔 — 카드 위에서 빛이 내려옴 */}
+                <path d="M14 2 L26 2 L31 10 L9 10 Z" fill="url(#beamLight)" opacity="0.55" />
+                {/* 카드 그림자 (베이스) */}
+                <rect x="9" y="14" width="22" height="28" rx="3.2" fill="#5A0830" opacity="0.45" transform="rotate(-6 20 28)" />
+                {/* 카드 페이스 */}
+                <rect x="9" y="12" width="22" height="28" rx="3.2" fill="url(#cardFace)" transform="rotate(-6 20 26)" />
+                {/* 카드 테두리 라이트 */}
+                <rect x="9.5" y="12.5" width="21" height="27" rx="2.8" fill="none" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.8" transform="rotate(-6 20 26)" />
+                {/* 스페이드 — 매장 핀 (카드 중앙) */}
+                <g transform="rotate(-6 20 26)">
+                  <path d="M20 18 C16.4 22.8 14.2 24.4 14.2 27.2 C14.2 29.0 15.7 30.3 17.4 30.3 C18.4 30.3 19.2 29.9 19.6 29.2 C19.4 30.6 18.7 31.6 17.8 32.4 L22.2 32.4 C21.3 31.6 20.6 30.6 20.4 29.2 C20.8 29.9 21.6 30.3 22.6 30.3 C24.3 30.3 25.8 29.0 25.8 27.2 C25.8 24.4 23.6 22.8 20 18 Z" fill="url(#suitDark)" filter="url(#innerShade)" />
+                  <path d="M20 19 C18 22 16.5 23.8 16 25.4" stroke="#FF8FC4" strokeWidth="0.7" strokeLinecap="round" fill="none" opacity="0.85" />
+                </g>
+                {/* 위치 빔 위 작은 별빛 */}
+                <circle cx="20" cy="5" r="1.4" fill="#FFFFFF" opacity="0.95" />
+                <circle cx="20" cy="5" r="2.6" fill="#FFFFFF" opacity="0.35" />
               </svg>
             </div>
             <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>매장찾기</span>
           </Link>
 
-          {/* LIVE 중 */}
+          {/* 2. LIVE — 3단 비스듬 칩 스택 + 빨강 코어 + 미세 광선 (실시간 진행 중) */}
           <Link href="/m/discover" className="flex flex-col items-center gap-2 transition active:scale-95">
-            <div className="cat-icon-wrap cat-icon-wrap-live relative">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3" fill="#fff" stroke="none"/>
-                <path d="M16.5 7.5a6.5 6.5 0 010 9M7.5 7.5a6.5 6.5 0 000 9"/>
-                <path d="M19.07 4.93a10.5 10.5 0 010 14.14M4.93 4.93a10.5 10.5 0 000 14.14"/>
+            <div className="cat-icon-wrap cat-icon-wrap-live">
+              <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
+                {/* 바닥 그림자 */}
+                <ellipse cx="20" cy="38" rx="13" ry="2.6" fill="#3A0202" opacity="0.45" />
+                {/* 칩 3층 (맨 아래) */}
+                <ellipse cx="20" cy="33" rx="11" ry="3.4" fill="url(#chipRed)" />
+                <path d="M9 33 L9 36 A11 3.4 0 0 0 31 36 L31 33 A11 3.4 0 0 1 9 33 Z" fill="#5A0808" opacity="0.85" />
+                {/* 칩 2층 */}
+                <ellipse cx="20" cy="27" rx="11" ry="3.4" fill="url(#chipRed)" />
+                <path d="M9 27 L9 30 A11 3.4 0 0 0 31 30 L31 27 A11 3.4 0 0 1 9 27 Z" fill="#7A0A0A" opacity="0.7" />
+                {/* 칩 1층 (맨 위 — 상단 면) */}
+                <ellipse cx="20" cy="21" rx="11" ry="3.4" fill="url(#chipRed)" />
+                {/* 칩 상단 마크 — 십자(칩 패턴) */}
+                <g transform="translate(20 21)">
+                  <rect x="-7" y="-0.6" width="14" height="1.2" rx="0.5" fill="#FFFFFF" opacity="0.85" />
+                  <rect x="-0.6" y="-2.4" width="1.2" height="4.8" rx="0.5" fill="#FFFFFF" opacity="0.85" />
+                  <circle cx="0" cy="0" r="2" fill="#FF6464" stroke="#FFFFFF" strokeWidth="0.6" />
+                </g>
+                {/* 상단 빛 반사 — 타원 일부 */}
+                <ellipse cx="17" cy="20" rx="5.5" ry="1.2" fill="#FFFFFF" opacity="0.55" />
+                {/* 위 광선 — 진행 중 표시 */}
+                <path d="M20 4 L20 10" stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="round" opacity="0.85" />
+                <path d="M12 7 L15 11" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity="0.65" />
+                <path d="M28 7 L25 11" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity="0.65" />
               </svg>
-              {/* 미세 펄스 표시 */}
-              <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full" style={{ background: '#fff', opacity: 0.9 }} aria-hidden="true" />
             </div>
-            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>LIVE 중</span>
+            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>LIVE</span>
           </Link>
 
-          {/* 토너 */}
+          {/* 3. 토너먼트 — 비스듬한 카드 두 장 + 다이아몬드(예정 일정) + 12시 시계 호 */}
           <Link href="/m/calendar" className="flex flex-col items-center gap-2 transition active:scale-95">
             <div className="cat-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2.5"/>
-                <path d="M16 2v4M8 2v4M3 10h18"/>
-                <circle cx="8" cy="15" r="1" fill="#fff" stroke="none"/>
-                <circle cx="12" cy="15" r="1" fill="#fff" stroke="none"/>
-                <circle cx="16" cy="15" r="1" fill="#fff" stroke="none"/>
+              <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
+                {/* 뒤 카드 (오른쪽으로 살짝 회전) */}
+                <rect x="11" y="13" width="20" height="26" rx="3" fill="#7A0840" opacity="0.55" transform="rotate(8 21 26)" />
+                <rect x="11" y="11" width="20" height="26" rx="3" fill="url(#cardFace)" transform="rotate(8 21 24)" />
+                {/* 앞 카드 (왼쪽으로 살짝 회전) */}
+                <rect x="8" y="14" width="20" height="26" rx="3" fill="#5A0830" opacity="0.5" transform="rotate(-8 18 27)" />
+                <rect x="8" y="12" width="20" height="26" rx="3" fill="url(#cardFace)" transform="rotate(-8 18 25)" />
+                <rect x="8.5" y="12.5" width="19" height="25" rx="2.6" fill="none" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.85" transform="rotate(-8 18 25)" />
+                {/* 다이아몬드 슈트 (앞 카드 중앙) */}
+                <g transform="rotate(-8 18 25)">
+                  <path d="M18 18 L24 25 L18 32 L12 25 Z" fill="url(#suitDark)" filter="url(#innerShade)" />
+                  <path d="M18 19 L22.5 25 L18 22 Z" fill="#FFFFFF" opacity="0.35" />
+                </g>
+                {/* 시계 호 — 우상단 (예정/스케줄 메타) */}
+                <circle cx="32" cy="10" r="5" fill="#FFFFFF" stroke="#7A0840" strokeWidth="0.8" />
+                <path d="M32 10 L32 7 M32 10 L34 11" stroke="#7A0840" strokeWidth="1.1" strokeLinecap="round" />
+                <circle cx="32" cy="10" r="0.7" fill="#7A0840" />
               </svg>
             </div>
-            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>토너</span>
+            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>토너먼트</span>
           </Link>
 
-          {/* 시리즈 */}
+          {/* 4. 대회정보 — 골드 왕관 + 클럽 슈트(메이저 시리즈, 트로피 클리셰 회피) */}
           <Link href="/m/events" className="flex flex-col items-center gap-2 transition active:scale-95">
             <div className="cat-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M8 21l4-4 4 4"/>
-                <path d="M12 17V3"/>
-                <path d="M3 8h18"/>
-                <path d="M6 12.5l6-2.5 6 2.5"/>
+              <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
+                {/* 베이스 그림자 */}
+                <ellipse cx="20" cy="38" rx="10" ry="2" fill="#5C2F00" opacity="0.5" />
+                {/* 클럽 슈트 (왕관 아래) */}
+                <g transform="translate(20 30)">
+                  <circle cx="0" cy="-3" r="3.2" fill="url(#suitDark)" filter="url(#innerShade)" />
+                  <circle cx="-3.4" cy="0.5" r="3.2" fill="url(#suitDark)" filter="url(#innerShade)" />
+                  <circle cx="3.4" cy="0.5" r="3.2" fill="url(#suitDark)" filter="url(#innerShade)" />
+                  <path d="M-1.2 1.5 L0 5.5 L1.2 1.5 Z" fill="url(#suitDark)" />
+                  <circle cx="-0.8" cy="-4" r="0.9" fill="#FFFFFF" opacity="0.6" />
+                </g>
+                {/* 골드 왕관 (메이저) */}
+                <path d="M9 13 L12 20 L16 14 L20 21 L24 14 L28 20 L31 13 L30 24 L10 24 Z" fill="url(#goldFace)" filter="url(#innerShadeGold)" />
+                {/* 왕관 보석 */}
+                <circle cx="20" cy="17" r="1.6" fill="#FF1F8F" />
+                <circle cx="20" cy="17" r="0.7" fill="#FFD0E5" />
+                <circle cx="13" cy="14" r="0.9" fill="#E53E3E" />
+                <circle cx="27" cy="14" r="0.9" fill="#E53E3E" />
+                {/* 왕관 밴드 */}
+                <rect x="9" y="22" width="22" height="3" rx="0.6" fill="url(#goldFace)" />
+                <rect x="9" y="22" width="22" height="0.8" fill="#FFF1B5" opacity="0.8" />
+                {/* 별빛 (위) */}
+                <path d="M20 4 L21 7 L24 7 L21.5 8.8 L22.5 11.8 L20 10 L17.5 11.8 L18.5 8.8 L16 7 L19 7 Z" fill="#FFF1B5" opacity="0.9" />
               </svg>
             </div>
-            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>시리즈</span>
+            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>대회정보</span>
           </Link>
 
-          {/* 즐겨찾기 */}
-          <Link href="/m/favorites" className="flex flex-col items-center gap-2 transition active:scale-95">
+          {/* 5. 커뮤니티 — 말풍선 안에 펼친 카드 한 쌍(스페이드+하트) + 대화 점 */}
+          <Link href="/m/community" className="flex flex-col items-center gap-2 transition active:scale-95">
             <div className="cat-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+              <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
+                {/* 말풍선 (큰) */}
+                <path d="M20 8 C28 8 32 12 32 17 C32 22 28 26 20 26 C18 26 16.5 25.8 15 25.3 L10 28 L11.5 23.5 C9 22 8 19.5 8 17 C8 12 12 8 20 8 Z" fill="#FFFFFF" opacity="0.97" />
+                {/* 뒤 카드 (스페이드) — 오른쪽 회전 */}
+                <g transform="rotate(10 24 17)">
+                  <rect x="20" y="11" width="8" height="11" rx="1.2" fill="url(#cardFace)" />
+                  <rect x="20.3" y="11.3" width="7.4" height="10.4" rx="0.9" fill="none" stroke="#FF1F8F" strokeWidth="0.5" opacity="0.6" />
+                  <path d="M24 14 C22.4 15.8 21.6 16.4 21.6 17.4 C21.6 18.0 22.1 18.4 22.7 18.4 C23.0 18.4 23.3 18.3 23.5 18.0 C23.4 18.5 23.1 18.9 22.8 19.2 L25.2 19.2 C24.9 18.9 24.6 18.5 24.5 18.0 C24.7 18.3 25.0 18.4 25.3 18.4 C25.9 18.4 26.4 18.0 26.4 17.4 C26.4 16.4 25.6 15.8 24 14 Z" fill="url(#suitDark)" />
+                </g>
+                {/* 앞 카드 (하트) — 왼쪽 회전 */}
+                <g transform="rotate(-12 16 18)">
+                  <rect x="12" y="12" width="8" height="11" rx="1.2" fill="url(#cardFace)" />
+                  <rect x="12.3" y="12.3" width="7.4" height="10.4" rx="0.9" fill="none" stroke="#FF1F8F" strokeWidth="0.5" opacity="0.6" />
+                  <path d="M16 20 C16 20 12.8 18.4 12.8 16.4 C12.8 15.4 13.6 14.6 14.6 14.6 C15.3 14.6 15.8 15.0 16 15.5 C16.2 15.0 16.7 14.6 17.4 14.6 C18.4 14.6 19.2 15.4 19.2 16.4 C19.2 18.4 16 20 16 20 Z" fill="url(#suitRed)" />
+                </g>
+                {/* 작은 말풍선 (대화 표시, 우하단) */}
+                <ellipse cx="32" cy="34" rx="4.5" ry="3.5" fill="#FFFFFF" opacity="0.92" />
+                <circle cx="30" cy="34" r="0.7" fill="#FF1F8F" />
+                <circle cx="32" cy="34" r="0.7" fill="#FF1F8F" />
+                <circle cx="34" cy="34" r="0.7" fill="#FF1F8F" />
               </svg>
             </div>
-            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>즐겨찾기</span>
+            <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>커뮤니티</span>
           </Link>
         </div>
       </section>
+
+      {/* 섹션 구분 — 브랜드 핑크 스트립 */}
+      <div className="brand-strip-divider" />
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          📢 오늘의 매장 소식 — 본사 pinned + 매장 데일리 글 통합 피드
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <DailyPostsFeed />
 
       {/* 섹션 구분 — 브랜드 핑크 스트립 */}
       <div className="brand-strip-divider" />
@@ -436,7 +624,7 @@ function LiveHeroCard({ group, thumbnail }: { group: StoreGroup; thumbnail?: str
     <Link
       href={`/m/store/${group.storeId}`}
       onClick={() => bumpStoreMetric(group.storeId, 'cardClicks')}
-      className="w-[280px] flex-shrink-0 overflow-hidden card-hover hero-dark-card"
+      className="w-[220px] flex-shrink-0 overflow-hidden card-hover hero-dark-card"
       style={{
         boxShadow: '0 4px 24px rgba(0,0,0,0.22), 0 1px 6px rgba(229,62,62,0.18)',
       }}
@@ -485,19 +673,19 @@ function LiveHeroCard({ group, thumbnail }: { group: StoreGroup; thumbnail?: str
         )}
 
         {/* 하단 텍스트 블록 — lun의 GTD 강조 레이아웃 */}
-        <div className="absolute bottom-0 left-0 right-0 p-3.5 z-10">
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
           {/* 토너 이름 — 굵고 크게 */}
           <div
-            className="text-[15px] font-extrabold text-white leading-snug"
+            className="text-[13px] font-extrabold text-white leading-snug"
             style={{ textShadow: '0 1px 6px rgba(0,0,0,0.60)' }}
           >
             {primary.tournamentName}
           </div>
           {/* 바이인 — 금색 강조 */}
           {primary.buyIn > 0 && (
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-[11px] font-bold" style={{ color: 'rgba(255,255,255,0.60)' }}>바이인</span>
-              <span className="stat-number text-[13px] font-extrabold" style={{ color: '#F59E0B' }}>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.60)' }}>바이인</span>
+              <span className="stat-number text-[12px] font-extrabold" style={{ color: '#F59E0B' }}>
                 ₩{primary.buyIn.toLocaleString()}
               </span>
             </div>
@@ -506,22 +694,21 @@ function LiveHeroCard({ group, thumbnail }: { group: StoreGroup; thumbnail?: str
       </div>
 
       {/* 정보 영역 — 다크 배경 위 라이트 텍스트. 레벨 + 블라인드 + 인원 한눈에. */}
-      <div className="px-3.5 py-3" style={{ background: 'rgba(255,255,255,0.04)' }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[13px] font-bold truncate text-white flex-1 min-w-0">
+      <div className="px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-[12px] font-bold truncate text-white flex-1 min-w-0">
             {group.storeName}
           </div>
           <CountdownPill session={primary} />
         </div>
         {/* 핵심 지표 한 줄 — Lv · SB/BB · 인원 */}
-        <div className="flex items-center gap-3 text-[11px]" style={{ color: 'rgba(255,255,255,0.65)' }}>
+        <div className="flex items-center gap-2 text-[10px]" style={{ color: 'rgba(255,255,255,0.65)' }}>
           <span className="font-bold">
             <span style={{ color: 'rgba(255,255,255,0.45)' }}>Lv </span>
             <span className="font-mono font-extrabold text-white">{primary.currentLevel}</span>
           </span>
           <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
           <span className="font-mono font-bold tracking-tight">
-            <span style={{ color: 'rgba(255,255,255,0.45)' }}>블라인드 </span>
             <span className="text-white">{primary.smallBlind}/{primary.bigBlind}</span>
           </span>
           <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
@@ -578,14 +765,14 @@ function CountdownPill({ session }: { session: LiveSession }) {
   const paused = session.status === 'paused';
   return (
     <div
-      className="flex-shrink-0 rounded-full px-3 py-1.5 ml-2"
+      className="flex-shrink-0 rounded-full px-2.5 py-1 ml-1.5"
       style={{
         background: paused ? 'rgba(245,158,11,0.15)' : 'rgba(229,62,62,0.15)',
         border: `1px solid ${paused ? 'rgba(245,158,11,0.30)' : 'rgba(229,62,62,0.30)'}`,
       }}
     >
       <span
-        className="font-mono text-[13px] font-extrabold stat-number"
+        className="font-mono text-[11px] font-extrabold stat-number"
         style={{ color: paused ? '#F59E0B' : '#FC8181' }}
       >
         {fmtTime(sec)}
@@ -601,7 +788,7 @@ function LiveHeroSkeleton() {
       {[0, 1].map((i) => (
         <div
           key={i}
-          className="w-[280px] flex-shrink-0 rounded-3xl overflow-hidden"
+          className="w-[220px] flex-shrink-0 rounded-3xl overflow-hidden"
           style={{ border: '1px solid var(--border)' }}
         >
           <div className="skeleton" style={{ aspectRatio: '16/9' }} />
@@ -620,6 +807,214 @@ function LiveHeroSkeleton() {
  * 인기 매장 아바타 가로 스크롤 — popularity 점수 + 위치 10km 자동 확장
  * 정책: project_holdemnow_popularity (LIVE×2 + favoriteAdds + directionsClicks + 신규부스트 − 거리감점)
  * ========================================================== */
+/* ============================================================
+ * 📢 오늘의 매장 소식 (디자이너 권고 C-변형)
+ * - Pinned 배너 (풀 width, 21/9): 2건 이상 자동 회전(3초). IntersectionObserver + focus/touch 정지.
+ * - 매장 글 가로 스크롤 (200px, 4/3): 자동 회전 없음, 최대 15건.
+ * ========================================================== */
+const HOME_POSTS_LIMIT = 15;
+const PINNED_ROTATE_MS = 3000;
+
+function DailyPostsFeed() {
+  const [pinned, setPinned] = useState<PinnedPost[]>([]);
+  const [posts, setPosts] = useState<StorePost[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeActivePinnedPosts(setPinned, () => {});
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadActivePostsAll()
+      .then((items) => {
+        if (cancelled) return;
+        const now = Date.now();
+        setPosts(items.filter((p) => (p.expiresAt?.toMillis() ?? 0) > now).slice(0, HOME_POSTS_LIMIT));
+        setLoaded(true);
+      })
+      .catch(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loaded && pinned.length === 0 && posts.length === 0) return null;
+
+  return (
+    <section aria-label="오늘의 매장 소식" className="py-5">
+      <div className="px-4 flex items-end justify-between mb-3">
+        <div>
+          <div className="text-[17px] font-extrabold tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
+            <span>📢</span>
+            <span>오늘의 매장 소식</span>
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+            매장이 직접 올린 24시간 한정 소식
+          </div>
+        </div>
+      </div>
+
+      {pinned.length > 0 && (
+        <div className="px-4 mb-4">
+          <PinnedCarousel items={pinned} />
+        </div>
+      )}
+
+      {posts.length > 0 && (
+        <ul
+          role="list"
+          className="pl-4 flex gap-2.5 overflow-x-auto scrollbar-none pb-2"
+          aria-label="매장 데일리 소식 리스트"
+        >
+          {posts.map((p) => (
+            <li role="listitem" key={p.id} className="flex-shrink-0">
+              <StorePostMiniCard post={p} />
+            </li>
+          ))}
+          <li aria-hidden="true" className="w-3 flex-shrink-0" />
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** 본사 pinned 자동 회전 캐러셀 — 2건 이상일 때만 회전.
+ *  IntersectionObserver로 viewport 밖이면 타이머 정지(성능 + 배경 비용 0).
+ *  사용자 터치/포커스 시 영구 정지(자동 재개 안 함). */
+function PinnedCarousel({ items }: { items: PinnedPost[] }) {
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [inView, setInView] = useState(true);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // viewport 가시성 추적
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const ob = new IntersectionObserver(
+      (entries) => setInView(entries[0]?.isIntersecting ?? true),
+      { threshold: 0.5 },
+    );
+    ob.observe(el);
+    return () => ob.disconnect();
+  }, []);
+
+  // 자동 회전 — items 2건 이상 + 가시 + 미정지일 때만
+  useEffect(() => {
+    if (items.length < 2 || !inView || paused) return;
+    const t = setInterval(() => setIdx((i) => (i + 1) % items.length), PINNED_ROTATE_MS);
+    return () => clearInterval(t);
+  }, [items.length, inView, paused]);
+
+  const pause = () => setPaused(true);
+  const safeIdx = Math.min(idx, items.length - 1);
+  const current = items[safeIdx];
+
+  return (
+    <div
+      ref={containerRef}
+      onTouchStart={pause}
+      onPointerDown={pause}
+      onFocus={pause}
+      aria-live="off"
+    >
+      <PinnedBanner post={current} />
+      {items.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-2.5" role="tablist" aria-label="공지 인디케이터">
+          {items.map((_, i) => (
+            <button
+              key={i}
+              role="tab"
+              aria-selected={i === safeIdx}
+              aria-label={`${i + 1}번째 공지`}
+              onClick={() => { setPaused(true); setIdx(i); }}
+              className="relative flex items-center justify-center"
+              style={{ width: 32, height: 32 }}
+            >
+              <span
+                className="block rounded-full transition-all"
+                style={{
+                  width: i === safeIdx ? 18 : 5,
+                  height: 5,
+                  background: i === safeIdx ? 'var(--brand)' : 'rgba(255,31,143,0.30)',
+                }}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PinnedBanner({ post }: { post: PinnedPost }) {
+  const photo = post.imageUrls[0];
+  const openLink = () => post.ctaUrl && window.open(post.ctaUrl, '_blank', 'noopener,noreferrer');
+  return (
+    <button
+      onClick={openLink}
+      disabled={!post.ctaUrl}
+      className="w-full rounded-2xl overflow-hidden card-hover text-left block"
+      style={{ background: 'var(--surface-1)', border: '1.5px solid var(--brand)', boxShadow: '0 2px 12px rgba(255,31,143,0.15)' }}
+    >
+      {photo && (
+        <div className="relative w-full" style={{ aspectRatio: '21/9', background: 'var(--surface-2)' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photo} alt={post.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+          <span className="absolute top-2 left-2 text-[10px] font-extrabold rounded-full px-2 py-0.5" style={{ background: 'var(--brand)', color: '#fff' }}>📌 본사 공지</span>
+        </div>
+      )}
+      <div className="px-4 py-3">
+        {!photo && (
+          <span className="inline-block text-[10px] font-extrabold rounded-full px-2 py-0.5 mb-2" style={{ background: 'var(--brand)', color: '#fff' }}>📌 본사 공지</span>
+        )}
+        <div className="text-[15px] font-extrabold mb-1 line-clamp-2" style={{ color: 'var(--text-1)' }}>{post.title}</div>
+        {post.body && (
+          <div className="text-[12px] line-clamp-2" style={{ color: 'var(--text-2)' }}>{post.body}</div>
+        )}
+        {post.ctaLabel && (
+          <div className="text-[13px] font-bold mt-2" style={{ color: 'var(--brand)' }}>{post.ctaLabel} ›</div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+/** 매장 글 소형 카드 — 200px × (사진 4/3 + 텍스트 영역) */
+function StorePostMiniCard({ post }: { post: StorePost }) {
+  const photo = post.imageUrls[0];
+  const summary = post.body.split('\n').slice(0, 4).join('\n');
+  return (
+    <Link
+      href={`/m/store/${post.storeId}`}
+      onClick={() => bumpStoreMetric(post.storeId, 'cardClicks')}
+      className="w-[200px] block rounded-2xl overflow-hidden card-hover"
+      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}
+    >
+      {photo ? (
+        <div className="relative w-full" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photo} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+          {post.imageUrls.length > 1 && (
+            <span className="absolute bottom-2 right-2 text-[10px] font-bold rounded-full px-2 py-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>+{post.imageUrls.length - 1}</span>
+          )}
+        </div>
+      ) : null}
+      <div className="px-3 py-2.5" style={{ minHeight: photo ? undefined : 100 }}>
+        <div className="text-[12px] font-extrabold mb-1 truncate" style={{ color: 'var(--brand)' }}>{post.storeName ?? '매장'}</div>
+        <div className="text-[11px] leading-relaxed whitespace-pre-wrap line-clamp-3" style={{ color: 'var(--text-2)' }}>{summary}</div>
+        {post.eventTags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {post.eventTags.slice(0, 2).map((t) => (
+              <span key={t} className="text-[10px] font-bold rounded px-1.5 py-0.5" style={{ background: 'rgba(255,31,143,0.10)', color: 'var(--brand)' }}>#{t}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string, number> }) {
   const [stores, setStores] = useState<PopularityStore[]>([]);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
@@ -844,7 +1239,7 @@ const NEARBY_RADIUS_STEPS_KM = [20, 40, 60, 80, 100] as const;
 const NEARBY_RADIUS_INITIAL_KM = 20;
 const NEARBY_RADIUS_MAX_KM = 100;
 
-const NEARBY_LIST_INITIAL_COUNT = 20;
+const NEARBY_LIST_INITIAL_COUNT = 8;
 
 function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
   const [stores, setStores] = useState<NearbyStore[]>([]);
@@ -978,16 +1373,16 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
         ))}
       </div>
 
-      {/* 펼치기/접기 토글 — 20개 초과 시만 노출 */}
+      {/* 펼쳐보기/접기 토글 — 8개 초과 시만 노출. 브랜드 틴트 배경으로 반경 확장 버튼과 구분 */}
       {visible.length > NEARBY_LIST_INITIAL_COUNT && (
         <div className="px-4 pt-3">
           <button
             onClick={() => setListExpanded((v) => !v)}
             className="w-full py-3 rounded-2xl text-[13px] font-bold transition active:scale-[0.99] flex items-center justify-center gap-1.5"
             style={{
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-1)',
+              background: listExpanded ? 'var(--surface-2)' : 'var(--brand-pale)',
+              border: `1px solid ${listExpanded ? 'var(--border)' : 'rgba(240,71,155,0.25)'}`,
+              color: listExpanded ? 'var(--text-2)' : '#C8276A',
             }}
             aria-expanded={listExpanded}
           >
@@ -998,8 +1393,8 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
               </>
             ) : (
               <>
-                <span>더 보기</span>
-                <span className="stat-number" style={{ color: 'var(--brand)' }}>
+                <span>펼쳐보기</span>
+                <span className="stat-number font-extrabold">
                   +{visible.length - NEARBY_LIST_INITIAL_COUNT}개
                 </span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
@@ -1009,21 +1404,22 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
         </div>
       )}
 
-      {/* 단계 확장 더보기 — 반경 늘리기 */}
+      {/* 반경 확장 버튼 — 뉴트럴 스타일, 역할이 다름을 명확히 */}
       {canExpand && (
-        <div className="px-4 pt-3 pb-1">
+        <div className="px-4 pt-2 pb-1">
           <button
             onClick={() => setRadiusKm(nextRadiusKm!)}
-            className="w-full py-3 rounded-2xl text-[13px] font-bold transition active:scale-[0.99]"
+            className="w-full py-2.5 rounded-2xl text-[12px] font-semibold transition active:scale-[0.99] flex items-center justify-center gap-1"
             style={{
               background: 'var(--surface-1)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-1)',
+              border: '1px dashed var(--border)',
+              color: 'var(--text-3)',
             }}
           >
-            더 멀리 보기 · 반경 {nextRadiusKm}km
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+            더 멀리 · 반경 {nextRadiusKm}km까지 넓히기
             {moreCount > 0 && (
-              <span style={{ color: 'var(--brand)', fontWeight: 800 }} className="stat-number"> · +{moreCount}개</span>
+              <span className="stat-number font-bold" style={{ color: 'var(--text-2)' }}> +{moreCount}개</span>
             )}
           </button>
         </div>

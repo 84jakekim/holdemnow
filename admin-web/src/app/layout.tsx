@@ -67,7 +67,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col font-sans">
         {children}
-        {/* Kakao Maps SDK + services 라이브러리 (Geocoder/Places). */}
+        {/* Kakao Maps SDK + services + clusterer 라이브러리.
+            strategy="afterInteractive" 유지 — beforeInteractive로 바꾸면 Next.js가 head에
+            inline 삽입하면서 Referer 누락 → 카카오 API가 도메인 검증 실패하여 400 거부.
+            afterInteractive는 클라 DOM에서 script 추가 → Referer 정상 포함 → 도메인 인증 OK. */}
         {KAKAO_JS_KEY && (
           <Script
             id="kakao-maps-sdk"

@@ -15,11 +15,19 @@ declare global {
 }
 
 let readyPromise: Promise<any> | null = null;
+// 한 세션에서 SDK가 한 번 실패하면 같은 세션 내 추가 호출 시도 즉시 거절.
+// 카카오 일일 한도 초과 등으로 SDK 거부 시 같은 페이지에서 수십~수백번 재시도하는 콘솔 폭증 차단.
+let sessionFailed = false;
 
 /** Kakao Maps SDK가 준비될 때까지 기다림. window.kakao.maps 반환. */
 export function loadKakaoMaps(): Promise<any> {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Kakao Maps는 클라이언트에서만 로드 가능'));
+  }
+  // 같은 세션에서 한 번 실패하면 즉시 reject — 카카오 일일 한도 초과 시
+  // 페이지의 모든 SDK 호출이 25초씩 폴링하며 콘솔 폭증하는 것 차단.
+  if (sessionFailed) {
+    return Promise.reject(new Error('Kakao Maps SDK 세션 실패 — 새로고침 후 재시도'));
   }
   if (readyPromise) return readyPromise;
 
@@ -37,19 +45,14 @@ export function loadKakaoMaps(): Promise<any> {
       }
       if (Date.now() - start > TIMEOUT) {
         readyPromise = null;
-        // 진단 힌트
+        sessionFailed = true; // 이후 호출은 폴링 안 함
         const has = !!window.kakao;
         const scripts = Array.from(document.querySelectorAll('script[src*="dapi.kakao.com"]'));
         const mapsScript = scripts[0] as HTMLScriptElement | undefined;
         const detail = `window.kakao=${has}, scripts=${scripts.length}, src=${mapsScript?.src ?? 'none'}`;
-        console.error('[kakao] SDK 로드 실패. ' + detail);
-        console.error('[kakao] 가능한 원인:\n' +
-          '  1) 카카오 개발자 콘솔 → 플랫폼 → Web에 현재 도메인 미등록\n' +
-          '     현재 도메인: ' + window.location.origin + '\n' +
-          '  2) JavaScript 키 오타 또는 다른 앱의 키\n' +
-          '  3) 카카오맵 API 사용 설정 OFF (앱 설정에서 확인)\n' +
-          '  현재 키 prefix: ' + (process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY?.slice(0, 8) ?? 'EMPTY') + '...');
-        reject(new Error('Kakao Maps SDK 로드 타임아웃 (10s). ' + detail));
+        // 한 번만 콘솔에 안내 — 카카오 일일 한도 초과가 가장 흔한 원인
+        console.warn('[kakao] SDK 로드 실패. 카카오 일일 호출 한도(30만/일) 초과 또는 도메인 거부일 가능성. 한국시간 자정 후 재시도. ' + detail);
+        reject(new Error('Kakao Maps SDK 로드 타임아웃. ' + detail));
         return;
       }
       setTimeout(check, TICK);
@@ -138,6 +141,31 @@ export async function searchPlaces(
       },
       opts,
     );
+  });
+}
+
+/** 좌표 → 행정구역 (services.Geocoder.coord2RegionCode).
+ *  반환: "부산 부산진구 부전동" 형태의 축약 라벨, 또는 null. */
+export async function coordToRegionLabel(lat: number, lng: number): Promise<string | null> {
+  const maps = await loadKakaoMaps();
+  const geocoder = new maps.services.Geocoder();
+  return new Promise<string | null>((resolve) => {
+    geocoder.coord2RegionCode(lng, lat, (result: any[], status: any) => {
+      if (status !== maps.services.Status.OK || !result || result.length === 0) {
+        resolve(null);
+        return;
+      }
+      const hRegion = result.find((r) => r.region_type === 'H') ?? result[0];
+      if (!hRegion) {
+        resolve(null);
+        return;
+      }
+      const region1 = String(hRegion.region_1depth_name || '').replace(/(특별시|광역시|특별자치시|특별자치도|도)$/u, '');
+      const region2 = String(hRegion.region_2depth_name || '');
+      const region3 = String(hRegion.region_3depth_name || '');
+      const parts = [region1, region2, region3].filter(Boolean);
+      resolve(parts.join(' '));
+    });
   });
 }
 

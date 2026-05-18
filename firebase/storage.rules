@@ -42,6 +42,20 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(5);
     }
 
+    // 매장 데일리 홍보 글 이미지 + 본사 pinned 글 이미지 (_pinned 하위 폴더)
+    // posts/{storeId}/{postId}/{filename} — 인증 사용자만 업로드(매장 권한은 Firestore rules에서 검증)
+    // posts/_pinned/{postId}/{filename} — 본사 pinned 글
+    match /posts/{folder}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
+    // 커뮤니티 (구인/구직/중고) 이미지 — 인증 사용자만 업로드, 권한은 Firestore rules에서.
+    match /community/{itemIdOrTemp}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

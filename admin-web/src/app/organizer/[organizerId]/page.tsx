@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
+import AuthGate from '@/components/AuthGate';
 import {
   type Organizer,
   subscribeOrganizer,
@@ -25,8 +26,7 @@ const MENUS = [
   { id: 'stats', icon: '📈', label: '통계 리포트' },
 ];
 
-export default function OrganizerAdminPage({ params }: { params: Promise<{ organizerId: string }> }) {
-  const { organizerId } = use(params);
+function OrganizerAdminPageInner({ organizerId }: { organizerId: string }) {
   const router = useRouter();
   const authState = useAuth();
   const [org, setOrg] = useState<Organizer | null | undefined>(undefined);
@@ -37,17 +37,12 @@ export default function OrganizerAdminPage({ params }: { params: Promise<{ organ
     return unsub;
   }, [organizerId]);
 
-  // 비로그인 → 메인 (effect로)
-  useEffect(() => {
-    if (authState.status === 'anonymous') router.replace('/');
-  }, [authState.status, router]);
-
   if (authState.status === 'loading' || org === undefined) {
     return <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</div>;
   }
-  if (authState.status === 'anonymous') {
-    return null;
-  }
+  // AuthGate가 anonymous를 이미 차단. 타입 좁힘 목적의 guard.
+  if (authState.status !== 'authenticated') return null;
+
   if (org === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
@@ -192,5 +187,14 @@ function ComingSoon({ menu }: { menu: { icon: string; label: string; id: string 
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OrganizerAdminPage({ params }: { params: Promise<{ organizerId: string }> }) {
+  const { organizerId } = use(params);
+  return (
+    <AuthGate>
+      <OrganizerAdminPageInner organizerId={organizerId} />
+    </AuthGate>
   );
 }

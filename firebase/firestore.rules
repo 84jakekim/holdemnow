@@ -42,17 +42,23 @@ service cloud.firestore {
     // ===== 매장 =====
     match /stores/{storeId} {
       allow read: if true;                               // 누구나 매장 조회
-      // v0.1: 인증된 사용자가 본인을 owner로 매장 생성 가능 (심사 흐름은 v0.2)
+      // 인증된 사용자가 본인을 owner로 매장 생성 + status=pending 강제
       allow create: if isSignedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      // 일반 owner는 status 변경 불가. platform_admin만 status 변경 가능.
       allow update: if isSignedIn()
-        && (resource.data.ownerUid == request.auth.uid
-            || isStoreMember(storeId)
-            || isPlatformAdmin()
-            || resource.data.isDemo == true);
-      // v0.1: ownerUid 본인이면 삭제 가능 + 데모 매장(isDemo=true)은 인증 사용자 누구나 삭제.
-      // 본사 관리자 token claim이 아직 없을 때도(셀프 부여한 role은 Firestore 문서뿐) 데모 정리가 가능하도록.
-      // 운영 단계에서는 매장 폐업 신청 → 본사 승인 플로우로 교체.
+        && (
+          // 매장 owner: status 필드를 변경하지 않는 경우만
+          (resource.data.ownerUid == request.auth.uid
+            && !('status' in request.resource.data.diff(resource.data)))
+          // 본사 관리자: 모든 필드 변경 가능 (승인/반려/정지)
+          || isPlatformAdmin()
+          // 스태프: status 외 업무 데이터
+          || isStoreMember(storeId)
+          // 데모 매장: 누구나 업데이트 가능
+          || resource.data.isDemo == true
+        );
       allow delete: if isSignedIn()
         && (resource.data.ownerUid == request.auth.uid
             || isPlatformAdmin()
@@ -85,6 +91,17 @@ service cloud.firestore {
         allow read: if true;
         allow write: if true;
       }
+
+      // 매장 데일리 홍보 "오늘의 소식" — 매장 owner/member만 write, 누구나 read.
+      // collectionGroup('posts') 쿼리는 아래 별도 와일드카드 규칙으로 허용.
+      match /posts/{postId} {
+        allow read: if true;
+        allow create: if isSignedIn()
+          && (isStoreOwner(storeId) || isStoreMember(storeId))
+          && request.resource.data.authorUid == request.auth.uid;
+        allow update, delete: if isSignedIn()
+          && (isStoreOwner(storeId) || isStoreMember(storeId) || isPlatformAdmin());
+      }
     }
 
     // ===== LIVE 세션 (실시간 송출의 심장) =====
@@ -116,9 +133,11 @@ service cloud.firestore {
 
     // ===== 사용자 =====
     match /users/{userId} {
-      allow read: if isSignedIn() && uid() == userId;
+      // 본인 또는 platform_admin 읽기 가능 (회원 관리 페이지)
+      allow read: if isSignedIn() && (uid() == userId || isPlatformAdmin());
       allow create: if isSignedIn() && uid() == userId;
-      allow update: if isSignedIn() && uid() == userId;
+      // 일반 사용자는 본인만 update, platform_admin은 status 변경 가능
+      allow update: if isSignedIn() && (uid() == userId || isPlatformAdmin());
       allow delete: if false;                            // 소프트 삭제만
 
       match /favorites/{storeId} {
@@ -134,6 +153,17 @@ service cloud.firestore {
       match /fcmTokens/{tokenId} {
         allow read, write: if uid() == userId;
       }
+    }
+
+    // ===== 비밀번호 복구 정보 (Email/Password 가입자 전용) =====
+    // doc id = 소문자 이메일. 조회 키가 이메일이므로 임의 추측 어려움 (v0.1 보안 수준).
+    // 가입 시 본인 uid로 생성, 분실 복구 시 read (이메일 알아야 조회 가능).
+    // platform_admin도 read 허용 (고객 지원용).
+    match /passwordRecovery/{emailKey} {
+      allow read: if isSignedIn();     // 이메일 키를 알아야 조회 가능
+      allow create: if isSignedIn();   // 가입 시 자신의 정보 생성
+      allow update: if isSignedIn();   // 비밀번호 변경 시 본인이 갱신
+      allow delete: if false;
     }
 
     // ===== 시리즈 (대회사) — v0.1: 인증된 사용자 = ownerUid로 직접 검증 =====
@@ -153,13 +183,22 @@ service cloud.firestore {
       }
     }
 
-    // ===== 대회사 — v0.1: ownerUid 직접 검증 =====
+    // ===== 대회사 — ownerUid 직접 검증 =====
     match /organizers/{organizerId} {
       allow read: if true;
+      // 가입 신청: status=pending 강제
       allow create: if isSignedIn()
-        && request.resource.data.ownerUid == request.auth.uid;
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'pending';
       allow update: if isSignedIn()
-        && (resource.data.ownerUid == request.auth.uid || isOrganizerMember(organizerId));
+        && (
+          // owner: status 변경 불가
+          (resource.data.ownerUid == request.auth.uid
+            && !('status' in request.resource.data.diff(resource.data)))
+          // 본사 관리자: 모든 필드 변경 (승인/반려/정지)
+          || isPlatformAdmin()
+          || isOrganizerMember(organizerId)
+        );
       allow delete: if isSignedIn()
         && (resource.data.ownerUid == request.auth.uid || isPlatformAdmin());
 
@@ -181,6 +220,36 @@ service cloud.firestore {
     match /notices/{noticeId} {
       allow read: if true;
       allow create, update, delete: if isSignedIn();
+    }
+
+    // ===== 본사 pinned 글 (홈 인라인 고정 공지) =====
+    // 팝업 notices와 별개로, 모바일 홈 "오늘의 매장 소식" 섹션 최상단에 고정 노출.
+    // v0.1: 인증 사용자 누구나 write 허용(데모 패턴). 페이지는 platform_admin gating.
+    match /pinnedPosts/{postId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // ===== 커뮤니티 (구인/구직/중고거래) =====
+    // 통합 community 컬렉션 — type 분기. v0.1은 jobOffer만 활성.
+    // - read: 누구나 (status='hidden'은 클라이언트 필터)
+    // - jobOffer create: 매장 owner만(authorUid=본인 + storeId 매장 owner 검증)
+    // - dealerProfile (v0.2): 본인 uid 프로필만
+    // - usedListing (v0.2): 매장 owner만
+    // - update/delete: 작성자 본인 또는 platform_admin (모더레이션)
+    match /community/{itemId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && (
+          (request.resource.data.type == 'jobOffer'
+            && isStoreOwner(request.resource.data.storeId))
+          || (request.resource.data.type == 'dealerProfile')
+          || (request.resource.data.type == 'usedListing'
+            && isStoreOwner(request.resource.data.storeId))
+        );
+      allow update, delete: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isPlatformAdmin());
     }
 
     // ===== 대회 (events) — 국내외 메이저 토너먼트 이벤트 =====
@@ -208,6 +277,10 @@ service cloud.firestore {
     // 기존 nested path 규칙(stores/{storeId}/tournaments)도 유효하며 둘 다 매칭됨.
     match /{path=**}/tournaments/{tournamentId} {
       allow read: if true;  // 모바일 캘린더는 전체 토너 조회 (collectionGroup)
+    }
+    // 모바일 홈 "오늘의 매장 소식"이 collectionGroup('posts')로 전체 매장 글을 한 번에 읽음.
+    match /{path=**}/posts/{postId} {
+      allow read: if true;
     }
 
     // ===== 그 외 모두 차단 (default deny) =====

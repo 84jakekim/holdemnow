@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useStoreDoc, useUserDoc, hasRole } from '@/lib/hooks';
+import AuthGate from '@/components/AuthGate';
 import TemplatesPanel from '@/components/admin/TemplatesPanel';
 import LivePanel from '@/components/admin/LivePanel';
 import SlotsPanel from '@/components/admin/SlotsPanel';
@@ -13,11 +14,20 @@ import StoreInfoPanel from '@/components/admin/StoreInfoPanel';
 import TournamentsPanel from '@/components/admin/TournamentsPanel';
 import AdsPanel from '@/components/admin/AdsPanel';
 import StatsPanel from '@/components/admin/StatsPanel';
+import PostsPanel from '@/components/admin/PostsPanel';
+import JobsPanel from '@/components/admin/JobsPanel';
+import UsedItemsPanel from '@/components/admin/UsedItemsPanel';
+import DealerPoolPanel from '@/components/admin/DealerPoolPanel';
 import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
+import { changePassword, syncPasswordRecovery, validatePassword } from '@/lib/emailAuth';
 
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드' },
   { id: 'live', icon: '🎬', label: 'LIVE 운영' },
+  { id: 'posts', icon: '📢', label: '오늘의 소식' },
+  { id: 'jobs', icon: '💼', label: '구인' },
+  { id: 'dealers', icon: '🃏', label: '딜러 풀' },
+  { id: 'used', icon: '🛒', label: '중고거래' },
   { id: 'tournaments', icon: '📅', label: '예정 토너' },
   { id: 'templates', icon: '🎲', label: '토너 템플릿' },
   { id: 'store', icon: '🏬', label: '매장 정보' },
@@ -26,26 +36,21 @@ const MENUS = [
   { id: 'stats', icon: '📈', label: '통계' },
 ];
 
-export default function AdminPage({ params }: { params: Promise<{ storeId: string }> }) {
-  const { storeId } = use(params);
+function AdminPageInner({ storeId }: { storeId: string }) {
   const router = useRouter();
   const authState = useAuth();
   const store = useStoreDoc(storeId);
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
   const [activeMenu, setActiveMenu] = useState('dashboard');
-
-  // 비로그인 시 메인으로 리다이렉트 (render 중 직접 호출하면 React가 경고 — effect로 옮김)
-  useEffect(() => {
-    if (authState.status === 'anonymous') router.replace('/');
-  }, [authState.status, router]);
+  const [showPwModal, setShowPwModal] = useState(false);
 
   if (authState.status === 'loading' || store === undefined) {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
   }
-  if (authState.status === 'anonymous') {
-    return null;
-  }
+  // AuthGate가 anonymous를 이미 차단. 타입 좁힘 목적의 guard.
+  if (authState.status !== 'authenticated') return null;
+
   if (store === null) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
@@ -123,7 +128,16 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
               🏆 대회사 어드민으로 전환
             </Link>
           )}
-          <div className="text-[10px] text-gray-500">{authState.user.email}</div>
+          <div className="text-[10px] text-gray-500 truncate">{authState.user.email}</div>
+          {/* 이메일/비번 가입자만 비밀번호 변경 표시 */}
+          {authState.user.providerData?.some((p) => p.providerId === 'password') && (
+            <button
+              onClick={() => setShowPwModal(true)}
+              className="text-[11px] font-bold text-gray-600 hover:text-gray-900 underline underline-offset-2 block"
+            >
+              비밀번호 변경
+            </button>
+          )}
           <button
             onClick={() => signOut(auth)}
             className="text-xs text-gray-500 underline hover:text-gray-900"
@@ -132,6 +146,14 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
           </button>
         </div>
       </aside>
+
+      {/* 비밀번호 변경 모달 */}
+      {showPwModal && (
+        <ChangePasswordModal
+          email={authState.user.email ?? ''}
+          onClose={() => setShowPwModal(false)}
+        />
+      )}
 
       {/* 메인 컨텐츠 */}
       <main className="flex-1 p-8 overflow-y-auto">
@@ -152,12 +174,16 @@ export default function AdminPage({ params }: { params: Promise<{ storeId: strin
           {activeMenu === 'dashboard' && <DashboardContent storeId={storeId} storeName={store.name} />}
           {activeMenu === 'templates' && <TemplatesPanel storeId={storeId} />}
           {activeMenu === 'live' && <LivePanel storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'posts' && <PostsPanel storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'jobs' && <JobsPanel storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'dealers' && <DealerPoolPanel storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'used' && <UsedItemsPanel storeId={storeId} storeName={store.name} storePhotoUrl={store.photoUrls?.[0]} />}
           {activeMenu === 'tournaments' && <TournamentsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'slots' && <SlotsPanel storeId={storeId} />}
           {activeMenu === 'store' && <StoreInfoPanel storeId={storeId} />}
           {activeMenu === 'ads' && <AdsPanel />}
           {activeMenu === 'stats' && <StatsPanel storeId={storeId} />}
-          {!['dashboard', 'templates', 'live', 'tournaments', 'slots', 'store', 'ads', 'stats'].includes(activeMenu) && (
+          {!['dashboard', 'templates', 'live', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'slots', 'store', 'ads', 'stats'].includes(activeMenu) && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />
           )}
         </div>
@@ -231,6 +257,199 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
   );
 }
 
+// =====================================================================
+// 비밀번호 변경 모달
+// =====================================================================
+
+function ChangePasswordModal({ email, onClose }: { email: string; onClose: () => void }) {
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newPwConfirm, setNewPwConfirm] = useState('');
+  const [updateHint, setUpdateHint] = useState(false);
+  const [newHint, setNewHint] = useState('');
+  const [newLast4, setNewLast4] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const pwErr = newPw ? validatePassword(newPw) : null;
+  const pwMatch = newPw === newPwConfirm;
+  const canSave =
+    currentPw.length >= 1 &&
+    !pwErr &&
+    pwMatch &&
+    newPw.length >= 8;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await changePassword(currentPw, newPw);
+      if (updateHint) {
+        await syncPasswordRecovery(email, {
+          ...(newHint.trim() ? { passwordHint: newHint.trim() } : {}),
+          ...(newLast4.length === 4 ? { recoveryLast4: newLast4 } : {}),
+        });
+      }
+      setDone(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('wrong-password') || msg.includes('invalid-credential')) {
+        setError('현재 비밀번호가 올바르지 않습니다.');
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+      >
+        {done ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M20 6L9 17l-5-5" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div className="font-extrabold text-gray-900 mb-1">비밀번호가 변경되었습니다</div>
+            <div className="text-xs text-gray-500 mb-4">다음 로그인부터 새 비밀번호를 사용하세요.</div>
+            <button onClick={onClose} className="w-full py-2.5 rounded-xl font-bold text-sm text-white" style={{ background: '#FF1F8F' }}>
+              닫기
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-1">
+              <div className="font-extrabold text-gray-900">비밀번호 변경</div>
+              <div className="text-[10px] text-gray-500 mt-0.5 truncate">{email}</div>
+            </div>
+
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">현재 비밀번호</label>
+                <input
+                  type="password"
+                  className="pw-input"
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  placeholder="현재 비밀번호"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">새 비밀번호</label>
+                <input
+                  type="password"
+                  className="pw-input"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  placeholder="영문+숫자 8자 이상"
+                  autoComplete="new-password"
+                />
+                {newPw && pwErr && <div className="text-[11px] text-red-600 mt-0.5">{pwErr}</div>}
+                {newPw && !pwErr && <div className="text-[11px] text-green-600 mt-0.5">안전한 비밀번호</div>}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">새 비밀번호 확인</label>
+                <input
+                  type="password"
+                  className="pw-input"
+                  value={newPwConfirm}
+                  onChange={(e) => setNewPwConfirm(e.target.value)}
+                  placeholder="새 비밀번호를 다시 입력"
+                  autoComplete="new-password"
+                />
+                {newPwConfirm && !pwMatch && <div className="text-[11px] text-red-600 mt-0.5">비밀번호가 일치하지 않습니다</div>}
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer mt-1">
+                <input
+                  type="checkbox"
+                  checked={updateHint}
+                  onChange={(e) => setUpdateHint(e.target.checked)}
+                  className="w-4 h-4 accent-gray-900"
+                />
+                <span className="text-xs text-gray-700 font-medium">비밀번호 힌트/복구 연락처도 변경</span>
+              </label>
+
+              {updateHint && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2.5">
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 block mb-1">새 비밀번호 힌트 (선택)</label>
+                    <input
+                      className="pw-input"
+                      value={newHint}
+                      onChange={(e) => setNewHint(e.target.value)}
+                      placeholder="새 힌트 문구"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 block mb-1">새 복구 연락처 마지막 4자리 (선택)</label>
+                    <input
+                      className="pw-input font-mono tracking-widest"
+                      value={newLast4}
+                      onChange={(e) => setNewLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="0000"
+                      maxLength={4}
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {error && (
+              <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border-[1.5px] border-gray-200 font-bold text-sm">
+                취소
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!canSave || saving}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition disabled:opacity-40"
+                style={{ background: '#FF1F8F' }}
+              >
+                {saving ? '변경 중…' : '변경'}
+              </button>
+            </div>
+
+            <style jsx>{`
+              .pw-input {
+                background: #fff;
+                border: 1.5px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 9px 12px;
+                font-size: 13px;
+                color: #111;
+                width: 100%;
+                box-sizing: border-box;
+                outline: none;
+                transition: border-color 0.15s;
+              }
+              .pw-input:focus { border-color: #FF1F8F; }
+            `}</style>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ComingSoon({ menu }: { menu: { icon: string; label: string; id: string } }) {
   return (
     <div>
@@ -248,5 +467,14 @@ function ComingSoon({ menu }: { menu: { icon: string; label: string; id: string 
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminPage({ params }: { params: Promise<{ storeId: string }> }) {
+  const { storeId } = use(params);
+  return (
+    <AuthGate>
+      <AdminPageInner storeId={storeId} />
+    </AuthGate>
   );
 }

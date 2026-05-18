@@ -1,0 +1,399 @@
+'use client';
+
+/**
+ * Email/Password 가입·로그인·복구 유틸
+ *
+ * Firebase Auth Email/Password provider 활성화 필요:
+ * Firebase Console → Authentication → Sign-in method → Email/Password → 사용 설정
+ */
+
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+} from 'firebase/auth';
+import {
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+  collection,
+  addDoc,
+} from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { auth, db, storage } from './firebase';
+
+// =====================================================================
+// 타입 정의
+// =====================================================================
+
+export interface StoreSignupPayload {
+  // Step 1 — 계정
+  email: string;
+  password: string;
+  passwordHint: string;
+  recoveryLast4: string; // 보조 복구 연락처 마지막 4자리
+
+  // Step 2 — 매장 기본 (사업자등록증 대신 매장 간판 사진으로 실존 확인)
+  storeName: string;
+  storeAddress: string;
+  storeHours: string;
+  storeDescription: string;
+  storePhone: string;
+  signageImageFile: File; // 매장 간판 사진 — 본사 심사 시 매장 실존 확인용
+
+  // Step 3 — 대표자
+  representativeName: string;
+  representativePhone: string;
+
+  // Step 4 — 약관
+  agreeService: boolean;
+  agreePrivacy: boolean;
+  agreeMarketing: boolean;
+}
+
+export interface OrganizerSignupPayload {
+  // Step 1 — 계정
+  email: string;
+  password: string;
+  passwordHint: string;
+  recoveryLast4: string;
+
+  // Step 2 — 회사 정보
+  companyName: string;
+  businessRegistrationNumber: string;
+  representativeName: string;
+  representativePhone: string;
+  companyAddress: string;
+
+  // Step 3 — 담당자
+  contactPersonName: string;
+  contactPersonPosition?: string;
+  contactPersonPhone: string;
+  contactPersonEmail?: string;
+
+  // Step 4 — 레퍼런스 + 약관
+  tournamentReferences: string;
+  agreeService: boolean;
+  agreePrivacy: boolean;
+  agreeMarketing: boolean;
+}
+
+// =====================================================================
+// 비밀번호 유효성 검사
+// =====================================================================
+
+export function validatePassword(pw: string): string | null {
+  if (pw.length < 8) return '비밀번호는 8자 이상이어야 합니다';
+  if (!/[a-zA-Z]/.test(pw)) return '영문자를 포함해야 합니다';
+  if (!/[0-9]/.test(pw)) return '숫자를 포함해야 합니다';
+  return null;
+}
+
+export function validateBusinessReg(brn: string): boolean {
+  // XXX-XX-XXXXX 형식 검사
+  return /^\d{3}-\d{2}-\d{5}$/.test(brn);
+}
+
+export function formatBusinessReg(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+// =====================================================================
+// 매장 자체 가입
+// =====================================================================
+
+export async function signupAsStore(payload: StoreSignupPayload): Promise<string> {
+  // 1. Firebase Auth 계정 생성
+  const credential = await createUserWithEmailAndPassword(
+    auth,
+    payload.email.trim().toLowerCase(),
+    payload.password,
+  );
+  const uid = credential.user.uid;
+
+  // 2. storeId 미리 확보 (Storage 경로에 사용)
+  const newStoreRef = doc(collection(db, 'stores'));
+  const storeId = newStoreRef.id;
+
+  // 3. 매장 간판 사진 Storage 업로드 — 본사 심사 시 매장 실존 확인용
+  const file = payload.signageImageFile;
+  const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `stores/${storeId}/photos/signage.${ext}`;
+  await uploadBytes(storageRef(storage, path), file, { contentType: file.type });
+  const signageImageUrl = await getDownloadURL(storageRef(storage, path));
+
+  // 4. stores/{storeId} 문서 생성 (photoUrls 첫번째에 간판 사진 URL 포함)
+  await setDoc(newStoreRef, {
+    ownerUid: uid,
+    name: payload.storeName.trim(),
+    address: payload.storeAddress.trim(),
+    phone: payload.storePhone.trim(),
+    hours: payload.storeHours.trim(),
+    description: payload.storeDescription.trim(),
+    representativeName: payload.representativeName.trim(),
+    representativePhone: payload.representativePhone.trim(),
+    signageImageUrl,
+    photoUrls: [signageImageUrl],
+    status: 'pending',
+    tier: 'free',
+    reviewCount: 0,
+    liveSessionCount: 0,
+    signupApplication: {
+      submittedAt: new Date().toISOString(),
+      agreeService: payload.agreeService,
+      agreePrivacy: payload.agreePrivacy,
+      agreeMarketing: payload.agreeMarketing,
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const storeRef = newStoreRef;
+
+  // 3. users/{uid} 문서 생성
+  await setDoc(doc(db, 'users', uid), {
+    uid,
+    email: payload.email.trim().toLowerCase(),
+    storeId: storeRef.id,
+    role: 'store_master',
+    roles: ['store_master'],
+    providers: ['password'],
+    signupSource: 'store-signup',
+    signupAt: serverTimestamp(),
+    status: 'active',
+    passwordHint: payload.passwordHint.trim(),
+    recoveryLast4: payload.recoveryLast4.trim().slice(-4),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  // 4. passwordRecovery/{email} 문서 생성 (비밀번호 분실 시 빠른 조회용)
+  await setDoc(doc(db, 'passwordRecovery', payload.email.trim().toLowerCase()), {
+    uid,
+    passwordHint: payload.passwordHint.trim(),
+    recoveryLast4: payload.recoveryLast4.trim().slice(-4),
+    createdAt: serverTimestamp(),
+  });
+
+  return storeRef.id;
+}
+
+// =====================================================================
+// 대회사 자체 가입
+// =====================================================================
+
+export async function signupAsOrganizer(payload: OrganizerSignupPayload): Promise<string> {
+  const credential = await createUserWithEmailAndPassword(
+    auth,
+    payload.email.trim().toLowerCase(),
+    payload.password,
+  );
+  const uid = credential.user.uid;
+
+  const orgRef = await addDoc(collection(db, 'organizers'), {
+    ownerUid: uid,
+    companyName: payload.companyName.trim(),
+    name: payload.companyName.trim(), // 기존 name 필드 호환
+    businessRegistrationNumber: payload.businessRegistrationNumber.trim(),
+    representativeName: payload.representativeName.trim(),
+    representativePhone: payload.representativePhone.trim(),
+    companyAddress: payload.companyAddress.trim(),
+    contactPerson: {
+      name: payload.contactPersonName.trim(),
+      position: payload.contactPersonPosition?.trim() || null,
+      phone: payload.contactPersonPhone.trim(),
+      email: payload.contactPersonEmail?.trim() || null,
+    },
+    tournamentReferences: payload.tournamentReferences.trim(),
+    tagline: payload.companyName.trim(), // 기존 tagline 필드 호환
+    contactEmail: payload.contactPersonEmail?.trim() || null,
+    status: 'pending',
+    signupApplication: {
+      submittedAt: new Date().toISOString(),
+      agreeService: payload.agreeService,
+      agreePrivacy: payload.agreePrivacy,
+      agreeMarketing: payload.agreeMarketing,
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await setDoc(doc(db, 'users', uid), {
+    uid,
+    email: payload.email.trim().toLowerCase(),
+    organizerId: orgRef.id,
+    role: 'organizer_master',
+    roles: ['organizer_master'],
+    providers: ['password'],
+    signupSource: 'organizer-signup',
+    signupAt: serverTimestamp(),
+    status: 'active',
+    passwordHint: payload.passwordHint.trim(),
+    recoveryLast4: payload.recoveryLast4.trim().slice(-4),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await setDoc(doc(db, 'passwordRecovery', payload.email.trim().toLowerCase()), {
+    uid,
+    passwordHint: payload.passwordHint.trim(),
+    recoveryLast4: payload.recoveryLast4.trim().slice(-4),
+    createdAt: serverTimestamp(),
+  });
+
+  return orgRef.id;
+}
+
+// =====================================================================
+// 플레이어 자체 가입
+// =====================================================================
+
+export interface PlayerSignupPayload {
+  email: string;
+  password: string;
+  nickname: string;
+  passwordHint?: string;
+  agreeService: boolean;
+  agreePrivacy: boolean;
+  agreeMarketing: boolean;
+}
+
+export async function signupAsPlayer(payload: PlayerSignupPayload): Promise<void> {
+  // 1) Firebase Auth 계정 생성
+  const credential = await createUserWithEmailAndPassword(
+    auth,
+    payload.email.trim().toLowerCase(),
+    payload.password,
+  );
+  const uid = credential.user.uid;
+  const email = payload.email.trim().toLowerCase();
+
+  // 2) users/{uid} 문서 생성
+  await setDoc(doc(db, 'users', uid), {
+    uid,
+    email,
+    role: 'player',
+    roles: ['player'],
+    providers: ['password'],
+    signupSource: 'player-signup',
+    status: 'active',
+    displayName: payload.nickname.trim(),
+    nickname: payload.nickname.trim(),
+    ...(payload.passwordHint?.trim() ? { passwordHint: payload.passwordHint.trim() } : {}),
+    agreeMarketing: payload.agreeMarketing,
+    signupAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  // 3) 힌트가 있을 때만 passwordRecovery/{email} 문서 생성
+  if (payload.passwordHint?.trim()) {
+    await setDoc(doc(db, 'passwordRecovery', email), {
+      uid,
+      passwordHint: payload.passwordHint.trim(),
+      createdAt: serverTimestamp(),
+    });
+  }
+}
+
+// =====================================================================
+// 이메일/비밀번호 로그인
+// =====================================================================
+
+export async function loginWithEmail(email: string, password: string) {
+  return signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+}
+
+// =====================================================================
+// 비밀번호 분실 복구
+// =====================================================================
+
+export interface RecoveryCheckResult {
+  success: boolean;
+  hint?: string; // 가입 시 설정한 힌트 문구 (화면에 표시)
+  uid?: string;
+}
+
+/**
+ * 이메일로 passwordRecovery 문서 조회 → 힌트 반환
+ * (힌트 답변과 4자리 검증은 클라이언트에서 수행)
+ */
+export async function fetchRecoveryInfo(email: string): Promise<{
+  found: boolean;
+  hint: string;
+  recoveryLast4: string;
+  uid: string;
+} | null> {
+  const key = email.trim().toLowerCase();
+  const snap = await getDoc(doc(db, 'passwordRecovery', key));
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  return {
+    found: true,
+    hint: d.passwordHint || '',
+    recoveryLast4: d.recoveryLast4 || '',
+    uid: d.uid || '',
+  };
+}
+
+export async function sendPasswordReset(email: string) {
+  await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+}
+
+// =====================================================================
+// 비밀번호 변경 (어드민 내부)
+// =====================================================================
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error('로그인 상태가 아닙니다');
+
+  // 재인증 (보안 요구)
+  const cred = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, cred);
+  await updatePassword(user, newPassword);
+}
+
+/**
+ * 비밀번호 변경 후 passwordRecovery 동기화 (힌트/4자리 갱신 옵션)
+ */
+export async function syncPasswordRecovery(
+  email: string,
+  updates: { passwordHint?: string; recoveryLast4?: string },
+) {
+  const key = email.trim().toLowerCase();
+  const snap = await getDoc(doc(db, 'passwordRecovery', key));
+  if (!snap.exists()) return;
+
+  await setDoc(
+    doc(db, 'passwordRecovery', key),
+    {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  // users/{uid}도 동기화
+  const uid = snap.data().uid;
+  if (uid) {
+    await setDoc(
+      doc(db, 'users', uid),
+      {
+        ...(updates.passwordHint !== undefined ? { passwordHint: updates.passwordHint } : {}),
+        ...(updates.recoveryLast4 !== undefined ? { recoveryLast4: updates.recoveryLast4 } : {}),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+}

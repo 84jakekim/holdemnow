@@ -1,0 +1,232 @@
+'use client';
+
+/**
+ * /login/business — 매장 사장·대회사 관계자 전용 로그인 페이지
+ *
+ * /login 메인은 일반 사용자(플레이어) 위주.
+ * 사장님·대회사 관계자는 우측 상단 진입점을 통해 이곳으로 분기.
+ *
+ * 분기:
+ *  - 비밀번호 찾기:   /login/recover
+ *  - 매장 가입신청:   /signup/store
+ *  - 대회사 가입신청: /signup/organizer
+ *  - 일반 로그인 회귀: /login
+ */
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
+import { loginWithEmail } from '@/lib/emailAuth';
+
+export default function BusinessLoginPage() {
+  const router = useRouter();
+  const authState = useAuth();
+  const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // 로그인 후 role 기반 라우팅
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return;
+    if (userDoc === undefined) return;
+
+    if (userDoc) {
+      if (hasRole(userDoc, 'platform_admin') && !userDoc.storeId) {
+        router.replace('/platform');
+        return;
+      }
+      if (userDoc.storeId) {
+        router.replace(`/admin/${userDoc.storeId}`);
+        return;
+      }
+      if (userDoc.organizerId) {
+        router.replace(`/organizer/${userDoc.organizerId}`);
+        return;
+      }
+      // role이 매장/대회사가 아니면 일반 사용자 → /m
+      router.replace('/m');
+    }
+  }, [authState, userDoc, router]);
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setLoggingIn(true);
+    setLoginError(null);
+    try {
+      await loginWithEmail(email, password);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('invalid-credential') || msg.includes('wrong-password') || msg.includes('user-not-found')) {
+        setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');
+      } else if (msg.includes('too-many-requests')) {
+        setLoginError('로그인 시도가 너무 많습니다. 잠시 후 다시 시도하거나 비밀번호를 재설정하세요.');
+      } else {
+        setLoginError(msg);
+      }
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  if (authState.status === 'loading' || (authState.status === 'authenticated' && userDoc === undefined)) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
+        로딩 중…
+      </main>
+    );
+  }
+  if (authState.status === 'authenticated') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
+        이동 중…
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen flex flex-col bg-white relative">
+      {/* 좌측 상단 — 일반 로그인으로 회귀 */}
+      <Link
+        href="/login"
+        className="absolute top-3 left-3 text-[11px] font-medium text-gray-500 hover:text-gray-900 px-3 py-1.5 rounded-full hover:bg-gray-100 transition"
+      >
+        ← 일반 로그인으로
+      </Link>
+
+      <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
+        {/* 로고 + 컨텍스트 라벨 */}
+        <div className="flex flex-col items-center mb-8 mt-6">
+          <img src="/logo.svg" alt="HoldemNow" width={180} height={30} className="mb-2" />
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="text-[10px] font-bold text-[#FF1F8F] bg-[#FF1F8F]/10 px-2 py-0.5 rounded-full tracking-widest">
+              매장·대회사 전용
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">홀덤펍 사장님·대회사 관계자 로그인</p>
+        </div>
+
+        <div className="w-full max-w-sm">
+          {/* ── 이메일/비밀번호 로그인 ── */}
+          <form onSubmit={handleEmailLogin} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-gray-700 block mb-1.5">이메일</label>
+              <input
+                type="email"
+                className="form-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="가입 시 등록한 이메일"
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-700 block mb-1.5">비밀번호</label>
+              <div className="relative">
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  className="form-input pr-14"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="비밀번호"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium"
+                  tabIndex={-1}
+                >
+                  {showPw ? '숨기기' : '보기'}
+                </button>
+              </div>
+            </div>
+
+            {loginError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 leading-relaxed">
+                {loginError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loggingIn || !email.trim() || !password}
+              className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition disabled:opacity-40 mt-1"
+              style={{ background: '#FF1F8F' }}
+            >
+              {loggingIn ? '로그인 중…' : '매장 / 대회사 로그인'}
+            </button>
+          </form>
+
+          {/* 비밀번호 찾기 */}
+          <div className="text-center mt-3">
+            <Link
+              href="/login/recover"
+              className="text-xs text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              비밀번호를 잊으셨나요?
+            </Link>
+          </div>
+
+          {/* 가입신청 카드 */}
+          <div className="mt-6 bg-gray-50 rounded-xl p-4 space-y-2">
+            <div className="text-[10px] font-bold text-gray-500 tracking-widest mb-1">아직 가입하지 않으셨나요?</div>
+            <Link
+              href="/signup/store"
+              className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#FF1F8F] transition"
+            >
+              <div>
+                <div className="text-sm font-bold text-gray-900">매장 가입 신청</div>
+                <div className="text-[11px] text-gray-500 mt-0.5">홀덤펍 사장님·매니저 전용</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden className="text-gray-400">
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </Link>
+            <Link
+              href="/signup/organizer"
+              className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#FF1F8F] transition"
+            >
+              <div>
+                <div className="text-sm font-bold text-gray-900">대회사 가입 신청</div>
+                <div className="text-[11px] text-gray-500 mt-0.5">홀덤 대회 운영 법인·단체</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden className="text-gray-400">
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-gray-400 text-center pb-6 leading-relaxed">
+        로그인 시 이용약관 및 개인정보 처리방침에 동의합니다.
+        <br />
+        정보 제공 플랫폼 (사행성 매개 X)
+      </p>
+
+      <style jsx global>{`
+        .form-input {
+          background: #fff;
+          border: 1.5px solid #e5e7eb;
+          border-radius: 10px;
+          padding: 11px 14px;
+          font-size: 14px;
+          color: #111;
+          width: 100%;
+          box-sizing: border-box;
+          outline: none;
+          transition: border-color 0.15s;
+        }
+        .form-input:focus { border-color: #FF1F8F; }
+      `}</style>
+    </main>
+  );
+}

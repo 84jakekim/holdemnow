@@ -5,32 +5,29 @@ import Link from 'next/link';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import AuthGate from '@/components/AuthGate';
 
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드', href: '/platform' },
   { id: 'live', icon: '🎬', label: '전국 LIVE', href: '/platform/live' },
-  { id: 'stores', icon: '🏬', label: '매장 심사', href: '/platform/stores' },
-  { id: 'organizers', icon: '🏢', label: '대회사 심사', href: '/platform/organizers' },
+  { id: 'members', icon: '👥', label: '회원 관리', href: '/platform/members' },
   { id: 'events', icon: '🎫', label: '대회 큐레이션', href: '/platform/events' },
   { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
+  { id: 'pinned', icon: '📌', label: '홈 고정 공지', href: '/platform/pinned' },
   { id: 'demo', icon: '🛠', label: '데모 데이터', href: '/platform/demo' },
   { id: 'stats', icon: '📈', label: '플랫폼 통계', href: '/platform/stats' },
 ];
 
-export default function PlatformLayout({ children }: { children: React.ReactNode }) {
+function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
   const authState = useAuth();
   const router = useRouter();
   const pathname = usePathname() ?? '';
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const [claiming, setClaiming] = useState(false);
-
-  useEffect(() => {
-    if (authState.status === 'anonymous') router.replace('/');
-  }, [authState, router]);
 
   if (authState.status !== 'authenticated' || userDoc === undefined) {
     return (
@@ -154,5 +151,13 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
         <div className="max-w-5xl">{children}</div>
       </main>
     </div>
+  );
+}
+
+export default function PlatformLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthGate>
+      <PlatformLayoutInner>{children}</PlatformLayoutInner>
+    </AuthGate>
   );
 }
