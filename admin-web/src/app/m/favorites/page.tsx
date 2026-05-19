@@ -11,6 +11,7 @@ import {
   getDocs, query, where, documentId,
 } from 'firebase/firestore';
 import { subscribeAllLiveSessions, type LiveSession } from '@/lib/live';
+import { RatingChip } from '@/components/mobile/RatingChip';
 
 interface FavoriteDoc {
   storeId: string;
@@ -22,6 +23,8 @@ interface StoreSummary {
   name: string;
   address?: string;
   photoUrl?: string;
+  averageRating?: number;
+  reviewCount?: number;
 }
 
 export default function FavoritesPage() {
@@ -51,8 +54,14 @@ export default function FavoritesPage() {
         const snap = await getDocs(query(collection(db, 'stores'), where(documentId(), 'in', ids.slice(0, 10))));
         const next: Record<string, StoreSummary> = {};
         snap.forEach((d) => {
-          const data = d.data() as { name: string; address?: string; photoUrls?: string[] };
-          next[d.id] = { name: data.name, address: data.address, photoUrl: data.photoUrls?.[0] };
+          const data = d.data() as {
+            name: string; address?: string; photoUrls?: string[];
+            averageRating?: number; reviewCount?: number;
+          };
+          next[d.id] = {
+            name: data.name, address: data.address, photoUrl: data.photoUrls?.[0],
+            averageRating: data.averageRating, reviewCount: data.reviewCount,
+          };
         });
         setStores((prev) => ({ ...prev, ...next }));
       } catch { /* ignore */ }
@@ -179,7 +188,12 @@ export default function FavoritesPage() {
                     </div>
                     {!liveSessions.length && (
                       <div className="px-4 py-3">
-                        <div className="font-bold text-sm" style={{ color: 'var(--text-1)' }}>{fav.storeName}</div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-bold text-sm" style={{ color: 'var(--text-1)' }}>{fav.storeName}</div>
+                          {(store?.reviewCount ?? 0) > 0 && (
+                            <RatingChip rating={store?.averageRating} count={store?.reviewCount} size="sm" />
+                          )}
+                        </div>
                         <div className="text-[11px] mt-1" style={{ color: 'var(--text-3)' }}>진행 중인 LIVE 없음</div>
                       </div>
                     )}

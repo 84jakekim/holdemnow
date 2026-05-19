@@ -18,6 +18,7 @@ import {
   type StorePost,
   type PinnedPost,
 } from '@/lib/posts';
+import { RatingChip } from '@/components/mobile/RatingChip';
 
 interface StoreGroup {
   storeId: string;
@@ -39,6 +40,8 @@ interface NearbyStore {
   lat?: number;
   lng?: number;
   distance?: number;
+  averageRating?: number;
+  reviewCount?: number;
 }
 
 /* ============================================================
@@ -1270,11 +1273,13 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
           const data = d.data() as {
             name: string; address?: string; photoUrls?: string[];
             facilities?: string[]; tier?: string; lat?: number; lng?: number;
+            averageRating?: number; reviewCount?: number;
           };
           return {
             id: d.id, name: data.name, address: data.address,
             photoUrl: data.photoUrls?.[0], facilities: data.facilities,
             tier: data.tier, lat: data.lat, lng: data.lng,
+            averageRating: data.averageRating, reviewCount: data.reviewCount,
           };
         }));
     });
@@ -1488,6 +1493,11 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
       </div>
       <div className="px-2.5 pt-2.5 pb-2">
         <div className="text-[13px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{st.name}</div>
+        {(st.reviewCount ?? 0) > 0 && (
+          <div className="mt-1">
+            <RatingChip rating={st.averageRating} count={st.reviewCount} size="sm" />
+          </div>
+        )}
         {st.address && (
           <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>
             {st.address.split(' ').slice(1, 3).join(' ')}
@@ -1538,6 +1548,11 @@ function NearbyStoreListRow({ store: st, live, rank }: { store: NearbyStore; liv
           )}
           {st.address ? st.address.split(' ').slice(1, 3).join(' ') : ''}
         </div>
+        {(st.reviewCount ?? 0) > 0 && (
+          <div className="mt-0.5">
+            <RatingChip rating={st.averageRating} count={st.reviewCount} size="sm" />
+          </div>
+        )}
       </div>
       {live > 0 ? (
         <span className="badge-live flex-shrink-0">

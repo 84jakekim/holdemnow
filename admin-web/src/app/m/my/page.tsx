@@ -223,7 +223,7 @@ export default function MyPage() {
           { label: '즐겨찾기 매장', go: '/m/favorites', icon: '♡' },
           { label: '관심 토너', go: '/m/interests', icon: '★' },
           { label: '시리즈 구독', go: '/m/subscriptions', icon: '◎' },
-          { label: '내가 쓴 리뷰', tag: 'v0.2', icon: '✎' },
+          { label: '내가 쓴 리뷰', go: '/m/my/reviews', icon: '✎' },
           { label: '도움말·문의', tag: '', icon: '?' },
         ].map((m, i) => (
           <button

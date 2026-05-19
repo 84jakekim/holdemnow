@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase';
 import { subscribeAllLiveSessions, type LiveSession } from '@/lib/live';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { loadKakaoMaps, geocodeAddress, DEFAULT_CENTER, type LatLng } from '@/lib/kakao';
+import { RatingChip } from '@/components/mobile/RatingChip';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -18,6 +19,8 @@ interface StoreSummary {
   photoUrl?: string;
   lat?: number;
   lng?: number;
+  averageRating?: number;
+  reviewCount?: number;
 }
 
 interface NearbyStore extends StoreSummary {
@@ -79,8 +82,15 @@ export default function DiscoverPage() {
           return data.status === 'active' || data.isDemo === true;
         });
         setStores(visible.map((d) => {
-          const data = d.data() as { name: string; address?: string; photoUrls?: string[]; lat?: number; lng?: number };
-          return { id: d.id, name: data.name, address: data.address, photoUrl: data.photoUrls?.[0], lat: data.lat, lng: data.lng };
+          const data = d.data() as {
+            name: string; address?: string; photoUrls?: string[]; lat?: number; lng?: number;
+            averageRating?: number; reviewCount?: number;
+          };
+          return {
+            id: d.id, name: data.name, address: data.address,
+            photoUrl: data.photoUrls?.[0], lat: data.lat, lng: data.lng,
+            averageRating: data.averageRating, reviewCount: data.reviewCount,
+          };
         }));
         visible.forEach((d) => trackImpressionOnce(d.id, 'discover-map'));
       })
@@ -411,6 +421,11 @@ function NearbyStoresSheet({
                     )}
                     {s.address && <span className="truncate">{s.address}</span>}
                   </div>
+                  {(s.reviewCount ?? 0) > 0 && (
+                    <div className="mt-1">
+                      <RatingChip rating={s.averageRating} count={s.reviewCount} size="sm" />
+                    </div>
+                  )}
                 </div>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)', flexShrink: 0 }}>
                   <path d="M9 18l6-6-6-6"/>

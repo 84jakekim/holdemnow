@@ -4,7 +4,7 @@ import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp,
+  doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
@@ -25,6 +25,13 @@ import {
   formatUsedPrice,
   subscribeStoreUsedListings,
 } from '@/lib/community';
+import {
+  subscribeStoreReviews,
+  deleteReview,
+  formatRating,
+  type Review,
+} from '@/lib/reviews';
+import ReviewWriteSheet from '@/components/mobile/ReviewWriteSheet';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,6 +48,9 @@ interface StoreData {
   status?: 'pending' | 'active' | 'rejected' | 'suspended';
   isDemo?: boolean;
   ownerUid?: string;
+  reviewCount?: number;
+  averageRating?: number;
+  ratingDistribution?: { '1'?: number; '2'?: number; '3'?: number; '4'?: number; '5'?: number };
 }
 
 export default function MobileStorePage({ params }: { params: Promise<{ storeId: string }> }) {
@@ -56,6 +66,11 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [photoIndex, setPhotoIndex] = useState(0);
   const [activePost, setActivePost] = useState<StorePost | null>(null);
   const [usedListings, setUsedListings] = useState<UsedListing[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewWriteOpen, setReviewWriteOpen] = useState(false);
+  const [reviewEditing, setReviewEditing] = useState<Review | null>(null);
+  const [reviewsExpanded, setReviewsExpanded] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
@@ -116,10 +131,25 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   };
 
   useEffect(() => {
-    (async () => {
-      const snap = await getDoc(doc(db, 'stores', storeId));
-      setStore(snap.exists() ? (snap.data() as StoreData) : null);
-    })();
+    // 매장 doc 구독 — Cloud Function이 갱신하는 reviewCount/averageRating/ratingDistribution
+    // 등의 집계 필드가 실시간 반영되도록.
+    const unsub = onSnapshot(
+      doc(db, 'stores', storeId),
+      (snap) => setStore(snap.exists() ? (snap.data() as StoreData) : null),
+      () => setStore(null),
+    );
+    return unsub;
+  }, [storeId]);
+
+  // 매장 리뷰 구독
+  useEffect(() => {
+    setReviewsLoading(true);
+    const unsub = subscribeStoreReviews(
+      storeId,
+      (items) => { setReviews(items); setReviewsLoading(false); },
+      () => setReviewsLoading(false),
+    );
+    return unsub;
   }, [storeId]);
 
   useEffect(() => {
@@ -597,6 +627,47 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       )}
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          리뷰 섹션
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <ReviewsSection
+        storeId={storeId}
+        storeName={store.name}
+        reviewCount={store.reviewCount ?? 0}
+        averageRating={store.averageRating ?? 0}
+        ratingDistribution={store.ratingDistribution}
+        reviews={reviews}
+        loading={reviewsLoading}
+        expanded={reviewsExpanded}
+        onToggleExpand={() => setReviewsExpanded((v) => !v)}
+        currentUid={currentUid}
+        onWriteClick={() => {
+          if (!currentUid) {
+            // 비로그인 — 구글 로그인으로 유도
+            signInWithPopup(auth, new GoogleAuthProvider()).catch(() => {});
+            return;
+          }
+          setReviewEditing(null);
+          setReviewWriteOpen(true);
+        }}
+        onEdit={(r) => { setReviewEditing(r); setReviewWriteOpen(true); }}
+        onDelete={(r) => {
+          if (!window.confirm('리뷰를 삭제할까요?')) return;
+          deleteReview(storeId, r.id).catch((e) => alert(e instanceof Error ? e.message : String(e)));
+        }}
+      />
+
+      {reviewWriteOpen && currentUid && (
+        <ReviewWriteSheet
+          storeId={storeId}
+          storeName={store.name}
+          authorUid={currentUid}
+          authorName={authState.status === 'authenticated' ? (authState.user.displayName ?? authState.user.email ?? '플레이어') : '플레이어'}
+          existingReview={reviewEditing}
+          onClose={() => { setReviewWriteOpen(false); setReviewEditing(null); }}
+        />
+      )}
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           위치 미니맵
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {store.lat != null && store.lng != null && (
@@ -841,4 +912,346 @@ function ActivePostCard({ post }: { post: StorePost }) {
       </div>
     </div>
   );
+}
+
+/* ============================================================
+ * 리뷰 섹션 — 별점 분포 + 작성 CTA + 리스트
+ * ========================================================== */
+const REVIEWS_INITIAL_COUNT = 5;
+
+function ReviewsSection({
+  storeId,
+  storeName,
+  reviewCount,
+  averageRating,
+  ratingDistribution,
+  reviews,
+  loading,
+  expanded,
+  onToggleExpand,
+  currentUid,
+  onWriteClick,
+  onEdit,
+  onDelete,
+}: {
+  storeId: string;
+  storeName: string;
+  reviewCount: number;
+  averageRating: number;
+  ratingDistribution?: { '1'?: number; '2'?: number; '3'?: number; '4'?: number; '5'?: number };
+  reviews: Review[];
+  loading: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  currentUid: string | null;
+  onWriteClick: () => void;
+  onEdit: (r: Review) => void;
+  onDelete: (r: Review) => void;
+}) {
+  const ratingLabel = (() => {
+    if (!reviewCount || reviewCount === 0) return '첫 리뷰를 남겨주세요';
+    if (averageRating >= 4.5) return '매우 좋음';
+    if (averageRating >= 3.5) return '좋음';
+    if (averageRating >= 2.5) return '보통';
+    if (averageRating >= 1.5) return '아쉬움';
+    return '별로';
+  })();
+
+  // 분포 막대용 최대값 (모든 별점 중 가장 많은 개수)
+  const dist = ratingDistribution ?? {};
+  const counts: Record<1 | 2 | 3 | 4 | 5, number> = {
+    1: dist['1'] ?? 0,
+    2: dist['2'] ?? 0,
+    3: dist['3'] ?? 0,
+    4: dist['4'] ?? 0,
+    5: dist['5'] ?? 0,
+  };
+  const maxBar = Math.max(1, counts[1], counts[2], counts[3], counts[4], counts[5]);
+
+  const shown = expanded ? reviews : reviews.slice(0, REVIEWS_INITIAL_COUNT);
+  const hasMore = reviews.length > REVIEWS_INITIAL_COUNT;
+
+  // 매장에 표시된 reviewCount보다 reviews 실시간 길이가 더 정확할 수 있음 (Function 갱신 지연)
+  const displayCount = Math.max(reviewCount, reviews.length);
+
+  return (
+    <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
+      {/* 헤더 */}
+      <div className="flex items-center gap-2 mb-4">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--brand)' }} aria-hidden="true">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        <span className="text-[14px] font-extrabold" style={{ color: 'var(--text-1)' }}>
+          리뷰 ({displayCount.toLocaleString()})
+        </span>
+      </div>
+
+      {/* 요약 카드 — 별점 큰 표시 + 분포 막대 */}
+      <div
+        className="rounded-2xl p-4 mb-4"
+        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+      >
+        <div className="flex items-baseline gap-3 mb-1">
+          <div
+            className="font-extrabold font-mono leading-none"
+            style={{ fontSize: 40, color: 'var(--text-1)', letterSpacing: '-0.02em' }}
+          >
+            {formatRating(averageRating)}
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <span
+                  key={n}
+                  aria-hidden="true"
+                  style={{
+                    fontSize: 16,
+                    lineHeight: 1,
+                    color: n <= Math.round(averageRating) ? '#FFC83D' : 'var(--surface-3)',
+                  }}
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+            <div className="text-[12px] font-bold mt-1" style={{ color: 'var(--text-2)' }}>
+              {ratingLabel}
+            </div>
+          </div>
+        </div>
+
+        {/* 분포 막대 */}
+        <div className="mt-4 space-y-1.5">
+          {[5, 4, 3, 2, 1].map((star) => {
+            const n = counts[star as 1 | 2 | 3 | 4 | 5];
+            const pct = Math.round((n / maxBar) * 100);
+            return (
+              <div key={star} className="flex items-center gap-2">
+                <span className="text-[10px] font-bold w-6 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+                  {star}점
+                </span>
+                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-3)' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${pct}%`, background: star >= 4 ? '#FFC83D' : star === 3 ? '#FFA800' : 'var(--text-3)' }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-bold w-8 text-right flex-shrink-0" style={{ color: 'var(--text-3)' }}>
+                  {n}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 리뷰 쓰기 버튼 */}
+      <button
+        onClick={onWriteClick}
+        className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl font-extrabold text-[14px] transition active:scale-[0.98] mb-4 text-white"
+        style={{ background: '#FF1F8F', boxShadow: '0 4px 12px rgba(255,31,143,0.30)' }}
+      >
+        <span aria-hidden="true" style={{ fontSize: 16 }}>✎</span>
+        {currentUid ? '리뷰 쓰기' : '로그인하고 리뷰 쓰기'}
+      </button>
+
+      {/* 리스트 */}
+      {loading ? (
+        <div className="py-6 text-center text-[13px]" style={{ color: 'var(--text-3)' }}>리뷰 로딩 중…</div>
+      ) : reviews.length === 0 ? (
+        <div className="py-8 text-center">
+          <div className="text-[40px] mb-2" aria-hidden="true">💬</div>
+          <div className="text-[14px] font-bold mb-1" style={{ color: 'var(--text-1)' }}>
+            아직 리뷰가 없어요
+          </div>
+          <div className="text-[12px]" style={{ color: 'var(--text-3)' }}>
+            {storeName}의 첫 리뷰를 남겨보세요
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {shown.map((r) => (
+              <ReviewCard
+                key={r.id}
+                review={r}
+                isMine={!!currentUid && r.authorUid === currentUid}
+                onEdit={() => onEdit(r)}
+                onDelete={() => onDelete(r)}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <button
+              onClick={onToggleExpand}
+              className="mt-4 w-full py-3 rounded-2xl text-[13px] font-bold transition active:scale-[0.99]"
+              style={{
+                background: expanded ? 'var(--surface-2)' : 'var(--brand-pale)',
+                border: `1px solid ${expanded ? 'var(--border)' : 'rgba(240,71,155,0.25)'}`,
+                color: expanded ? 'var(--text-2)' : '#C8276A',
+              }}
+              aria-expanded={expanded}
+            >
+              {expanded ? '접기' : `리뷰 더 보기 (+${reviews.length - REVIEWS_INITIAL_COUNT})`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReviewCard({
+  review,
+  isMine,
+  onEdit,
+  onDelete,
+}: {
+  review: Review;
+  isMine: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const createdMs = review.createdAt?.toMillis?.() ?? 0;
+  const visitMs = review.visitDate?.toMillis?.() ?? 0;
+  const initials = (review.authorName?.[0] ?? '?').toUpperCase();
+
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BB5 100%)' }}
+          aria-hidden="true"
+        >
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] font-bold truncate" style={{ color: 'var(--text-1)' }}>
+              {review.authorName || '익명'}
+            </span>
+            {isMine && (
+              <span
+                className="text-[9px] font-extrabold rounded-full px-1.5 py-0.5"
+                style={{ background: 'rgba(255,31,143,0.10)', color: 'var(--brand)' }}
+              >
+                내 리뷰
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <span
+                  key={n}
+                  aria-hidden="true"
+                  style={{
+                    fontSize: 11,
+                    lineHeight: 1,
+                    color: n <= review.rating ? '#FFC83D' : 'var(--surface-3)',
+                  }}
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+            <span className="text-[11px]" style={{ color: 'var(--text-3)' }}>
+              {createdMs ? formatRelativeTime(createdMs) : ''}
+              {review.editedAt && <span> · 수정됨</span>}
+            </span>
+          </div>
+        </div>
+        {isMine && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={onEdit}
+              className="text-[11px] font-bold px-2 py-1 rounded-lg transition active:scale-95"
+              style={{ background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
+            >
+              수정
+            </button>
+            <button
+              onClick={onDelete}
+              className="text-[11px] font-bold px-2 py-1 rounded-lg transition active:scale-95"
+              style={{ background: 'var(--surface-2)', color: 'var(--live)', border: '1px solid var(--border)' }}
+            >
+              삭제
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 본문 */}
+      <div
+        className="mt-3 text-[13px] whitespace-pre-wrap leading-relaxed"
+        style={{ color: 'var(--text-1)' }}
+      >
+        {review.body}
+      </div>
+
+      {/* 사진 */}
+      {review.photoUrls && review.photoUrls.length > 0 && (
+        <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-none">
+          {review.photoUrls.map((url) => (
+            <button
+              key={url}
+              onClick={() => setLightboxUrl(url)}
+              className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 transition active:scale-95"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+              aria-label="사진 크게 보기"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="리뷰 사진" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 방문일 */}
+      {visitMs > 0 && (
+        <div className="text-[11px] mt-2" style={{ color: 'var(--text-3)' }}>
+          방문일: {formatYmd(visitMs)}
+        </div>
+      )}
+
+      {/* 라이트박스 */}
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.92)' }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightboxUrl} alt="리뷰 사진 확대" className="max-w-full max-h-full object-contain" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatRelativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}일 전`;
+  if (day < 30) return `${Math.floor(day / 7)}주 전`;
+  if (day < 365) return `${Math.floor(day / 30)}개월 전`;
+  return `${Math.floor(day / 365)}년 전`;
+}
+
+function formatYmd(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
 }
