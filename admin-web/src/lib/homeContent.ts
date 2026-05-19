@@ -7,7 +7,6 @@
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
   Timestamp,
   where,
@@ -80,10 +79,10 @@ export function subscribeHomeAds(
   onData: (ads: HomeAd[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
+  // composite index 회피 — where만 적용, 정렬은 클라이언트.
   const q = query(
     collection(db, 'homeAds'),
     where('isActive', '==', true),
-    orderBy('order'),
   );
 
   return onSnapshot(
@@ -91,14 +90,14 @@ export function subscribeHomeAds(
     (snap) => {
       const now = Date.now();
       const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as HomeAd));
-      const filtered = all.filter((ad) => {
-        // position 필터
-        if (position !== 'all' && ad.position !== position) return false;
-        // 날짜 범위 필터 (클라이언트)
-        const start = ad.startAt?.toMillis() ?? 0;
-        const end = ad.endAt?.toMillis() ?? Infinity;
-        return now >= start && now <= end;
-      });
+      const filtered = all
+        .filter((ad) => {
+          if (position !== 'all' && ad.position !== position) return false;
+          const start = ad.startAt?.toMillis() ?? 0;
+          const end = ad.endAt?.toMillis() ?? Infinity;
+          return now >= start && now <= end;
+        })
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       onData(filtered);
     },
     (err) => onError?.(err),
@@ -112,16 +111,19 @@ export function subscribeHotVideos(
   onData: (videos: HotYoutubeVideo[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
+  // composite index 회피 — where만 적용, 정렬은 클라이언트.
+  // 데이터 수십 건 이하 가정이라 비용 미미.
   const q = query(
     collection(db, 'hotYoutubeVideos'),
     where('isActive', '==', true),
-    orderBy('order'),
   );
 
   return onSnapshot(
     q,
     (snap) => {
-      const videos = snap.docs.map((d) => ({ id: d.id, ...d.data() } as HotYoutubeVideo));
+      const videos = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as HotYoutubeVideo))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       onData(videos);
     },
     (err) => onError?.(err),
@@ -135,16 +137,18 @@ export function subscribeHotYoutubers(
   onData: (youtubers: HotYoutuber[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
+  // composite index 회피 — where만 적용, 정렬은 클라이언트.
   const q = query(
     collection(db, 'hotYoutubers'),
     where('isActive', '==', true),
-    orderBy('order'),
   );
 
   return onSnapshot(
     q,
     (snap) => {
-      const youtubers = snap.docs.map((d) => ({ id: d.id, ...d.data() } as HotYoutuber));
+      const youtubers = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as HotYoutuber))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       onData(youtubers);
     },
     (err) => onError?.(err),
