@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { subscribeHotVideos, type HotYoutubeVideo } from '@/lib/homeContent';
 import { youtubeThumbnailUrl } from '@/lib/youtube';
 
@@ -191,7 +191,7 @@ function SmallCard({ video }: { video: HotYoutubeVideo }) {
       href={youtubeUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex-1 min-w-0 block rounded-2xl overflow-hidden transition active:scale-[0.98]"
+      className="block rounded-2xl overflow-hidden transition active:scale-[0.98]"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
@@ -228,48 +228,10 @@ function SmallCard({ video }: { video: HotYoutubeVideo }) {
   );
 }
 
-// ─── 빈 작은 카드 슬롯 ───────────────────────────────────────────
-function EmptySmallSlot() {
-  return <div className="flex-1 min-w-0" aria-hidden="true" />;
-}
-
-// ─── 페이지 (큰 1 + 작은 2) ──────────────────────────────────────
-function VideoPage({ group }: { group: HotYoutubeVideo[] }) {
-  const big = group[0];
-  const small1 = group[1];
-  const small2 = group[2];
-
-  return (
-    <div
-      className="flex-shrink-0 flex flex-col gap-3"
-      style={{
-        scrollSnapAlign: 'start',
-        // 부모 padding(px-4=32px)을 뺀 화면 폭 — 일부 브라우저에서 w-full이
-        // 정확히 계산 안 되는 경우 대비. 큰 카드/작은 카드 row 모두 부모 폭에 맞춤.
-        width: 'calc(100vw - 32px)',
-        maxWidth: 'calc(100% - 0px)',
-      }}
-    >
-      {/* 큰 카드 */}
-      {big && <BigCard video={big} />}
-
-      {/* 작은 카드 2개 — small1 또는 small2가 있을 때만 렌더 */}
-      {(small1 || small2) && (
-        <div className="flex gap-3">
-          {small1 ? <SmallCard video={small1} /> : <EmptySmallSlot />}
-          {small2 ? <SmallCard video={small2} /> : <EmptySmallSlot />}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function HotVideosCarousel() {
   const [videos, setVideos] = useState<HotYoutubeVideo[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [activePage, setActivePage] = useState(0);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const unsub = subscribeHotVideos(
@@ -282,32 +244,9 @@ export default function HotVideosCarousel() {
     return unsub;
   }, []);
 
-  // 3개씩 페이지 chunking
-  const pages = useMemo(() => {
-    const out: HotYoutubeVideo[][] = [];
-    for (let i = 0; i < videos.length; i += 3) out.push(videos.slice(i, i + 3));
-    return out;
-  }, [videos]);
+  if (!loaded || videos.length === 0) return null;
 
-  // 스크롤 위치로 활성 페이지 추적
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const handleScroll = () => {
-      const pageWidth = el.clientWidth;
-      if (pageWidth === 0) return;
-      const newPage = Math.round(el.scrollLeft / pageWidth);
-      setActivePage(Math.min(newPage, pages.length - 1));
-    };
-
-    el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
-  }, [pages.length]);
-
-  if (!loaded || pages.length === 0) return null;
-
-  const showDots = pages.length >= 2;
+  const hasSmallRow = videos.length >= 2;
 
   return (
     <section aria-label="인기 유튜브 영상" className="py-5">
@@ -325,40 +264,41 @@ export default function HotVideosCarousel() {
         </div>
       </div>
 
-      {/* 페이지 단위 가로 스크롤 */}
+      {/* 큰 카드 행 — 한 화면 1개, snap = 카드 1개 */}
       <div
-        ref={scrollRef}
-        className="px-4 flex overflow-x-auto scrollbar-none gap-4"
+        className="px-4 flex overflow-x-auto scrollbar-none gap-3"
         style={{ scrollSnapType: 'x mandatory' }}
+        aria-label="큰 영상 카드 가로 스크롤"
       >
-        {pages.map((group, i) => (
-          <VideoPage key={i} group={group} />
+        {videos.map((v) => (
+          <div
+            key={`big-${v.videoId}`}
+            className="flex-shrink-0"
+            style={{ scrollSnapAlign: 'start', width: 'calc(100vw - 32px)' }}
+          >
+            <BigCard video={v} />
+          </div>
         ))}
       </div>
 
-      {/* 점 인디케이터 — 페이지 2개 이상 */}
-      {showDots && (
+      {/* 작은 카드 행 — 한 화면 2개, snap = 카드 1개 (영상 2개 이상일 때만) */}
+      {hasSmallRow && (
         <div
-          className="flex justify-center gap-1.5 mt-3"
-          role="tablist"
-          aria-label="페이지 인디케이터"
+          className="mt-3 px-4 flex overflow-x-auto scrollbar-none gap-3"
+          style={{ scrollSnapType: 'x mandatory' }}
+          aria-label="작은 영상 카드 가로 스크롤"
         >
-          {pages.map((_, i) => (
-            <span
-              key={i}
-              role="tab"
-              aria-selected={i === activePage}
-              aria-label={`${i + 1}번째 페이지`}
-              className="block rounded-full transition-all duration-200"
+          {videos.map((v) => (
+            <div
+              key={`small-${v.videoId}`}
+              className="flex-shrink-0"
               style={{
-                width: i === activePage ? 14 : 6,
-                height: 6,
-                background:
-                  i === activePage
-                    ? 'var(--brand)'
-                    : 'rgba(255,31,143,0.30)',
+                scrollSnapAlign: 'start',
+                width: 'calc((100vw - 32px - 12px) / 2)',
               }}
-            />
+            >
+              <SmallCard video={v} />
+            </div>
           ))}
         </div>
       )}
