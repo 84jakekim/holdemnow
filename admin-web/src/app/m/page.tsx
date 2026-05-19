@@ -184,10 +184,11 @@ export default function MobileHome() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo.svg"
+              src="/top_right_logo.svg"
               alt="HoldemNow"
-              height={20}
-              style={{ width: 'auto', display: 'block' }}
+              width={36}
+              height={36}
+              style={{ display: 'block' }}
             />
           </Link>
 

@@ -20,6 +20,20 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: 'ko',
     categories: ['entertainment', 'lifestyle', 'social'],
     icons: [
+      // 신규 통합 로고 SVG — 모든 sizes 대응 + maskable 겸용
+      {
+        src: '/top_right_logo.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+        purpose: 'any',
+      },
+      {
+        src: '/top_right_logo.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+        purpose: 'maskable',
+      },
+      // 폴백 PNG — 일부 안드로이드 구버전이 SVG 미지원 시 사용
       {
         src: '/icon-192.png',
         sizes: '192x192',
@@ -32,12 +46,6 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
         purpose: 'any',
       },
-      {
-        src: '/icon-maskable-512.png',
-        sizes: '512x512',
-        type: 'image/png',
-        purpose: 'maskable',
-      },
     ],
     // 모바일 앱에서 자주 가는 경로를 long-press 빠른 진입으로 제공
     shortcuts: [
@@ -46,14 +54,14 @@ export default function manifest(): MetadataRoute.Manifest {
         short_name: 'LIVE',
         description: '진행 중인 LIVE 토너먼트',
         url: '/m',
-        icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+        icons: [{ src: '/top_right_logo.svg', sizes: 'any', type: 'image/svg+xml' }],
       },
       {
         name: '지도 탐색',
         short_name: '탐색',
         description: '주변 매장 지도 보기',
         url: '/m/discover',
-        icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+        icons: [{ src: '/top_right_logo.svg', sizes: 'any', type: 'image/svg+xml' }],
       },
     ],
   };
