@@ -12,6 +12,8 @@ import {
   query,
   where,
   orderBy,
+  limit as fbLimit,
+  setDoc,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
@@ -21,7 +23,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { auth, db, storage } from './firebase';
 
 /**
  * 매장 방문 리뷰 (stores/{storeId}/reviews/{reviewId} 서브컬렉션).
@@ -51,6 +53,10 @@ export interface Review {
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   editedAt?: Timestamp | null;
+  /** 본사가 숨김 처리한 리뷰 — 모바일 노출은 client-side에서 필터링. */
+  hidden?: boolean;
+  hiddenAt?: Timestamp | null;
+  hiddenBy?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -75,6 +81,9 @@ function toReview(id: string, data: Record<string, unknown>, storeIdFallback?: s
     createdAt: data.createdAt as Timestamp | undefined,
     updatedAt: data.updatedAt as Timestamp | undefined,
     editedAt: (data.editedAt as Timestamp | null | undefined) ?? null,
+    hidden: (data.hidden as boolean | undefined) ?? false,
+    hiddenAt: (data.hiddenAt as Timestamp | null | undefined) ?? null,
+    hiddenBy: (data.hiddenBy as string | null | undefined) ?? null,
   };
 }
 
@@ -82,7 +91,11 @@ function toReview(id: string, data: Record<string, unknown>, storeIdFallback?: s
 // 구독
 // ─────────────────────────────────────────────────────────────
 
-/** 매장 리뷰 목록 구독 (최신순) */
+/**
+ * 매장 리뷰 목록 구독 (최신순).
+ * hidden=true 리뷰는 모바일 사용자에게 노출 차단 (본사가 숨김 처리한 리뷰).
+ * 본사 관리 UI에서 hidden 포함 전체 목록이 필요하면 subscribeRecentReviews 사용.
+ */
 export function subscribeStoreReviews(
   storeId: string,
   onChange: (items: Review[]) => void,
@@ -92,7 +105,10 @@ export function subscribeStoreReviews(
   return onSnapshot(
     q,
     (snap) => {
-      onChange(snap.docs.map((d) => toReview(d.id, d.data() as Record<string, unknown>, storeId)));
+      const items = snap.docs
+        .map((d) => toReview(d.id, d.data() as Record<string, unknown>, storeId))
+        .filter((r) => r.hidden !== true);
+      onChange(items);
     },
     (e) => onError(e as Error),
   );
@@ -256,4 +272,69 @@ async function deleteReviewImageByUrl(url: string): Promise<void> {
 export function formatRating(rating: number): string {
   if (!Number.isFinite(rating)) return '0.0';
   return (Math.round(rating * 10) / 10).toFixed(1);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 본사 리뷰 관리 (platform_admin 전용 — rules에서 강제)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 리뷰 숨김 — 모바일 사용자에게 노출 차단.
+ * 원본 데이터는 보존, hidden 플래그만 토글. platform_admin만 호출 가능
+ * (Firestore rules에서 강제).
+ */
+export async function hideReview(storeId: string, reviewId: string): Promise<void> {
+  const uid = auth.currentUser?.uid ?? null;
+  await setDoc(
+    doc(reviewsCol(storeId), reviewId),
+    {
+      hidden: true,
+      hiddenAt: serverTimestamp(),
+      hiddenBy: uid,
+    },
+    { merge: true },
+  );
+}
+
+/** 숨김 해제 — hidden=false 로 토글. */
+export async function unhideReview(storeId: string, reviewId: string): Promise<void> {
+  const uid = auth.currentUser?.uid ?? null;
+  await setDoc(
+    doc(reviewsCol(storeId), reviewId),
+    {
+      hidden: false,
+      hiddenAt: null,
+      hiddenBy: uid,
+    },
+    { merge: true },
+  );
+}
+
+/**
+ * 전 매장 최근 N건 리뷰 구독 (collectionGroup, 최신순).
+ * 본사 관리 페이지에서 hidden 포함 모든 리뷰 모니터링.
+ * 인덱스: collectionGroup('reviews') orderBy('createdAt' desc) — Firebase 자동 인덱스로 OK.
+ */
+export function subscribeRecentReviews(
+  limit: number,
+  onChange: (items: Review[]) => void,
+  onError: (e: Error) => void,
+): () => void {
+  const q = query(
+    collectionGroup(db, 'reviews'),
+    orderBy('createdAt', 'desc'),
+    fbLimit(limit),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      onChange(
+        snap.docs.map((d) => {
+          const storeIdFromPath = d.ref.parent.parent?.id ?? '';
+          return toReview(d.id, d.data() as Record<string, unknown>, storeIdFromPath);
+        }),
+      );
+    },
+    (e) => onError(e as Error),
+  );
 }

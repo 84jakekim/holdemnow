@@ -126,14 +126,20 @@ service cloud.firestore {
           && request.resource.data.rating is int
           && request.resource.data.rating >= 1
           && request.resource.data.rating <= 5;
-        allow update: if isSignedIn()
-          && resource.data.authorUid == request.auth.uid
-          && request.resource.data.authorUid == request.auth.uid  // uid 변경 차단
-          && request.resource.data.rating is int
-          && request.resource.data.rating >= 1
-          && request.resource.data.rating <= 5;
+        // 본인은 본인 리뷰 update (rating·body·photoUrls 등), 또는 platform_admin이
+        // hidden 토글 등 운영 목적으로 update 가능.
+        allow update: if isSignedIn() && (
+          (
+            resource.data.authorUid == request.auth.uid
+            && request.resource.data.authorUid == request.auth.uid  // uid 변경 차단
+            && request.resource.data.rating is int
+            && request.resource.data.rating >= 1
+            && request.resource.data.rating <= 5
+          )
+          || isPlatformAdmin()
+        );
         allow delete: if isSignedIn()
-          && resource.data.authorUid == request.auth.uid;
+          && (resource.data.authorUid == request.auth.uid || isPlatformAdmin());
       }
     }
 

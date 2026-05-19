@@ -870,3 +870,247 @@ export async function loadTopStoresByLiveCount(limit: number): Promise<TopStore[
     return [];
   }
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 본사 통합: 인기/비인기 매장 Top N (metric별)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * 본사 관리에서 임의 메트릭으로 정렬할 수 있는 통합 Top N 타입.
+ * - rating / reviewCount / liveSessionCount: stores doc 필드 (orderBy 직접 가능)
+ * - cardClicks / impressions / favoriteAdds: stores/{id}/metrics/global 서브 doc 필드
+ *   (Firestore는 서브doc 필드로 orderBy 불가 → 전체 fetch 후 클라이언트 정렬)
+ */
+export type StoreMetricField =
+  | 'rating'
+  | 'reviewCount'
+  | 'liveSessionCount'
+  | 'cardClicks'
+  | 'impressions'
+  | 'favoriteAdds';
+
+const STORE_DOC_FIELDS: ReadonlySet<StoreMetricField> = new Set<StoreMetricField>([
+  'rating',
+  'reviewCount',
+  'liveSessionCount',
+]);
+
+/**
+ * 인기/비인기 매장 Top N (metric별).
+ * ascending=true 이면 가장 낮은 순(비인기 매장 발굴용).
+ *
+ * 구현:
+ *  - rating/reviewCount/liveSessionCount: orderBy + limit (인덱스 자동 생성).
+ *    rating은 stores doc의 `averageRating` 필드를 사용.
+ *  - cardClicks/impressions/favoriteAdds: 모든 매장의 metrics/global 병렬 fetch 후 정렬.
+ *    베타 규모(< 수백 매장) 가정.
+ */
+export async function loadTopStoresByMetric(
+  metric: StoreMetricField,
+  limit: number,
+  ascending = false,
+): Promise<TopStore[]> {
+  if (limit <= 0) return [];
+  const direction: 'asc' | 'desc' = ascending ? 'asc' : 'desc';
+
+  // 1) stores doc 필드 — orderBy 직접 사용
+  if (STORE_DOC_FIELDS.has(metric)) {
+    try {
+      const { orderBy: fbOrderBy, limit: fbLimit } = await import('firebase/firestore');
+      // 'rating'은 실제 doc 필드명은 'averageRating'
+      const docField = metric === 'rating' ? 'averageRating' : metric;
+      const q = query(
+        collection(db, 'stores'),
+        fbOrderBy(docField, direction),
+        fbLimit(limit),
+      );
+      const snap = await getDocs(q);
+      const rows: TopStore[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as Record<string, unknown>;
+        const v = data[docField];
+        rows.push({
+          id: d.id,
+          name: (data.name as string) ?? '(이름 없음)',
+          metric: typeof v === 'number' ? v : 0,
+        });
+      });
+      return rows;
+    } catch {
+      return [];
+    }
+  }
+
+  // 2) metrics/global 서브doc 필드 — 전체 fetch 후 클라 정렬
+  try {
+    const storesSnap = await getDocs(query(collection(db, 'stores')));
+    const stores: Array<{ id: string; name: string }> = [];
+    storesSnap.forEach((d) => {
+      const data = d.data() as { name?: string };
+      stores.push({ id: d.id, name: data.name ?? '(이름 없음)' });
+    });
+
+    const results = await Promise.all(
+      stores.map(async (s) => {
+        try {
+          const { doc: fbDoc, getDoc: fbGetDoc } = await import('firebase/firestore');
+          const mSnap = await fbGetDoc(fbDoc(db, 'stores', s.id, 'metrics', 'global'));
+          const m = (mSnap.exists() ? mSnap.data() : {}) as Record<string, unknown>;
+          const v = m[metric];
+          return {
+            id: s.id,
+            name: s.name,
+            metric: typeof v === 'number' ? v : 0,
+          };
+        } catch {
+          return { id: s.id, name: s.name, metric: 0 };
+        }
+      }),
+    );
+
+    results.sort((a, b) => (ascending ? a.metric - b.metric : b.metric - a.metric));
+    return results.slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 본사 통합: 전 매장 누적 메트릭 행 (대시보드·매장 분석)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface StoreMetricsRow {
+  storeId: string;
+  storeName: string;
+  impressions: number;
+  cardClicks: number;
+  liveOpens: number;
+  directionsClicks: number;
+  phoneClicks: number;
+  favoriteAdds: number;
+  rating: number;
+  reviewCount: number;
+  liveSessionCount: number;
+}
+
+/**
+ * 전 매장 누적 메트릭 (stores doc + analytics metrics/global 결합).
+ * 본사 대시보드·매장 분석 페이지에서 한 번에 다운로드해 정렬·필터.
+ * 베타 규모(< 수백 매장)에선 전체 병렬 fetch가 단순·충분.
+ */
+export async function loadAllStoresMetrics(): Promise<StoreMetricsRow[]> {
+  try {
+    const storesSnap = await getDocs(query(collection(db, 'stores')));
+    const stores: Array<{
+      id: string;
+      name: string;
+      rating: number;
+      reviewCount: number;
+      liveSessionCount: number;
+    }> = [];
+    storesSnap.forEach((d) => {
+      const data = d.data() as {
+        name?: string;
+        averageRating?: number;
+        reviewCount?: number;
+        liveSessionCount?: number;
+      };
+      stores.push({
+        id: d.id,
+        name: data.name ?? '(이름 없음)',
+        rating: data.averageRating ?? 0,
+        reviewCount: data.reviewCount ?? 0,
+        liveSessionCount: data.liveSessionCount ?? 0,
+      });
+    });
+
+    const { doc: fbDoc, getDoc: fbGetDoc } = await import('firebase/firestore');
+
+    const rows = await Promise.all(
+      stores.map(async (s): Promise<StoreMetricsRow> => {
+        let m: Record<string, unknown> = {};
+        try {
+          const mSnap = await fbGetDoc(fbDoc(db, 'stores', s.id, 'metrics', 'global'));
+          if (mSnap.exists()) m = mSnap.data() as Record<string, unknown>;
+        } catch {
+          // metrics 없으면 0
+        }
+        const num = (k: string): number => {
+          const v = m[k];
+          return typeof v === 'number' ? v : 0;
+        };
+        return {
+          storeId: s.id,
+          storeName: s.name,
+          impressions: num('impressions'),
+          cardClicks: num('cardClicks'),
+          liveOpens: num('liveOpens'),
+          directionsClicks: num('directionsClicks'),
+          phoneClicks: num('phoneClicks'),
+          favoriteAdds: num('favoriteAdds'),
+          rating: s.rating,
+          reviewCount: s.reviewCount,
+          liveSessionCount: s.liveSessionCount,
+        };
+      }),
+    );
+
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 본사 통합: 최근 가입 사용자 N명 (사용자 관리)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface UserSummary {
+  uid: string;
+  displayName?: string | null;
+  email?: string | null;
+  role?: string | null;
+  roles?: string[];
+  createdAt?: { toDate(): Date } | null;
+  lastActiveAt?: { toDate(): Date } | null;
+}
+
+/**
+ * 최근 가입 사용자 N명 — 본사 사용자 관리 페이지용.
+ * users 컬렉션 createdAt 내림차순 (자동 인덱스).
+ */
+export async function loadRecentUsers(limit: number): Promise<UserSummary[]> {
+  if (limit <= 0) return [];
+  try {
+    const { orderBy: fbOrderBy, limit: fbLimit } = await import('firebase/firestore');
+    const q = query(
+      collection(db, 'users'),
+      fbOrderBy('createdAt', 'desc'),
+      fbLimit(limit),
+    );
+    const snap = await getDocs(q);
+    const rows: UserSummary[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as {
+        displayName?: string | null;
+        email?: string | null;
+        role?: string | null;
+        roles?: string[];
+        createdAt?: Timestamp | null;
+        lastActiveAt?: Timestamp | null;
+      };
+      rows.push({
+        uid: d.id,
+        displayName: data.displayName ?? null,
+        email: data.email ?? null,
+        role: data.role ?? null,
+        roles: Array.isArray(data.roles) ? data.roles : [],
+        createdAt: data.createdAt ?? null,
+        lastActiveAt: data.lastActiveAt ?? null,
+      });
+    });
+    return rows;
+  } catch {
+    return [];
+  }
+}
