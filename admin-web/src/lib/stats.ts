@@ -574,3 +574,299 @@ export async function loadEventStats(): Promise<EventStats> {
     thisMonth: thisMonthCount,
   };
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 시계열 데이터 — 일별 추이 (sparkline·라인 차트용)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface TimeSeriesPoint {
+  /** 'YYYY-MM-DD' (Asia/Seoul 브라우저 로컬 기준) */
+  date: string;
+  /** 그 날 카운트 */
+  value: number;
+}
+
+/** 'YYYY-MM-DD' 형식 키 생성 (브라우저 로컬 = KST 가정) */
+function formatDateKey(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * 공통 시계열 빌더 — 한 번에 fetch 후 클라이언트에서 일별 bucket 채우기.
+ * 베타 규모(<= 수천 docs/N일)에선 비용·복잡도상 OK.
+ */
+async function buildTimeSeries(
+  collectionPath: string,
+  dateField: string,
+  days: number,
+  isCollectionGroup = false,
+  extraWhere: QueryConstraint[] = [],
+): Promise<TimeSeriesPoint[]> {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  start.setHours(0, 0, 0, 0);
+
+  const ref = isCollectionGroup
+    ? collectionGroup(db, collectionPath)
+    : collection(db, collectionPath);
+  const q = query(
+    ref,
+    where(dateField, '>=', Timestamp.fromDate(start)),
+    where(dateField, '<=', Timestamp.fromDate(end)),
+    ...extraWhere,
+  );
+  const snap = await getDocs(q);
+
+  // 일별 bucket 초기화 — N일 전부 0으로 채워두고 발생분만 더하기
+  const buckets: Record<string, number> = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    buckets[formatDateKey(d)] = 0;
+  }
+
+  snap.forEach((doc) => {
+    const ts = doc.data()[dateField] as Timestamp | undefined;
+    if (!ts || typeof ts.toMillis !== 'function') return;
+    const key = formatDateKey(ts.toDate());
+    if (buckets[key] !== undefined) buckets[key] += 1;
+  });
+
+  return Object.entries(buckets)
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** 최근 N일 일별 신규 가입자 수 (오늘 포함, 가장 옛날부터 정렬) */
+export async function loadUsersTimeSeries(days: number): Promise<TimeSeriesPoint[]> {
+  return buildTimeSeries('users', 'createdAt', days).catch(() => []);
+}
+
+/** 최근 N일 일별 신규 매장 등록 (createdAt 기준) */
+export async function loadStoresTimeSeries(days: number): Promise<TimeSeriesPoint[]> {
+  return buildTimeSeries('stores', 'createdAt', days).catch(() => []);
+}
+
+/** 최근 N일 일별 완료된 LIVE 세션 (endedAt 기준, status='completed') */
+export async function loadLiveTimeSeries(days: number): Promise<TimeSeriesPoint[]> {
+  return buildTimeSeries('liveSessions', 'endedAt', days, false, [
+    where('status', '==', 'completed'),
+  ]).catch(() => []);
+}
+
+/** 최근 N일 일별 작성된 리뷰 수 (collectionGroup) */
+export async function loadReviewsTimeSeries(days: number): Promise<TimeSeriesPoint[]> {
+  return buildTimeSeries('reviews', 'createdAt', days, true).catch(() => []);
+}
+
+/** 최근 N일 일별 발송 캠페인 수 (status='sent', sentAt 기준) */
+export async function loadCampaignsTimeSeries(days: number): Promise<TimeSeriesPoint[]> {
+  return buildTimeSeries('platformCampaigns', 'sentAt', days, false, [
+    where('status', '==', 'sent'),
+  ]).catch(() => []);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 증감률 — 오늘 vs 어제, 이번 주 vs 지난 주
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface GrowthRate {
+  current: number;
+  previous: number;
+  /** +12.5 / -3.2, current==0 && previous==0 이면 0 */
+  changePct: number;
+  direction: 'up' | 'down' | 'flat';
+}
+
+export interface GrowthRates {
+  /** 오늘 vs 어제 가입자 */
+  usersDaily: GrowthRate;
+  /** 이번 주 vs 지난 주 가입자 */
+  usersWeekly: GrowthRate;
+  storesDaily: GrowthRate;
+  storesWeekly: GrowthRate;
+  /** 오늘 vs 어제 완료된 LIVE 세션 */
+  liveDaily: GrowthRate;
+  reviewsDaily: GrowthRate;
+}
+
+/** 어제 00:00 ~ 23:59:59.999 */
+function rangeYesterday(): DateRange {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+  return { start, end };
+}
+
+/** 지난 주 월요일 00:00 ~ 지난 주 일요일 23:59:59.999 */
+function rangeLastWeek(): DateRange {
+  const thisWeek = rangeThisWeek();
+  const start = new Date(thisWeek.start);
+  start.setDate(start.getDate() - 7);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function calcGrowth(current: number, previous: number): GrowthRate {
+  let changePct: number;
+  if (previous > 0) {
+    changePct = ((current - previous) / previous) * 100;
+  } else {
+    changePct = current > 0 ? 100 : 0;
+  }
+  // 소수점 한 자리 반올림 (UI 친화적)
+  changePct = Math.round(changePct * 10) / 10;
+  const direction: 'up' | 'down' | 'flat' =
+    changePct > 1 ? 'up' : changePct < -1 ? 'down' : 'flat';
+  return { current, previous, changePct, direction };
+}
+
+/**
+ * 단일 지표 증감 빌더 — current/previous 각각 카운트 후 calcGrowth.
+ * 리뷰처럼 collectionGroup이 필요한 경우 isCollectionGroup=true.
+ */
+async function buildGrowth(
+  collectionPath: string,
+  dateField: string,
+  currentRange: DateRange,
+  previousRange: DateRange,
+  isCollectionGroup = false,
+  extraWhere: QueryConstraint[] = [],
+): Promise<GrowthRate> {
+  const ref = isCollectionGroup
+    ? collectionGroup(db, collectionPath)
+    : collection(db, collectionPath);
+
+  const buildQ = (r: DateRange) =>
+    query(
+      ref,
+      where(dateField, '>=', Timestamp.fromDate(r.start)),
+      where(dateField, '<=', Timestamp.fromDate(r.end)),
+      ...extraWhere,
+    );
+
+  const [curSnap, prevSnap] = await Promise.all([
+    getCountFromServer(buildQ(currentRange)).catch(() => ({ data: () => ({ count: 0 }) })),
+    getCountFromServer(buildQ(previousRange)).catch(() => ({ data: () => ({ count: 0 }) })),
+  ]);
+
+  return calcGrowth(curSnap.data().count, prevSnap.data().count);
+}
+
+export async function loadGrowthRates(): Promise<GrowthRates> {
+  const today = rangeToday();
+  const yesterday = rangeYesterday();
+  const thisWeek = rangeThisWeek();
+  const lastWeek = rangeLastWeek();
+
+  const completedWhere: QueryConstraint[] = [where('status', '==', 'completed')];
+
+  const [
+    usersDaily,
+    usersWeekly,
+    storesDaily,
+    storesWeekly,
+    liveDaily,
+    reviewsDaily,
+  ] = await Promise.all([
+    buildGrowth('users', 'createdAt', today, yesterday),
+    buildGrowth('users', 'createdAt', thisWeek, lastWeek),
+    buildGrowth('stores', 'createdAt', today, yesterday),
+    buildGrowth('stores', 'createdAt', thisWeek, lastWeek),
+    buildGrowth('liveSessions', 'endedAt', today, yesterday, false, completedWhere),
+    buildGrowth('reviews', 'createdAt', today, yesterday, true),
+  ]);
+
+  return {
+    usersDaily,
+    usersWeekly,
+    storesDaily,
+    storesWeekly,
+    liveDaily,
+    reviewsDaily,
+  };
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Top N 매장 (v0.1)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface TopStore {
+  id: string;
+  name: string;
+  /** 호출 함수가 무슨 지표를 담느냐에 따라 다름 (평점·LIVE 세션 수 등) */
+  metric: number;
+}
+
+/**
+ * 인기 매장 Top N — averageRating 내림차순.
+ * 동률 처리·reviewCount 가중치는 베타 단순화로 클라이언트에서 secondary sort.
+ * Firestore는 동일 쿼리에 두 orderBy 가능하지만 인덱스 추가 필요 — 일단 클라 sort.
+ */
+export async function loadTopStoresByRating(limit: number): Promise<TopStore[]> {
+  try {
+    const { orderBy: fbOrderBy, limit: fbLimit } = await import('firebase/firestore');
+    // 평점 기준 상위 N*2 fetch 후 reviewCount 동률 처리 (베타 단순화)
+    const fetchN = Math.max(limit * 2, limit);
+    const q = query(
+      collection(db, 'stores'),
+      fbOrderBy('averageRating', 'desc'),
+      fbLimit(fetchN),
+    );
+    const snap = await getDocs(q);
+    const rows: Array<TopStore & { reviewCount: number }> = [];
+    snap.forEach((d) => {
+      const data = d.data() as {
+        name?: string;
+        averageRating?: number;
+        reviewCount?: number;
+      };
+      rows.push({
+        id: d.id,
+        name: data.name ?? '(이름 없음)',
+        metric: data.averageRating ?? 0,
+        reviewCount: data.reviewCount ?? 0,
+      });
+    });
+    rows.sort((a, b) => {
+      if (b.metric !== a.metric) return b.metric - a.metric;
+      return b.reviewCount - a.reviewCount;
+    });
+    return rows.slice(0, limit).map(({ id, name, metric }) => ({ id, name, metric }));
+  } catch {
+    return [];
+  }
+}
+
+/** 활동 매장 Top N — liveSessionCount 내림차순 */
+export async function loadTopStoresByLiveCount(limit: number): Promise<TopStore[]> {
+  try {
+    const { orderBy: fbOrderBy, limit: fbLimit } = await import('firebase/firestore');
+    const q = query(
+      collection(db, 'stores'),
+      fbOrderBy('liveSessionCount', 'desc'),
+      fbLimit(limit),
+    );
+    const snap = await getDocs(q);
+    const rows: TopStore[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as { name?: string; liveSessionCount?: number };
+      rows.push({
+        id: d.id,
+        name: data.name ?? '(이름 없음)',
+        metric: data.liveSessionCount ?? 0,
+      });
+    });
+    return rows;
+  } catch {
+    return [];
+  }
+}
