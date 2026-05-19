@@ -287,23 +287,23 @@ html, body {
  * 핑크 윤곽 + 떠 있는 그림자로 "떠 있는 카드" 느낌 유지.
  */
 .tabbar-glass {
-  /* 핫핑크 그라데이션 알약 — 흰 페이지 위 명확한 콘트라스트 */
-  background: linear-gradient(135deg, #FF1F8F 0%, #E01077 100%) !important;
-  background-color: #FF1F8F !important;
+  /* 옅은 솔리드 핑크 알약 — 톤다운, 부드러운 브랜드 톤 */
+  background: #FFB8DC !important;
+  background-color: #FFB8DC !important;
   border: none;
   box-shadow:
-    0 10px 30px rgba(255, 31, 143, 0.35),
-    0 4px 14px rgba(0, 0, 0, 0.18),
-    0 1px 3px rgba(0, 0, 0, 0.10);
+    0 8px 24px rgba(255, 31, 143, 0.22),
+    0 3px 10px rgba(0, 0, 0, 0.10),
+    0 1px 3px rgba(0, 0, 0, 0.06);
 }
 html[data-theme="dark"] .tabbar-glass {
-  background: linear-gradient(135deg, #FF1F8F 0%, #C8156B 100%) !important;
-  background-color: #FF1F8F !important;
+  background: #FF6B9D !important;
+  background-color: #FF6B9D !important;
   border: none;
   box-shadow:
-    0 10px 30px rgba(255, 31, 143, 0.45),
-    0 4px 14px rgba(0, 0, 0, 0.55),
-    0 1px 3px rgba(0, 0, 0, 0.40);
+    0 8px 24px rgba(255, 31, 143, 0.35),
+    0 3px 10px rgba(0, 0, 0, 0.50),
+    0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 /* ── Shimmer 스켈레톤 (라이트) ─────────────────────────── */
