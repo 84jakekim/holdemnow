@@ -241,8 +241,14 @@ function VideoPage({ group }: { group: HotYoutubeVideo[] }) {
 
   return (
     <div
-      className="w-full flex-shrink-0 flex flex-col gap-3"
-      style={{ scrollSnapAlign: 'start' }}
+      className="flex-shrink-0 flex flex-col gap-3"
+      style={{
+        scrollSnapAlign: 'start',
+        // 부모 padding(px-4=32px)을 뺀 화면 폭 — 일부 브라우저에서 w-full이
+        // 정확히 계산 안 되는 경우 대비. 큰 카드/작은 카드 row 모두 부모 폭에 맞춤.
+        width: 'calc(100vw - 32px)',
+        maxWidth: 'calc(100% - 0px)',
+      }}
     >
       {/* 큰 카드 */}
       {big && <BigCard video={big} />}
