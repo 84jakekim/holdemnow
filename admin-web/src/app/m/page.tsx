@@ -36,29 +36,30 @@ export default function MobileHome() {
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
 
-  // 4섹션 콘텐츠 0건 여부 (platform_admin에게만 안내 카드 표시 목적)
+  // 4섹션 콘텐츠 0건 여부 — 모든 사용자에게 적용
+  //  - platform_admin: 본사 어드민 이동 안내 카드
+  //  - 일반 사용자: 친화적 빈상태 placeholder ("매장찾기 둘러보기")
   const [allEmpty, setAllEmpty] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!isPlatformAdmin) return;
     let cancelled = false;
     (async () => {
       try {
-        const [hasTopAds, hasBottomAds, hasVideos, hasYoutubers] = await Promise.all([
-          hasActiveContent('homeAds'),
+        const [hasAds, hasVideos, hasYoutubers] = await Promise.all([
           hasActiveContent('homeAds'),
           hasActiveContent('hotYoutubeVideos'),
           hasActiveContent('hotYoutubers'),
         ]);
         if (!cancelled) {
-          setAllEmpty(!hasTopAds && !hasBottomAds && !hasVideos && !hasYoutubers);
+          setAllEmpty(!hasAds && !hasVideos && !hasYoutubers);
         }
       } catch {
-        if (!cancelled) setAllEmpty(false);
+        // fetch 실패 시 보수적으로 빈 상태로 처리 — placeholder는 보여주는 게 낫다
+        if (!cancelled) setAllEmpty(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [isPlatformAdmin]);
+  }, []);
 
   const displayName =
     authState.status === 'authenticated'
@@ -199,6 +200,47 @@ export default function MobileHome() {
           5. 본사 광고 하단 — 21:9 서브 배너
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <HomeAdsCarousel position="bottom" />
+
+      {/* 일반 사용자용 친화적 빈상태 placeholder — 콘텐츠 0건이고 본사 관리자가 아닌 경우 */}
+      {!isPlatformAdmin && allEmpty === true && (
+        <section className="px-4 py-6">
+          <div
+            className="rounded-2xl px-5 py-6 flex flex-col items-center text-center gap-3"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1.5px solid var(--border)',
+            }}
+            role="status"
+          >
+            <span className="text-3xl" aria-hidden>🎲</span>
+            <div>
+              <div
+                className="text-[15px] font-bold leading-snug"
+                style={{ color: 'var(--text-1)' }}
+              >
+                곧 새로운 콘텐츠가 채워집니다
+              </div>
+              <div
+                className="text-[12px] mt-1 leading-relaxed"
+                style={{ color: 'var(--text-2)' }}
+              >
+                먼저 내 주변 홀덤펍부터 둘러보세요.
+              </div>
+            </div>
+            <Link
+              href="/m/find"
+              className="text-[13px] font-bold px-4 py-2 rounded-xl transition active:opacity-70"
+              style={{
+                background: 'var(--surface-2)',
+                color: 'var(--text-1)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              매장찾기 둘러보기 →
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* 본사 관리자 전용 — 4섹션 콘텐츠 0건 안내 카드 */}
       {isPlatformAdmin && allEmpty === true && (
