@@ -605,6 +605,23 @@ export default function StoreSignupPage() {
           border-color: #FF1F8F;
         }
       `}</style>
+
+      {/* 다음 우편번호 모달 — showPostcode=true일 때만 화면에 표시 */}
+      <DaumPostcode
+        open={showPostcode}
+        onClose={() => setShowPostcode(false)}
+        onComplete={(r) => {
+          setForm((f) => ({
+            ...f,
+            roadAddress: r.roadAddress,
+            jibunAddress: r.jibunAddress,
+            zonecode: r.zonecode,
+            // 새 주소 선택 시 상세주소 초기화 (이전 입력이 무관한 새 건물일 수 있음)
+            detailAddress: '',
+          }));
+          setShowPostcode(false);
+        }}
+      />
     </main>
   );
 }
