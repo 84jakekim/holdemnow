@@ -40,9 +40,11 @@ import {
 import {
   loadUserStats,
   loadStoreStats,
+  loadOrganizerStats,
   loadLiveStats,
   loadReviewStats,
   loadCampaignStats,
+  loadEventStats,
   loadUsersTimeSeries,
   loadStoresTimeSeries,
   loadLiveTimeSeries,
@@ -51,9 +53,11 @@ import {
   loadTopStoresByRating,
   type UserStats,
   type StoreStats,
+  type OrganizerStats,
   type LiveStats,
   type ReviewStats,
   type CampaignStats,
+  type EventStats,
   type TimeSeriesPoint,
   type GrowthRate,
   type GrowthRates,
@@ -103,9 +107,11 @@ function shortDate(iso: string): string {
 interface DashboardData {
   users: UserStats;
   stores: StoreStats;
+  organizers: OrganizerStats;
   live: LiveStats;
   reviews: ReviewStats;
   campaigns: CampaignStats;
+  events: EventStats;
   usersSeries: TimeSeriesPoint[];
   storesSeries: TimeSeriesPoint[];
   liveSeries: TimeSeriesPoint[];
@@ -132,9 +138,11 @@ export default function PlatformDashboard() {
       const [
         users,
         stores,
+        organizers,
         live,
         reviews,
         campaigns,
+        events,
         usersSeries,
         storesSeries,
         liveSeries,
@@ -144,9 +152,11 @@ export default function PlatformDashboard() {
       ] = await Promise.all([
         loadUserStats(),
         loadStoreStats(),
+        loadOrganizerStats(),
         loadLiveStats(),
         loadReviewStats(),
         loadCampaignStats(),
+        loadEventStats(),
         loadUsersTimeSeries(30),
         loadStoresTimeSeries(30),
         loadLiveTimeSeries(30),
@@ -157,9 +167,11 @@ export default function PlatformDashboard() {
       setData({
         users,
         stores,
+        organizers,
         live,
         reviews,
         campaigns,
+        events,
         usersSeries,
         storesSeries,
         liveSeries,
@@ -432,6 +444,59 @@ export default function PlatformDashboard() {
         />
       </ChartCard>
 
+      {/* ━━ 2-1. 사용자 상세 row ━━ */}
+      <SectionLabel>사용자 상세</SectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <SubCard label="오늘 신규" value={fmt(data?.users.today)} accent="brand" />
+        <SubCard label="이번달 신규" value={fmt(data?.users.thisMonth)} accent="brand" />
+        <SubCard label="올해 신규" value={fmt(data?.users.thisYear)} accent="brand" />
+        <SubCard label="실시간 접속자" value={fmt(data?.users.activeNow)} accent="live" hint="5분 이내 활동" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <SubCard label="마케팅 동의자" value={fmt(data?.users.marketingOptIn)} accent="gold" />
+        <SubCard label="FCM 토큰" value={fmt(data?.users.withFcmTokens)} accent="muted" hint="수신 가능 디바이스" />
+        <SubCard label="Role · 플레이어" value={fmt(data?.users.byRole.player)} accent="muted" />
+        <SubCard label="Role · 매장 사장" value={fmt(data?.users.byRole.storeOwner)} accent="muted" />
+      </div>
+      <div
+        className="mb-6"
+        style={{ fontSize: 11, color: 'var(--text-3)', paddingLeft: 4 }}
+      >
+        Role: 대회사 사장 <strong style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmt(data?.users.byRole.organizerOwner)}</strong>
+        {' · '}
+        본사 관리자 <strong style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmt(data?.users.byRole.platformAdmin)}</strong>
+      </div>
+
+      {/* ━━ 2-2. 매장 상세 row ━━ */}
+      <SectionLabel>매장 상세</SectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <SubCard label="활성" value={fmt(data?.stores.active)} accent="success" />
+        <SubCard label="심사 대기" value={fmt(data?.stores.pending)} accent="brand" />
+        <SubCard label="거부" value={fmt(data?.stores.rejected)} accent="live" />
+        <SubCard label="정지" value={fmt(data?.stores.suspended)} accent="muted" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+        <SubCard label="데모 매장" value={fmt(data?.stores.isDemo)} accent="muted" />
+        <SubCard label="오늘 신규" value={fmt(data?.stores.today)} accent="gold" />
+        <SubCard label="리뷰 있는 매장" value={fmt(data?.stores.withReviews)} accent="gold" />
+        <SubCard label="LIVE 운영 매장" value={fmt(data?.stores.withLiveSessions)} accent="live" />
+      </div>
+
+      {/* ━━ 2-3. LIVE 상세 row ━━ */}
+      <SectionLabel>LIVE 상세</SectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <SubCard label="현재 진행" value={fmt(data?.live.currentRunning)} accent="live" />
+        <SubCard label="대기 (ready)" value={fmt(data?.live.currentReady)} accent="gold" />
+        <SubCard label="일시정지" value={fmt(data?.live.currentPaused)} accent="muted" />
+        <SubCard label="누적 완료" value={fmt(data?.live.totalCompleted)} accent="success" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+        <SubCard label="오늘 완료" value={fmt(data?.live.today)} accent="brand" />
+        <SubCard label="이번주 완료" value={fmt(data?.live.thisWeek)} accent="brand" />
+        <SubCard label="이번달 완료" value={fmt(data?.live.thisMonth)} accent="brand" />
+        <div />
+      </div>
+
       {/* ━━ 3. 분포 (2열) ━━ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
         <ChartCard
@@ -576,6 +641,14 @@ export default function PlatformDashboard() {
         </ChartCard>
       </div>
 
+      {/* ━━ 3-1. 리뷰 상세 row ━━ */}
+      <SectionLabel>리뷰 상세</SectionLabel>
+      <div className="grid grid-cols-3 gap-2 mb-6">
+        <SubCard label="오늘 신규 리뷰" value={fmt(data?.reviews.today)} accent="gold" />
+        <SubCard label="이번주 신규" value={fmt(data?.reviews.thisWeek)} accent="gold" />
+        <SubCard label="이번달 신규" value={fmt(data?.reviews.thisMonth)} accent="gold" />
+      </div>
+
       {/* ━━ 4. Top 10 매장 ━━ */}
       <ChartCard
         title="Top 10 매장 (평점 기준)"
@@ -583,6 +656,51 @@ export default function PlatformDashboard() {
       >
         <TopStoresList stores={data?.topStores ?? []} loading={loading && !data} />
       </ChartCard>
+
+      {/* ━━ 4-1. 대회사 ━━ */}
+      <SectionLabel>대회사</SectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <SubCard label="총 대회사" value={fmt(data?.organizers.total)} accent="brand" />
+        <SubCard label="활성" value={fmt(data?.organizers.active)} accent="success" />
+        <SubCard label="심사 대기" value={fmt(data?.organizers.pending)} accent="gold" />
+        <SubCard label="거부" value={fmt(data?.organizers.rejected)} accent="live" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+        <SubCard label="오늘 신규" value={fmt(data?.organizers.today)} accent="muted" />
+        <SubCard label="이번주 신규" value={fmt(data?.organizers.thisWeek)} accent="muted" />
+        <SubCard label="이번달 신규" value={fmt(data?.organizers.thisMonth)} accent="muted" />
+        <div />
+      </div>
+
+      {/* ━━ 4-2. 이벤트(대회) ━━ */}
+      <SectionLabel>이벤트(대회)</SectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+        <SubCard label="총 이벤트" value={fmt(data?.events.total)} accent="brand" />
+        <SubCard label="예정 (upcoming)" value={fmt(data?.events.upcoming)} accent="gold" />
+        <SubCard label="진행 중 (ongoing)" value={fmt(data?.events.ongoing)} accent="live" />
+        <SubCard label="이번달" value={fmt(data?.events.thisMonth)} accent="success" />
+      </div>
+
+      {/* ━━ 4-3. 캠페인 ━━ */}
+      <SectionLabel>캠페인</SectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <SubCard label="총 캠페인" value={fmt(data?.campaigns.total)} accent="brand" />
+        <SubCard label="발송 완료" value={fmt(data?.campaigns.sent)} accent="success" />
+        <SubCard label="예약" value={fmt(data?.campaigns.scheduled)} accent="gold" />
+        <SubCard
+          label="평균 도달률"
+          value={data ? `${data.campaigns.avgDeliveryRate.toFixed(1)}%` : '-'}
+          accent="live"
+        />
+      </div>
+      <div
+        className="mb-6"
+        style={{ fontSize: 11, color: 'var(--text-3)', paddingLeft: 4 }}
+      >
+        총 발송 수 <strong style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmt(data?.campaigns.totalDelivered)}</strong>
+        {' · '}
+        총 도달 (recipients) <strong style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmt(data?.campaigns.totalRecipients)}</strong>
+      </div>
 
       {/* ━━ 5. 빠른 진입 액션 ━━ */}
       <SectionLabel>빠른 진입</SectionLabel>
@@ -1043,6 +1161,79 @@ function TopStoresList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SubCard — 큰 KPI 보조 카드 (label + value + hint)
+// 큰 KPI(KpiCard) 절반 사이즈. 회사 회의·인쇄용 정보 밀도 유지.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function SubCard({
+  label,
+  value,
+  hint,
+  accent = 'muted',
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  accent?: 'brand' | 'gold' | 'live' | 'success' | 'muted';
+}) {
+  const accentColor =
+    accent === 'brand'
+      ? 'var(--brand)'
+      : accent === 'gold'
+        ? 'var(--gold)'
+        : accent === 'live'
+          ? COLOR_LIVE
+          : accent === 'success'
+            ? COLOR_SUCCESS
+            : 'var(--text-3)';
+  return (
+    <div
+      style={{
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border)',
+        borderLeft: `3px solid ${accentColor}`,
+        borderRadius: 'var(--r-md)',
+        padding: '10px 12px',
+        minHeight: 72,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        gap: 4,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          color: 'var(--text-3)',
+          letterSpacing: '0.02em',
+          lineHeight: 1.2,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        className="font-mono"
+        style={{
+          fontSize: 19,
+          fontWeight: 800,
+          color: 'var(--text-1)',
+          fontVariantNumeric: 'tabular-nums',
+          lineHeight: 1.05,
+        }}
+      >
+        {value}
+      </div>
+      {hint && (
+        <div style={{ fontSize: 10, color: 'var(--text-3)', lineHeight: 1.1 }}>
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
