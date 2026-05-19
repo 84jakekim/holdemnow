@@ -23,7 +23,11 @@ export default function HomeAdsCarousel({ position }: Props) {
   useEffect(() => {
     const unsub = subscribeHomeAds(
       position,
-      (data) => { setAds(data); setLoaded(true); },
+      (data) => {
+        // imageUrl 없는 광고는 carousel 노출에서 제외 — <img src=""> 에러 방지
+        setAds(data.filter((ad) => !!ad.imageUrl && ad.imageUrl.trim().length > 0));
+        setLoaded(true);
+      },
       () => setLoaded(true),
     );
     return unsub;
