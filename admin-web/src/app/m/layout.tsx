@@ -106,10 +106,14 @@ function TabBar({ pathname }: { pathname: string }) {
       aria-label="메인 내비게이션"
     >
       {/* Floating Solid Pill — 양옆·아래 12px 여백, rounded-full
-       * inline style로 background 강제 — class cascade 충돌/투명 방지 */}
+       * inline style + hex 하드코딩으로 background 강제 — Tailwind v4
+       * 자동 reset이나 cascade 충돌 어떤 경우에도 흰색 보장. */}
       <div
-        className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden"
-        style={{ background: 'var(--surface-1)' }}
+        className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden tabbar-solid"
+        style={{
+          background: '#FFFFFF',
+          backgroundColor: '#FFFFFF',
+        }}
       >
         <div className="flex items-stretch h-[60px] px-1">
           {TABS.map((t) => {
