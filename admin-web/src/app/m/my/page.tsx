@@ -391,7 +391,7 @@ function EditProfileSheet({
               onChange={(e) => setBio(e.target.value)}
               maxLength={200}
               rows={2}
-              placeholder="예: 부산 NL 캐시 위주로 즐깁니다"
+              placeholder="나를 한 줄로 소개해 주세요"
               className="w-full px-3 py-2.5 rounded-lg text-sm outline-none resize-none"
               style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
             />
