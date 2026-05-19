@@ -24,6 +24,7 @@ export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';
 export { notifyTournamentStart } from './notifications/notifyTournamentStart';
 export { notifyLateRegImminent } from './notifications/notifyLateRegImminent';
 export { marketingBroadcast } from './notifications/marketingBroadcast';
+export { processScheduledCampaigns } from './notifications/processScheduledCampaigns';
 
 // ===== LIVE =====
 // 마지막 레벨 종료 후 그레이스(180초) 만료된 세션을 status=completed로 자동 정리.

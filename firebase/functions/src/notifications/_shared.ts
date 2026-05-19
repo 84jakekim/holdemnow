@@ -97,6 +97,133 @@ export async function filterByPrefs(
   return allowed;
 }
 
+/**
+ * 마케팅 캠페인 발송 코어 헬퍼.
+ *
+ * marketingBroadcast(Callable) + processScheduledCampaigns(Scheduled) 둘 다 공유.
+ *
+ * - testUid가 있으면 그 사용자에게만 발송 (테스트).
+ * - 없으면 users where notificationPrefs.marketing == true 전수 발송.
+ * - 광고 prefix 자동 처리 (정보통신망법): isAdvertisement=true && !body.startsWith('(광고)') → "(광고) " 자동 부착.
+ * - FCM chunk는 sendAndCleanup이 알아서 처리 (500개씩은 admin SDK가 내부 제한).
+ *   배치가 더 커질 가능성이 있으면 호출부에서 분할.
+ * - 만료/무효 토큰 정리 포함.
+ *
+ * @returns 발송 통계 {recipientCount, deliveredCount, failureCount}
+ */
+export async function broadcastMarketing(input: {
+  campaignId?: string | null;
+  title: string;
+  body: string;
+  imageUrl?: string | null;
+  linkUrl?: string | null;
+  isAdvertisement: boolean;
+  testUid?: string | null;
+}): Promise<{ recipientCount: number; deliveredCount: number; failureCount: number }> {
+  const db = admin.firestore();
+  const messaging = admin.messaging();
+
+  // 1. 광고 prefix
+  const finalBody = input.isAdvertisement && !input.body.startsWith('(광고)')
+    ? `(광고) ${input.body}`
+    : input.body;
+
+  // 2. 대상 uid 결정
+  let targetUids: string[];
+  if (input.testUid) {
+    targetUids = [input.testUid];
+  } else {
+    const usersSnap = await db
+      .collection('users')
+      .where('notificationPrefs.marketing', '==', true)
+      .get();
+    targetUids = usersSnap.docs.map((d) => d.id);
+  }
+
+  if (targetUids.length === 0) {
+    return { recipientCount: 0, deliveredCount: 0, failureCount: 0 };
+  }
+
+  // 3. 토큰 모음
+  const tokenDocs = await gatherFcmTokens(targetUids);
+  if (tokenDocs.length === 0) {
+    return { recipientCount: targetUids.length, deliveredCount: 0, failureCount: 0 };
+  }
+
+  // 4. 메시지 빌드 — 토큰별 (이미지/링크/data payload 포함). 500개씩 chunk.
+  const baseData: Record<string, string> = {
+    type: 'marketing',
+    campaignId: input.campaignId ?? '',
+    url: input.linkUrl ?? '/m',
+  };
+  if (input.isAdvertisement) baseData.isAd = '1';
+
+  const messages: admin.messaging.Message[] = tokenDocs.map(({ token }) => {
+    const notification: admin.messaging.Notification = {
+      title: input.title,
+      body: finalBody,
+    };
+    if (input.imageUrl) notification.imageUrl = input.imageUrl;
+
+    const webpushNotification: admin.messaging.WebpushNotification = {
+      icon: '/icon-app.svg',
+      badge: '/icon-app.svg',
+      tag: `campaign-${input.campaignId ?? Date.now()}`,
+    };
+    if (input.imageUrl) webpushNotification.image = input.imageUrl;
+
+    return {
+      token,
+      notification,
+      data: baseData,
+      webpush: {
+        notification: webpushNotification,
+        fcmOptions: { link: input.linkUrl ?? '/m' },
+      },
+    };
+  });
+
+  // 5. 청크 발송 + 만료 토큰 정리
+  let totalSuccess = 0;
+  let totalFailure = 0;
+  const cleanups: Promise<unknown>[] = [];
+
+  for (let i = 0; i < messages.length; i += 500) {
+    const chunk = messages.slice(i, i + 500);
+    const resp = await messaging.sendEach(chunk);
+    totalSuccess += resp.successCount;
+    totalFailure += resp.failureCount;
+    resp.responses.forEach((r, idx) => {
+      if (!r.success) {
+        const code = r.error?.code;
+        if (
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token'
+        ) {
+          const td = tokenDocs[i + idx];
+          if (td) {
+            cleanups.push(
+              db
+                .collection('users')
+                .doc(td.uid)
+                .collection('fcmTokens')
+                .doc(td.tokenId)
+                .delete(),
+            );
+          }
+        }
+      }
+    });
+  }
+  await Promise.allSettled(cleanups);
+
+  return {
+    recipientCount: targetUids.length,
+    deliveredCount: totalSuccess,
+    failureCount: totalFailure,
+  };
+}
+
 /** Firestore 서브컬렉션 경로(`users/{uid}/...`)에서 uid 추출 */
 export function uidFromPath(refPath: string): string | null {
   const parts = refPath.split('/');

@@ -75,6 +75,14 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(2);
     }
 
+    // 본사 마케팅 캠페인 알림 이미지 — 푸시 알림 이미지로 사용되므로 누구나 read.
+    // 페이지 자체가 platform_admin gating이며 Firestore rules가 캠페인 doc 권한을 제어.
+    // v0.1: 인증 사용자면 write 허용. v0.2에서 platform_admin custom claim 강화.
+    match /campaigns/{campaignId}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
