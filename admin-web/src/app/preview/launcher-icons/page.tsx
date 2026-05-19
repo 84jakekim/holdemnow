@@ -49,16 +49,23 @@ function BgGradient3({ id }: { id: string }) {
   );
 }
 
-/* low-poly 다각형 색상 팔레트 (핑크 5톤) */
+/* low-poly 다각형 색상 팔레트 (핑크 8톤 — 빛 좌상→우하 음영 표현용) */
 const POLY = {
+  vvh: '#FFD1E5', // very very highlight (반짝임)
   vh: '#FFB8DC', // very highlight
   hi: '#FF6B9D', // highlight
-  mid: '#FF4DA1',
-  main: '#FF1F8F',
-  dk: '#E01077',
-  vdk: '#C8276A',
-  deep: '#7A0840',
+  mid: '#FF4DA1', // mid-light
+  main: '#FF1F8F', // main mid
+  dk: '#E01077', // mid-dark
+  vdk: '#C8276A', // dark
+  deeper: '#A11857', // deeper
+  deep: '#7A0840', // very deep
+  accent: '#5A0530', // extreme accent (귀 안쪽 최심부)
 };
+
+/* 폴리곤 외곽선 — 다이아몬드 cut 효과용 미세 stroke */
+const EDGE = 'rgba(122,8,64,0.32)';
+const EDGE_W = 0.6;
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  시안 1 — 라인아트 정면 토끼 (흰 배경 + 핑크 그라데이션 stroke)
@@ -144,6 +151,13 @@ function Design1() {
  * ────────────────────────────────────────────────────────────────────────── */
 
 function Design2() {
+  // 폴리곤 공통 props — 다이아몬드 cut 효과용 미세 stroke
+  const p = {
+    stroke: EDGE,
+    strokeWidth: EDGE_W,
+    strokeLinejoin: 'round' as const,
+  };
+
   return (
     <svg
       viewBox="0 0 192 192"
@@ -155,35 +169,82 @@ function Design2() {
       {/* 흰 배경 */}
       <rect width="192" height="192" fill="#FFFFFF" />
 
-      {/* 토끼 머리 + 귀 low-poly 다각형들 (안쪽에서 바깥쪽 순) */}
+      {/*
+        토끼 머리 + 귀 low-poly mesh (총 28 폴리곤)
+        빛 방향: 좌상단 → 우하단 (135deg)
+        - 좌상·코·뺨 위·귀 외측 끝 = 하이라이트
+        - 우하·턱 하단·귀 안쪽 = 그림자
+      */}
 
-      {/* 왼귀 — 3개 다각형 (안쪽 밝음 → 외측 어두움) */}
-      <polygon points="74,36 84,42 80,82" fill={POLY.hi} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
-      <polygon points="74,36 80,82 64,92" fill={POLY.main} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
-      <polygon points="74,36 64,92 60,60" fill={POLY.vdk} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
+      {/* ═══════════ 왼귀 (6 폴리곤) ═══════════
+          외측 = 빛 받는 쪽 (밝음), 안쪽 = 어두움 */}
+      {/* L-귀 외측 상단 (가장 밝은 하이라이트 — 빛 정면) */}
+      <polygon {...p} points="72,30 80,38 76,58" fill={POLY.vvh} />
+      {/* L-귀 외측 중단 */}
+      <polygon {...p} points="72,30 76,58 66,68" fill={POLY.vh} />
+      {/* L-귀 외측 하단 (얼굴 합류) */}
+      <polygon {...p} points="66,68 76,58 80,82 64,92" fill={POLY.hi} />
+      {/* L-귀 안쪽 상단 (그림자) */}
+      <polygon {...p} points="72,30 80,38 84,52" fill={POLY.vdk} />
+      {/* L-귀 안쪽 중단 (더 깊은 그림자) */}
+      <polygon {...p} points="80,38 84,52 80,82" fill={POLY.deeper} />
+      {/* L-귀 안쪽 최심부 (극강 어두운 액센트) */}
+      <polygon {...p} points="76,58 80,82 84,52" fill={POLY.accent} />
 
-      {/* 오른귀 — 3개 다각형 (대칭) */}
-      <polygon points="118,36 108,42 112,82" fill={POLY.hi} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
-      <polygon points="118,36 112,82 128,92" fill={POLY.main} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
-      <polygon points="118,36 128,92 132,60" fill={POLY.vdk} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
+      {/* ═══════════ 오른귀 (6 폴리곤) ═══════════
+          좌우대칭이되 빛 방향상 왼귀보다 한 톤 어두움 */}
+      {/* R-귀 외측 상단 */}
+      <polygon {...p} points="120,30 112,38 116,58" fill={POLY.vh} />
+      {/* R-귀 외측 중단 */}
+      <polygon {...p} points="120,30 116,58 126,68" fill={POLY.hi} />
+      {/* R-귀 외측 하단 (얼굴 합류) */}
+      <polygon {...p} points="126,68 116,58 112,82 128,92" fill={POLY.mid} />
+      {/* R-귀 안쪽 상단 (그림자) */}
+      <polygon {...p} points="120,30 112,38 108,52" fill={POLY.deeper} />
+      {/* R-귀 안쪽 중단 */}
+      <polygon {...p} points="112,38 108,52 112,82" fill={POLY.deep} />
+      {/* R-귀 안쪽 최심부 (극강 어두움) */}
+      <polygon {...p} points="116,58 112,82 108,52" fill={POLY.accent} />
 
-      {/* 얼굴 상단 좌 (밝음) */}
-      <polygon points="80,82 96,76 96,100 64,92" fill={POLY.vh} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
-      {/* 얼굴 상단 우 (밝음) */}
-      <polygon points="112,82 96,76 96,100 128,92" fill={POLY.hi} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
+      {/* ═══════════ 얼굴 상단 (4 폴리곤) ═══════════ */}
+      {/* 얼굴 정수리 좌 (이마 하이라이트) */}
+      <polygon {...p} points="64,92 80,82 96,84 88,100" fill={POLY.vh} />
+      {/* 얼굴 정수리 우 (빛 약함 — 한 톤 어두움) */}
+      <polygon {...p} points="128,92 112,82 96,84 104,100" fill={POLY.mid} />
+      {/* 이마 중앙 (콧잔등 위쪽 — 돌출 하이라이트) */}
+      <polygon {...p} points="88,100 96,84 104,100 96,108" fill={POLY.hi} />
+      {/* 이마 정중앙 작은 반짝임 폴리곤 */}
+      <polygon {...p} points="88,100 96,108 96,84" fill={POLY.vvh} />
 
-      {/* 얼굴 좌측면 */}
-      <polygon points="64,92 96,100 78,140 50,118" fill={POLY.main} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
-      {/* 얼굴 우측면 */}
-      <polygon points="128,92 96,100 114,140 142,118" fill={POLY.mid} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
+      {/* ═══════════ 얼굴 좌측면 (4 폴리곤) ═══════════ */}
+      {/* 좌측 광대 위 (빛 받는 쪽) */}
+      <polygon {...p} points="64,92 88,100 78,118 56,108" fill={POLY.mid} />
+      {/* 좌측 광대 (뺨 하이라이트 — 작은 면) */}
+      <polygon {...p} points="88,100 96,108 86,124 78,118" fill={POLY.hi} />
+      {/* 좌측 옆얼굴 (외곽 음영) */}
+      <polygon {...p} points="56,108 78,118 70,140 50,128" fill={POLY.main} />
+      {/* 좌측 턱 라인 */}
+      <polygon {...p} points="78,118 86,124 82,142 70,140" fill={POLY.dk} />
 
-      {/* 턱 좌 */}
-      <polygon points="50,118 78,140 96,156 74,154" fill={POLY.vdk} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
-      {/* 턱 우 */}
-      <polygon points="142,118 114,140 96,156 118,154" fill={POLY.dk} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
+      {/* ═══════════ 얼굴 우측면 (4 폴리곤 — 그림자 측) ═══════════ */}
+      {/* 우측 광대 위 */}
+      <polygon {...p} points="128,92 104,100 114,118 136,108" fill={POLY.dk} />
+      {/* 우측 광대 (뺨) */}
+      <polygon {...p} points="104,100 96,108 106,124 114,118" fill={POLY.main} />
+      {/* 우측 옆얼굴 (외곽 음영 — 더 어두움) */}
+      <polygon {...p} points="136,108 114,118 122,140 142,128" fill={POLY.vdk} />
+      {/* 우측 턱 라인 */}
+      <polygon {...p} points="114,118 106,124 110,142 122,140" fill={POLY.deeper} />
 
-      {/* 턱 중앙 (제일 어두움) */}
-      <polygon points="78,140 114,140 96,156" fill={POLY.deep} stroke={POLY.deep} strokeWidth="0.6" strokeLinejoin="round" />
+      {/* ═══════════ 얼굴 중앙 하단 / 턱 (4 폴리곤) ═══════════ */}
+      {/* 코·인중 부근 (작은 하이라이트 면) */}
+      <polygon {...p} points="86,124 96,108 106,124 96,128" fill={POLY.vh} />
+      {/* 중앙 턱 위 */}
+      <polygon {...p} points="86,124 96,128 106,124 96,142" fill={POLY.main} />
+      {/* 좌 턱 하단 */}
+      <polygon {...p} points="82,142 96,142 96,158 70,140" fill={POLY.vdk} />
+      {/* 우 턱 하단 (더 어두움) */}
+      <polygon {...p} points="110,142 96,142 96,158 122,140" fill={POLY.deep} />
 
       {/* 하단 텍스트 */}
       <text
@@ -292,8 +353,8 @@ const ICONS: IconDef[] = [
   {
     id: 2,
     label: 'low-poly 다각형 토끼',
-    signature: '흰 배경 · 핑크 톤 다각형 면 (5톤 분산)',
-    palette: '#FFB8DC / #FF6B9D / #FF1F8F / #E01077 / #C8276A / #7A0840 · 검정 텍스트',
+    signature: '흰 배경 · 28 폴리곤 정교한 mesh · 빛 좌상→우하 일관 음영',
+    palette: '핑크 10톤 (#FFD1E5 하이라이트 → #5A0530 액센트) · 얇은 외곽 stroke · 검정 텍스트',
     svg: <Design2 />,
   },
   {
