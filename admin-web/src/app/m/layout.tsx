@@ -83,7 +83,8 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
   const isFullscreen =
     pathname.startsWith('/m/store/') ||
     pathname.startsWith('/m/live/') ||
-    pathname.startsWith('/m/events/');
+    pathname.startsWith('/m/events/') ||
+    pathname.startsWith('/m/campaigns/');
 
   return (
     <AuthGate>

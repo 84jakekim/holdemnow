@@ -35,17 +35,38 @@ messaging.onBackgroundMessage((payload) => {
   self.registration.showNotification(title, options);
 });
 
-// 알림 클릭 시 적절한 URL로 이동
+// 알림 클릭 시 적절한 URL로 이동.
+// 마케팅 캠페인 푸시는 data.url에 /m/campaigns/{id} 또는 외부 URL을 담아 보냄.
+// fcmOptions.link 폴백도 지원 (FCM webpush 표준).
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/m';
+  const data = event.notification.data || {};
+  // 우선순위: data.url → data.FCM_MSG.notification.click_action → '/m'
+  const url =
+    data.url ||
+    data?.FCM_MSG?.notification?.click_action ||
+    '/m';
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const c of clients) {
-        if (c.url.includes(url) && 'focus' in c) return c.focus();
-      }
-      return self.clients.openWindow(url);
-    }),
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // 이미 열려 있는 동일 origin 탭이 있으면 그 탭으로 navigate + focus
+        for (const c of clientList) {
+          if ('focus' in c) {
+            // navigate가 지원되는 경우만 시도 (Safari/구형 브라우저 대비)
+            if ('navigate' in c) {
+              try {
+                c.navigate(url);
+              } catch {
+                // cross-origin 등으로 navigate 실패 시 무시 — focus만
+              }
+            }
+            return c.focus();
+          }
+        }
+        // 열린 탭 없으면 새 창
+        return self.clients.openWindow(url);
+      }),
   );
 });
 

@@ -330,12 +330,14 @@ service cloud.firestore {
     // ===== 본사 마케팅 캠페인 (platformCampaigns) =====
     // 마케팅 푸시 캠페인 — title/body/imageUrl/linkUrl/isAdvertisement + 즉시·예약 발송 + 통계.
     // 발송 로직은 Cloud Function(marketingBroadcast / processScheduledCampaigns)이 status·통계 필드를 갱신.
-    // - read: platform_admin 전용 (캠페인 본문은 본사 영역).
+    // - read: sent/sending 상태는 누구나 (인앱 /m/campaigns/[id] 진입용 — 푸시 클릭한 비로그인도 OK).
+    //         draft/scheduled/failed/cancelled는 platform_admin만 (관리 영역).
     // - create: platform_admin, sentBy=본인 uid 강제.
     // - update: platform_admin && status ∈ {draft, scheduled} — 발송 중/완료/취소/실패 건은 잠금.
     // - delete: platform_admin && status ∈ {draft, cancelled, failed} — 발송 완료/sending은 이력 보관.
     match /platformCampaigns/{campaignId} {
-      allow read: if isPlatformAdmin();
+      allow read: if isPlatformAdmin()
+        || (resource != null && resource.data.status in ['sent', 'sending']);
       allow create: if isPlatformAdmin()
         && request.resource.data.sentBy == request.auth.uid;
       allow update: if isPlatformAdmin()
