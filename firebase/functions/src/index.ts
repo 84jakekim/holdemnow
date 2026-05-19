@@ -16,6 +16,9 @@ admin.initializeApp();
 // ===== Auth =====
 export { kakaoCustomToken } from './auth/kakaoCustomToken';
 
+// ===== YouTube — 채널 페이지 메타 추출 (API key 불필요, og:meta 파싱) =====
+export { getYoutubeChannelMeta } from './youtube/getYoutubeChannelMeta';
+
 // ===== Notifications (FCM) =====
 export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';
 export { notifyTournamentStart } from './notifications/notifyTournamentStart';

@@ -17,7 +17,7 @@ import {
   ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
 } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import { extractYoutubeVideoId, youtubeThumbnailUrl } from '@/lib/youtube';
+import { extractYoutubeVideoId, youtubeThumbnailUrl, fetchYoutubeChannelMeta } from '@/lib/youtube';
 import type { HomeAd, HotYoutubeVideo, HotYoutuber } from '@/lib/homeContent';
 
 // ─── homeContentCounts 동기화 ─────────────────────────────────
@@ -304,6 +304,26 @@ function AdModal({ ad, saving, onSave, onClose }: {
               </div>
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+
+            {/* 권장 이미지 사이즈 안내 */}
+            <div className="mt-2.5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-gray-600 space-y-1.5">
+              <p className="font-bold text-blue-700 text-[11px] uppercase tracking-wide">권장 이미지 사이즈</p>
+              <ul className="space-y-1">
+                <li className={form.position === 'top' ? 'font-bold text-gray-900' : 'text-gray-500'}>
+                  {form.position === 'top' ? '▶ ' : ''}
+                  상단 광고: <span className={form.position === 'top' ? 'text-amber-700' : ''}>16:9 비율</span>
+                  {' '}(예: 1600×900px, 최소 800×450px)
+                </li>
+                <li className={form.position === 'bottom' ? 'font-bold text-gray-900' : 'text-gray-500'}>
+                  {form.position === 'bottom' ? '▶ ' : ''}
+                  하단 광고: <span className={form.position === 'bottom' ? 'text-amber-700' : ''}>21:9 비율</span>
+                  {' '}(예: 1680×720px, 최소 840×360px)
+                </li>
+                <li className="text-gray-500">가로 사이즈는 자유롭게 사용 가능 (비율만 맞으면 모든 사이즈 OK)</li>
+                <li className="text-gray-500">다른 비율 업로드 시 가운데 정렬로 잘림 (object-cover)</li>
+                <li className="text-gray-500">파일 형식: JPG / PNG (5MB 이하)</li>
+              </ul>
+            </div>
           </div>
 
           {/* position */}
@@ -748,7 +768,10 @@ function YoutuberModal({ youtuber, saving, onSave, onClose }: {
     isActive: youtuber?.isActive ?? true,
   });
   const [file, setFile] = useState<File | null>(null);
+  // 아바타 미리보기: 파일 업로드 > API 아바타 URL > 기존 저장값
   const [preview, setPreview] = useState<string>(youtuber?.avatarUrl ?? '');
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [metaStatus, setMetaStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -756,6 +779,35 @@ function YoutuberModal({ youtuber, saving, onSave, onClose }: {
     if (!f) return;
     setFile(f);
     setPreview(URL.createObjectURL(f));
+  };
+
+  const handleFetchMeta = async () => {
+    if (!form.channelUrl) return;
+    setMetaLoading(true);
+    setMetaStatus('idle');
+    const meta = await fetchYoutubeChannelMeta(form.channelUrl);
+    setMetaLoading(false);
+    if (meta) {
+      setForm((f) => ({
+        ...f,
+        channelId: meta.channelId || f.channelId,
+        channelName: meta.channelName || f.channelName,
+        description: meta.description || f.description,
+        avatarUrl: meta.avatarUrl || f.avatarUrl,
+      }));
+      // 파일 업로드가 없을 때만 API 아바타로 미리보기 갱신
+      if (!file && meta.avatarUrl) setPreview(meta.avatarUrl);
+      setMetaStatus('ok');
+    } else {
+      setMetaStatus('fail');
+    }
+  };
+
+  // 채널 URL blur 시 자동 fetch — Cloud Function이 og:meta 파싱 (API key 불필요)
+  const handleChannelUrlBlur = () => {
+    if (form.channelUrl) {
+      handleFetchMeta();
+    }
   };
 
   return (
@@ -766,9 +818,48 @@ function YoutuberModal({ youtuber, saving, onSave, onClose }: {
         </div>
         <div className="p-6 space-y-4">
 
+          {/* 빠른 등록 안내 — Cloud Function 자동 추출 */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+            💡 채널 URL을 입력하면 채널명·설명·아바타가 자동으로 채워집니다.
+          </div>
+
+          {/* 채널 URL + 메타 가져오기 */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">채널 URL</label>
+            <div className="flex gap-2">
+              <input
+                value={form.channelUrl}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, channelUrl: e.target.value }));
+                  setMetaStatus('idle');
+                }}
+                onBlur={handleChannelUrlBlur}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                placeholder="https://youtube.com/@channelname"
+              />
+              <button
+                type="button"
+                onClick={handleFetchMeta}
+                disabled={!form.channelUrl || metaLoading}
+                className="px-3 py-2 text-xs font-bold rounded-lg border transition whitespace-nowrap flex-shrink-0 bg-red-50 border-red-200 text-red-700 hover:bg-red-100 disabled:opacity-40"
+                title="채널 정보 자동 가져오기"
+              >
+                {metaLoading ? '가져오는 중…' : '메타 가져오기'}
+              </button>
+            </div>
+
+            {/* 상태 메시지 */}
+            {metaStatus === 'ok' && (
+              <p className="text-green-600 text-xs mt-1">채널 정보가 자동으로 채워졌습니다.</p>
+            )}
+            {metaStatus === 'fail' && (
+              <p className="text-red-500 text-xs mt-1">채널 정보를 가져오지 못했습니다. 수동으로 입력해 주세요.</p>
+            )}
+          </div>
+
           {/* 아바타 업로드 */}
           <div className="flex items-start gap-4">
-            <div className="relative cursor-pointer" onClick={() => fileRef.current?.click()}>
+            <div className="relative cursor-pointer flex-shrink-0" onClick={() => fileRef.current?.click()}>
               <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center">
                 {preview
                   // eslint-disable-next-line @next/next/no-img-element
@@ -777,8 +868,14 @@ function YoutuberModal({ youtuber, saving, onSave, onClose }: {
                 }
               </div>
             </div>
-            <div className="flex-1">
-              <p className="text-xs text-gray-500">원형 아바타 이미지를 업로드하세요 (최대 2MB)</p>
+            <div className="flex-1 pt-1">
+              <p className="text-xs font-bold text-gray-700 mb-0.5">아바타 이미지</p>
+              <p className="text-xs text-gray-500">
+                URL 입력 시 자동으로 채워집니다. 직접 업로드도 가능합니다 (최대 2MB).
+              </p>
+              {form.avatarUrl && !file && (
+                <p className="text-xs text-blue-600 mt-1 truncate">미리보기: API 아바타</p>
+              )}
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
@@ -789,17 +886,19 @@ function YoutuberModal({ youtuber, saving, onSave, onClose }: {
             <input value={form.channelName} onChange={(e) => setForm((f) => ({ ...f, channelName: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="채널명" />
           </div>
 
-          {/* 채널 URL */}
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">채널 URL</label>
-            <input value={form.channelUrl} onChange={(e) => setForm((f) => ({ ...f, channelUrl: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="https://youtube.com/@channelname" />
-          </div>
-
           {/* 설명 */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">설명 (선택)</label>
             <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="채널 소개 한 줄" />
           </div>
+
+          {/* channelId (읽기 전용, 자동 채워짐) */}
+          {form.channelId && (
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">채널 ID (자동)</label>
+              <input readOnly value={form.channelId} className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-400 cursor-default" />
+            </div>
+          )}
 
           {/* order + isActive */}
           <div className="flex items-center gap-4">
