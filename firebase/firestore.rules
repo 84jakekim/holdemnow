@@ -337,6 +337,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ===== 플랫폼 메타 문서 (homeContentCounts 등) =====
+    // read: 누구나 (사이드바 배지·모바일 홈 빈 상태 판정).
+    // write: platform_admin만 (home-content 페이지 CRUD 직후 클라이언트 write).
+    match /meta/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isPlatformAdmin();
+    }
+
     // ===== 홈 콘텐츠 — 광고/유튜브영상/유튜버 (모바일 홈 노출) =====
     // read: 누구나 (모바일 홈 공개 노출).
     // write: platform_admin만 (본사 콘텐츠 관리 페이지).

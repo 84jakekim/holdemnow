@@ -23,7 +23,7 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import AuthGate from '@/components/AuthGate';
 import { useTheme } from '@/lib/theme';
 import AdminIdentityBadge from '@/components/admin/AdminIdentityBadge';
@@ -93,6 +93,12 @@ function currentPageTitle(pathname: string): string {
   return best ? `${best.icon} ${best.label}` : '본사 어드민';
 }
 
+interface HomeContentCounts {
+  adsActive: number;
+  videosActive: number;
+  youtubersActive: number;
+}
+
 function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
   const authState = useAuth();
   const router = useRouter();
@@ -100,6 +106,7 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const [claiming, setClaiming] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [contentCounts, setContentCounts] = useState<HomeContentCounts | null>(null);
 
   // 다크 기본 — 본사 어드민
   const { pref, change } = useTheme('dark-default');
@@ -108,6 +115,29 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
+
+  // meta/homeContentCounts 실시간 구독 (사이드바 배지 + 대시보드 위젯 공유)
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'meta', 'homeContentCounts'),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setContentCounts({
+            adsActive: data.adsActive ?? 0,
+            videosActive: data.videosActive ?? 0,
+            youtubersActive: data.youtubersActive ?? 0,
+          });
+        } else {
+          setContentCounts({ adsActive: 0, videosActive: 0, youtubersActive: 0 });
+        }
+      },
+      () => {
+        setContentCounts({ adsActive: 0, videosActive: 0, youtubersActive: 0 });
+      },
+    );
+    return unsub;
+  }, []);
 
   // ESC로 드로어 닫기
   useEffect(() => {
@@ -272,6 +302,10 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
             <div className="flex flex-col gap-0.5">
               {group.items.map((item) => {
                 const active = isActive(pathname, item.href);
+                const totalActive = contentCounts
+                  ? contentCounts.adsActive + contentCounts.videosActive + contentCounts.youtubersActive
+                  : null;
+                const showBadge = item.id === 'home-content' && totalActive === 0;
                 return (
                   <Link
                     key={item.id}
@@ -281,6 +315,14 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
                   >
                     <span aria-hidden>{item.icon}</span>
                     <span>{item.label}</span>
+                    {showBadge && (
+                      <span className="ml-auto">
+                        <span
+                          className="w-2 h-2 rounded-full bg-red-500 block"
+                          aria-label="콘텐츠 없음"
+                        />
+                      </span>
+                    )}
                   </Link>
                 );
               })}

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   collection, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp, Timestamp, query, orderBy, onSnapshot,
+  getCountFromServer, setDoc, where,
 } from 'firebase/firestore';
 import {
   ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
@@ -18,6 +19,30 @@ import {
 import { db, storage } from '@/lib/firebase';
 import { extractYoutubeVideoId, youtubeThumbnailUrl } from '@/lib/youtube';
 import type { HomeAd, HotYoutubeVideo, HotYoutuber } from '@/lib/homeContent';
+
+// ─── homeContentCounts 동기화 ─────────────────────────────────
+
+async function syncHomeContentCounts(): Promise<void> {
+  try {
+    const [adsSnap, videosSnap, youtubersSnap] = await Promise.all([
+      getCountFromServer(query(collection(db, 'homeAds'), where('isActive', '==', true))),
+      getCountFromServer(query(collection(db, 'hotYoutubeVideos'), where('isActive', '==', true))),
+      getCountFromServer(query(collection(db, 'hotYoutubers'), where('isActive', '==', true))),
+    ]);
+    await setDoc(
+      doc(db, 'meta', 'homeContentCounts'),
+      {
+        adsActive: adsSnap.data().count,
+        videosActive: videosSnap.data().count,
+        youtubersActive: youtubersSnap.data().count,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch {
+    // 카운트 동기화 실패는 조용히 무시 (비핵심)
+  }
+}
 
 // ─── 헬퍼 ─────────────────────────────────────────────────────
 
@@ -104,11 +129,13 @@ function AdsTab() {
 
   const handleToggleActive = async (ad: HomeAd) => {
     await updateDoc(doc(db, 'homeAds', ad.id), { isActive: !ad.isActive, updatedAt: serverTimestamp() });
+    syncHomeContentCounts();
   };
 
   const handleDelete = async (ad: HomeAd) => {
     if (!confirm(`"${ad.title ?? ad.id}" 광고를 삭제하시겠습니까?`)) return;
     await deleteDoc(doc(db, 'homeAds', ad.id));
+    syncHomeContentCounts();
   };
 
   return (
@@ -194,6 +221,7 @@ function AdsTab() {
                 }
                 await updateDoc(doc(db, 'homeAds', editing.id), updates);
               }
+              syncHomeContentCounts();
               setEditing(null);
             } catch (e: unknown) {
               alert((e as Error).message);
@@ -373,11 +401,13 @@ function VideosTab() {
 
   const handleToggleActive = async (v: HotYoutubeVideo) => {
     await updateDoc(doc(db, 'hotYoutubeVideos', v.id), { isActive: !v.isActive, updatedAt: serverTimestamp() });
+    syncHomeContentCounts();
   };
 
   const handleDelete = async (v: HotYoutubeVideo) => {
     if (!confirm(`"${v.title}" 영상을 삭제하시겠습니까?`)) return;
     await deleteDoc(doc(db, 'hotYoutubeVideos', v.id));
+    syncHomeContentCounts();
   };
 
   interface VideoFormData {
@@ -439,6 +469,7 @@ function VideosTab() {
               } else {
                 await updateDoc(doc(db, 'hotYoutubeVideos', editing.id), { ...data, updatedAt: serverTimestamp() });
               }
+              syncHomeContentCounts();
               setEditing(null);
             } catch (e: unknown) { alert((e as Error).message); }
             finally { setSaving(false); }
@@ -448,6 +479,16 @@ function VideosTab() {
       )}
     </div>
   );
+}
+
+async function fetchOEmbed(url: string): Promise<{ title?: string; author_name?: string; author_url?: string; thumbnail_url?: string } | null> {
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 function VideoModal({ video, saving, onSave, onClose }: {
@@ -466,12 +507,26 @@ function VideoModal({ video, saving, onSave, onClose }: {
     isActive: video?.isActive ?? true,
   });
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [oEmbedLoading, setOEmbedLoading] = useState(false);
 
-  const handleUrlBlur = () => {
+  const handleUrlBlur = async () => {
     const id = extractYoutubeVideoId(urlInput);
     if (!id) { setExtractError('유효한 YouTube URL이 아닙니다.'); return; }
     setExtractError(null);
     setForm((f) => ({ ...f, videoId: id }));
+
+    // oEmbed 자동 메타 채우기
+    setOEmbedLoading(true);
+    const meta = await fetchOEmbed(urlInput);
+    setOEmbedLoading(false);
+    if (meta) {
+      setForm((f) => ({
+        ...f,
+        title: meta.title ?? f.title,
+        channelName: meta.author_name ?? f.channelName,
+        channelUrl: meta.author_url ?? f.channelUrl,
+      }));
+    }
   };
 
   const thumb = form.videoId ? youtubeThumbnailUrl(form.videoId) : '';
@@ -487,15 +542,24 @@ function VideoModal({ video, saving, onSave, onClose }: {
           {/* YouTube URL 입력 */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">YouTube URL</label>
-            <input
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              onBlur={handleUrlBlur}
-              className={`w-full border rounded-lg px-3 py-2 text-sm ${extractError ? 'border-red-400' : 'border-gray-200'}`}
-              placeholder="https://www.youtube.com/watch?v=..."
-            />
+            <div className="relative">
+              <input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onBlur={handleUrlBlur}
+                className={`w-full border rounded-lg px-3 py-2 text-sm pr-8 ${extractError ? 'border-red-400' : 'border-gray-200'}`}
+                placeholder="https://www.youtube.com/watch?v=..."
+              />
+              {oEmbedLoading && (
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                  ⏳
+                </span>
+              )}
+            </div>
             {extractError && <p className="text-red-500 text-xs mt-1">{extractError}</p>}
-            {form.videoId && <p className="text-green-600 text-xs mt-1">videoId: {form.videoId}</p>}
+            {form.videoId && !oEmbedLoading && (
+              <p className="text-green-600 text-xs mt-1">videoId: {form.videoId} · 메타 자동 입력됨</p>
+            )}
           </div>
 
           {/* 썸네일 미리보기 */}
@@ -571,11 +635,13 @@ function YoutubersTab() {
 
   const handleToggleActive = async (y: HotYoutuber) => {
     await updateDoc(doc(db, 'hotYoutubers', y.id), { isActive: !y.isActive, updatedAt: serverTimestamp() });
+    syncHomeContentCounts();
   };
 
   const handleDelete = async (y: HotYoutuber) => {
     if (!confirm(`"${y.channelName}" 채널을 삭제하시겠습니까?`)) return;
     await deleteDoc(doc(db, 'hotYoutubers', y.id));
+    syncHomeContentCounts();
   };
 
   interface YoutuberFormData {
@@ -647,6 +713,7 @@ function YoutubersTab() {
                 }
                 await updateDoc(doc(db, 'hotYoutubers', editing.id), updates);
               }
+              syncHomeContentCounts();
               setEditing(null);
             } catch (e: unknown) { alert((e as Error).message); }
             finally { setSaving(false); }

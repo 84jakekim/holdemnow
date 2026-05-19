@@ -16,14 +16,49 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/lib/hooks';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { coordToRegionLabel } from '@/lib/kakao';
 import HomeAdsCarousel from '@/components/mobile/home/HomeAdsCarousel';
 import HotVideosCarousel from '@/components/mobile/home/HotVideosCarousel';
 import HotYoutubersScroll from '@/components/mobile/home/HotYoutubersScroll';
 
+/** 활성 콘텐츠 존재 여부를 1회 fetch로 확인 */
+async function hasActiveContent(col: string): Promise<boolean> {
+  const q = query(collection(db, col), where('isActive', '==', true), limit(1));
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
 export default function MobileHome() {
   const authState = useAuth();
+  const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
+  const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
+
+  // 4섹션 콘텐츠 0건 여부 (platform_admin에게만 안내 카드 표시 목적)
+  const [allEmpty, setAllEmpty] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isPlatformAdmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [hasTopAds, hasBottomAds, hasVideos, hasYoutubers] = await Promise.all([
+          hasActiveContent('homeAds'),
+          hasActiveContent('homeAds'),
+          hasActiveContent('hotYoutubeVideos'),
+          hasActiveContent('hotYoutubers'),
+        ]);
+        if (!cancelled) {
+          setAllEmpty(!hasTopAds && !hasBottomAds && !hasVideos && !hasYoutubers);
+        }
+      } catch {
+        if (!cancelled) setAllEmpty(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isPlatformAdmin]);
 
   const displayName =
     authState.status === 'authenticated'
@@ -165,39 +200,47 @@ export default function MobileHome() {
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <HomeAdsCarousel position="bottom" />
 
-      {/* ── 매장찾기 CTA 섹션 (광고 없을 때도 항상 노출) */}
-      <section className="px-4 py-6">
-        <Link
-          href="/m/find"
-          className="w-full flex items-center gap-4 rounded-2xl px-5 py-4 transition active:scale-[0.99]"
-          style={{
-            background: 'linear-gradient(135deg, #FF1F8F 0%, #C8276A 100%)',
-            boxShadow: '0 4px 16px rgba(255,31,143,0.30)',
-          }}
-        >
+      {/* 본사 관리자 전용 — 4섹션 콘텐츠 0건 안내 카드 */}
+      {isPlatformAdmin && allEmpty === true && (
+        <section className="px-4 py-4">
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(255,255,255,0.20)' }}
+            className="rounded-2xl px-5 py-4 flex flex-col gap-3"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1.5px solid var(--border)',
+            }}
+            role="status"
           >
-            <svg
-              width="22" height="22" viewBox="0 0 24 24"
-              fill="none" stroke="#fff" strokeWidth="2.2"
-              strokeLinecap="round" strokeLinejoin="round"
-              aria-hidden="true"
+            <div className="flex items-start gap-3">
+              <span className="text-2xl flex-shrink-0" aria-hidden>📺</span>
+              <div>
+                <div
+                  className="text-[14px] font-bold leading-snug"
+                  style={{ color: 'var(--text-1)' }}
+                >
+                  홈에 콘텐츠가 없습니다
+                </div>
+                <div
+                  className="text-[12px] mt-0.5 leading-relaxed"
+                  style={{ color: 'var(--text-2)' }}
+                >
+                  본사 어드민에서 광고·유튜브·유튜버를 등록해 주세요.
+                </div>
+              </div>
+            </div>
+            <Link
+              href="/platform/home-content"
+              className="self-start text-[12px] font-bold px-3 py-1.5 rounded-xl transition active:opacity-70"
+              style={{
+                background: '#FF1F8F',
+                color: '#fff',
+              }}
             >
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
+              본사 어드민으로 이동 →
+            </Link>
           </div>
-          <div className="flex-1">
-            <div className="text-[16px] font-extrabold text-white leading-tight">내 주변 홀덤펍 찾기</div>
-            <div className="text-[12px] mt-0.5 text-white/75">리스트 · 지도로 탐색하기</div>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
-        </Link>
-      </section>
+        </section>
+      )}
 
       {/* 푸터 */}
       <div
