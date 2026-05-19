@@ -38,6 +38,7 @@ export interface HotYoutubeVideo {
   title: string;
   channelName?: string;
   channelUrl?: string;
+  channelAvatarUrl?: string;
   thumbnailUrl?: string;
   order: number;
   isActive: boolean;
