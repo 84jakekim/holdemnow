@@ -20,7 +20,8 @@ export { kakaoCustomToken } from './auth/kakaoCustomToken';
 export { getYoutubeChannelMeta } from './youtube/getYoutubeChannelMeta';
 
 // ===== YouTube — 인기 영상 자동 큐레이션 (매일 04:00 KST, YOUTUBE_API_KEY secret 필요) =====
-export { curateHotVideos } from './youtube/curateHotVideos';
+// curateHotVideos: 스케줄 정상 트리거 / triggerCurateHotVideos: 관리자 수동 트리거 (v0.5에서 어드민 callable 정식화)
+export { curateHotVideos, triggerCurateHotVideos } from './youtube/curateHotVideos';
 
 // ===== Notifications (FCM) =====
 export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';
