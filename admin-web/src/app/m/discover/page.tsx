@@ -72,11 +72,17 @@ export default function DiscoverPage() {
     getDocs(collection(db, 'stores'))
       .then((snap) => {
         if (cancelled) return;
-        setStores(snap.docs.map((d) => {
+        // 본사 미승인 매장(status=pending/rejected/suspended)은 모바일 디스커버리에 노출 차단.
+        // isDemo는 시드 데이터라 항상 노출.
+        const visible = snap.docs.filter((d) => {
+          const data = d.data() as { status?: string; isDemo?: boolean };
+          return data.status === 'active' || data.isDemo === true;
+        });
+        setStores(visible.map((d) => {
           const data = d.data() as { name: string; address?: string; photoUrls?: string[]; lat?: number; lng?: number };
           return { id: d.id, name: data.name, address: data.address, photoUrl: data.photoUrls?.[0], lat: data.lat, lng: data.lng };
         }));
-        snap.docs.forEach((d) => trackImpressionOnce(d.id, 'discover-map'));
+        visible.forEach((d) => trackImpressionOnce(d.id, 'discover-map'));
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

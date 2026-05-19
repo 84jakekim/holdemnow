@@ -10,6 +10,7 @@ import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendPasswordReset } from '@/lib/emailAuth';
 import { logAdminAction } from '@/lib/auditLog';
+import { geocodeAddress } from '@/lib/kakao';
 import MemberDetailHeader, { type MemberStatus } from '@/components/platform/MemberDetailHeader';
 import IdentityVerificationCard from '@/components/platform/IdentityVerificationCard';
 import ConsentSummaryCard from '@/components/platform/ConsentSummaryCard';
@@ -26,6 +27,12 @@ interface StoreDetail {
   ownerUid?: string;
   name?: string;
   address?: string;
+  roadAddress?: string;
+  detailAddress?: string;
+  jibunAddress?: string;
+  zonecode?: string;
+  lat?: number;
+  lng?: number;
   phone?: string;
   hours?: string;
   description?: string;
@@ -112,18 +119,56 @@ export default function StoreDetailPage() {
   const handleStatusChange = async (newStatus: MemberStatus) => {
     if (!store) return;
     try {
-      await updateDoc(doc(db, 'stores', storeId), {
+      // 본사가 매장을 'active'로 승인하는 첫 시점에 한해 카카오 geocoding 1회 시도.
+      // 도로명 실패 시 지번 폴백. 둘 다 실패하면 좌표 없이 그냥 active 처리 →
+      // 첫 모바일 진입 시 lazy geocoding (m/discover) 안전망 그대로 동작.
+      const goingActive = newStatus === 'active' && store.status !== 'active';
+      const needsGeocode = goingActive && (typeof store.lat !== 'number' || typeof store.lng !== 'number');
+
+      let geocoded: { lat: number; lng: number } | null = null;
+      if (needsGeocode) {
+        try {
+          const addr1 = store.roadAddress?.trim() || store.address?.trim();
+          if (addr1) geocoded = await geocodeAddress(addr1);
+          if (!geocoded && store.jibunAddress) {
+            geocoded = await geocodeAddress(store.jibunAddress.trim());
+          }
+        } catch {
+          /* 카카오 한도/오류 — 좌표 없이 active 처리, 추후 lazy 폴백 */
+        }
+      }
+
+      const updatePayload: Record<string, unknown> = {
         status: newStatus,
         reviewedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      if (geocoded) {
+        updatePayload.lat = geocoded.lat;
+        updatePayload.lng = geocoded.lng;
+        updatePayload.geocodedAt = serverTimestamp();
+      }
+      if (goingActive) {
+        updatePayload.approvedAt = serverTimestamp();
+      }
+
+      await updateDoc(doc(db, 'stores', storeId), updatePayload);
       await logAdminAction({
         action: 'change_status',
         target: { type: 'store', id: storeId },
-        metadata: { from: store.status, to: newStatus },
+        metadata: { from: store.status, to: newStatus, geocoded: !!geocoded },
       });
-      setStore((s) => s ? { ...s, status: newStatus as StoreStatus } : s);
-      showToast(`매장 상태가 "${newStatus}"로 변경되었습니다.`);
+      setStore((s) => s ? {
+        ...s,
+        status: newStatus as StoreStatus,
+        ...(geocoded ? { lat: geocoded.lat, lng: geocoded.lng } : {}),
+      } : s);
+      const msg = goingActive
+        ? geocoded
+          ? '매장 승인 완료 + 지도 좌표 등록됨'
+          : '매장 승인 완료 (좌표는 모바일 첫 진입 시 자동 산출)'
+        : `매장 상태가 "${newStatus}"로 변경되었습니다.`;
+      showToast(msg);
     } catch {
       showToast('상태 변경에 실패했습니다.', 'error');
     }

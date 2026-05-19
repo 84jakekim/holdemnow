@@ -88,7 +88,9 @@ export default function LiveFeedListPage() {
         const snap = await getDocs(collection(db, 'stores'));
         const map: Record<string, StoreMeta> = {};
         snap.forEach((d) => {
-          const data = d.data() as { lat?: number; lng?: number; address?: string };
+          // pending 매장은 join 대상에서 제외 — 해당 매장의 LIVE도 자연 숨김
+          const data = d.data() as { lat?: number; lng?: number; address?: string; status?: string; isDemo?: boolean };
+          if (data.status !== 'active' && data.isDemo !== true) return;
           map[d.id] = { lat: data.lat, lng: data.lng, address: data.address };
         });
         setStoresById(map);

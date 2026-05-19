@@ -41,7 +41,12 @@ service cloud.firestore {
 
     // ===== 매장 =====
     match /stores/{storeId} {
-      allow read: if true;                               // 누구나 매장 조회
+      // 본사 미승인 매장은 일반 사용자에게 노출 차단.
+      // owner 본인 + platform_admin + 데모 매장은 read 가능.
+      allow read: if resource.data.status == 'active'
+        || resource.data.isDemo == true
+        || isPlatformAdmin()
+        || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
       // 인증된 사용자가 본인을 owner로 매장 생성 + status=pending 강제
       allow create: if isSignedIn()
         && request.resource.data.ownerUid == request.auth.uid
@@ -93,12 +98,18 @@ service cloud.firestore {
       }
 
       // 매장 데일리 홍보 "오늘의 소식" — 매장 owner/member만 write, 누구나 read.
+      // pending 매장은 글 작성 차단 — 본사 승인 후에만 가능.
       // collectionGroup('posts') 쿼리는 아래 별도 와일드카드 규칙으로 허용.
       match /posts/{postId} {
         allow read: if true;
         allow create: if isSignedIn()
           && (isStoreOwner(storeId) || isStoreMember(storeId))
-          && request.resource.data.authorUid == request.auth.uid;
+          && request.resource.data.authorUid == request.auth.uid
+          && (
+            isPlatformAdmin()
+            || get(/databases/$(database)/documents/stores/$(storeId)).data.status == 'active'
+            || get(/databases/$(database)/documents/stores/$(storeId)).data.isDemo == true
+          );
         allow update, delete: if isSignedIn()
           && (isStoreOwner(storeId) || isStoreMember(storeId) || isPlatformAdmin());
       }
@@ -108,10 +119,16 @@ service cloud.firestore {
     match /liveSessions/{sessionId} {
       allow read: if true;                               // 누구나 LIVE 피드 구독
       // platform_admin은 임의 매장에 LIVE 시작 가능 (본사 모니터링 페이지에서 매장 사장 부재 시 대신 실행).
+      // pending 매장은 LIVE 시작 차단 — 본사 승인 후에만 가능.
       allow create: if isSignedIn()
         && (isStoreOwner(request.resource.data.storeId)
             || isStoreMember(request.resource.data.storeId)
-            || isPlatformAdmin());
+            || isPlatformAdmin())
+        && (
+          isPlatformAdmin()
+          || get(/databases/$(database)/documents/stores/$(request.resource.data.storeId)).data.status == 'active'
+          || get(/databases/$(database)/documents/stores/$(request.resource.data.storeId)).data.isDemo == true
+        );
       // platform_admin은 본사 모니터링 페이지에서 전국 LIVE를 직접 제어 가능 (긴급 정지·종료·시간 조정).
       allow update: if isSignedIn()
         && (isStoreOwner(resource.data.storeId)

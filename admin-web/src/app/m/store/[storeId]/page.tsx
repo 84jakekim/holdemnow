@@ -8,7 +8,8 @@ import {
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { useAuth } from '@/lib/hooks';
+import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
+import PendingStoreNotice from '@/components/mobile/PendingStoreNotice';
 import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveCountdown, computeReadyExpirySec } from '@/lib/live';
 import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { posterStyleFor } from '@/lib/templates';
@@ -37,12 +38,17 @@ interface StoreData {
   photoUrls?: string[];
   lat?: number;
   lng?: number;
+  status?: 'pending' | 'active' | 'rejected' | 'suspended';
+  isDemo?: boolean;
+  ownerUid?: string;
 }
 
 export default function MobileStorePage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = use(params);
   const router = useRouter();
   const authState = useAuth();
+  const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
+  const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
   const [store, setStore] = useState<StoreData | null | undefined>(undefined);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [tournaments, setTournaments] = useState<TournamentInstance[]>([]);
@@ -168,6 +174,14 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
         </button>
       </div>
     );
+  }
+
+  // 본사 미승인 매장 — owner 본인 또는 platform_admin이 아니면 안내 화면만 노출
+  const currentUid = authState.status === 'authenticated' ? authState.user.uid : null;
+  const isOwner = !!currentUid && store.ownerUid === currentUid;
+  const isVisible = store.status === 'active' || store.isDemo === true || isOwner || isPlatformAdmin;
+  if (!isVisible) {
+    return <PendingStoreNotice />;
   }
 
   const photos = store.photoUrls ?? [];

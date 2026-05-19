@@ -54,7 +54,9 @@ export default function CalendarPage() {
         const snap = await getDocs(collection(db, 'stores'));
         const map: Record<string, StoreCoord> = {};
         snap.forEach((d) => {
-          const data = d.data() as { lat?: number; lng?: number };
+          // pending 매장 제외 — 해당 매장의 토너도 자연 숨김
+          const data = d.data() as { lat?: number; lng?: number; status?: string; isDemo?: boolean };
+          if (data.status !== 'active' && data.isDemo !== true) return;
           map[d.id] = { lat: data.lat, lng: data.lng };
         });
         setStoresById(map);

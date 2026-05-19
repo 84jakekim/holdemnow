@@ -3,7 +3,7 @@
 /**
  * /signup/store — 매장 자체 가입 마법사 (4-step)
  * Email/Password Firebase Auth + Firestore stores 생성
- * 카카오맵 SDK 미사용 — 주소 자유 텍스트
+ * 카카오맵 SDK 미사용 — 다음 우편번호 서비스로 주소 검색
  */
 
 import { useState, useEffect } from 'react';
@@ -15,12 +15,13 @@ import {
   type StoreSignupPayload,
 } from '@/lib/emailAuth';
 import BusinessHoursPicker from '@/components/common/BusinessHoursPicker';
+import DaumPostcode, { type DaumPostcodeResult } from '@/components/common/DaumPostcode';
 
 // =====================================================================
 // 타입
 // =====================================================================
 
-type FormState = Omit<StoreSignupPayload, 'signageImageFile' | 'agreeService' | 'agreePrivacy' | 'agreeMarketing'> & {
+type FormState = Omit<StoreSignupPayload, 'signageImageFile' | 'agreeService' | 'agreePrivacy' | 'agreeMarketing' | 'storeAddress'> & {
   passwordConfirm: string;
   signageImageFile: File | null;
   agreeService: boolean;
@@ -35,7 +36,10 @@ const INITIAL: FormState = {
   passwordHint: '',
   recoveryLast4: '',
   storeName: '',
-  storeAddress: '',
+  roadAddress: '',
+  detailAddress: '',
+  jibunAddress: '',
+  zonecode: '',
   storeHours: '',
   storeDescription: '',
   storePhone: '',
@@ -65,6 +69,7 @@ export default function StoreSignupPage() {
   const [done, setDone] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showPwConfirm, setShowPwConfirm] = useState(false);
+  const [showPostcode, setShowPostcode] = useState(false);
 
   const update = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -86,7 +91,7 @@ export default function StoreSignupPage() {
         form.signageImageFile.type.startsWith('image/');
       return (
         form.storeName.trim().length >= 1 &&
-        form.storeAddress.trim().length >= 5 &&
+        form.roadAddress.trim().length >= 5 &&  // 주소 선택 완료
         form.storePhone.trim().length >= 7 &&
         signageOk
       );
@@ -115,7 +120,10 @@ export default function StoreSignupPage() {
         passwordHint: form.passwordHint,
         recoveryLast4: form.recoveryLast4,
         storeName: form.storeName,
-        storeAddress: form.storeAddress,
+        roadAddress: form.roadAddress,
+        detailAddress: form.detailAddress,
+        jibunAddress: form.jibunAddress,
+        zonecode: form.zonecode,
         storeHours: form.storeHours || '협의 후 결정',
         storeDescription: form.storeDescription,
         storePhone: form.storePhone,
@@ -353,17 +361,65 @@ export default function StoreSignupPage() {
                 />
               </Field>
 
+              {/* 주소 검색 — 다음 우편번호 서비스 */}
               <Field label="매장 주소">
-                <input
-                  className="form-input"
-                  value={form.storeAddress}
-                  onChange={(e) => update('storeAddress', e.target.value)}
-                  placeholder="예: 부산시 수영구 광안해변로 123, 2층"
-                />
+                {form.roadAddress ? (
+                  /* 선택 완료 상태 */
+                  <div className="rounded-xl border-[1.5px] border-green-500 bg-green-50 p-3 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-bold text-green-700 mb-0.5">선택된 주소</div>
+                        <div className="text-[13px] font-semibold text-gray-900 break-words leading-snug">
+                          {form.roadAddress}
+                        </div>
+                        {form.zonecode && (
+                          <div className="text-[10px] text-gray-400 mt-0.5">우편번호: {form.zonecode}</div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPostcode(true)}
+                        className="flex-shrink-0 text-[11px] font-bold text-white rounded-lg px-3 py-1.5 transition"
+                        style={{ background: '#FF1F8F' }}
+                      >
+                        변경
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 미선택 상태 */
+                  <button
+                    type="button"
+                    onClick={() => setShowPostcode(true)}
+                    className="w-full flex items-center justify-center gap-2.5 rounded-xl border-[1.5px] border-dashed border-gray-300 hover:border-[#FF1F8F] hover:bg-pink-50/40 transition py-4 font-bold text-[14px]"
+                    style={{ color: '#FF1F8F' }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                    주소 검색
+                  </button>
+                )}
                 <div className="text-[10px] text-gray-400 mt-1">
-                  도로명 주소 + 층수·호수까지 상세히 입력해 주세요
+                  버튼을 눌러 도로명 또는 지번으로 검색하세요
                 </div>
               </Field>
+
+              {/* 상세주소 (층/호수, 선택) */}
+              {form.roadAddress && (
+                <Field label="상세 주소 (선택)">
+                  <input
+                    className="form-input"
+                    value={form.detailAddress}
+                    onChange={(e) => update('detailAddress', e.target.value)}
+                    placeholder="예: 3층, 301호"
+                  />
+                  <div className="text-[10px] text-gray-400 mt-1">
+                    층수·호수 등 상세 위치를 입력해 주세요 (선택 사항)
+                  </div>
+                </Field>
+              )}
 
               <Field label="영업시간">
                 <BusinessHoursPicker
@@ -472,7 +528,7 @@ export default function StoreSignupPage() {
                 <div className="font-bold text-gray-900 mb-2 text-sm">신청 정보 요약</div>
                 <SummaryRow label="이메일" value={form.email} />
                 <SummaryRow label="매장명" value={form.storeName} />
-                <SummaryRow label="주소" value={form.storeAddress} />
+                <SummaryRow label="주소" value={`${form.roadAddress} ${form.detailAddress}`.trim()} />
                 <SummaryRow label="대표자" value={form.representativeName} />
                 <SummaryRow label="연락처" value={form.representativePhone} />
               </div>

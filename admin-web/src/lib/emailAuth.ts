@@ -39,7 +39,12 @@ export interface StoreSignupPayload {
 
   // Step 2 — 매장 기본 (사업자등록증 대신 매장 간판 사진으로 실존 확인)
   storeName: string;
-  storeAddress: string;
+  /** @deprecated storeAddress 제거 — roadAddress + detailAddress 합본 사용. 기존 호환을 위해 optional 유지 */
+  storeAddress?: string;
+  roadAddress: string;    // 도로명 주소 (다음 우편번호 선택 결과)
+  detailAddress: string;  // 상세 주소 (층/호수, 수기 입력)
+  jibunAddress: string;   // 지번 주소
+  zonecode: string;       // 우편번호
   storeHours: string;
   storeDescription: string;
   storePhone: string;
@@ -129,11 +134,20 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
   await uploadBytes(storageRef(storage, path), file, { contentType: file.type });
   const signageImageUrl = await getDownloadURL(storageRef(storage, path));
 
+  // 합본 주소 (기존 address 필드 하위 호환)
+  const combinedAddress = [payload.roadAddress.trim(), payload.detailAddress.trim()]
+    .filter(Boolean)
+    .join(' ');
+
   // 4. stores/{storeId} 문서 생성 (photoUrls 첫번째에 간판 사진 URL 포함)
   await setDoc(newStoreRef, {
     ownerUid: uid,
     name: payload.storeName.trim(),
-    address: payload.storeAddress.trim(),
+    address: combinedAddress,           // 기존 호환 필드
+    roadAddress: payload.roadAddress.trim(),
+    detailAddress: payload.detailAddress.trim(),
+    jibunAddress: payload.jibunAddress.trim(),
+    zonecode: payload.zonecode.trim(),
     phone: payload.storePhone.trim(),
     hours: payload.storeHours.trim(),
     description: payload.storeDescription.trim(),

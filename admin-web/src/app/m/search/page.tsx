@@ -30,17 +30,23 @@ export default function SearchPage() {
   useEffect(() => {
     (async () => {
       const snap = await getDocs(collection(db, 'stores'));
+      // 본사 미승인 매장 검색 노출 차단 (isDemo 시드는 항상 노출)
       setStores(
-        snap.docs.map((d) => {
-          const data = d.data() as { name: string; address?: string; photoUrls?: string[]; facilities?: string[] };
-          return {
-            id: d.id,
-            name: data.name,
-            address: data.address,
-            photoUrl: data.photoUrls?.[0],
-            facilities: data.facilities,
-          };
-        }),
+        snap.docs
+          .filter((d) => {
+            const data = d.data() as { status?: string; isDemo?: boolean };
+            return data.status === 'active' || data.isDemo === true;
+          })
+          .map((d) => {
+            const data = d.data() as { name: string; address?: string; photoUrls?: string[]; facilities?: string[] };
+            return {
+              id: d.id,
+              name: data.name,
+              address: data.address,
+              photoUrl: data.photoUrls?.[0],
+              facilities: data.facilities,
+            };
+          }),
       );
     })();
   }, []);

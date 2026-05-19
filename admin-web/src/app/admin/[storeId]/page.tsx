@@ -6,6 +6,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useStoreDoc, useUserDoc, hasRole } from '@/lib/hooks';
 import AuthGate from '@/components/AuthGate';
+import AdminAccessDenied from '@/components/admin/AdminAccessDenied';
 import TemplatesPanel from '@/components/admin/TemplatesPanel';
 import LivePanel from '@/components/admin/LivePanel';
 import SlotsPanel from '@/components/admin/SlotsPanel';
@@ -35,6 +36,9 @@ const MENUS = [
   { id: 'ads', icon: '📣', label: '광고' },
   { id: 'stats', icon: '📈', label: '통계' },
 ];
+
+// pending 매장에서 차단되는 외부 노출 메뉴 — 본사 승인 후에만 활성
+const PENDING_DISABLED_MENUS = new Set(['live', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'templates', 'slots', 'ads']);
 
 function AdminPageInner({ storeId }: { storeId: string }) {
   const router = useRouter();
@@ -66,7 +70,17 @@ function AdminPageInner({ storeId }: { storeId: string }) {
     );
   }
 
+  // 본인 owner도 아니고 platform_admin도 아니면 — 어드민 접근 거부
+  const currentUid = authState.user.uid;
+  const isOwner = store.ownerUid === currentUid;
+  if (!isOwner && !isPlatformAdmin) {
+    return <AdminAccessDenied isLoggedIn myStoreId={userDoc?.storeId ?? null} />;
+  }
+
   const isPending = store.status === 'pending';
+  // platform_admin은 심사 차원에서 모든 메뉴 접근 가능. owner+pending만 메뉴 잠금.
+  const isMenuLocked = (id: string) =>
+    isPending && !isPlatformAdmin && PENDING_DISABLED_MENUS.has(id);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -90,21 +104,29 @@ function AdminPageInner({ storeId }: { storeId: string }) {
         </div>
 
         <nav className="flex-1 p-2 overflow-y-auto">
-          {MENUS.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setActiveMenu(m.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 mb-0.5 transition ${
-                activeMenu === m.id
-                  ? 'text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-              style={activeMenu === m.id ? { background: '#FF1F8F' } : undefined}
-            >
-              <span>{m.icon}</span>
-              <span>{m.label}</span>
-            </button>
-          ))}
+          {MENUS.map((m) => {
+            const locked = isMenuLocked(m.id);
+            return (
+              <button
+                key={m.id}
+                onClick={() => { if (!locked) setActiveMenu(m.id); }}
+                disabled={locked}
+                title={locked ? '본사 승인 후 사용 가능합니다' : undefined}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 mb-0.5 transition ${
+                  locked
+                    ? 'opacity-40 cursor-not-allowed text-gray-400'
+                    : activeMenu === m.id
+                    ? 'text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+                style={!locked && activeMenu === m.id ? { background: '#FF1F8F' } : undefined}
+              >
+                <span>{m.icon}</span>
+                <span>{m.label}</span>
+                {locked && <span className="ml-auto text-[9px] text-gray-400">🔒</span>}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="p-3 border-t border-gray-100 space-y-2">
