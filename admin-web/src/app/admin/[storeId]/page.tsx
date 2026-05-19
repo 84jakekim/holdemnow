@@ -19,6 +19,9 @@ import PostsPanel from '@/components/admin/PostsPanel';
 import JobsPanel from '@/components/admin/JobsPanel';
 import UsedItemsPanel from '@/components/admin/UsedItemsPanel';
 import DealerPoolPanel from '@/components/admin/DealerPoolPanel';
+import AdminIdentityBadge from '@/components/admin/AdminIdentityBadge';
+import ThemeToggle from '@/components/admin/ThemeToggle';
+import { useTheme } from '@/lib/theme';
 import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
 import { changePassword, syncPasswordRecovery, validatePassword } from '@/lib/emailAuth';
 
@@ -48,6 +51,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [showPwModal, setShowPwModal] = useState(false);
+  const { pref, change } = useTheme('light-default');
 
   if (authState.status === 'loading' || store === undefined) {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
@@ -57,12 +61,22 @@ function AdminPageInner({ storeId }: { storeId: string }) {
 
   if (store === null) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white border border-gray-200 rounded-2xl p-8 max-w-sm w-full text-center">
+      <main
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ background: 'var(--bg-sub)' }}
+      >
+        <div
+          className="rounded-2xl p-8 max-w-sm w-full text-center"
+          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+        >
           <div className="text-4xl mb-3">⚠️</div>
-          <div className="font-bold text-gray-900 mb-2">매장을 찾을 수 없습니다</div>
-          <div className="text-xs text-gray-500 mb-6">URL이 잘못됐거나 매장이 삭제됐을 수 있습니다.</div>
-          <button onClick={() => router.replace('/')} className="bg-black text-white px-5 py-2 rounded-lg text-sm font-bold">
+          <div className="font-bold mb-2" style={{ color: 'var(--text-1)' }}>매장을 찾을 수 없습니다</div>
+          <div className="text-xs mb-6" style={{ color: 'var(--text-2)' }}>URL이 잘못됐거나 매장이 삭제됐을 수 있습니다.</div>
+          <button
+            onClick={() => router.replace('/')}
+            className="px-5 py-2 rounded-lg text-sm font-bold text-white"
+            style={{ background: 'var(--brand)' }}
+          >
             처음으로
           </button>
         </div>
@@ -83,86 +97,119 @@ function AdminPageInner({ storeId }: { storeId: string }) {
     isPending && !isPlatformAdmin && PENDING_DISABLED_MENUS.has(id);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* 좌측 사이드바 */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-5 border-b border-gray-100">
-          <div className="mb-1">
-            <img src="/logo.svg" alt="HoldemNow" width={160} height={27} style={{ display: 'block' }} />
+    <div className="min-h-screen flex" style={{ background: 'var(--bg-sub)' }}>
+      {/* 좌측 사이드바 — 매장(현장 운영) 톤: 라이트 기본 + 핫핑크 액센트 */}
+      <aside
+        className="w-64 flex flex-col"
+        style={{ background: 'var(--surface-1)', borderRight: '1px solid var(--border)' }}
+      >
+        {/* 로고 + STORE OPS 워드마크 (핑크 그라데이션 강조) */}
+        <div
+          className="p-5"
+          style={{
+            borderBottom: '1px solid var(--border)',
+            background: 'linear-gradient(180deg, rgba(255,31,143,0.06) 0%, transparent 100%)',
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <img src="/logo.svg" alt="HoldemNow" width={120} height={20} style={{ display: 'block' }} />
           </div>
-          <div className="text-[10px] text-gray-500">어드민 v0.1</div>
+          <div
+            className="text-[10px] font-extrabold"
+            style={{ color: 'var(--brand)', letterSpacing: '0.18em' }}
+          >
+            STORE OPS · 매장 운영
+          </div>
         </div>
 
-        <div className="p-3 border-b border-gray-100">
-          <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1">매장</div>
-          <div className="text-sm font-bold text-gray-900 truncate">{store.name}</div>
-          {isPending && (
-            <div className="mt-1.5 inline-flex items-center gap-1 bg-amber-50 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">
-              ⏳ 심사 대기
-            </div>
-          )}
+        {/* 매장 사장 식별 뱃지 */}
+        <div className="p-3" style={{ borderBottom: '1px solid var(--border)' }}>
+          <AdminIdentityBadge
+            context="store"
+            name={store.name}
+            email={authState.user.email ?? undefined}
+            subLabel={isPending ? '⏳ 심사 대기' : undefined}
+          />
         </div>
 
         <nav className="flex-1 p-2 overflow-y-auto">
           {MENUS.map((m) => {
             const locked = isMenuLocked(m.id);
+            const isActive = !locked && activeMenu === m.id;
             return (
               <button
                 key={m.id}
                 onClick={() => { if (!locked) setActiveMenu(m.id); }}
                 disabled={locked}
                 title={locked ? '본사 승인 후 사용 가능합니다' : undefined}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 mb-0.5 transition ${
+                className={`w-full text-left px-3 py-2.5 rounded-lg text-[14px] font-bold flex items-center gap-2 mb-0.5 transition relative ${
                   locked
-                    ? 'opacity-40 cursor-not-allowed text-gray-400'
-                    : activeMenu === m.id
-                    ? 'text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'opacity-40 cursor-not-allowed'
+                    : isActive
+                      ? ''
+                      : 'hover:bg-[var(--surface-2)]'
                 }`}
-                style={!locked && activeMenu === m.id ? { background: '#FF1F8F' } : undefined}
+                style={
+                  isActive
+                    ? {
+                        background: 'rgba(255,31,143,0.10)',
+                        color: 'var(--brand)',
+                        borderLeft: '4px solid var(--brand)',
+                        paddingLeft: '8px',
+                      }
+                    : { color: locked ? 'var(--text-3)' : 'var(--text-1)' }
+                }
               >
                 <span>{m.icon}</span>
                 <span>{m.label}</span>
-                {locked && <span className="ml-auto text-[9px] text-gray-400">🔒</span>}
+                {locked && (
+                  <span className="ml-auto text-[9px]" style={{ color: 'var(--text-3)' }}>🔒</span>
+                )}
               </button>
             );
           })}
         </nav>
 
-        <div className="p-3 border-t border-gray-100 space-y-2">
+        <div className="p-3 space-y-2" style={{ borderTop: '1px solid var(--border)' }}>
+          {/* 테마 토글 — 라이트/시스템/다크 */}
+          <div className="mb-2">
+            <ThemeToggle value={pref} onChange={change} />
+          </div>
+
           {isPlatformAdmin && (
             <Link
               href="/platform"
               className="block text-[11px] font-bold rounded-md px-2.5 py-1.5"
-            style={{ color: '#FF1F8F', background: 'rgba(255,31,143,0.08)', border: '1px solid rgba(255,31,143,0.25)' }}
+              style={{ color: '#F59E0B', background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.30)' }}
               title="본사 총관리자 화면으로 전환"
             >
-              🏢 본사 관리자로 전환
+              👑 본사 관리자로 전환
             </Link>
           )}
           {userDoc?.organizerId && (
             <Link
               href={`/organizer/${userDoc.organizerId}`}
               className="block text-[11px] font-bold rounded-md px-2.5 py-1.5"
-            style={{ color: '#FFB800', background: 'rgba(255,184,0,0.10)', border: '1px solid rgba(255,184,0,0.30)' }}
+              style={{ color: '#A855F7', background: 'rgba(168,85,247,0.10)', border: '1px solid rgba(168,85,247,0.30)' }}
               title="대회사 어드민"
             >
               🏆 대회사 어드민으로 전환
             </Link>
           )}
-          <div className="text-[10px] text-gray-500 truncate">{authState.user.email}</div>
           {/* 이메일/비번 가입자만 비밀번호 변경 표시 */}
           {authState.user.providerData?.some((p) => p.providerId === 'password') && (
             <button
               onClick={() => setShowPwModal(true)}
-              className="text-[11px] font-bold text-gray-600 hover:text-gray-900 underline underline-offset-2 block"
+              className="text-[11px] font-bold underline underline-offset-2 block"
+              style={{ color: 'var(--text-2)' }}
             >
               비밀번호 변경
             </button>
           )}
           <button
             onClick={() => signOut(auth)}
-            className="text-xs text-gray-500 underline hover:text-gray-900"
+            className="text-xs underline"
+            style={{ color: 'var(--text-2)' }}
           >
             로그아웃
           </button>
@@ -177,15 +224,22 @@ function AdminPageInner({ storeId }: { storeId: string }) {
         />
       )}
 
-      {/* 메인 컨텐츠 */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      {/* 메인 컨텐츠 — 현장 운영 톤: 여유 패딩 + 라운드 큼 */}
+      <main className="flex-1 p-8 overflow-y-auto" style={{ background: 'var(--bg-sub)' }}>
         <div className="max-w-4xl">
           {isPending && (
-            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <div
+              className="mb-6 p-4 flex items-start gap-3"
+              style={{
+                background: 'rgba(245,158,11,0.10)',
+                border: '1px solid rgba(245,158,11,0.35)',
+                borderRadius: 'var(--r-lg)',
+              }}
+            >
               <div className="text-xl">⏳</div>
               <div>
-                <div className="font-bold text-amber-900 text-sm">매장 심사 대기 중</div>
-                <div className="text-xs text-amber-800 mt-1 leading-relaxed">
+                <div className="font-bold text-sm" style={{ color: '#F59E0B' }}>매장 심사 대기 중</div>
+                <div className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--text-2)' }}>
                   지금은 데모용으로 즉시 어드민 진입했지만, v0.2부터 플랫폼 운영팀 확인 후 활성화됩니다.
                   아래 메뉴는 모두 작동하며, 모바일 앱 노출만 승인 후 시작됩니다.
                 </div>
@@ -229,27 +283,47 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
     { label: '전화', value: fmt(metrics.phoneClicks), tag: 'tel: 호출' },
   ];
 
+  // 카드 공통 — 매장 톤(--r-lg, 18px) + surface 토큰
+  const cardStyle = {
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--r-lg)',
+  } as const;
+
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📊 대시보드</h1>
-        <p className="text-sm text-gray-500 mt-1">{storeName} · 실시간 누적 지표</p>
+        <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+          📊 대시보드
+        </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+          {storeName} · 실시간 누적 지표
+        </p>
       </div>
 
-      <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-100 rounded-xl p-5 mb-6">
-        <div className="text-xs font-bold text-red-700 tracking-wider mb-1">🎉 환영합니다</div>
-        <div className="font-bold text-gray-900 mb-2">매장 가입이 완료되었습니다.</div>
-        <div className="text-sm text-gray-600 leading-relaxed">
+      <div
+        className="p-5 mb-6"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,31,143,0.10) 0%, rgba(255,31,143,0.03) 100%)',
+          border: '1px solid rgba(255,31,143,0.25)',
+          borderRadius: 'var(--r-lg)',
+        }}
+      >
+        <div className="text-xs font-bold tracking-wider mb-1" style={{ color: 'var(--brand)' }}>
+          🎉 환영합니다
+        </div>
+        <div className="font-bold mb-2" style={{ color: 'var(--text-1)' }}>매장 가입이 완료되었습니다.</div>
+        <div className="text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
           좌측 메뉴에서 토너 템플릿을 먼저 만들고 LIVE 운영을 시작해보세요.
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {kpis.map((k) => (
-          <div key={k.label} className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{k.label}</div>
-            <div className="font-mono text-xl font-extrabold text-gray-900">{k.value}</div>
-            <div className="text-[10px] text-gray-400 mt-1">{k.tag}</div>
+          <div key={k.label} className="p-4" style={cardStyle}>
+            <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: 'var(--text-2)' }}>{k.label}</div>
+            <div className="font-mono text-xl font-extrabold" style={{ color: 'var(--text-1)' }}>{k.value}</div>
+            <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>{k.tag}</div>
           </div>
         ))}
       </div>
@@ -259,16 +333,16 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
           { label: 'LIVE 풀스크린 열기', value: fmt(metrics.liveOpens) },
           { label: '즐겨찾기 추가', value: fmt(metrics.favoriteAdds) },
         ].map((k) => (
-          <div key={k.label} className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{k.label}</div>
-            <div className="font-mono text-xl font-extrabold text-gray-900">{k.value}</div>
+          <div key={k.label} className="p-4" style={cardStyle}>
+            <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: 'var(--text-2)' }}>{k.label}</div>
+            <div className="font-mono text-xl font-extrabold" style={{ color: 'var(--text-1)' }}>{k.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <div className="text-sm font-bold text-gray-900 mb-3">🎯 시작 가이드</div>
-        <ol className="text-xs text-gray-600 space-y-2 list-decimal list-inside leading-relaxed">
+      <div className="p-5" style={cardStyle}>
+        <div className="text-sm font-bold mb-3" style={{ color: 'var(--text-1)' }}>🎯 시작 가이드</div>
+        <ol className="text-xs space-y-2 list-decimal list-inside leading-relaxed" style={{ color: 'var(--text-2)' }}>
           <li>좌측 <b>🎲 토너 템플릿</b>에서 매장의 토너 종류를 등록하세요 (블라인드 구조 포함)</li>
           <li><b>📺 디스플레이</b>에서 매장 TV 슬롯을 추가하세요</li>
           <li><b>🎬 LIVE 운영</b>에서 첫 LIVE를 시작하면 모바일 앱에 즉시 노출됩니다</li>
