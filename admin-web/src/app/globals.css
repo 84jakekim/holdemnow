@@ -72,6 +72,31 @@
   --shadow-brand: 0 2px 12px rgba(255,31,143,0.20);
 }
 
+/* ── 다크 모드 토큰 분기 (어드민 테마 시스템) ──────────────
+ * html[data-theme="dark"] 셀렉터로 전역 분기.
+ * 본사 어드민 = 다크 기본, 매장 어드민 = 라이트 기본.
+ * 다른 토큰(--brand, --live, --gold 등)은 그대로 유지 — surface/text/bg만 분기.
+ */
+html[data-theme="dark"] {
+  /* === Surface (다크 — "관제센터" 차가운 네이비/그레이) === */
+  --bg:         #0F1419;
+  --bg-sub:     #161B25;
+  --surface-1:  #1A1F2A;
+  --surface-2:  #232936;
+  --surface-3:  #2D3548;
+  --border:     #2D3548;
+  --border-soft: rgba(255, 255, 255, 0.06);
+
+  /* === Typography (다크) === */
+  --text-1:     #F0F2F6;
+  --text-2:     #B8BFCC;
+  --text-3:     #7A8294;
+
+  /* === Shadow (다크 — 더 진하게) === */
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-float: 0 4px 20px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.40);
+}
+
 /* ── Tailwind v4 theme 매핑 ─────────────────────────────── */
 @theme inline {
   /* brand */
