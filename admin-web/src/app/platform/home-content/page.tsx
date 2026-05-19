@@ -404,6 +404,28 @@ function AdModal({ ad, saving, onSave, onClose }: {
 // TAB 2: 인기 유튜브 영상
 // ═══════════════════════════════════════════════════════════════
 
+// ─── 헬퍼: 숫자 포맷 (k/M 단위) ──────────────────────────────
+
+function fmtViewCount(n?: number): string {
+  if (n === undefined || n === null) return '';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+/** relative 날짜 ("N일 전" 등) */
+function fmtRelative(t?: { toMillis(): number } | null): string {
+  if (!t) return '';
+  const diffMs = Date.now() - t.toMillis();
+  const days = Math.floor(diffMs / 86_400_000);
+  if (days === 0) return '오늘';
+  if (days < 7) return `${days}일 전`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}주 전`;
+  const months = Math.floor(days / 30);
+  return `${months}개월 전`;
+}
+
 function VideosTab() {
   const [videos, setVideos] = useState<HotYoutubeVideo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -412,9 +434,19 @@ function VideosTab() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'hotYoutubeVideos'), orderBy('order'));
+    // 어드민은 order 없이 전체 로드 (isActive 관계없이) → 클라이언트 정렬
+    const q = query(collection(db, 'hotYoutubeVideos'));
     return onSnapshot(q, (snap) => {
-      setVideos(snap.docs.map((d) => ({ id: d.id, ...d.data() } as HotYoutubeVideo)));
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as HotYoutubeVideo));
+      // 어드민 뷰: manual 먼저(order ASC) → auto(score DESC)
+      all.sort((a, b) => {
+        const aManual = a.source !== 'auto';
+        const bManual = b.source !== 'auto';
+        if (aManual !== bManual) return aManual ? -1 : 1;
+        if (aManual) return (a.order ?? 0) - (b.order ?? 0);
+        return (b.score ?? 0) - (a.score ?? 0);
+      });
+      setVideos(all);
       setLoading(false);
     }, (e) => { setError(e.message); setLoading(false); });
   }, []);
@@ -441,6 +473,11 @@ function VideosTab() {
 
   return (
     <div>
+      {/* 자동 큐레이션 안내 */}
+      <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+        유튜버 탭에 등록된 채널의 최신 영상이 매일 새벽 4시 자동 추가됩니다 (90일 이내, viewCount + 최신순 혼합 점수).
+      </div>
+
       <div className="flex justify-end mb-4">
         <button onClick={() => setEditing('new')} className="px-4 py-2 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition">
           + 영상 추가
@@ -451,26 +488,50 @@ function VideosTab() {
       {loading && <div className="text-sm text-gray-500">로딩 중…</div>}
 
       <div className="space-y-3">
-        {videos.map((v) => (
-          <div key={v.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
-            {/* 썸네일 */}
-            <div className="w-20 h-12 rounded-lg overflow-hidden bg-gray-900 flex-shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={v.thumbnailUrl || youtubeThumbnailUrl(v.videoId)} alt="" className="w-full h-full object-cover" />
+        {videos.map((v) => {
+          const isAuto = v.source === 'auto';
+          return (
+            <div key={v.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
+              {/* 썸네일 */}
+              <div className="w-20 h-12 rounded-lg overflow-hidden bg-gray-900 flex-shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={v.thumbnailUrl || youtubeThumbnailUrl(v.videoId)} alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                  {/* source 배지 */}
+                  {isAuto ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">AUTO</span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-700">수동</span>
+                  )}
+                  <span className="text-sm font-bold text-gray-900 truncate">{v.title}</span>
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-2">
+                  <span>{v.channelName ?? '-'}</span>
+                  {v.viewCount !== undefined && (
+                    <span>조회수 {fmtViewCount(v.viewCount)}</span>
+                  )}
+                  {v.publishedAt && (
+                    <span>{fmtRelative(v.publishedAt)}</span>
+                  )}
+                  <span>videoId: {v.videoId}</span>
+                  {!isAuto && <span>order {v.order}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => handleToggleActive(v)} className={`relative w-10 h-5 rounded-full transition ${v.isActive ? 'bg-green-500' : 'bg-gray-300'}`} aria-label={v.isActive ? '비활성화' : '활성화'}>
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${v.isActive ? 'left-5' : 'left-0.5'}`} />
+                </button>
+                {/* auto doc은 수정 버튼 숨김 */}
+                {!isAuto && (
+                  <button onClick={() => setEditing(v)} className="px-2.5 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 rounded-lg">수정</button>
+                )}
+                <button onClick={() => handleDelete(v)} className="px-2.5 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg">삭제</button>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-gray-900 truncate">{v.title}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{v.channelName ?? '-'} · videoId: {v.videoId} · order {v.order}</div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={() => handleToggleActive(v)} className={`relative w-10 h-5 rounded-full transition ${v.isActive ? 'bg-green-500' : 'bg-gray-300'}`} aria-label={v.isActive ? '비활성화' : '활성화'}>
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${v.isActive ? 'left-5' : 'left-0.5'}`} />
-              </button>
-              <button onClick={() => setEditing(v)} className="px-2.5 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 rounded-lg">수정</button>
-              <button onClick={() => handleDelete(v)} className="px-2.5 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg">삭제</button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {!loading && videos.length === 0 && (
           <div className="py-12 text-center text-sm text-gray-400">등록된 영상이 없습니다</div>
         )}
@@ -485,7 +546,12 @@ function VideosTab() {
             setSaving(true);
             try {
               if (editing === 'new') {
-                await addDoc(collection(db, 'hotYoutubeVideos'), { ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+                await addDoc(collection(db, 'hotYoutubeVideos'), {
+                  ...data,
+                  source: 'manual',
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                });
               } else {
                 await updateDoc(doc(db, 'hotYoutubeVideos', editing.id), { ...data, updatedAt: serverTimestamp() });
               }
@@ -893,12 +959,19 @@ function YoutuberModal({ youtuber, saving, onSave, onClose }: {
           </div>
 
           {/* channelId (읽기 전용, 자동 채워짐) */}
-          {form.channelId && (
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1.5">채널 ID (자동)</label>
-              <input readOnly value={form.channelId} className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-400 cursor-default" />
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">채널 ID (자동)</label>
+            {/* 자동 영상 큐레이션 안내 */}
+            <p className="text-[11px] text-blue-700 mb-1.5">
+              channelId가 등록되어 있어야 자동 영상 큐레이션이 작동합니다. URL 자동 메타에서 자동 채워집니다.
+            </p>
+            <input
+              readOnly
+              value={form.channelId}
+              className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-400 cursor-default"
+              placeholder="채널 URL 입력 후 '메타 가져오기' 클릭 시 자동 입력"
+            />
+          </div>
 
           {/* order + isActive */}
           <div className="flex items-center gap-4">

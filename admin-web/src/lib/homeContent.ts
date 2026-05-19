@@ -41,6 +41,14 @@ export interface HotYoutubeVideo {
   thumbnailUrl?: string;
   order: number;
   isActive: boolean;
+  /** 'auto': Cloud Function 자동 큐레이션 | 'manual': 어드민 수동 등록 */
+  source?: 'auto' | 'manual';
+  channelId?: string;
+  publishedAt?: Timestamp;
+  viewCount?: number;
+  /** score = viewCount / daysSincePublished */
+  score?: number;
+  lastCuratedAt?: Timestamp;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -123,7 +131,17 @@ export function subscribeHotVideos(
     (snap) => {
       const videos = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as HotYoutubeVideo))
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        .sort((a, b) => {
+          // manual 먼저 (source !== 'auto') → order ASC
+          // auto 다음 → score DESC
+          // top 20 slice는 호출부에서 처리
+          const aManual = a.source !== 'auto';
+          const bManual = b.source !== 'auto';
+          if (aManual !== bManual) return aManual ? -1 : 1;
+          if (aManual) return (a.order ?? 0) - (b.order ?? 0);
+          return (b.score ?? 0) - (a.score ?? 0);
+        })
+        .slice(0, 20);
       onData(videos);
     },
     (err) => onError?.(err),
