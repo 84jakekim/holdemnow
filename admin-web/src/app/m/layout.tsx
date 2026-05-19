@@ -105,14 +105,12 @@ function TabBar({ pathname }: { pathname: string }) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="메인 내비게이션"
     >
-      {/* Floating Solid Pill — 양옆·아래 12px 여백, rounded-full
-       * inline style + hex 하드코딩으로 background 강제 — Tailwind v4
-       * 자동 reset이나 cascade 충돌 어떤 경우에도 흰색 보장. */}
+      {/* Floating Pink Pill — 핫핑크 그라데이션으로 콘트라스트 확보.
+       * 흰 페이지 위에서 명확히 떠 있는 브랜드 시그니처. */}
       <div
-        className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden tabbar-solid"
+        className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden"
         style={{
-          background: '#FFFFFF',
-          backgroundColor: '#FFFFFF',
+          background: 'linear-gradient(135deg, #FF1F8F 0%, #E01077 100%)',
         }}
       >
         <div className="flex items-stretch h-[60px] px-1">
@@ -130,14 +128,14 @@ function TabBar({ pathname }: { pathname: string }) {
                 aria-label={t.label}
                 aria-current={active ? 'page' : undefined}
                 className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200 active:scale-90"
-                style={{ color: active ? 'var(--brand)' : 'var(--text-3)' }}
+                style={{ color: active ? '#FFFFFF' : 'rgba(255, 255, 255, 0.68)' }}
               >
-                {/* 활성 indicator — 상단 짧은 underline (4×3px 핫핑크) */}
+                {/* 활성 indicator — 상단 짧은 흰색 underline (핑크 알약 위에서 명확) */}
                 <span
                   className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-full pointer-events-none transition-all duration-200"
                   style={{
                     width: active ? 28 : 0,
-                    background: 'var(--brand)',
+                    background: '#FFFFFF',
                     opacity: active ? 1 : 0,
                   }}
                   aria-hidden="true"

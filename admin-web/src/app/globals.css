@@ -287,20 +287,21 @@ html, body {
  * 핑크 윤곽 + 떠 있는 그림자로 "떠 있는 카드" 느낌 유지.
  */
 .tabbar-glass {
-  background: #FFFFFF !important;     /* 완전 불투명 — cascade 충돌 무시 */
-  background-color: #FFFFFF !important;
-  border: 1.5px solid rgba(255, 31, 143, 0.20);
+  /* 핫핑크 그라데이션 알약 — 흰 페이지 위 명확한 콘트라스트 */
+  background: linear-gradient(135deg, #FF1F8F 0%, #E01077 100%) !important;
+  background-color: #FF1F8F !important;
+  border: none;
   box-shadow:
-    0 10px 30px rgba(255, 31, 143, 0.12),
-    0 4px 14px rgba(0, 0, 0, 0.12),
-    0 1px 3px rgba(0, 0, 0, 0.06);
+    0 10px 30px rgba(255, 31, 143, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.18),
+    0 1px 3px rgba(0, 0, 0, 0.10);
 }
 html[data-theme="dark"] .tabbar-glass {
-  background: #1A1F2A !important;
-  background-color: #1A1F2A !important;
-  border: 1.5px solid rgba(255, 31, 143, 0.30);
+  background: linear-gradient(135deg, #FF1F8F 0%, #C8156B 100%) !important;
+  background-color: #FF1F8F !important;
+  border: none;
   box-shadow:
-    0 10px 30px rgba(255, 31, 143, 0.20),
+    0 10px 30px rgba(255, 31, 143, 0.45),
     0 4px 14px rgba(0, 0, 0, 0.55),
     0 1px 3px rgba(0, 0, 0, 0.40);
 }
