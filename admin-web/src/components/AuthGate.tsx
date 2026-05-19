@@ -26,6 +26,7 @@ const ANONYMOUS_WHITELIST = [
   '/admin-login',
   '/organizer-login',
   '/organizer-signup',
+  '/platform-login',  // 본사 관리자 전용 로그인 — anonymous 허용
   '/auth/kakao/callback',
   '/display',
   '/onboarding/kyc',
@@ -40,6 +41,7 @@ const KYC_WHITELIST = [
   '/admin-login',
   '/organizer-login',
   '/organizer-signup',
+  '/platform-login',  // 본사 관리자 로그인 페이지도 KYC 면제
   '/auth/kakao/callback',
   '/display',
 ];
@@ -76,14 +78,16 @@ export default function AuthGate({ children, loadingFallback }: Props) {
   const userDoc = useUserDoc(uid);
 
   // 1. anonymous redirect
+  //    - /platform/* 영역은 본사 전용 로그인(/platform/login)으로 분리
+  //    - 그 외는 일반 통합 로그인(/login)으로
   useEffect(() => {
     if (authState.status !== 'anonymous') return;
     if (isWhitelisted(pathname)) return;
 
     const next = isSafeNextPath(pathname) ? pathname : '';
-    const dest = next
-      ? `/login?next=${encodeURIComponent(next)}`
-      : '/login';
+    const isPlatformArea = pathname === '/platform' || pathname.startsWith('/platform/');
+    const base = isPlatformArea ? '/platform-login' : '/login';
+    const dest = next ? `${base}?next=${encodeURIComponent(next)}` : base;
     router.replace(dest);
   }, [authState.status, pathname, router]);
 
