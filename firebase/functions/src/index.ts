@@ -27,6 +27,9 @@ export { marketingBroadcast } from './notifications/marketingBroadcast';
 // "실시간" 컨셉 보증 — 매장 사장 화면이 꺼져 있어도 서버에서 정리됨.
 export { autoStopFinishedSessions } from './live/autoStopFinishedSessions';
 
+// ===== Reviews — 매장 리뷰 집계 (reviewCount/averageRating/ratingDistribution) =====
+export { aggregateReviewStats } from './reviews/aggregateReviewStats';
+
 // ===== Series — 위성 예선 자동 집계 (M19 매핑) (v0.2+ 추가 예정) =====
 // export { onSatelliteResultBatch } from './series/onSatelliteResultBatch';
 

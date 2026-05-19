@@ -115,6 +115,26 @@ service cloud.firestore {
         allow update, delete: if isSignedIn()
           && (isStoreOwner(storeId) || isStoreMember(storeId) || isPlatformAdmin());
       }
+
+      // 방문 리뷰 — 누구나 read, 인증 사용자가 본인 명의로만 write.
+      // 집계 필드(reviewCount/averageRating/ratingDistribution)는 Cloud Function이 자동 갱신.
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow create: if isSignedIn()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.storeId == storeId
+          && request.resource.data.rating is int
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5;
+        allow update: if isSignedIn()
+          && resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorUid == request.auth.uid  // uid 변경 차단
+          && request.resource.data.rating is int
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5;
+        allow delete: if isSignedIn()
+          && resource.data.authorUid == request.auth.uid;
+      }
     }
 
     // ===== LIVE 세션 (실시간 송출의 심장) =====
@@ -300,6 +320,10 @@ service cloud.firestore {
     }
     // 모바일 홈 "오늘의 매장 소식"이 collectionGroup('posts')로 전체 매장 글을 한 번에 읽음.
     match /{path=**}/posts/{postId} {
+      allow read: if true;
+    }
+    // 내 리뷰 전체 보기(collectionGroup('reviews')) — 모든 매장 리뷰 누구나 read.
+    match /{path=**}/reviews/{reviewId} {
       allow read: if true;
     }
 

@@ -56,6 +56,13 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(5);
     }
 
+    // 방문 리뷰 사진 — 인증 사용자만 업로드 (Firestore rules에서 본인 doc만 write 가능).
+    // 경로: reviews/{reviewIdOrTemp}/{filename}. 최대 5MB.
+    match /reviews/{reviewIdOrTemp}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
