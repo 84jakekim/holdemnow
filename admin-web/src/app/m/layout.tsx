@@ -23,15 +23,17 @@ const TABS = [
     ),
   },
   {
-    id: 'discover',
-    href: '/m/discover',
-    label: '탐색',
+    id: 'find',
+    href: '/m/find',
+    label: '매장찾기',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth={active ? 2.2 : 1.7} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.10 : 0} />
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M14.5 9.5l-5 2-2 5 5-2 2-5z"/>
-        <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+        {/* 빌딩 + 돋보기 결합 아이콘 */}
+        <rect x="3" y="7" width="10" height="14" rx="1.5" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.10 : 0} />
+        <rect x="3" y="7" width="10" height="14" rx="1.5"/>
+        <path d="M7 21V3h10v7"/>
+        <circle cx="18" cy="17" r="3"/>
+        <path d="M20.5 19.5l2 2"/>
       </svg>
     ),
   },
@@ -106,7 +108,9 @@ function TabBar({ pathname }: { pathname: string }) {
         {TABS.map((t) => {
           const active =
             pathname === t.href ||
-            (t.href !== '/m' && pathname.startsWith(t.href));
+            (t.href !== '/m' && pathname.startsWith(t.href)) ||
+            // /m/discover는 /m/find로 리다이렉트되므로 find 탭 활성 처리
+            (t.id === 'find' && pathname.startsWith('/m/discover'));
 
           return (
             <Link

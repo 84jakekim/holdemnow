@@ -60,6 +60,7 @@ const MENU_GROUPS: MenuGroup[] = [
   {
     title: '콘텐츠',
     items: [
+      { id: 'home-content', icon: '📺', label: '홈 콘텐츠', href: '/platform/home-content' },
       { id: 'events', icon: '🎫', label: '대회 큐레이션', href: '/platform/events' },
       { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
       { id: 'pinned', icon: '📌', label: '홈 고정 공지', href: '/platform/pinned' },

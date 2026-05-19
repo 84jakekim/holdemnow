@@ -337,6 +337,22 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ===== 홈 콘텐츠 — 광고/유튜브영상/유튜버 (모바일 홈 노출) =====
+    // read: 누구나 (모바일 홈 공개 노출).
+    // write: platform_admin만 (본사 콘텐츠 관리 페이지).
+    match /homeAds/{adId} {
+      allow read: if true;
+      allow create, update, delete: if isPlatformAdmin();
+    }
+    match /hotYoutubeVideos/{vid} {
+      allow read: if true;
+      allow create, update, delete: if isPlatformAdmin();
+    }
+    match /hotYoutubers/{cid} {
+      allow read: if true;
+      allow create, update, delete: if isPlatformAdmin();
+    }
+
     // ===== 그 외 모두 차단 (default deny) =====
     match /{document=**} {
       allow read, write: if false;

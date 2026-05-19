@@ -63,6 +63,18 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(5);
     }
 
+    // 홈 광고 이미지 (16:9 커버, 최대 5MB)
+    match /homeAds/{adId}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
+    // 인기 유튜버 아바타 (최대 2MB)
+    match /hotYoutubers/{cid}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(2);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
