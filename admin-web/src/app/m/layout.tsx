@@ -105,12 +105,12 @@ function TabBar({ pathname }: { pathname: string }) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="메인 내비게이션"
     >
-      {/* Floating Translucent Hot Pink Pill — 브랜드 핫핑크 + alpha 0.88.
-       * 솔리드처럼 보이되 미세하게 가벼운 톤. */}
+      {/* Floating Translucent Hot Pink Pill — 핫핑크 alpha 0.28.
+       * 핑크 톤 유지 + 투명도만 낮춤. 아이콘은 진한 핫핑크. */}
       <div
         className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden"
         style={{
-          background: 'rgba(255, 31, 143, 0.88)',
+          background: 'rgba(255, 31, 143, 0.28)',
         }}
       >
         <div className="flex items-stretch h-[60px] px-1">
@@ -128,14 +128,14 @@ function TabBar({ pathname }: { pathname: string }) {
                 aria-label={t.label}
                 aria-current={active ? 'page' : undefined}
                 className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200 active:scale-90"
-                style={{ color: active ? '#FFFFFF' : 'rgba(255, 255, 255, 0.72)' }}
+                style={{ color: active ? '#E01077' : 'rgba(224, 16, 119, 0.55)' }}
               >
-                {/* 활성 indicator — 상단 짧은 흰색 underline (핫핑크 위에서 명확) */}
+                {/* 활성 indicator — 상단 짧은 진한 핑크 underline */}
                 <span
                   className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-full pointer-events-none transition-all duration-200"
                   style={{
                     width: active ? 28 : 0,
-                    background: '#FFFFFF',
+                    background: '#E01077',
                     opacity: active ? 1 : 0,
                   }}
                   aria-hidden="true"
