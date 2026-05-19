@@ -98,6 +98,11 @@ export default function AuthGate({ children, loadingFallback }: Props) {
     // kycCompletedAt 있으면 통과
     if (userDoc.kycCompletedAt) return;
 
+    // 매장·대회사 자체 가입자는 이미 대표자/담당자 정보를 가입 시 필수 입력 → KYC 면제.
+    // 이 분기는 직전 가입 흐름에서 kycCompletedAt 필드를 빠뜨린 기존 doc에 대한 안전망.
+    const src = (userDoc as { signupSource?: string }).signupSource;
+    if (src === 'store-signup' || src === 'organizer-signup') return;
+
     // KYC 미완료 — returnTo 저장 후 redirect
     try {
       if (isSafeNextPath(pathname)) {

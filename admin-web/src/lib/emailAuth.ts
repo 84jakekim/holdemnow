@@ -171,6 +171,9 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
   const storeRef = newStoreRef;
 
   // 3. users/{uid} 문서 생성
+  //   - 매장 가입자는 대표자명/대표 연락처를 이미 필수 입력했으므로
+  //     realName/phone에 자동 매핑하고 KYC를 즉시 완료 처리 (AuthGate가 /onboarding/kyc로
+  //     잘못 가로채지 않도록 함). signupSource='store-signup' 이면 별도 KYC 절차 불필요.
   await setDoc(doc(db, 'users', uid), {
     uid,
     email: payload.email.trim().toLowerCase(),
@@ -183,6 +186,10 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
     status: 'active',
     passwordHint: payload.passwordHint.trim(),
     recoveryLast4: payload.recoveryLast4.trim().slice(-4),
+    realName: payload.representativeName.trim(),
+    phone: payload.representativePhone.trim(),
+    kycCompletedAt: serverTimestamp(),
+    kycSource: 'signup',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -238,6 +245,7 @@ export async function signupAsOrganizer(payload: OrganizerSignupPayload): Promis
     updatedAt: serverTimestamp(),
   });
 
+  // 대회사 가입자도 담당자/대표자 정보를 이미 필수 입력 → realName/phone 자동 매핑 + KYC 즉시 완료
   await setDoc(doc(db, 'users', uid), {
     uid,
     email: payload.email.trim().toLowerCase(),
@@ -248,6 +256,10 @@ export async function signupAsOrganizer(payload: OrganizerSignupPayload): Promis
     signupSource: 'organizer-signup',
     signupAt: serverTimestamp(),
     status: 'active',
+    realName: payload.contactPersonName.trim() || payload.representativeName.trim(),
+    phone: payload.contactPersonPhone.trim() || payload.representativePhone.trim(),
+    kycCompletedAt: serverTimestamp(),
+    kycSource: 'signup',
     passwordHint: payload.passwordHint.trim(),
     recoveryLast4: payload.recoveryLast4.trim().slice(-4),
     createdAt: serverTimestamp(),
