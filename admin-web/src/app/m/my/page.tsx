@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import LogoutConfirmSheet from '@/components/mobile/LogoutConfirmSheet';
 import { doc, setDoc, onSnapshot, serverTimestamp, collection } from 'firebase/firestore';
+import { enableNotifications, getNotificationPermission, isMessagingSupported } from '@/lib/messaging';
 
 interface ProfileFields {
   displayName?: string;
@@ -40,6 +41,10 @@ export default function MyPage() {
   const [interestCount, setInterestCount] = useState(0);
   const [logoutSheetOpen, setLogoutSheetOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [pushTokenCount, setPushTokenCount] = useState<number | null>(null);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported' | 'unknown'>('unknown');
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authState.status !== 'authenticated') return;
@@ -47,8 +52,44 @@ export default function MyPage() {
     const u1 = onSnapshot(collection(db, 'users', uid, 'favorites'), (s) => setFavCount(s.size));
     const u2 = onSnapshot(collection(db, 'users', uid, 'seriesSubscriptions'), (s) => setSeriesSubCount(s.size));
     const u3 = onSnapshot(collection(db, 'users', uid, 'interests'), (s) => setInterestCount(s.size));
-    return () => { u1(); u2(); u3(); };
+    const u4 = onSnapshot(collection(db, 'users', uid, 'fcmTokens'), (s) => setPushTokenCount(s.size));
+    return () => { u1(); u2(); u3(); u4(); };
   }, [authState]);
+
+  // 브라우저 알림 권한·지원 여부 확인 (브라우저별 동적)
+  useEffect(() => {
+    (async () => {
+      const supported = await isMessagingSupported();
+      if (!supported) {
+        setPushPermission('unsupported');
+        return;
+      }
+      setPushPermission(getNotificationPermission());
+    })();
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    if (authState.status !== 'authenticated') return;
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      const token = await enableNotifications(authState.user.uid);
+      if (token) {
+        setPushPermission('granted');
+      } else {
+        setPushPermission(getNotificationPermission());
+        setPushError(
+          getNotificationPermission() === 'denied'
+            ? '브라우저 설정에서 알림을 허용해 주세요'
+            : '알림 활성화 실패 — 브라우저가 지원하지 않거나 권한이 거부되었습니다',
+        );
+      }
+    } catch (e: unknown) {
+      setPushError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (authState.status !== 'authenticated') { setLoading(false); return; }
@@ -177,6 +218,16 @@ export default function MyPage() {
       {/* ── 알림 설정 ── */}
       <div className="px-5 py-5" style={{ borderBottom: '6px solid var(--surface-2)' }}>
         <div className="text-base font-extrabold mb-4" style={{ color: 'var(--text-1)' }}>알림 설정</div>
+
+        {/* 알림 권한 진단 카드 — 권한 + 토큰 상태 표시 + 활성화 버튼 */}
+        <NotificationStatusCard
+          permission={pushPermission}
+          tokenCount={pushTokenCount}
+          busy={pushBusy}
+          error={pushError}
+          onEnable={handleEnableNotifications}
+        />
+
         {loading ? (
           <div className="text-sm" style={{ color: 'var(--text-3)' }}>로딩…</div>
         ) : (
@@ -442,6 +493,99 @@ function EditProfileSheet({
           >
             {busy ? '저장 중…' : '저장'}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+ * 알림 권한·토큰 진단 카드 — 토글 위에 표시
+ * ========================================================== */
+function NotificationStatusCard({
+  permission,
+  tokenCount,
+  busy,
+  error,
+  onEnable,
+}: {
+  permission: NotificationPermission | 'unsupported' | 'unknown';
+  tokenCount: number | null;
+  busy: boolean;
+  error: string | null;
+  onEnable: () => void;
+}) {
+  if (permission === 'unsupported') {
+    return (
+      <div className="mb-4 rounded-xl p-3.5" style={{ background: 'rgba(229,62,62,0.08)', border: '1px solid rgba(229,62,62,0.25)' }}>
+        <div className="text-[12px] font-extrabold mb-1" style={{ color: 'var(--live)' }}>⚠️ 이 브라우저는 알림 미지원</div>
+        <div className="text-[11px] leading-relaxed" style={{ color: 'var(--text-2)' }}>
+          Chrome·Safari·Edge 최신 버전 + iOS 16.4+ 또는 Android에서 사용해주세요. 홈 화면에 PWA 설치 시 안정성이 더 좋습니다.
+        </div>
+      </div>
+    );
+  }
+  if (permission === 'granted' && (tokenCount ?? 0) > 0) {
+    return (
+      <div className="mb-4 rounded-xl p-3.5" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-[14px]">✅</span>
+          <div className="flex-1">
+            <div className="text-[12px] font-extrabold" style={{ color: 'var(--success, #10B981)' }}>알림 받기 활성화됨</div>
+            <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>{tokenCount}개 디바이스 등록 · 즐겨찾기·관심 토너 알림이 도착합니다</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (permission === 'granted' && (tokenCount ?? 0) === 0) {
+    return (
+      <div className="mb-4 rounded-xl p-3.5" style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.30)' }}>
+        <div className="flex items-start gap-2">
+          <span className="text-[14px]">⚠️</span>
+          <div className="flex-1">
+            <div className="text-[12px] font-extrabold mb-1" style={{ color: 'var(--gold)' }}>권한은 허용됐지만 토큰 미등록</div>
+            <div className="text-[11px] leading-relaxed mb-2.5" style={{ color: 'var(--text-2)' }}>
+              알림 시스템 등록을 한 번 더 시도해 주세요. PWA 설치를 권장합니다.
+            </div>
+            <button
+              onClick={onEnable}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg text-[12px] font-extrabold text-white disabled:opacity-40"
+              style={{ background: 'var(--brand)' }}
+            >
+              {busy ? '등록 중…' : '🔔 알림 다시 등록'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // denied / default / unknown — 권한 요청 안내
+  return (
+    <div className="mb-4 rounded-xl p-3.5" style={{ background: 'rgba(255,31,143,0.06)', border: '1px solid rgba(255,31,143,0.25)' }}>
+      <div className="flex items-start gap-2">
+        <span className="text-[18px]">🔔</span>
+        <div className="flex-1">
+          <div className="text-[12px] font-extrabold mb-1" style={{ color: 'var(--brand)' }}>알림을 받으려면 권한 허용이 필요해요</div>
+          <div className="text-[11px] leading-relaxed mb-2.5" style={{ color: 'var(--text-2)' }}>
+            {permission === 'denied'
+              ? '브라우저에서 알림이 차단된 상태입니다. 브라우저 주소창 좌측 자물쇠 → 알림 → 허용으로 직접 켜주세요.'
+              : '아래 버튼을 누르면 권한 요청 팝업이 떠요. 허용하면 즐겨찾기 매장 LIVE·관심 토너 시작 알림을 받습니다.'}
+          </div>
+          {permission !== 'denied' && (
+            <button
+              onClick={onEnable}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg text-[12px] font-extrabold text-white disabled:opacity-40"
+              style={{ background: 'var(--brand)' }}
+            >
+              {busy ? '활성화 중…' : '🔔 알림 받기 활성화'}
+            </button>
+          )}
+          {error && (
+            <div className="text-[11px] font-bold mt-2" style={{ color: 'var(--live)' }}>{error}</div>
+          )}
         </div>
       </div>
     </div>
