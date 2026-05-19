@@ -290,7 +290,7 @@ html, body {
   /* 브랜드 핫핑크 alpha 0.28 — 핑크 톤은 유지하되 투명도 강하게 */
   background: rgba(255, 31, 143, 0.28) !important;
   background-color: rgba(255, 31, 143, 0.28) !important;
-  border: none;
+  border: 1px solid rgba(255, 31, 143, 0.55);
   box-shadow:
     0 8px 24px rgba(255, 31, 143, 0.22),
     0 3px 10px rgba(0, 0, 0, 0.08),
@@ -299,7 +299,7 @@ html, body {
 html[data-theme="dark"] .tabbar-glass {
   background: rgba(255, 31, 143, 0.45) !important;
   background-color: rgba(255, 31, 143, 0.45) !important;
-  border: none;
+  border: 1px solid rgba(255, 31, 143, 0.70);
   box-shadow:
     0 8px 24px rgba(255, 31, 143, 0.35),
     0 3px 10px rgba(0, 0, 0, 0.50),
