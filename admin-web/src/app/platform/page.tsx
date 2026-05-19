@@ -51,6 +51,9 @@ import {
   loadReviewsTimeSeries,
   loadGrowthRates,
   loadTopStoresByRating,
+  loadTopStoresByMetric,
+  loadAllStoresMetrics,
+  loadRecentUsers,
   type UserStats,
   type StoreStats,
   type OrganizerStats,
@@ -62,6 +65,8 @@ import {
   type GrowthRate,
   type GrowthRates,
   type TopStore,
+  type StoreMetricsRow,
+  type UserSummary,
 } from '@/lib/stats';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -100,6 +105,35 @@ function shortDate(iso: string): string {
   return `${Number(parts[1])}/${Number(parts[2])}`;
 }
 
+/** 긴 매장명 자르기 (BarChart X축용) */
+function truncate(s: string, maxChars: number): string {
+  if (!s) return '';
+  return s.length > maxChars ? `${s.slice(0, maxChars)}…` : s;
+}
+
+/** Date 또는 Firestore Timestamp-like(.toDate()) → 'M/D HH:mm' */
+function formatTs(ts: { toDate(): Date } | Date | null | undefined): string {
+  if (!ts) return '-';
+  let d: Date;
+  if (ts instanceof Date) {
+    d = ts;
+  } else if (typeof (ts as { toDate?: unknown }).toDate === 'function') {
+    try {
+      d = (ts as { toDate(): Date }).toDate();
+    } catch {
+      return '-';
+    }
+  } else {
+    return '-';
+  }
+  if (Number.isNaN(d.getTime())) return '-';
+  const M = d.getMonth() + 1;
+  const D = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${M}/${D} ${hh}:${mm}`;
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 데이터 컨테이너
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -118,6 +152,10 @@ interface DashboardData {
   reviewsSeries: TimeSeriesPoint[];
   growth: GrowthRates;
   topStores: TopStore[];
+  topByClicks: TopStore[];
+  bottomByImpressions: TopStore[];
+  allMetrics: StoreMetricsRow[];
+  recentUsers: UserSummary[];
 }
 
 type RangeToggle = 7 | 30;
@@ -149,6 +187,10 @@ export default function PlatformDashboard() {
         reviewsSeries,
         growth,
         topStores,
+        topByClicks,
+        bottomByImpressions,
+        allMetrics,
+        recentUsers,
       ] = await Promise.all([
         loadUserStats(),
         loadStoreStats(),
@@ -163,6 +205,10 @@ export default function PlatformDashboard() {
         loadReviewsTimeSeries(30),
         loadGrowthRates(),
         loadTopStoresByRating(10),
+        loadTopStoresByMetric('cardClicks', 10, false),
+        loadTopStoresByMetric('impressions', 10, true),
+        loadAllStoresMetrics(),
+        loadRecentUsers(10),
       ]);
       setData({
         users,
@@ -178,6 +224,10 @@ export default function PlatformDashboard() {
         reviewsSeries,
         growth,
         topStores,
+        topByClicks,
+        bottomByImpressions,
+        allMetrics,
+        recentUsers,
       });
       setLastUpdate(new Date());
     } catch (err) {
@@ -250,6 +300,34 @@ export default function PlatformDashboard() {
     () => storeStatusData.reduce((a, b) => a + b.value, 0),
     [storeStatusData],
   );
+
+  // ━━ 매장 누적 메트릭 합계 (impressions / cardClicks / liveOpens / favoriteAdds) ━━
+  const metricTotals = useMemo(() => {
+    const rows = data?.allMetrics ?? [];
+    return rows.reduce(
+      (acc, r) => {
+        acc.impressions += r.impressions ?? 0;
+        acc.cardClicks += r.cardClicks ?? 0;
+        acc.liveOpens += r.liveOpens ?? 0;
+        acc.favoriteAdds += r.favoriteAdds ?? 0;
+        return acc;
+      },
+      { impressions: 0, cardClicks: 0, liveOpens: 0, favoriteAdds: 0 },
+    );
+  }, [data]);
+
+  // ━━ BarChart: 매장별 cardClicks Top 10 ━━
+  const clicksBarData = useMemo(() => {
+    const rows = data?.allMetrics ?? [];
+    return [...rows]
+      .sort((a, b) => (b.cardClicks ?? 0) - (a.cardClicks ?? 0))
+      .slice(0, 10)
+      .map((r) => ({
+        name: r.storeName,
+        shortName: truncate(r.storeName, 8),
+        value: r.cardClicks ?? 0,
+      }));
+  }, [data]);
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 렌더
@@ -656,6 +734,107 @@ export default function PlatformDashboard() {
       >
         <TopStoresList stores={data?.topStores ?? []} loading={loading && !data} />
       </ChartCard>
+
+      {/* ━━ 4-A. 매장 랭킹 (인기 · 비인기) ━━ */}
+      <SectionLabel>매장 랭킹</SectionLabel>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-8">
+        <RankTableCard
+          title="🏆 인기 매장 Top 10"
+          subtitle="cardClicks 내림차순"
+          rows={data?.topByClicks ?? []}
+          metricLabel="클릭 수"
+          loading={loading && !data}
+          accent="brand"
+        />
+        <RankTableCard
+          title="📉 노출 적은 매장 Top 10"
+          subtitle="impressions 가장 낮은 순"
+          rows={data?.bottomByImpressions ?? []}
+          metricLabel="노출 수"
+          loading={loading && !data}
+          accent="muted"
+          footnote="신규 매장일 수도 있습니다."
+        />
+      </div>
+
+      {/* ━━ 4-B. 매장별 접속 통계 ━━ */}
+      <SectionLabel>매장별 접속 통계</SectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <SubCard label="총 노출 (impressions)" value={fmt(metricTotals.impressions)} accent="muted" />
+        <SubCard label="총 카드 클릭" value={fmt(metricTotals.cardClicks)} accent="brand" />
+        <SubCard label="총 LIVE 진입" value={fmt(metricTotals.liveOpens)} accent="live" />
+        <SubCard label="총 즐겨찾기 추가" value={fmt(metricTotals.favoriteAdds)} accent="gold" />
+      </div>
+      <ChartCard
+        title="매장별 카드 클릭 Top 10"
+        subtitle="cardClicks 내림차순 — 한눈에 인기 매장 비교"
+      >
+        {clicksBarData.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+            {loading && !data ? '불러오는 중…' : '메트릭 데이터가 아직 없습니다.'}
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={clicksBarData}
+                margin={{ top: 10, right: 16, left: 0, bottom: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis
+                  dataKey="shortName"
+                  tick={{ fill: 'var(--text-2)', fontSize: 11, fontWeight: 600 }}
+                  tickLine={false}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  interval={0}
+                  angle={-25}
+                  textAnchor="end"
+                  height={50}
+                />
+                <YAxis
+                  tick={{ fill: 'var(--text-3)', fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={{ stroke: 'var(--border)' }}
+                  allowDecimals={false}
+                  width={36}
+                />
+                <Tooltip content={<BarStoreTooltip />} cursor={{ fill: 'var(--surface-3)', opacity: 0.4 }} />
+                <Bar
+                  dataKey="value"
+                  name="cardClicks"
+                  fill="var(--brand)"
+                  radius={[6, 6, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </ChartCard>
+
+      {/* ━━ 4-C. 최근 가입 사용자 ━━ */}
+      <SectionLabel>최근 가입 사용자</SectionLabel>
+      <div
+        style={{
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-md)',
+          padding: '14px 16px',
+          marginBottom: 24,
+        }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            createdAt 내림차순 · 최근 10명
+          </div>
+          <Link
+            href="/platform/users"
+            style={{ fontSize: 11, color: 'var(--brand)', fontWeight: 700, textDecoration: 'none' }}
+          >
+            전체 보기 →
+          </Link>
+        </div>
+        <RecentUsersTable users={data?.recentUsers ?? []} loading={loading && !data} />
+      </div>
 
       {/* ━━ 4-1. 대회사 ━━ */}
       <SectionLabel>대회사</SectionLabel>
@@ -1161,6 +1340,359 @@ function TopStoresList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// RankTableCard — 순위 · 매장명 · 메트릭 3열 테이블 카드
+// 인기 / 비인기 매장 양쪽에서 재사용.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function RankTableCard({
+  title,
+  subtitle,
+  rows,
+  metricLabel,
+  loading,
+  accent,
+  footnote,
+}: {
+  title: string;
+  subtitle?: string;
+  rows: TopStore[];
+  metricLabel: string;
+  loading?: boolean;
+  accent: 'brand' | 'gold' | 'muted';
+  footnote?: string;
+}) {
+  const metricColor =
+    accent === 'brand'
+      ? 'var(--brand)'
+      : accent === 'gold'
+        ? 'var(--gold)'
+        : 'var(--text-2)';
+  return (
+    <div
+      style={{
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--r-md)',
+        padding: '16px 18px',
+      }}
+    >
+      <div className="mb-3">
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: 'var(--text-1)',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {title}
+        </div>
+        {subtitle && (
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+          불러오는 중…
+        </div>
+      ) : rows.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+          데이터가 아직 없습니다.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 12,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <thead>
+              <tr style={{ color: 'var(--text-3)', fontSize: 11 }}>
+                <th
+                  style={{
+                    textAlign: 'left',
+                    padding: '6px 8px',
+                    fontWeight: 700,
+                    borderBottom: '1px solid var(--border)',
+                    width: 36,
+                  }}
+                >
+                  순위
+                </th>
+                <th
+                  style={{
+                    textAlign: 'left',
+                    padding: '6px 8px',
+                    fontWeight: 700,
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  매장명
+                </th>
+                <th
+                  style={{
+                    textAlign: 'right',
+                    padding: '6px 8px',
+                    fontWeight: 700,
+                    borderBottom: '1px solid var(--border)',
+                    width: 80,
+                  }}
+                >
+                  {metricLabel}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const rank = i + 1;
+                return (
+                  <tr
+                    key={r.id}
+                    className="group"
+                    style={{
+                      borderBottom: '1px solid var(--border)',
+                      transition: 'background 120ms',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background = 'var(--surface-2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background = 'transparent';
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: '7px 8px',
+                        color: 'var(--text-3)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {rank}
+                    </td>
+                    <td
+                      style={{
+                        padding: '7px 8px',
+                        color: 'var(--text-1)',
+                        fontWeight: 600,
+                        maxWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {r.name}
+                    </td>
+                    <td
+                      style={{
+                        padding: '7px 8px',
+                        color: metricColor,
+                        fontWeight: 700,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {fmt(r.metric)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {footnote && (
+        <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 8 }}>
+          ※ {footnote}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BarStoreTooltip — 매장별 cardClicks 차트용 (전체 이름 표시)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+interface BarStorePayload {
+  name?: string;
+  value?: number;
+  payload?: { name?: string; shortName?: string };
+}
+
+function BarStoreTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: BarStorePayload[];
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0];
+  const fullName = p.payload?.name ?? p.payload?.shortName ?? '';
+  return (
+    <div
+      style={{
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        padding: '8px 10px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        fontSize: 11,
+      }}
+    >
+      <div style={{ color: 'var(--text-1)', fontWeight: 700, marginBottom: 2 }}>
+        {fullName}
+      </div>
+      <div
+        className="font-mono"
+        style={{
+          color: 'var(--brand)',
+          fontWeight: 700,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        카드 클릭 {fmt(p.value)}회
+      </div>
+    </div>
+  );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// RecentUsersTable — 최근 가입 사용자 10명
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function RecentUsersTable({
+  users,
+  loading,
+}: {
+  users: UserSummary[];
+  loading?: boolean;
+}) {
+  if (loading) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+        불러오는 중…
+      </div>
+    );
+  }
+  if (users.length === 0) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+        가입 사용자가 없습니다.
+      </div>
+    );
+  }
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 12,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <thead>
+          <tr style={{ color: 'var(--text-3)', fontSize: 11 }}>
+            <th
+              style={{
+                textAlign: 'left',
+                padding: '6px 8px',
+                fontWeight: 700,
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              닉네임
+            </th>
+            <th
+              style={{
+                textAlign: 'left',
+                padding: '6px 8px',
+                fontWeight: 700,
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              이메일
+            </th>
+            <th
+              style={{
+                textAlign: 'left',
+                padding: '6px 8px',
+                fontWeight: 700,
+                borderBottom: '1px solid var(--border)',
+                width: 120,
+              }}
+            >
+              가입일
+            </th>
+            <th
+              style={{
+                textAlign: 'left',
+                padding: '6px 8px',
+                fontWeight: 700,
+                borderBottom: '1px solid var(--border)',
+                width: 120,
+              }}
+            >
+              마지막 활동
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((u) => (
+            <tr
+              key={u.uid}
+              style={{
+                borderBottom: '1px solid var(--border)',
+                transition: 'background 120ms',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLTableRowElement).style.background = 'var(--surface-2)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLTableRowElement).style.background = 'transparent';
+              }}
+            >
+              <td
+                style={{
+                  padding: '7px 8px',
+                  color: 'var(--text-1)',
+                  fontWeight: 600,
+                }}
+              >
+                {u.displayName?.trim() || '-'}
+              </td>
+              <td
+                style={{
+                  padding: '7px 8px',
+                  color: 'var(--text-2)',
+                  maxWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {u.email?.trim() || '-'}
+              </td>
+              <td style={{ padding: '7px 8px', color: 'var(--text-2)' }}>
+                {formatTs(u.createdAt)}
+              </td>
+              <td style={{ padding: '7px 8px', color: 'var(--text-3)' }}>
+                {formatTs(u.lastActiveAt)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
