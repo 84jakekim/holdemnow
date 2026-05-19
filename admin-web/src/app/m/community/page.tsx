@@ -23,7 +23,7 @@ const CATEGORIES: CategoryCard[] = [
     id: 'jobs',
     emoji: '💼',
     title: '구인',
-    subtitle: '매장이 직접 올린 채용 공고',
+    subtitle: '홀덤펍 채용 공고',
     href: '/m/community/jobs',
     accentColor: '#FF1F8F',
   },

@@ -1094,7 +1094,6 @@ function DailyPostsFeed() {
           <div className="text-[17px] font-extrabold tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
             <span>오늘의 매장 소식</span>
           </div>
-          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>매장이 직접 올린 24시간 한정 소식</div>
         </div>
       </div>
       {pinned.length > 0 && <div className="px-4 mb-4"><PinnedCarousel items={pinned} /></div>}
@@ -1156,11 +1155,9 @@ function PinnedBanner({ post }: { post: PinnedPost }) {
         <div className="relative w-full" style={{ aspectRatio: '21/9', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt={post.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-          <span className="absolute top-2 left-2 text-[10px] font-extrabold rounded-full px-2 py-0.5" style={{ background: 'var(--brand)', color: '#fff' }}>📌 본사 공지</span>
         </div>
       )}
       <div className="px-4 py-3">
-        {!photo && <span className="inline-block text-[10px] font-extrabold rounded-full px-2 py-0.5 mb-2" style={{ background: 'var(--brand)', color: '#fff' }}>📌 본사 공지</span>}
         <div className="text-[15px] font-extrabold mb-1 line-clamp-2" style={{ color: 'var(--text-1)' }}>{post.title}</div>
         {post.body && <div className="text-[12px] line-clamp-2" style={{ color: 'var(--text-2)' }}>{post.body}</div>}
         {post.ctaLabel && <div className="text-[13px] font-bold mt-2" style={{ color: 'var(--brand)' }}>{post.ctaLabel} ›</div>}
