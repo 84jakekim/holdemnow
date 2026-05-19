@@ -17,6 +17,9 @@ export default function HotYoutubersScroll() {
 
   if (!loaded || youtubers.length === 0) return null;
 
+  // 6개 이상이면 더 진한 페이드
+  const fadeWidth = youtubers.length >= 6 ? 'w-12' : 'w-8';
+
   return (
     <section aria-label="인기 유튜버 채널" className="py-5">
       {/* 섹션 헤더 */}
@@ -34,12 +37,21 @@ export default function HotYoutubersScroll() {
         </div>
       </div>
 
-      {/* 원형 아바타 가로 스크롤 */}
-      <div className="pl-4 flex gap-4 overflow-x-auto scrollbar-none pb-1">
-        {youtubers.map((yt) => (
-          <YoutuberAvatarItem key={yt.id} youtuber={yt} />
-        ))}
-        <div className="w-3 flex-shrink-0" aria-hidden="true" />
+      {/* 원형 아바타 가로 스크롤 — 페이드 오버레이용 relative */}
+      <div className="relative">
+        <div className="pl-4 flex gap-4 overflow-x-auto scrollbar-none pb-1">
+          {youtubers.map((yt) => (
+            <YoutuberAvatarItem key={yt.id} youtuber={yt} />
+          ))}
+          <div className="w-3 flex-shrink-0" aria-hidden="true" />
+        </div>
+
+        {/* 우측 페이드 오버레이 — 6개 이상이면 더 진하게 */}
+        <div
+          className={`absolute right-0 top-0 bottom-1 ${fadeWidth} pointer-events-none`}
+          style={{ background: 'linear-gradient(to right, transparent, var(--bg))' }}
+          aria-hidden="true"
+        />
       </div>
     </section>
   );

@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { subscribeHotVideos, type HotYoutubeVideo } from '@/lib/homeContent';
 import { youtubeThumbnailUrl } from '@/lib/youtube';
 
 export default function HotVideosCarousel() {
   const [videos, setVideos] = useState<HotYoutubeVideo[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const unsub = subscribeHotVideos(
@@ -16,7 +18,24 @@ export default function HotVideosCarousel() {
     return unsub;
   }, []);
 
+  // 스크롤 위치로 활성 인덱스 추적
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const cardWidth = 180 + 12; // w-[180px] + gap-3(12px)
+      const newIdx = Math.round(el.scrollLeft / cardWidth);
+      setActiveIdx(Math.min(newIdx, videos.length - 1));
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [videos.length]);
+
   if (!loaded || videos.length === 0) return null;
+
+  const showDots = videos.length >= 2 && videos.length <= 4;
 
   return (
     <section aria-label="인기 유튜브 영상" className="py-5">
@@ -36,13 +55,53 @@ export default function HotVideosCarousel() {
         </div>
       </div>
 
-      {/* 가로 스크롤 카드 */}
-      <div className="pl-4 flex gap-3 overflow-x-auto scrollbar-none pb-2">
-        {videos.map((v) => (
-          <VideoCard key={v.id} video={v} />
-        ))}
-        <div className="w-3 flex-shrink-0" aria-hidden="true" />
+      {/* 가로 스크롤 래퍼 — 페이드 오버레이용 relative */}
+      <div className="relative">
+        {/* 가로 스크롤 카드 */}
+        <div
+          ref={scrollRef}
+          className="pl-4 flex gap-3 overflow-x-auto scrollbar-none pb-2"
+          style={{ scrollSnapType: 'x mandatory' }}
+        >
+          {videos.map((v) => (
+            <VideoCard key={v.id} video={v} />
+          ))}
+          <div className="w-3 flex-shrink-0" aria-hidden="true" />
+        </div>
+
+        {/* 우측 페이드 오버레이 */}
+        <div
+          className="absolute right-0 top-0 bottom-2 w-8 pointer-events-none"
+          style={{ background: 'linear-gradient(to right, transparent, var(--bg))' }}
+          aria-hidden="true"
+        />
       </div>
+
+      {/* 점 인디케이터 — 2개 이상 4개 이하 */}
+      {showDots && (
+        <div
+          className="flex justify-center gap-1.5 mt-2"
+          role="tablist"
+          aria-label="영상 인디케이터"
+        >
+          {videos.map((_, i) => (
+            <span
+              key={i}
+              role="tab"
+              aria-selected={i === activeIdx}
+              aria-label={`${i + 1}번째 영상`}
+              className="block rounded-full transition-all duration-200"
+              style={{
+                width: i === activeIdx ? 14 : 6,
+                height: 6,
+                background: i === activeIdx
+                  ? 'var(--brand)'
+                  : 'rgba(255,31,143,0.30)',
+              }}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -57,11 +116,12 @@ function VideoCard({ video }: { video: HotYoutubeVideo }) {
       href={youtubeUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="w-[200px] flex-shrink-0 block rounded-2xl overflow-hidden transition active:scale-95"
+      className="w-[180px] flex-shrink-0 block rounded-2xl overflow-hidden transition active:scale-95"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
         boxShadow: 'var(--shadow-card)',
+        scrollSnapAlign: 'start',
       }}
       aria-label={`${video.title} 유튜브에서 보기`}
     >

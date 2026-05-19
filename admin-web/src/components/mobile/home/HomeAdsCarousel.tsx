@@ -1,21 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { subscribeHomeAds, type HomeAd } from '@/lib/homeContent';
 
 interface Props {
   position: 'top' | 'bottom';
 }
 
-const AUTO_ROTATE_MS = 4000;
+const AUTO_ROTATE_MS = 5000;
+const RESUME_DELAY_MS = 5000;
 
 export default function HomeAdsCarousel({ position }: Props) {
   const [ads, setAds] = useState<HomeAd[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [idx, setIdx] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const [inView, setInView] = useState(true);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const unsub = subscribeHomeAds(
@@ -38,129 +41,173 @@ export default function HomeAdsCarousel({ position }: Props) {
     return () => ob.disconnect();
   }, []);
 
-  // 자동 회전
+  // 스크롤로 인디케이터 동기화
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || ads.length < 2) return;
+
+    const handleScroll = () => {
+      const cardWidth = el.clientWidth;
+      if (cardWidth === 0) return;
+      const newIdx = Math.round(el.scrollLeft / cardWidth);
+      setActiveIdx(Math.min(newIdx, ads.length - 1));
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [ads.length]);
+
+  // 특정 인덱스로 스크롤
+  const scrollTo = useCallback((i: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
+    setActiveIdx(i);
+  }, []);
+
+  // 자동 슬라이드
   useEffect(() => {
     if (ads.length < 2 || !inView || paused) return;
-    const t = setInterval(() => setIdx((i) => (i + 1) % ads.length), AUTO_ROTATE_MS);
+    const t = setInterval(() => {
+      setActiveIdx((prev) => {
+        const next = (prev + 1) % ads.length;
+        scrollTo(next);
+        return next;
+      });
+    }, AUTO_ROTATE_MS);
     return () => clearInterval(t);
-  }, [ads.length, inView, paused]);
+  }, [ads.length, inView, paused, scrollTo]);
+
+  // 사용자 조작 후 일시 정지 — RESUME_DELAY_MS 뒤 재개
+  const handleUserInteraction = useCallback(() => {
+    setPaused(true);
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    resumeTimer.current = setTimeout(() => setPaused(false), RESUME_DELAY_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    };
+  }, []);
 
   if (!loaded || ads.length === 0) return null;
 
-  const safeIdx = Math.min(idx, ads.length - 1);
-  const current = ads[safeIdx];
   const isTop = position === 'top';
 
-  const handleClick = () => {
-    if (!current.linkUrl) return;
-    if (current.linkType === 'external') {
-      window.open(current.linkUrl, '_blank', 'noopener,noreferrer');
+  const handleAdClick = (ad: HomeAd) => {
+    if (!ad.linkUrl) return;
+    if (ad.linkType === 'external') {
+      window.open(ad.linkUrl, '_blank', 'noopener,noreferrer');
     } else {
-      window.location.href = current.linkUrl;
+      window.location.href = ad.linkUrl;
     }
   };
 
   return (
     <div
       ref={containerRef}
-      onTouchStart={() => setPaused(true)}
-      onPointerDown={() => setPaused(true)}
       className={isTop ? 'mb-0' : 'px-4 pb-5'}
     >
-      {/* 광고 카드 */}
-      <button
-        onClick={handleClick}
-        disabled={!current.linkUrl}
-        className="w-full block transition active:opacity-90 text-left"
-        aria-label={current.title ?? '광고 보기'}
+      {/* 가로 스크롤 컨테이너 */}
+      <div
+        ref={scrollRef}
+        className={`flex overflow-x-auto scrollbar-none ${isTop ? 'rounded-none' : 'rounded-2xl'}`}
+        style={{ scrollSnapType: 'x mandatory' }}
+        onTouchStart={handleUserInteraction}
+        onPointerDown={handleUserInteraction}
+        aria-label="광고 슬라이드"
       >
-        <div
-          className={`relative w-full overflow-hidden ${isTop ? 'rounded-none' : 'rounded-2xl'}`}
-          style={{
-            aspectRatio: isTop ? '16/9' : '21/9',
-            background: isTop ? '#0A0A0F' : 'var(--surface-2)',
-          }}
-        >
-          {/* 배경 이미지 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={current.imageUrl}
-            alt={current.title ?? '광고'}
-            className="absolute inset-0 w-full h-full object-cover"
-            loading="lazy"
-          />
-
-          {/* 상단: 어두운 오버레이 (콘텐츠 구분) */}
-          {isTop && (
+        {ads.map((ad, i) => (
+          <button
+            key={ad.id ?? i}
+            onClick={() => handleAdClick(ad)}
+            disabled={!ad.linkUrl}
+            className="flex-shrink-0 w-full block transition active:opacity-90 text-left"
+            style={{ scrollSnapAlign: 'start' }}
+            aria-label={ad.title ?? '광고 보기'}
+          >
             <div
-              className="absolute inset-0"
-              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)' }}
-            />
-          )}
+              className="relative w-full overflow-hidden"
+              style={{
+                aspectRatio: isTop ? '16/9' : '21/9',
+                background: isTop ? '#0A0A0F' : 'var(--surface-2)',
+              }}
+            >
+              {/* 배경 이미지 */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={ad.imageUrl}
+                alt={ad.title ?? '광고'}
+                className="absolute inset-0 w-full h-full object-cover"
+                loading="lazy"
+              />
 
-          {/* 광고 텍스트 오버레이 (제목/부제 있을 때) */}
-          {(current.title || current.subtitle) && (
-            <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
-              {current.title && (
+              {/* 상단: 어두운 오버레이 (콘텐츠 구분) */}
+              {isTop && (
                 <div
-                  className="text-[16px] font-extrabold text-white leading-tight"
-                  style={{ textShadow: '0 1px 8px rgba(0,0,0,0.60)' }}
-                >
-                  {current.title}
+                  className="absolute inset-0"
+                  style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)' }}
+                />
+              )}
+
+              {/* 광고 텍스트 오버레이 */}
+              {(ad.title || ad.subtitle) && (
+                <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+                  {ad.title && (
+                    <div
+                      className="text-[16px] font-extrabold text-white leading-tight"
+                      style={{ textShadow: '0 1px 8px rgba(0,0,0,0.60)' }}
+                    >
+                      {ad.title}
+                    </div>
+                  )}
+                  {ad.subtitle && (
+                    <div
+                      className="text-[12px] mt-1 text-white/80 leading-snug"
+                      style={{ textShadow: '0 1px 4px rgba(0,0,0,0.50)' }}
+                    >
+                      {ad.subtitle}
+                    </div>
+                  )}
                 </div>
               )}
-              {current.subtitle && (
-                <div
-                  className="text-[12px] mt-1 text-white/80 leading-snug"
-                  style={{ textShadow: '0 1px 4px rgba(0,0,0,0.50)' }}
+
+              {/* 광고 라벨 — 우상단 */}
+              <div className="absolute top-2 right-2 z-10">
+                <span
+                  className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                  style={{ background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.7)' }}
                 >
-                  {current.subtitle}
+                  광고
+                </span>
+              </div>
+
+              {/* 인디케이터 점 — 카드 우하단 (이미지 위) */}
+              {ads.length > 1 && (
+                <div
+                  className="absolute bottom-3 right-3 z-10 flex gap-1"
+                  aria-hidden="true"
+                >
+                  {ads.map((_, dotIdx) => (
+                    <span
+                      key={dotIdx}
+                      className="block rounded-full transition-all duration-200"
+                      style={{
+                        width: dotIdx === activeIdx ? 14 : 6,
+                        height: 6,
+                        background: dotIdx === activeIdx
+                          ? 'var(--brand)'
+                          : 'rgba(255,255,255,0.50)',
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </div>
-          )}
-
-          {/* 광고 라벨 — 우상단 */}
-          <div className="absolute top-2 right-2 z-10">
-            <span
-              className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-              style={{ background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.7)' }}
-            >
-              광고
-            </span>
-          </div>
-        </div>
-      </button>
-
-      {/* 인디케이터 — 2개 이상일 때 */}
-      {ads.length > 1 && (
-        <div
-          className="flex justify-center gap-1.5 mt-2"
-          role="tablist"
-          aria-label="광고 인디케이터"
-        >
-          {ads.map((_, i) => (
-            <button
-              key={i}
-              role="tab"
-              aria-selected={i === safeIdx}
-              aria-label={`${i + 1}번째 광고`}
-              onClick={() => { setPaused(true); setIdx(i); }}
-              className="flex items-center justify-center"
-              style={{ width: 24, height: 20 }}
-            >
-              <span
-                className="block rounded-full transition-all"
-                style={{
-                  width: i === safeIdx ? 14 : 4,
-                  height: 4,
-                  background: i === safeIdx ? 'var(--brand)' : 'rgba(255,31,143,0.25)',
-                }}
-              />
-            </button>
-          ))}
-        </div>
-      )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
