@@ -7,7 +7,8 @@ import AuthGate from '@/components/AuthGate';
 
 /* ============================================================
  * 탭 정의 — 5탭 (대회 → 토너 흡수, 즐겨찾기 유지)
- * 활성: 핑크 텍스트 + 핑크 알약 배경 (카카오/토스 스타일)
+ * 활성: 핑크 아이콘·라벨 + 상단 underline indicator
+ * 컨테이너: Floating Glass Pill (Soft Pink + Glass)
  * ========================================================== */
 const TABS = [
   {
@@ -88,7 +89,7 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     <AuthGate>
       <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
         <div className="max-w-md mx-auto min-h-screen relative" style={{ background: 'var(--bg)' }}>
-          <div className={isFullscreen ? '' : 'pb-[68px]'}>{children}</div>
+          <div className={isFullscreen ? '' : 'pb-[88px]'}>{children}</div>
           {!isFullscreen && <TabBar pathname={pathname} />}
           <NoticePopup />
         </div>
@@ -100,56 +101,62 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
 function TabBar({ pathname }: { pathname: string }) {
   return (
     <nav
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-40 tabbar-bg"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-40"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="메인 내비게이션"
     >
-      <div className="flex items-stretch h-[56px]">
-        {TABS.map((t) => {
-          const active =
-            pathname === t.href ||
-            (t.href !== '/m' && pathname.startsWith(t.href)) ||
-            // /m/discover는 /m/find로 리다이렉트되므로 find 탭 활성 처리
-            (t.id === 'find' && pathname.startsWith('/m/discover'));
+      {/* Floating Glass Pill — 양옆·아래 12px 여백, rounded-full */}
+      <div className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden">
+        <div className="flex items-stretch h-[60px] px-1">
+          {TABS.map((t) => {
+            const active =
+              pathname === t.href ||
+              (t.href !== '/m' && pathname.startsWith(t.href)) ||
+              // /m/discover는 /m/find로 리다이렉트되므로 find 탭 활성 처리
+              (t.id === 'find' && pathname.startsWith('/m/discover'));
 
-          return (
-            <Link
-              key={t.id}
-              href={t.href}
-              aria-label={t.label}
-              aria-current={active ? 'page' : undefined}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors relative"
-              style={{ color: active ? '#FFFFFF' : 'var(--text-3)' }}
-            >
-              {/* 활성 탭: 핑크 솔리드 알약 배경 (브랜드 컨셉 띠 v5) */}
-              {active && (
+            return (
+              <Link
+                key={t.id}
+                href={t.href}
+                aria-label={t.label}
+                aria-current={active ? 'page' : undefined}
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200 active:scale-90"
+                style={{ color: active ? 'var(--brand)' : 'var(--text-3)' }}
+              >
+                {/* 활성 indicator — 상단 짧은 underline (4×3px 핫핑크) */}
                 <span
-                  className="absolute top-1.5 left-1/2 -translate-x-1/2 rounded-full pointer-events-none tabbar-active-pill"
+                  className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-full pointer-events-none transition-all duration-200"
                   style={{
-                    width: 44,
-                    height: 28,
+                    width: active ? 28 : 0,
+                    background: 'var(--brand)',
+                    opacity: active ? 1 : 0,
                   }}
                   aria-hidden="true"
                 />
-              )}
-              <span
-                className="relative z-10"
-                style={{ color: active ? '#FFFFFF' : undefined }}
-              >
-                {t.icon(active)}
-              </span>
-              <span
-                className="relative z-10 text-[10px] leading-none"
-                style={{
-                  fontWeight: active ? 700 : 500,
-                  color: active ? '#FFFFFF' : undefined,
-                }}
-              >
-                {t.label}
-              </span>
-            </Link>
-          );
-        })}
+                {/* 아이콘 — 활성 시 살짝 위로 떠오르고 scale-up */}
+                <span
+                  className="transition-transform duration-200"
+                  style={{
+                    transform: active
+                      ? 'translateY(-2px) scale(1.05)'
+                      : 'translateY(0) scale(1)',
+                  }}
+                >
+                  {t.icon(active)}
+                </span>
+                <span
+                  className="text-[11px] leading-none transition-all duration-200"
+                  style={{
+                    fontWeight: active ? 700 : 500,
+                  }}
+                >
+                  {t.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

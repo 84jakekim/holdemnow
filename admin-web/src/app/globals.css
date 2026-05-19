@@ -282,6 +282,27 @@ html, body {
   border-top: 1px solid var(--border);
 }
 
+/* ── 모바일 탭바 — Floating Glass Pill (Soft Pink + Glass) ─
+ * 떠 있는 알약 컨테이너. 라이트는 흰색 글래스, 다크는 다크 글래스.
+ * 핑크 미세 테두리로 브랜드 톤 유지.
+ */
+.tabbar-glass {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 31, 143, 0.10);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04);
+}
+html[data-theme="dark"] .tabbar-glass {
+  background: rgba(26, 31, 42, 0.78);
+  border: 1px solid rgba(255, 31, 143, 0.20);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
 /* ── Shimmer 스켈레톤 (라이트) ─────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: -300px 0; }
