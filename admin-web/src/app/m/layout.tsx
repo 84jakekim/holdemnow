@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import NoticePopup from '@/components/mobile/NoticePopup';
 import AuthGate from '@/components/AuthGate';
+import { useAuth } from '@/lib/hooks';
+import { useHeartbeat } from '@/lib/heartbeat';
 
 /* ============================================================
  * 탭 정의 — 5탭 (대회 → 토너 흡수, 즐겨찾기 유지)
@@ -78,6 +80,10 @@ const TABS = [
 ] as const;
 
 export default function MobileLayout({ children }: { children: React.ReactNode }) {
+  const authState = useAuth();
+  const uid = authState.status === 'authenticated' ? authState.user.uid : null;
+  useHeartbeat(uid);
+
   const pathname = usePathname() ?? '';
   // 풀스크린 페이지 — 탭바 숨김
   const isFullscreen =
