@@ -303,6 +303,11 @@ function ReservationCard({ reservation: r, busy, onApprove, onRejectOpen }: Card
           {' · '}
           <span>{r.partySize}명</span>
         </div>
+        {r.participatingGame && (
+          <div className="text-[12px] mt-1 font-bold" style={{ color: 'var(--brand)' }}>
+            🎮 참가 게임: {r.participatingGame}
+          </div>
+        )}
       </div>
 
       {/* 사용자 메모 */}
