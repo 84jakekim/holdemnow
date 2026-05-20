@@ -258,7 +258,9 @@ service cloud.firestore {
     // 가입 시 본인 uid로 생성, 분실 복구 시 read (이메일 알아야 조회 가능).
     // platform_admin도 read 허용 (고객 지원용).
     match /passwordRecovery/{emailKey} {
-      allow read: if isSignedIn();     // 이메일 키를 알아야 조회 가능
+      // anonymous(비번 분실 사용자)도 read 필수 — 이메일 키 알아야 조회 가능.
+      // 노출 정보: passwordHint + recoveryLast4(4자리). 비번 자체는 Firebase Auth hash로 별도 보호.
+      allow read: if true;
       allow create: if isSignedIn();   // 가입 시 자신의 정보 생성
       allow update: if isSignedIn();   // 비밀번호 변경 시 본인이 갱신
       allow delete: if false;

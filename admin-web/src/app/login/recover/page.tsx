@@ -61,15 +61,23 @@ export default function RecoverPage() {
 
       const info = await fetchRecoveryInfo(email);
       if (!info) {
-        setError('해당 이메일로 가입된 매장·대회사 계정을 찾을 수 없습니다.');
+        // passwordRecovery doc 없음 — 가입 시 힌트 미설정 또는 OAuth 가입자.
+        // 직접 Firebase 표준 reset 메일 발송 fallback.
+        try {
+          await sendPasswordReset(email);
+          setPhase('done');
+        } catch {
+          setError('해당 이메일로 가입된 계정을 찾을 수 없거나, 재설정 메일 발송에 실패했습니다.');
+        }
         setLoading(false);
         return;
       }
       setHint(info.hint);
       setStoredLast4(info.recoveryLast4);
       setPhase('verify');
-    } catch {
-      setError('조회 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`조회 중 오류가 발생했습니다: ${msg}`);
     } finally {
       setLoading(false);
     }
