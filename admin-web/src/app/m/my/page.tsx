@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import LogoutConfirmSheet from '@/components/mobile/LogoutConfirmSheet';
 import RecentVisitsSection from '@/components/mobile/my/RecentVisitsSection';
-import { doc, setDoc, onSnapshot, serverTimestamp, collection } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp, collection, collectionGroup, query, where } from 'firebase/firestore';
 import { enableNotifications, getNotificationPermission, isMessagingSupported } from '@/lib/messaging';
 import { moderateText, checkWriteRateLimit } from '@/lib/moderation';
 
@@ -41,6 +41,7 @@ export default function MyPage() {
   const [favCount, setFavCount] = useState(0);
   const [seriesSubCount, setSeriesSubCount] = useState(0);
   const [interestCount, setInterestCount] = useState(0);
+  const [reservationActiveCount, setReservationActiveCount] = useState(0);
   const [logoutSheetOpen, setLogoutSheetOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [pushTokenCount, setPushTokenCount] = useState<number | null>(null);
@@ -55,7 +56,17 @@ export default function MyPage() {
     const u2 = onSnapshot(collection(db, 'users', uid, 'seriesSubscriptions'), (s) => setSeriesSubCount(s.size));
     const u3 = onSnapshot(collection(db, 'users', uid, 'interests'), (s) => setInterestCount(s.size));
     const u4 = onSnapshot(collection(db, 'users', uid, 'fcmTokens'), (s) => setPushTokenCount(s.size));
-    return () => { u1(); u2(); u3(); u4(); };
+    // 활성 예약(pending·confirmed) 카운트 — collectionGroup
+    const u5 = onSnapshot(
+      query(
+        collectionGroup(db, 'reservations'),
+        where('authorUid', '==', uid),
+        where('status', 'in', ['pending', 'confirmed']),
+      ),
+      (s) => setReservationActiveCount(s.size),
+      () => setReservationActiveCount(0),
+    );
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, [authState]);
 
   // 브라우저 알림 권한·지원 여부 확인 (브라우저별 동적)
@@ -199,10 +210,11 @@ export default function MyPage() {
       </div>
 
       {/* ── 통계 ── */}
-      <div className="px-4 py-5 grid grid-cols-3 gap-2" style={{ borderBottom: '6px solid var(--surface-2)' }}>
+      <div className="px-4 py-5 grid grid-cols-4 gap-2" style={{ borderBottom: '6px solid var(--surface-2)' }}>
         {[
           { label: '즐겨찾기', value: favCount, go: '/m/favorites' },
           { label: '관심 토너', value: interestCount, go: '/m/interests' },
+          { label: '내 예약', value: reservationActiveCount, go: '/m/reservations' },
           { label: '시리즈 구독', value: seriesSubCount, go: '/m/subscriptions' },
         ].map((k) => (
           <button
@@ -275,6 +287,7 @@ export default function MyPage() {
         {[
           { label: '즐겨찾기 매장', go: '/m/favorites', icon: '♡' },
           { label: '관심 토너', go: '/m/interests', icon: '★' },
+          { label: '내 예약', go: '/m/reservations', icon: '📅' },
           { label: '시리즈 구독', go: '/m/subscriptions', icon: '◎' },
           { label: '내가 쓴 리뷰', go: '/m/my/reviews', icon: '✎' },
           { label: '도움말·문의', tag: '', icon: '?' },

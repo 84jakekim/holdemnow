@@ -34,6 +34,7 @@ import {
 } from '@/lib/reviews';
 import ReviewWriteSheet from '@/components/mobile/ReviewWriteSheet';
 import ReportReviewSheet from '@/components/mobile/ReportReviewSheet';
+import ReservationSheet from '@/components/mobile/ReservationSheet';
 import { recordRecentVisit } from '@/lib/recentVisits';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -77,6 +78,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const [reservationOpen, setReservationOpen] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
@@ -699,6 +701,13 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           setReviewEditing(null);
           setReviewWriteOpen(true);
         }}
+        onReserveClick={() => {
+          if (!currentUid) {
+            signInWithPopup(auth, new GoogleAuthProvider()).catch(() => {});
+            return;
+          }
+          setReservationOpen(true);
+        }}
         onEdit={(r) => { setReviewEditing(r); setReviewWriteOpen(true); }}
         onDelete={(r) => {
           if (!window.confirm('리뷰를 삭제할까요?')) return;
@@ -722,6 +731,18 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           authorName={authState.status === 'authenticated' ? (authState.user.displayName ?? authState.user.email ?? '플레이어') : '플레이어'}
           existingReview={reviewEditing}
           onClose={() => { setReviewWriteOpen(false); setReviewEditing(null); }}
+        />
+      )}
+
+      {/* 예약 신청 시트 */}
+      {reservationOpen && currentUid && (
+        <ReservationSheet
+          storeId={storeId}
+          storeName={store.name}
+          authorUid={currentUid}
+          authorName={authState.status === 'authenticated' ? (authState.user.displayName ?? authState.user.email ?? '플레이어') : '플레이어'}
+          defaultPhone={(userDoc as { phone?: string } | null)?.phone ?? ''}
+          onClose={() => setReservationOpen(false)}
         />
       )}
 
@@ -1027,6 +1048,7 @@ function ReviewsSection({
   onToggleExpand,
   currentUid,
   onWriteClick,
+  onReserveClick,
   onEdit,
   onDelete,
   onReport,
@@ -1043,6 +1065,7 @@ function ReviewsSection({
   onToggleExpand: () => void;
   currentUid: string | null;
   onWriteClick: () => void;
+  onReserveClick: () => void;
   onEdit: (r: Review) => void;
   onDelete: (r: Review) => void;
   onReport: (r: Review) => void;
@@ -1145,13 +1168,31 @@ function ReviewsSection({
         </div>
       </div>
 
+      {/* 예약하기 버튼 — 핫핑크 큰 버튼 */}
+      <button
+        onClick={onReserveClick}
+        className="w-full h-14 flex items-center justify-center gap-2 rounded-2xl font-extrabold text-[15px] transition active:scale-[0.98] mb-3 text-white"
+        style={{
+          background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BB5 100%)',
+          boxShadow: '0 6px 18px rgba(255,31,143,0.35)',
+        }}
+        aria-label={currentUid ? `${storeName} 예약하기` : '로그인하고 예약하기'}
+      >
+        <span aria-hidden="true" style={{ fontSize: 18 }}>📅</span>
+        {currentUid ? '예약하기' : '로그인하고 예약하기'}
+      </button>
+
       {/* 리뷰 쓰기 버튼 */}
       <button
         onClick={onWriteClick}
-        className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl font-extrabold text-[14px] transition active:scale-[0.98] mb-4 text-white"
-        style={{ background: '#FF1F8F', boxShadow: '0 4px 12px rgba(255,31,143,0.30)' }}
+        className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl font-extrabold text-[14px] transition active:scale-[0.98] mb-4"
+        style={{
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border)',
+          color: 'var(--text-1)',
+        }}
       >
-        <span aria-hidden="true" style={{ fontSize: 16 }}>✎</span>
+        <span aria-hidden="true" style={{ fontSize: 16, color: '#FF1F8F' }}>✎</span>
         {currentUid ? '리뷰 쓰기' : '로그인하고 리뷰 쓰기'}
       </button>
 

@@ -256,7 +256,7 @@ interface RateLimitDoc {
  */
 export async function checkWriteRateLimit(
   uid: string,
-  namespace: 'review' | 'community' | 'profile',
+  namespace: 'review' | 'community' | 'profile' | 'reservation',
   limit: number = DEFAULT_RATE_LIMIT,
   windowMs: number = DEFAULT_RATE_WINDOW_MS,
 ): Promise<boolean> {
