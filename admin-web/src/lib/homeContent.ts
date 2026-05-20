@@ -134,14 +134,13 @@ export function subscribeHotVideos(
         .sort((a, b) => {
           // manual 먼저 (source !== 'auto') → order ASC
           // auto 다음 → score DESC
-          // top 20 slice는 호출부에서 처리
           const aManual = a.source !== 'auto';
           const bManual = b.source !== 'auto';
           if (aManual !== bManual) return aManual ? -1 : 1;
           if (aManual) return (a.order ?? 0) - (b.order ?? 0);
           return (b.score ?? 0) - (a.score ?? 0);
         })
-        .slice(0, 20);
+        .slice(0, 10);
       onData(videos);
     },
     (err) => onError?.(err),
