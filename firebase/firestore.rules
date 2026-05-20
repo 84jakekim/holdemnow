@@ -116,6 +116,35 @@ service cloud.firestore {
           && (isStoreOwner(storeId) || isStoreMember(storeId) || isPlatformAdmin());
       }
 
+      // 매장 예약 (reservations) — 본인 또는 매장 owner/member만 read.
+      // - create: 본인 uid + storeId 일치, status='pending' 강제, partySize 1~20 검증.
+      // - update: 본인은 status='cancelled'로만 (취소), 매장 owner/member는 운영 상태 갱신.
+      // - delete: platform_admin만 — 매장이 함부로 못 지우게 이력 보존.
+      // collectionGroup('reservations') 쿼리는 별도 와일드카드 규칙에서 본인 read 허용.
+      match /reservations/{reservationId} {
+        allow read: if isSignedIn() && (
+          resource.data.authorUid == request.auth.uid
+          || isStoreOwner(storeId)
+          || isStoreMember(storeId)
+          || isPlatformAdmin()
+        );
+        allow create: if isSignedIn()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.storeId == storeId
+          && request.resource.data.partySize is int
+          && request.resource.data.partySize >= 1
+          && request.resource.data.partySize <= 20
+          && request.resource.data.status == 'pending';
+        allow update: if isSignedIn() && (
+          (resource.data.authorUid == request.auth.uid
+            && request.resource.data.status == 'cancelled')
+          || isStoreOwner(storeId)
+          || isStoreMember(storeId)
+          || isPlatformAdmin()
+        );
+        allow delete: if isPlatformAdmin();
+      }
+
       // 방문 리뷰 — 누구나 read, 인증 사용자가 본인 명의로만 write.
       // 집계 필드(reviewCount/averageRating/ratingDistribution)는 Cloud Function이 자동 갱신.
       match /reviews/{reviewId} {
@@ -331,6 +360,13 @@ service cloud.firestore {
     // 내 리뷰 전체 보기(collectionGroup('reviews')) — 모든 매장 리뷰 누구나 read.
     match /{path=**}/reviews/{reviewId} {
       allow read: if true;
+    }
+    // 내 예약 전체 보기(collectionGroup('reservations')) — 본인 또는 platform_admin만 read.
+    // 매장 owner/member용 매장별 조회는 nested rule이 처리하며, 이 와일드카드는
+    // 사용자 본인 마이페이지(전 매장 자기 예약)와 본사 모니터링에 한정.
+    match /{path=**}/reservations/{reservationId} {
+      allow read: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isPlatformAdmin());
     }
 
     // ===== 본사 마케팅 캠페인 (platformCampaigns) =====

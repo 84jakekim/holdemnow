@@ -127,7 +127,7 @@ export default function RecentVisitsSection() {
 
   return (
     <section
-      aria-label="최근 방문 매장"
+      aria-label="최근 본 매장"
       className="py-5"
       style={{ borderBottom: '6px solid var(--surface-2)' }}
     >
@@ -137,7 +137,7 @@ export default function RecentVisitsSection() {
           <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
         </svg>
         <span className="text-[16px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-          최근 방문 매장
+          최근 본 매장
         </span>
         {visits.length > 0 && (
           <span
