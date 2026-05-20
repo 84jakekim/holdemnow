@@ -253,11 +253,12 @@ export function useLiveTimelineTick(
     const t = setInterval(() => setPos(computeTimelinePosition(session)), 1000);
     return () => clearInterval(t);
   }, [
+    // timeline 기반이라 levelEndsAt/levelSecondsLeft는 useEffect dep에서 제외 —
+    // cron이 매분 갱신하던 그 필드들이 dep에 있으면 setInterval 재시작 race로
+    // 타이머가 점프하는 현상이 발생함 (사용자 보고: 18:50→20:00 reset).
     session?.id,
     session?.status,
     session?.currentLevel,
-    session?.levelSecondsLeft,
-    session?.levelEndsAt?.toMillis(),
     session?.totalStartedAt?.toMillis(),
     session?.totalPausedMs,
     session?.pausedAt?.toMillis(),

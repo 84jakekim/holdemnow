@@ -166,33 +166,19 @@ export const autoAdvanceLevel = onSchedule(
         continue;
       }
 
-      // currentLevel이 일치하면 levelEndsAt 정도만 동기화 (idempotent)
-      const newEndsAt = admin.firestore.Timestamp.fromMillis(
-        Date.now() + pos.secondsLeft * 1000,
-      );
-
+      // 같은 레벨이면 doc update 아예 X — 클라이언트는 totalStartedAt 기반 timeline으로
+      // 매초 자체 계산하므로 levelEndsAt sync 불필요. 매분 doc update가 클라이언트
+      // useEffect 재실행을 일으켜 잠재적 race(타이머 점프) 원인이 됨.
       if ((data.currentLevel ?? 0) === pos.level) {
-        // 같은 레벨 — levelEndsAt이 너무 stale하면(>=10초 차이) 만 동기화
-        const curEndsMs = data.levelEndsAt?.toMillis() ?? 0;
-        const drift = Math.abs(curEndsMs - newEndsAt.toMillis());
-        if (drift < 10_000) continue; // 클라이언트가 보는 것과 거의 일치 — skip
-        await doc.ref.update({
-          levelEndsAt: newEndsAt,
-          levelSecondsLeft: pos.secondsLeft,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        synced++;
         continue;
       }
 
-      // 레벨 전환 — currentLevel/sb/bb/ante 갱신
+      // 레벨 전환만 doc update — currentLevel/sb/bb/ante 갱신 (levelEndsAt/levelSecondsLeft 제거)
       await doc.ref.update({
         currentLevel: pos.level,
         smallBlind: pos.sb,
         bigBlind: pos.bb,
         ante: pos.ante,
-        levelSecondsLeft: pos.secondsLeft,
-        levelEndsAt: newEndsAt,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       advanced++;
