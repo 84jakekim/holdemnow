@@ -173,175 +173,194 @@ export default function LiveFeedListPage() {
 }
 
 /* ============================================================
- * LIVE 카드 — 컴팩트 2단 레이아웃.
- * - 좌측 4px 핑크 라인 (브랜드 강조 / paused: 노랑 / finishing: 빨강)
- * - 흰 배경 + 토큰 기반 색상 (라이트·다크 자동 대응)
- * - 정보 한눈에: 매장·LIVE·거리·타이머 → 토너명·레벨 → 메트릭 inline
+ * LIVE 카드 — 컨셉 1 "Hero 타이머 + 좌측 토너 포스터"
+ *
+ * 디자인 의도:
+ * 배민 가게 카드처럼 좌측 토너 포스터(시각 앵커) + 우측 정보 블록.
+ * 타이머는 카드의 hero 요소로 mono 32px 큼지막하게 — 한눈에 인지.
+ * 핑크는 LIVE 점·곧종료 배지 두 곳만 절제. 다양한 포스터 컬러가
+ * 카드별 시각 다양성을 만들고, 메트릭은 하단 한 줄로 깔끔하게.
  * ========================================================== */
 
 function LiveCard({ session, distance, locality }: { session: LiveSession; distance?: number; locality?: string }) {
   const sec = useLiveCountdown(session);
   const isPaused = session.status === 'paused';
-  const lowTime = sec <= 10 && !isPaused;
+  const lowTime = sec <= 60 && !isPaused; // 1분 이내 임박 → 빨강
   const lateMin = computeLateRegMinutes(session, sec);
   const graceSec = computeFinishingGraceSec(session);
   const isFinishing = graceSec != null && graceSec > 0;
-  // 포스터 스타일은 후속 확장 여지를 위해 import 유지하되 본 컴파일러에는 미사용
-  void posterStyleFor;
+  const poster = posterStyleFor(session.posterStyle || 'poster-dark');
 
-  // 좌측 라인 컬러 — 상태별
-  const accentColor = isFinishing
-    ? 'var(--live, #ef4444)'
+  // 토너명 첫 글자(또는 첫 단어 한 글자) — 포스터 표시용
+  const posterChar = (() => {
+    const name = (session.tournamentName || '').trim();
+    if (!name) return 'T';
+    // 첫 단어의 첫 문자 (한글/영문 무관)
+    const firstWord = name.split(/\s+/)[0];
+    return firstWord.charAt(0);
+  })();
+
+  // 타이머 색 분기
+  const timerColor = isFinishing
+    ? 'var(--live, #E53E3E)'
     : isPaused
-      ? '#f59e0b'
-      : 'var(--brand, #FF1F8F)';
+      ? 'var(--gold, #F59E0B)'
+      : lowTime
+        ? 'var(--live, #E53E3E)'
+        : 'var(--text-1, #111827)';
+
+  // 타이머 펄스 — finishing 또는 1분 이내일 때만
+  const timerPulse = isFinishing || lowTime;
 
   return (
     <Link
       href={`/m/live/${session.id}`}
       onClick={() => bumpStoreMetric(session.storeId, 'liveOpens')}
-      className={`relative block rounded-2xl overflow-hidden active:scale-[0.99] transition ${isFinishing ? 'animate-pulse' : ''}`}
+      className="relative block rounded-[20px] overflow-hidden active:scale-[0.99]"
       style={{
         background: 'var(--surface-1, #ffffff)',
         border: '1px solid var(--border, #e5e7eb)',
+        boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06))',
+        transition: 'transform 80ms ease',
       }}
     >
-      {/* 좌측 4px 강조 라인 */}
-      <span
-        aria-hidden
-        className="absolute left-0 top-0 bottom-0 w-1"
-        style={{ background: accentColor }}
-      />
-
-      <div className="pl-4 pr-3.5 py-3">
-        {/* 1행 — LIVE 배지 · 매장명 (좌) / 거리 · 타이머 (우) */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            {isFinishing ? (
-              <span
-                className="text-[10px] font-extrabold tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
-                style={{ background: 'var(--live, #ef4444)', color: '#ffffff' }}
-              >
-                곧 종료
-              </span>
-            ) : isPaused ? (
-              <span className="text-[10px] font-extrabold tracking-wider flex-shrink-0" style={{ color: '#b45309' }}>
-                PAUSED
-              </span>
-            ) : (
-              <>
-                <span
-                  className="w-1.5 h-1.5 rounded-full animate-pulse flex-shrink-0"
-                  style={{ background: 'var(--live, #ef4444)' }}
-                />
-                <span
-                  className="text-[10px] font-extrabold tracking-wider flex-shrink-0"
-                  style={{ color: 'var(--live, #ef4444)' }}
-                >
-                  LIVE
-                </span>
-              </>
-            )}
+      <div className="flex gap-3.5 p-4">
+        {/* 좌측 — 토너 포스터 (시각 앵커) */}
+        <div
+          className="flex-shrink-0 w-[84px] h-[96px] rounded-[14px] flex flex-col items-center justify-center relative overflow-hidden"
+          style={{ background: poster.bg, color: poster.color }}
+          aria-hidden
+        >
+          {/* paused/finishing 상태 오버레이 (포스터 위) */}
+          {isPaused && (
             <span
-              className="text-[14px] font-extrabold truncate"
+              className="absolute top-1.5 right-1.5 text-[9px] font-extrabold tracking-wider px-1 py-[1px] rounded"
+              style={{ background: 'var(--gold, #F59E0B)', color: '#1A1A1A' }}
+            >
+              일시정지
+            </span>
+          )}
+          {isFinishing && (
+            <span
+              className="absolute top-1.5 right-1.5 text-[9px] font-extrabold tracking-wider px-1 py-[1px] rounded animate-pulse"
+              style={{ background: 'var(--live, #E53E3E)', color: '#ffffff' }}
+            >
+              곧 종료
+            </span>
+          )}
+          <div className="text-[34px] font-black leading-none" style={{ color: poster.color }}>
+            {posterChar}
+          </div>
+          <div
+            className="text-[9px] font-bold tracking-wider mt-1 opacity-80"
+            style={{ color: poster.color }}
+          >
+            TOURNEY
+          </div>
+        </div>
+
+        {/* 우측 — 정보 블록 */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* 상단 — LIVE 배지 + 매장명 */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-extrabold tracking-wider px-1.5 py-[2px] rounded-md flex-shrink-0"
+              style={{
+                background: 'rgba(229, 62, 62, 0.10)',
+                color: 'var(--live, #E53E3E)',
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full animate-pulse"
+                style={{ background: 'var(--live, #E53E3E)' }}
+              />
+              LIVE
+            </span>
+            <span
+              className="text-[15px] font-extrabold truncate"
               style={{ color: 'var(--text-1, #111827)' }}
             >
               {session.storeName}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {distance != null && (
-              <span className="text-[11px] font-medium" style={{ color: 'var(--text-3, #6b7280)' }}>
-                {formatDistance(distance)}
-              </span>
-            )}
-            <span
-              className={`font-mono text-[18px] font-extrabold leading-none ${lowTime ? '' : ''}`}
-              style={{
-                color: isFinishing
-                  ? 'var(--live, #ef4444)'
-                  : lowTime
-                    ? 'var(--live, #ef4444)'
-                    : isPaused
-                      ? '#b45309'
-                      : 'var(--text-1, #111827)',
-              }}
-            >
-              {isFinishing && graceSec != null ? fmtTime(graceSec) : fmtTime(sec)}
-            </span>
-          </div>
-        </div>
-
-        {/* 2행 — 지역 (있을 때만) */}
-        {locality && (
-          <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-3, #6b7280)' }}>
-            {locality}
-          </div>
-        )}
-
-        {/* 3행 — 토너명 + 레벨 */}
-        <div className="mt-2 flex items-center justify-between gap-2">
+          {/* 토너명 */}
           <div
-            className="text-[13px] font-bold truncate min-w-0 flex-1"
-            style={{ color: 'var(--text-1, #111827)' }}
+            className="text-[13px] font-medium truncate mt-1"
+            style={{ color: 'var(--text-2, #6B7280)' }}
           >
             {session.tournamentName}
           </div>
+
+          {/* hero 타이머 + 레벨/블라인드 */}
+          <div className="mt-2 flex items-baseline gap-2.5 min-w-0">
+            <span
+              className={`font-mono text-[30px] font-extrabold leading-none tabular-nums tracking-tight flex-shrink-0 ${timerPulse ? 'animate-pulse' : ''}`}
+              style={{ color: timerColor }}
+            >
+              {isFinishing && graceSec != null ? fmtTime(graceSec) : fmtTime(sec)}
+            </span>
+            <div className="flex flex-col min-w-0 leading-tight">
+              <span
+                className="text-[11px] font-extrabold"
+                style={{ color: 'var(--text-1, #111827)' }}
+              >
+                Lv {session.currentLevel}
+              </span>
+              <span
+                className="text-[10px] font-mono tabular-nums"
+                style={{ color: 'var(--text-3, #9CA3AF)' }}
+              >
+                {session.smallBlind}/{session.bigBlind}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 하단 메타 바 — 상금·인원·등록·지역·거리 */}
+      <div
+        className="px-4 py-2.5 flex items-center gap-2 text-[11px] flex-wrap"
+        style={{
+          background: 'var(--surface-2, #F3F4F6)',
+          borderTop: '1px solid var(--border-soft, rgba(0,0,0,0.06))',
+          color: 'var(--text-2, #6B7280)',
+        }}
+      >
+        {session.prizePool > 0 && (
+          <span className="font-mono font-bold" style={{ color: 'var(--text-1, #111827)' }}>
+            ₩{Math.floor(session.prizePool / 10000)}만 GTD
+          </span>
+        )}
+        {session.prizePool > 0 && <span aria-hidden style={{ color: 'var(--text-3, #9CA3AF)' }}>·</span>}
+        <span>
+          <span className="font-mono font-bold" style={{ color: 'var(--text-2, #6B7280)' }}>
+            {session.playersRemaining}
+          </span>
+          <span className="font-mono" style={{ color: 'var(--text-3, #9CA3AF)' }}>
+            /{session.totalPlayers}
+          </span>
+          명
+        </span>
+        <span aria-hidden style={{ color: 'var(--text-3, #9CA3AF)' }}>·</span>
+        {session.lateRegClosed ? (
+          <span style={{ color: 'var(--text-3, #9CA3AF)' }}>등록 마감</span>
+        ) : (
           <span
-            className="text-[11px] font-bold flex-shrink-0 px-1.5 py-0.5 rounded"
+            className={lateMin <= 5 ? 'font-bold' : ''}
             style={{
-              background: 'var(--surface-2, #f3f4f6)',
-              color: 'var(--text-2, #374151)',
+              color: lateMin <= 5 ? 'var(--live, #E53E3E)' : 'var(--text-2, #6B7280)',
             }}
           >
-            Lv {session.currentLevel}
+            등록 {lateMin}분
           </span>
-        </div>
-
-        {/* 4행 — 메트릭 inline (블라인드 · 인원 · 상금 · 등록) */}
-        <div
-          className="mt-1.5 flex items-center gap-1.5 text-[11px] flex-wrap"
-          style={{ color: 'var(--text-3, #6b7280)' }}
-        >
-          <span className="font-mono" style={{ color: 'var(--text-2, #374151)' }}>
-            {session.smallBlind}/{session.bigBlind}
-          </span>
-          <span aria-hidden>·</span>
-          <span>
-            <span className="font-mono font-bold" style={{ color: 'var(--text-2, #374151)' }}>
-              {session.playersRemaining}
-            </span>
-            <span className="font-mono">/{session.totalPlayers}</span>명
-          </span>
-          {session.prizePool > 0 && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="font-mono font-bold" style={{ color: 'var(--text-2, #374151)' }}>
-                ₩{Math.floor(session.prizePool / 10000)}만
-              </span>
-            </>
-          )}
-          <span aria-hidden>·</span>
-          {session.lateRegClosed ? (
-            <span style={{ color: 'var(--text-3, #6b7280)' }}>등록 마감</span>
-          ) : (
-            <span
-              className={lateMin <= 5 ? 'font-bold' : ''}
-              style={{
-                color: lateMin <= 5 ? 'var(--live, #ef4444)' : 'var(--text-3, #6b7280)',
-              }}
-            >
-              등록 {lateMin}분
-            </span>
-          )}
-          {session.buyIn > 0 && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="font-mono">바이인 ₩{session.buyIn.toLocaleString()}</span>
-            </>
-          )}
-        </div>
+        )}
+        {/* 우측 정렬 — 지역·거리 */}
+        <span className="ml-auto flex items-center gap-1.5" style={{ color: 'var(--text-3, #9CA3AF)' }}>
+          {locality && <span className="truncate max-w-[120px]">{locality}</span>}
+          {locality && distance != null && <span aria-hidden>·</span>}
+          {distance != null && <span className="font-mono">{formatDistance(distance)}</span>}
+        </span>
       </div>
     </Link>
   );
