@@ -20,8 +20,9 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { signOut } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { startKakaoLogin } from '@/lib/kakaoAuth';
 import { loginAsPlayerWithGoogle, getLoginIntent, clearLoginIntent } from '@/lib/auth';
@@ -52,6 +53,10 @@ function LoginPageInner() {
   const [showPw, setShowPw] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [wrongRoleInfo, setWrongRoleInfo] = useState<{
+    kind: 'store' | 'organizer' | 'platform_admin';
+    email: string;
+  } | null>(null);
 
   // AuthGate가 redirect할 때 붙여주는 `?next=/admin/...` 등 의도된 목적지 우선 존중.
   // 단, 권한 외 경로로의 오픈 리다이렉트 방지를 위해 안전 prefix만 허용.
@@ -67,14 +72,20 @@ function LoginPageInner() {
     if (authState.status !== 'authenticated') return;
     const uid = authState.user.uid;
 
+    const userEmail = authState.user.email ?? '(이메일 없음)';
+
     // 카카오 — 항상 player. userDoc 로딩이 끝나야 storeId 판정 가능.
     if (uid.startsWith('kakao:')) {
-      if (userDoc === undefined) return; // 로딩 중엔 라우팅 보류 (이게 빠져있어 /m으로 잘못 튕기던 버그)
-      if (userDoc && userDoc.storeId) {
-        router.replace(`/admin/${userDoc.storeId}`);
+      if (userDoc === undefined) return; // 로딩 중엔 라우팅 보류
+      if (userDoc?.storeId) {
+        setWrongRoleInfo({ kind: 'store', email: userEmail });
         return;
       }
-      // 카카오 사용자가 매장 사장이 아니면 — next가 안전 경로면 우선, 아니면 /m
+      if (userDoc?.organizerId) {
+        setWrongRoleInfo({ kind: 'organizer', email: userEmail });
+        return;
+      }
+      // 카카오 일반 사용자 — next가 안전 경로면 우선, 아니면 /m
       router.replace(isSafeNext ? nextParam : '/m');
       return;
     }
@@ -82,22 +93,22 @@ function LoginPageInner() {
     if (userDoc === undefined) return;
 
     if (userDoc) {
-      if (hasRole(userDoc, 'platform_admin') && !userDoc.storeId) {
-        router.replace(isSafeNext ? nextParam : '/platform');
+      // platform_admin — 일반 페이지 차단
+      if (hasRole(userDoc, 'platform_admin')) {
+        setWrongRoleInfo({ kind: 'platform_admin', email: userEmail });
         return;
       }
+      // 매장 사장 — 일반 페이지 차단
       if (userDoc.storeId) {
-        router.replace(`/admin/${userDoc.storeId}`);
+        setWrongRoleInfo({ kind: 'store', email: userEmail });
         return;
       }
+      // 대회사 — 일반 페이지 차단
       if (userDoc.organizerId) {
-        router.replace(`/organizer/${userDoc.organizerId}`);
+        setWrongRoleInfo({ kind: 'organizer', email: userEmail });
         return;
       }
-      if (userDoc.role === 'player' || userDoc.roles?.includes('player')) {
-        router.replace(isSafeNext ? nextParam : '/m');
-        return;
-      }
+      // 일반 사용자(player) — 정상 라우팅
       router.replace(isSafeNext ? nextParam : '/m');
       return;
     }
@@ -129,7 +140,7 @@ function LoginPageInner() {
       },
       { merge: true },
     ).catch(() => {});
-  }, [authState, userDoc, router]);
+  }, [authState, userDoc, router, isSafeNext, nextParam]);
 
   const handleKakaoLogin = async () => {
     try {
@@ -175,6 +186,63 @@ function LoginPageInner() {
       </main>
     );
   }
+  // 잘못된 역할 계정으로 로그인 — 차단 안내 카드
+  if (authState.status === 'authenticated' && wrongRoleInfo) {
+    const labels = {
+      store: {
+        title: '매장 사장 계정',
+        desc: '매장·대회사 로그인 페이지를 이용해 주세요.',
+        cta: '매장·대회사 로그인으로 이동',
+        href: '/login/business',
+      },
+      organizer: {
+        title: '대회사 계정',
+        desc: '매장·대회사 로그인 페이지를 이용해 주세요.',
+        cta: '매장·대회사 로그인으로 이동',
+        href: '/login/business',
+      },
+      platform_admin: {
+        title: '본사 관리자 계정',
+        desc: '본사 관리자 로그인 페이지를 이용해 주세요.',
+        cta: '본사 관리자 로그인으로 이동',
+        href: '/platform-login',
+      },
+    }[wrongRoleInfo.kind];
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+          <div className="text-4xl mb-3" aria-hidden="true">⚠️</div>
+          <p className="text-base font-extrabold text-gray-900 mb-2">
+            {labels.title}으로 로그인하셨습니다
+          </p>
+          <p className="text-xs text-gray-600 leading-relaxed mb-5">
+            이 페이지는 일반 사용자 전용입니다.<br />
+            <span className="font-medium text-gray-500">({wrongRoleInfo.email})</span><br />
+            {labels.desc}
+          </p>
+          <div className="flex flex-col gap-2">
+            <Link
+              href={labels.href}
+              className="block w-full px-4 py-3 rounded-xl text-white text-sm font-extrabold text-center"
+              style={{ background: '#FF1F8F' }}
+            >
+              {labels.cta}
+            </Link>
+            <button
+              onClick={async () => {
+                await signOut(auth);
+                setWrongRoleInfo(null);
+              }}
+              className="block w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition"
+            >
+              다른 계정으로 로그인
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (authState.status === 'authenticated') {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
