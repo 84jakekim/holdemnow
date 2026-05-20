@@ -56,6 +56,8 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [showPwModal, setShowPwModal] = useState(false);
   const { pref, change } = useTheme('light-default');
+  // 사운드 알림 훅은 early return 전에 호출 — Rules of Hooks
+  useReservationSoundAlert(storeId);
 
   if (authState.status === 'loading' || store === undefined) {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
@@ -94,9 +96,6 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   if (!isOwner && !isPlatformAdmin) {
     return <AdminAccessDenied isLoggedIn myStoreId={userDoc?.storeId ?? null} />;
   }
-
-  // 사운드 알림 훅 (마운트 시 활성)
-  useReservationSoundAlert(storeId);
 
   const isPending = store.status === 'pending';
   // platform_admin은 심사 차원에서 모든 메뉴 접근 가능. owner+pending만 메뉴 잠금.
