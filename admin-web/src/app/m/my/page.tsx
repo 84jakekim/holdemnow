@@ -9,6 +9,7 @@ import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import LogoutConfirmSheet from '@/components/mobile/LogoutConfirmSheet';
 import { doc, setDoc, onSnapshot, serverTimestamp, collection } from 'firebase/firestore';
 import { enableNotifications, getNotificationPermission, isMessagingSupported } from '@/lib/messaging';
+import { moderateText, checkWriteRateLimit } from '@/lib/moderation';
 
 interface ProfileFields {
   displayName?: string;
@@ -361,16 +362,23 @@ function EditProfileSheet({
 
   const save = async () => {
     const trimmedName = displayName.trim();
-    if (!trimmedName) {
-      setError('닉네임을 입력하세요');
+    // 클린봇 — 닉네임 길이·금칙어 통합 검증
+    const checkName = moderateText(trimmedName, { allowEmpty: false, minLength: 1, maxLength: 30 });
+    if (!checkName.ok) {
+      setError(checkName.message ?? '닉네임에 부적절한 표현이 포함되어 있습니다');
       return;
     }
-    if (trimmedName.length > 30) {
-      setError('닉네임은 30자 이하로 입력하세요');
-      return;
+    if (bio) {
+      const checkBio = moderateText(bio, { allowEmpty: true, maxLength: 200 });
+      if (!checkBio.ok) {
+        setError(checkBio.message ?? '한 줄 소개에 부적절한 표현이 포함되어 있습니다');
+        return;
+      }
     }
-    if (bio.length > 200) {
-      setError('한 줄 소개는 200자 이하로 입력하세요');
+    // rate limit — 프로필 변경 잦은 시도 차단 (5회/5분)
+    const ok = await checkWriteRateLimit(uid, 'profile', 5, 5 * 60_000);
+    if (!ok) {
+      setError('프로필 변경이 너무 잦습니다. 잠시 후 다시 시도해주세요');
       return;
     }
     setError(null);

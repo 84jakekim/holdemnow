@@ -29,9 +29,11 @@ import {
   subscribeStoreReviews,
   deleteReview,
   formatRating,
+  hasReportedReview,
   type Review,
 } from '@/lib/reviews';
 import ReviewWriteSheet from '@/components/mobile/ReviewWriteSheet';
+import ReportReviewSheet from '@/components/mobile/ReportReviewSheet';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -71,6 +73,9 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [reviewWriteOpen, setReviewWriteOpen] = useState(false);
   const [reviewEditing, setReviewEditing] = useState<Review | null>(null);
   const [reviewsExpanded, setReviewsExpanded] = useState(false);
+  const [reportTarget, setReportTarget] = useState<Review | null>(null);
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
@@ -151,6 +156,37 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
     );
     return unsub;
   }, [storeId]);
+
+  // 신고한 리뷰 ID 집합 — 본인이 이미 신고한 리뷰 표시용
+  useEffect(() => {
+    const uid = authState.status === 'authenticated' ? authState.user.uid : null;
+    if (!uid || reviews.length === 0) {
+      setReportedIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const next = new Set<string>();
+      await Promise.all(
+        reviews.map(async (r) => {
+          if (r.authorUid === uid) return; // 본인 리뷰는 조회 skip
+          try {
+            const reported = await hasReportedReview(storeId, r.id, uid);
+            if (reported) next.add(r.id);
+          } catch { /* ignore */ }
+        }),
+      );
+      if (!cancelled) setReportedIds(next);
+    })();
+    return () => { cancelled = true; };
+  }, [authState, reviews, storeId]);
+
+  // 토스트 자동 해제
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     if (!store || !store.address) return;
@@ -654,6 +690,14 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           if (!window.confirm('리뷰를 삭제할까요?')) return;
           deleteReview(storeId, r.id).catch((e) => alert(e instanceof Error ? e.message : String(e)));
         }}
+        onReport={(r) => {
+          if (!currentUid) {
+            signInWithPopup(auth, new GoogleAuthProvider()).catch(() => {});
+            return;
+          }
+          setReportTarget(r);
+        }}
+        reportedIds={reportedIds}
       />
 
       {reviewWriteOpen && currentUid && (
@@ -665,6 +709,44 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           existingReview={reviewEditing}
           onClose={() => { setReviewWriteOpen(false); setReviewEditing(null); }}
         />
+      )}
+
+      {/* 리뷰 신고 시트 */}
+      {reportTarget && currentUid && (
+        <ReportReviewSheet
+          open={true}
+          storeId={storeId}
+          reviewId={reportTarget.id}
+          uid={currentUid}
+          onClose={() => setReportTarget(null)}
+          onSubmitted={() => {
+            const id = reportTarget.id;
+            setReportedIds((prev) => {
+              const next = new Set(prev);
+              next.add(id);
+              return next;
+            });
+            setToast('신고가 접수되었습니다. 검토 후 처리됩니다');
+          }}
+        />
+      )}
+
+      {/* 신고 토스트 */}
+      {toast && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-[60] px-4 py-3 rounded-2xl text-[13px] font-bold text-white"
+          style={{
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+            background: 'rgba(20,20,20,0.92)',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.30)',
+            backdropFilter: 'blur(8px)',
+            maxWidth: 'calc(100vw - 32px)',
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          {toast}
+        </div>
       )}
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -933,6 +1015,8 @@ function ReviewsSection({
   onWriteClick,
   onEdit,
   onDelete,
+  onReport,
+  reportedIds,
 }: {
   storeId: string;
   storeName: string;
@@ -947,6 +1031,8 @@ function ReviewsSection({
   onWriteClick: () => void;
   onEdit: (r: Review) => void;
   onDelete: (r: Review) => void;
+  onReport: (r: Review) => void;
+  reportedIds: Set<string>;
 }) {
   const ratingLabel = (() => {
     if (!reviewCount || reviewCount === 0) return '첫 리뷰를 남겨주세요';
@@ -1078,6 +1164,8 @@ function ReviewsSection({
                 isMine={!!currentUid && r.authorUid === currentUid}
                 onEdit={() => onEdit(r)}
                 onDelete={() => onDelete(r)}
+                onReport={() => onReport(r)}
+                alreadyReported={reportedIds.has(r.id)}
               />
             ))}
           </div>
@@ -1106,22 +1194,81 @@ function ReviewCard({
   isMine,
   onEdit,
   onDelete,
+  onReport,
+  alreadyReported,
 }: {
   review: Review;
   isMine: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onReport: () => void;
+  alreadyReported: boolean;
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const createdMs = review.createdAt?.toMillis?.() ?? 0;
   const visitMs = review.visitDate?.toMillis?.() ?? 0;
   const initials = (review.authorName?.[0] ?? '?').toUpperCase();
 
+  // 외부 클릭으로 메뉴 닫기
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClickOutside = () => setMenuOpen(false);
+    // 살짝 지연 — 같은 클릭에 즉시 닫히지 않도록
+    const t = setTimeout(() => window.addEventListener('click', onClickOutside, { once: true }), 0);
+    return () => { clearTimeout(t); window.removeEventListener('click', onClickOutside); };
+  }, [menuOpen]);
+
   return (
     <div
-      className="rounded-2xl p-4"
+      className="relative rounded-2xl p-4"
       style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
     >
+      {/* 우상단 ⋮ 메뉴 — 본인 리뷰엔 숨김 */}
+      {!isMine && (
+        <div className="absolute top-3 right-3 z-10">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+            aria-label="리뷰 메뉴"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition active:scale-90"
+            style={{ background: menuOpen ? 'var(--surface-2)' : 'transparent', color: 'var(--text-3)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-9 right-0 rounded-xl py-1 min-w-[140px]"
+              style={{
+                background: 'var(--surface-1)',
+                border: '1px solid var(--border)',
+                boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
+              }}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={alreadyReported}
+                onClick={() => {
+                  setMenuOpen(false);
+                  if (!alreadyReported) onReport();
+                }}
+                className="w-full text-left px-3 py-2 text-[13px] font-bold disabled:opacity-50"
+                style={{ color: alreadyReported ? 'var(--text-3)' : 'var(--live)' }}
+              >
+                {alreadyReported ? '이미 신고됨' : '리뷰 신고'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-start gap-3">
         <div
           className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0"

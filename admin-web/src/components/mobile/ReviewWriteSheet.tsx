@@ -9,6 +9,7 @@ import {
   MAX_REVIEW_BODY_LEN,
   type Review,
 } from '@/lib/reviews';
+import { moderateText, checkWriteRateLimit } from '@/lib/moderation';
 
 /**
  * 리뷰 작성/수정 바텀시트.
@@ -96,9 +97,19 @@ export default function ReviewWriteSheet({
     setError(null);
     if (rating < 1) { setError('별점을 선택해주세요'); return; }
     const trimmed = body.trim();
-    if (trimmed.length < 5) { setError('리뷰 본문은 5자 이상 입력해주세요'); return; }
-    if (trimmed.length > MAX_REVIEW_BODY_LEN) {
-      setError(`리뷰 본문은 ${MAX_REVIEW_BODY_LEN}자 이내로 작성해주세요`); return;
+    // 클린봇 — 길이·금칙어 통합 검증
+    const check = moderateText(trimmed, { allowEmpty: false, minLength: 5, maxLength: MAX_REVIEW_BODY_LEN });
+    if (!check.ok) {
+      setError(check.message ?? '부적절한 표현이 포함되어 있습니다');
+      return;
+    }
+    // rate limit — 단시간 다수 작성 차단
+    if (authorUid) {
+      const ok = await checkWriteRateLimit(authorUid, 'review');
+      if (!ok) {
+        setError('잠시 후 다시 시도해주세요 (단시간 다수 작성 차단)');
+        return;
+      }
     }
     setBusy(true);
     try {
