@@ -50,16 +50,19 @@ export default function ConfirmedReservationBanner() {
       return;
     }
 
+    // composite index 회피 — authorUid single where 만 적용, status 클라이언트 필터
+    // (기존 index 'authorUid+createdAt' 재사용. authorUid+status 신규 index 불필요)
     const q = query(
       collectionGroup(db, 'reservations'),
       where('authorUid', '==', uid),
-      where('status', '==', 'confirmed'),
     );
 
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const items = snap.docs.map((d) => {
+        const items = snap.docs
+          .filter((d) => (d.data() as { status?: string }).status === 'confirmed')
+          .map((d) => {
           const data = d.data() as Record<string, unknown>;
           const storeIdFromPath = d.ref.parent.parent?.id ?? '';
           return {
