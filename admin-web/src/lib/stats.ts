@@ -1075,6 +1075,369 @@ export interface UserSummary {
   lastActiveAt?: { toDate(): Date } | null;
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 지역 분석 (본사 BI — 영업·마케팅 의사결정용)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * 한국 주소에서 광역 단위 추출.
+ * 예) "부산광역시 부산진구..." → "부산"
+ *     "서울특별시 강남구..." → "서울"
+ *     "경기도 성남시..." → "경기"
+ *     "제주특별자치도 ..." → "제주"
+ */
+export function regionFromAddress(address?: string | null): string {
+  if (!address) return '미분류';
+  const first = address.trim().split(/\s+/)[0];
+  if (!first) return '미분류';
+  if (first.includes('광역시') || first.includes('특별시') || first.includes('특별자치시')) {
+    return first.slice(0, 2);
+  }
+  if (first.includes('특별자치도')) return first.slice(0, 2);
+  if (first.endsWith('도') && first.length >= 2) return first.replace(/도$/, '');
+  return first.slice(0, 4);
+}
+
+export interface RegionDistribution {
+  /** '부산' / '서울' / '경기' / '미분류' */
+  region: string;
+  count: number;
+}
+
+/**
+ * 정렬된 RegionDistribution 배열 빌더 — Map<region, count>에서 내림차순 배열로.
+ */
+function toSortedDistribution(map: Map<string, number>): RegionDistribution[] {
+  return Array.from(map.entries())
+    .map(([region, count]) => ({ region, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * 지역별 매장 수 분포.
+ * 매장 status='active' || isDemo=true 만 카운트.
+ */
+export async function loadStoreRegionDistribution(): Promise<RegionDistribution[]> {
+  try {
+    const snap = await getDocs(query(collection(db, 'stores')));
+    const buckets = new Map<string, number>();
+    snap.forEach((d) => {
+      const data = d.data() as {
+        address?: string | null;
+        status?: string;
+        isDemo?: boolean;
+      };
+      const isVisible = data.status === 'active' || data.isDemo === true;
+      if (!isVisible) return;
+      const region = regionFromAddress(data.address);
+      buckets.set(region, (buckets.get(region) ?? 0) + 1);
+    });
+    return toSortedDistribution(buckets);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 사용자별 "주 활동 지역" 추정 — 즐겨찾기 매장들의 region 중 최다 빈도.
+ * 즐겨찾기 없는 사용자는 '미분류'.
+ *
+ * 구현 비용: 모든 favorites(collectionGroup) + 모든 stores fetch. 베타 규모(< 수천 사용자) OK.
+ */
+export async function loadUserRegionDistribution(): Promise<RegionDistribution[]> {
+  try {
+    // 1) stores 전체 → storeId → region 매핑
+    const storesSnap = await getDocs(query(collection(db, 'stores')));
+    const storeRegion = new Map<string, string>();
+    storesSnap.forEach((d) => {
+      const data = d.data() as { address?: string | null };
+      storeRegion.set(d.id, regionFromAddress(data.address));
+    });
+
+    // 2) collectionGroup('favorites') → uid + storeId 추출
+    //    Firestore path: users/{uid}/favorites/{storeId}
+    const favsSnap = await getDocs(query(collectionGroup(db, 'favorites')));
+    // uid → (region → count)
+    const userRegionCounts = new Map<string, Map<string, number>>();
+    const totalUsers = new Set<string>();
+
+    favsSnap.forEach((d) => {
+      const ref = d.ref;
+      const parent = ref.parent.parent; // users/{uid}
+      if (!parent) return;
+      const uid = parent.id;
+      totalUsers.add(uid);
+      const storeId = d.id;
+      const region = storeRegion.get(storeId) ?? '미분류';
+      let inner = userRegionCounts.get(uid);
+      if (!inner) {
+        inner = new Map<string, number>();
+        userRegionCounts.set(uid, inner);
+      }
+      inner.set(region, (inner.get(region) ?? 0) + 1);
+    });
+
+    // 3) uid별 최다 region 선정
+    const regionTotals = new Map<string, number>();
+    userRegionCounts.forEach((inner) => {
+      let best = '미분류';
+      let bestCount = -1;
+      inner.forEach((count, region) => {
+        if (count > bestCount) {
+          best = region;
+          bestCount = count;
+        }
+      });
+      regionTotals.set(best, (regionTotals.get(best) ?? 0) + 1);
+    });
+
+    // 4) 즐겨찾기 없는 사용자 → '미분류'에 합산
+    //    전체 users count → 즐겨찾기 보유자 수
+    try {
+      const usersCount = await countDocs('users');
+      const uncategorized = Math.max(0, usersCount - totalUsers.size);
+      if (uncategorized > 0) {
+        regionTotals.set('미분류', (regionTotals.get('미분류') ?? 0) + uncategorized);
+      }
+    } catch {
+      // users count 실패 시 — 즐겨찾기 기반 분포만 반환
+    }
+
+    return toSortedDistribution(regionTotals);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 지역별 LIVE 누적 운영 (매장 liveSessionCount 합산).
+ * 활동성 지표 — 지역별 시장 활성도.
+ */
+export async function loadLiveRegionDistribution(): Promise<RegionDistribution[]> {
+  try {
+    const snap = await getDocs(query(collection(db, 'stores')));
+    const buckets = new Map<string, number>();
+    snap.forEach((d) => {
+      const data = d.data() as {
+        address?: string | null;
+        liveSessionCount?: number;
+      };
+      const region = regionFromAddress(data.address);
+      const lc = data.liveSessionCount ?? 0;
+      if (lc <= 0) return;
+      buckets.set(region, (buckets.get(region) ?? 0) + lc);
+    });
+    return toSortedDistribution(buckets);
+  } catch {
+    return [];
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 지역별 영업 우선순위 매트릭스
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface RegionOpportunity {
+  region: string;
+  /** 그 지역 사용자 수 (즐겨찾기 기반 추정) */
+  userCount: number;
+  /** 그 지역 매장 수 (active || isDemo) */
+  storeCount: number;
+  /** 매장당 사용자 비율 — 높을수록 매장 부족 = 영업 기회 */
+  userToStoreRatio: number;
+  /** 누적 LIVE 세션 (활성도) */
+  liveSessionsTotal: number;
+  /** 0~100 — 매장 부족 + 사용자 많음 + 활성도 가중 조합 */
+  opportunityScore: number;
+}
+
+/**
+ * 지역별 영업 기회 분석.
+ *
+ * opportunityScore 계산:
+ *  - normUser  = userCount / maxUserCount
+ *  - normRatio = (userCount / max(storeCount, 1)) / maxRatio   ← 매장 부족 정도
+ *  - normLive  = liveSessionsTotal / max(maxLive, 1)           ← 시장 활성도 (보너스)
+ *  - 가중 평균: 0.4 * normUser + 0.5 * normRatio + 0.1 * normLive
+ *  - 결과를 0~100 스케일.
+ *
+ * "사용자는 많은데 매장이 적은" 지역일수록 점수 높음.
+ */
+export async function loadRegionOpportunities(): Promise<RegionOpportunity[]> {
+  try {
+    const [storeDist, userDist, liveDist] = await Promise.all([
+      loadStoreRegionDistribution(),
+      loadUserRegionDistribution(),
+      loadLiveRegionDistribution(),
+    ]);
+
+    const storeMap = new Map(storeDist.map((r) => [r.region, r.count]));
+    const userMap = new Map(userDist.map((r) => [r.region, r.count]));
+    const liveMap = new Map(liveDist.map((r) => [r.region, r.count]));
+
+    const regions = new Set<string>([
+      ...storeMap.keys(),
+      ...userMap.keys(),
+      ...liveMap.keys(),
+    ]);
+
+    const rows = Array.from(regions).map((region) => {
+      const userCount = userMap.get(region) ?? 0;
+      const storeCount = storeMap.get(region) ?? 0;
+      const liveSessionsTotal = liveMap.get(region) ?? 0;
+      const userToStoreRatio = userCount / Math.max(storeCount, 1);
+      return {
+        region,
+        userCount,
+        storeCount,
+        userToStoreRatio,
+        liveSessionsTotal,
+        opportunityScore: 0,
+      };
+    });
+
+    const maxUser = Math.max(1, ...rows.map((r) => r.userCount));
+    const maxRatio = Math.max(1, ...rows.map((r) => r.userToStoreRatio));
+    const maxLive = Math.max(1, ...rows.map((r) => r.liveSessionsTotal));
+
+    rows.forEach((r) => {
+      const normUser = r.userCount / maxUser;
+      const normRatio = r.userToStoreRatio / maxRatio;
+      const normLive = r.liveSessionsTotal / maxLive;
+      const score = 0.4 * normUser + 0.5 * normRatio + 0.1 * normLive;
+      r.opportunityScore = Math.round(score * 1000) / 10; // 0~100, 소수 1자리
+    });
+
+    rows.sort((a, b) => b.opportunityScore - a.opportunityScore);
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 지역별 시계열 — 어느 지역 가입자 증가 추세인가
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface RegionTimeSeries {
+  region: string;
+  series: TimeSeriesPoint[];
+}
+
+/**
+ * 최근 N일 지역별 신규 사용자 추이.
+ *
+ * 지역 추정은 가입 시점이 아닌 "현재 즐겨찾기" 기반 — 정밀도 한계 있음 (베타 단순화).
+ * 향후 사용자에 region 필드 저장하면 정확도 개선 가능.
+ *
+ * 구현:
+ *  - stores fetch → storeId → region 매핑
+ *  - collectionGroup('favorites') fetch → uid별 region 추정
+ *  - users createdAt >= now-N일 fetch → 일별 bucket + region 카운트
+ *  - 결과: region별 series (오래된 날짜 → 최신 날짜 정렬)
+ */
+export async function loadUserRegionTimeSeries(days: number): Promise<RegionTimeSeries[]> {
+  try {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    start.setHours(0, 0, 0, 0);
+
+    // 1) stores → region 매핑
+    const storesSnap = await getDocs(query(collection(db, 'stores')));
+    const storeRegion = new Map<string, string>();
+    storesSnap.forEach((d) => {
+      const data = d.data() as { address?: string | null };
+      storeRegion.set(d.id, regionFromAddress(data.address));
+    });
+
+    // 2) favorites → uid → 최다 region
+    const favsSnap = await getDocs(query(collectionGroup(db, 'favorites')));
+    const userRegionCounts = new Map<string, Map<string, number>>();
+    favsSnap.forEach((d) => {
+      const parent = d.ref.parent.parent;
+      if (!parent) return;
+      const uid = parent.id;
+      const region = storeRegion.get(d.id) ?? '미분류';
+      let inner = userRegionCounts.get(uid);
+      if (!inner) {
+        inner = new Map<string, number>();
+        userRegionCounts.set(uid, inner);
+      }
+      inner.set(region, (inner.get(region) ?? 0) + 1);
+    });
+    const userRegion = new Map<string, string>();
+    userRegionCounts.forEach((inner, uid) => {
+      let best = '미분류';
+      let bestCount = -1;
+      inner.forEach((count, region) => {
+        if (count > bestCount) {
+          best = region;
+          bestCount = count;
+        }
+      });
+      userRegion.set(uid, best);
+    });
+
+    // 3) 최근 N일 가입자 fetch
+    const usersSnap = await getDocs(
+      query(
+        collection(db, 'users'),
+        where('createdAt', '>=', Timestamp.fromDate(start)),
+        where('createdAt', '<=', Timestamp.fromDate(end)),
+      ),
+    );
+
+    // region → date(YYYY-MM-DD) → count
+    const grid = new Map<string, Map<string, number>>();
+    // 모든 region에 대해 일별 0 bucket 초기화 함수
+    const initBuckets = (region: string) => {
+      let inner = grid.get(region);
+      if (!inner) {
+        inner = new Map<string, number>();
+        for (let i = 0; i < days; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          inner.set(formatDateKey(d), 0);
+        }
+        grid.set(region, inner);
+      }
+      return inner;
+    };
+
+    usersSnap.forEach((d) => {
+      const data = d.data() as { createdAt?: Timestamp };
+      if (!data.createdAt || typeof data.createdAt.toMillis !== 'function') return;
+      const dateKey = formatDateKey(data.createdAt.toDate());
+      const region = userRegion.get(d.id) ?? '미분류';
+      const inner = initBuckets(region);
+      if (inner.has(dateKey)) {
+        inner.set(dateKey, (inner.get(dateKey) ?? 0) + 1);
+      }
+    });
+
+    const intermediate: Array<{ region: string; series: TimeSeriesPoint[]; total: number }> = [];
+    grid.forEach((inner, region) => {
+      const series = Array.from(inner.entries())
+        .map(([date, value]) => ({ date, value }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const total = series.reduce((acc, p) => acc + p.value, 0);
+      intermediate.push({ region, series, total });
+    });
+
+    // 누적 신규 가입자가 많은 지역 우선
+    intermediate.sort((a, b) => b.total - a.total);
+    return intermediate.map(({ region, series }) => ({ region, series }));
+  } catch {
+    return [];
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 최근 가입 사용자 (사용자 관리)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 /**
  * 최근 가입 사용자 N명 — 본사 사용자 관리 페이지용.
  * users 컬렉션 createdAt 내림차순 (자동 인덱스).
