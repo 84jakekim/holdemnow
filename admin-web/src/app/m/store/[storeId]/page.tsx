@@ -468,20 +468,42 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       </div>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          CTA 버튼 — 토스 스타일 (길찾기 풀버튼 + 서브 그리드)
+          CTA 버튼 — 예약하기+길찾기 상단 / 전화+공유 하단
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
-        {/* 길찾기 — 메인 CTA (토스 스타일 큰 버튼) */}
-        <button
-          onClick={() => { bumpStoreMetric(storeId, 'directionsClicks'); openDirections(store.name, store.address); }}
-          className="w-full h-[52px] flex items-center justify-center gap-2.5 rounded-2xl font-bold text-[15px] transition active:scale-[0.98] mb-3"
-          style={{ background: 'var(--text-1)', color: '#fff' }}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-          </svg>
-          길찾기
-        </button>
+        {/* 메인 CTA — 예약하기 (좌) + 길찾기 (우) */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {/* 예약하기 */}
+          <button
+            onClick={() => {
+              if (!currentUid) {
+                signInWithPopup(auth, new GoogleAuthProvider()).catch(() => {});
+                return;
+              }
+              setReservationOpen(true);
+            }}
+            className="h-[52px] flex items-center justify-center gap-2 rounded-2xl font-bold text-[15px] transition active:scale-[0.98] text-white"
+            style={{
+              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BB5 100%)',
+              boxShadow: '0 4px 14px rgba(255,31,143,0.30)',
+            }}
+            aria-label={currentUid ? `${store.name} 예약하기` : '로그인하고 예약하기'}
+          >
+            <span aria-hidden="true" style={{ fontSize: 17 }}>📅</span>
+            {currentUid ? '예약하기' : '로그인 후 예약'}
+          </button>
+          {/* 길찾기 */}
+          <button
+            onClick={() => { bumpStoreMetric(storeId, 'directionsClicks'); openDirections(store.name, store.address); }}
+            className="h-[52px] flex items-center justify-center gap-2.5 rounded-2xl font-bold text-[15px] transition active:scale-[0.98]"
+            style={{ background: 'var(--text-1)', color: '#fff' }}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+            </svg>
+            길찾기
+          </button>
+        </div>
 
         {/* 서브 액션 — 전화 + 공유 */}
         <div className="grid grid-cols-2 gap-2">
@@ -1167,20 +1189,6 @@ function ReviewsSection({
           })}
         </div>
       </div>
-
-      {/* 예약하기 버튼 — 핫핑크 큰 버튼 */}
-      <button
-        onClick={onReserveClick}
-        className="w-full h-14 flex items-center justify-center gap-2 rounded-2xl font-extrabold text-[15px] transition active:scale-[0.98] mb-3 text-white"
-        style={{
-          background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BB5 100%)',
-          boxShadow: '0 6px 18px rgba(255,31,143,0.35)',
-        }}
-        aria-label={currentUid ? `${storeName} 예약하기` : '로그인하고 예약하기'}
-      >
-        <span aria-hidden="true" style={{ fontSize: 18 }}>📅</span>
-        {currentUid ? '예약하기' : '로그인하고 예약하기'}
-      </button>
 
       {/* 리뷰 쓰기 버튼 */}
       <button
