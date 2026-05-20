@@ -11,6 +11,7 @@
 import { useEffect, useRef } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { disableCurrentDeviceNotifications } from '@/lib/messaging';
 
 type Props = {
   open: boolean;
@@ -34,8 +35,14 @@ export default function LogoutConfirmSheet({ open, onClose }: Props) {
 
   const handleLogout = async () => {
     onClose();
+    // 1. 디바이스 FCM 토큰을 현재 uid에서 제거 — 다른 사용자가 같은 디바이스에 로그인했을 때
+    //    옛 사용자에게 잘못된 알림이 가는 cross-user 토큰 잔존 차단.
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      await disableCurrentDeviceNotifications(uid).catch(() => {});
+    }
+    // 2. signOut → AuthGate가 anonymous 감지 후 /login replace
     await signOut(auth);
-    // AuthGate가 anonymous 감지 후 /login으로 replace — 추가 redirect 불필요
   };
 
   if (!open) return null;

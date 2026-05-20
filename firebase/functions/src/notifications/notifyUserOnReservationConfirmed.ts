@@ -99,5 +99,36 @@ export const notifyUserOnReservationConfirmed = onDocumentUpdated(
     console.log(
       `[notifyUserOnReservationConfirmed] uid=${authorUid} store=${storeId} rid=${rid} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
+
+    // Invalid/만료 토큰 자동 정리 — 동일 디바이스가 다른 사용자에게도 잔존하던 토큰을 끊는다.
+    // Firebase 표준 에러 코드: messaging/registration-token-not-registered, messaging/invalid-registration-token
+    const invalidTokens: string[] = [];
+    resp.responses.forEach((r, i) => {
+      if (r.success) return;
+      const code = r.error?.code ?? '';
+      if (
+        code === 'messaging/registration-token-not-registered' ||
+        code === 'messaging/invalid-registration-token' ||
+        code === 'messaging/invalid-argument'
+      ) {
+        invalidTokens.push(tokens[i]);
+      }
+    });
+    if (invalidTokens.length > 0) {
+      const cleanups = invalidTokens.map((token) => {
+        const tokenId = token.slice(0, 16);
+        return db
+          .collection('users')
+          .doc(authorUid)
+          .collection('fcmTokens')
+          .doc(tokenId)
+          .delete()
+          .catch(() => undefined);
+      });
+      await Promise.all(cleanups);
+      console.log(
+        `[notifyUserOnReservationConfirmed] cleaned up ${invalidTokens.length} invalid tokens for uid=${authorUid}`,
+      );
+    }
   },
 );

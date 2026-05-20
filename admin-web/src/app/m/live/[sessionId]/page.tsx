@@ -23,6 +23,14 @@ import {
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric } from '@/lib/analytics';
 import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
+import {
+  playCountdownBeep,
+  playFinalBeep,
+  playBlindUp,
+  unlockAudio,
+} from '@/lib/sounds';
+
+const SOUND_STORAGE_KEY = 'holdemnow:liveSoundOn';
 
 export default function LiveFullscreen({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
@@ -107,6 +115,57 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
   // 절대 시각(levelEndsAt) 기반 카운트다운 — 폰 재접속해도 정확
   const sec = useLiveCountdown(session ?? null);
 
+  // ─── 사운드 (카운트다운 비프 · 블라인드업 알림) ───────────────────
+  // 풀스크린 LIVE 페이지에서만 활성 — 사장님이 실제로 화면 켜놓고 보는 페이지.
+  const prevSecRef = useRef<number | null>(null);
+  const prevLevelRef = useRef<number | null>(null);
+  const [soundOn, setSoundOn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem(SOUND_STORAGE_KEY) !== 'off';
+  });
+
+  // mount 시 AudioContext unlock 시도 (iOS Safari 등)
+  useEffect(() => {
+    unlockAudio();
+  }, []);
+
+  // 토글 상태 영속화
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? 'on' : 'off');
+  }, [soundOn]);
+
+  // sec/level 변화 감지 → 비프/블라인드업 트리거
+  useEffect(() => {
+    if (!session) {
+      prevSecRef.current = null;
+      prevLevelRef.current = null;
+      return;
+    }
+    const prevSec = prevSecRef.current;
+    const prevLevel = prevLevelRef.current;
+    const currLevel = session.currentLevel;
+    const running = session.status === 'running';
+
+    if (soundOn && running) {
+      // 레벨 전환 감지 — 블라인드업!
+      if (prevLevel != null && currLevel > prevLevel) {
+        playBlindUp();
+      }
+      // 카운트다운 비프 — sec이 새로운 값으로 줄어들 때 트리거
+      if (prevSec != null && prevSec !== sec) {
+        if (sec === 1) {
+          playFinalBeep();
+        } else if (sec >= 2 && sec <= 5) {
+          playCountdownBeep();
+        }
+      }
+    }
+
+    prevSecRef.current = sec;
+    prevLevelRef.current = currLevel;
+  }, [sec, soundOn, session]);
+
   if (session === undefined) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] text-gray-500 flex items-center justify-center text-sm">
@@ -131,10 +190,12 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
   const paused = session.status === 'paused';
   const lateMin = computeLateRegMinutes(session, sec);
   const nextBlind = session.blindStructure.find((l) => l.level === session.currentLevel + 1);
+  // 10초 이하 빨강 강조 (running 중일 때만) — 사용자 요청 핵심
+  const isWarning = !paused && sec > 0 && sec <= 10 && session.status === 'running';
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col">
-      {/* 상단 — 닫기 */}
+      {/* 상단 — 닫기 / 사운드 / 공유 */}
       <div className="px-5 pt-12 pb-2 flex justify-between items-center">
         <button
           onClick={() => router.back()}
@@ -142,13 +203,26 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
         >
           ✕
         </button>
-        <button
-          onClick={() => session && shareContent({ title: session.tournamentName, text: `${session.storeName} — ${session.tournamentName} 진행 중` })}
-          className="w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center text-sm"
-          title="공유"
-        >
-          ↗
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              unlockAudio(); // 사용자 첫 토글 시 확실히 unlock
+              setSoundOn((s) => !s);
+            }}
+            aria-label={soundOn ? '사운드 끄기' : '사운드 켜기'}
+            title={soundOn ? '사운드 끄기' : '사운드 켜기'}
+            className="w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center text-sm"
+          >
+            {soundOn ? '🔊' : '🔇'}
+          </button>
+          <button
+            onClick={() => session && shareContent({ title: session.tournamentName, text: `${session.storeName} — ${session.tournamentName} 진행 중` })}
+            className="w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center text-sm"
+            title="공유"
+          >
+            ↗
+          </button>
+        </div>
       </div>
 
       {/* 매장 + 토너 */}
@@ -177,14 +251,14 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
         LEVEL {session.currentLevel}
       </div>
 
-      {/* 거대 카운트다운 */}
+      {/* 거대 카운트다운 — 10초 이내 빨강 + pulse */}
       <div className="text-center px-4 mt-2">
         <div
-          className="font-mono font-extrabold leading-none"
+          className={`font-mono font-extrabold leading-none ${isWarning ? 'animate-pulse' : ''}`}
           style={{
             fontSize: '96px',
             letterSpacing: '-0.04em',
-            color: paused ? '#A8A8A8' : sec <= 10 ? '#FF4757' : '#fff',
+            color: paused ? '#A8A8A8' : isWarning ? '#FF4757' : '#fff',
           }}
         >
           {fmtTime(sec)}

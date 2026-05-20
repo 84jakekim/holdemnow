@@ -1,0 +1,102 @@
+'use client';
+
+/**
+ * LIVE 카운트다운·블라인드업 사운드 헬퍼.
+ *
+ * 외부 오디오 파일 의존 없이 Web Audio API로 즉시 톤 생성.
+ * - playCountdownBeep: 5,4,3,2초 짧은 비프 (700Hz · 150ms)
+ * - playFinalBeep: 1초 마지막 비프 (900Hz · 250ms · 더 큼)
+ * - playBlindUp: 레벨 전환 알림 — C5→E5→G5 화려한 상승 톤
+ * - unlockAudio: iOS Safari 첫 터치 전 AudioContext suspended 해제용
+ */
+
+let audioCtx: AudioContext | null = null;
+
+function getCtx(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (audioCtx) return audioCtx;
+  try {
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtx = new Ctx();
+    return audioCtx;
+  } catch {
+    return null;
+  }
+}
+
+/** 짧은 비프 — 카운트다운 (5,4,3,2초). 700Hz 150ms. */
+export function playCountdownBeep(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = 700;
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.16);
+}
+
+/** 1초 카운트다운 마지막 비프 — 더 높고 길게. 900Hz 250ms. */
+export function playFinalBeep(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = 900;
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.26);
+}
+
+/** 블라인드업! 알림 — 세 톤 상승 (C5→E5→G5). */
+export function playBlindUp(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  playNote(ctx, 523, now, 0.18); // C5
+  playNote(ctx, 659, now + 0.15, 0.25); // E5
+  playNote(ctx, 784, now + 0.3, 0.35); // G5
+}
+
+function playNote(ctx: AudioContext, freq: number, startAt: number, duration: number): void {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle'; // sine보다 살짝 풍부한 톤
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, startAt);
+  gain.gain.linearRampToValueAtTime(0.35, startAt + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(startAt);
+  osc.stop(startAt + duration + 0.05);
+}
+
+/**
+ * 모바일 Safari/iOS는 사용자 첫 터치 이전엔 AudioContext suspended.
+ * 페이지 mount 시 한 번 호출하면 ready 상태로 (단 실제 깨어남은 첫 user gesture 시).
+ */
+export function unlockAudio(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+}

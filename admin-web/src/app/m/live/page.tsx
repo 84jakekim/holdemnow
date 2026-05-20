@@ -185,7 +185,8 @@ export default function LiveFeedListPage() {
 function LiveCard({ session, distance, locality }: { session: LiveSession; distance?: number; locality?: string }) {
   const sec = useLiveCountdown(session);
   const isPaused = session.status === 'paused';
-  const lowTime = sec <= 60 && !isPaused; // 1분 이내 임박 → 빨강
+  // 10초 이내 임박 → 빨강 + pulse (사장님 요청: 풀스크린·카드 모두 동일 임계)
+  const lowTime = sec > 0 && sec <= 10 && !isPaused;
   const lateMin = computeLateRegMinutes(session, sec);
   const graceSec = computeFinishingGraceSec(session);
   const isFinishing = graceSec != null && graceSec > 0;

@@ -48,6 +48,8 @@ export { cleanupExpiredTournaments } from './notifications/cleanupExpiredTournam
 // 마지막 레벨 종료 후 그레이스(180초) 만료된 세션을 status=completed로 자동 정리.
 // "실시간" 컨셉 보증 — 매장 사장 화면이 꺼져 있어도 서버에서 정리됨.
 export { autoStopFinishedSessions } from './live/autoStopFinishedSessions';
+// LIVE 세션 레벨 자동 진행 — 매장 어드민 화면 꺼져있어도 다음 레벨로 자동 전환
+export { autoAdvanceLevel } from './live/autoAdvanceLevel';
 
 // ===== Reviews — 매장 리뷰 집계 (reviewCount/averageRating/ratingDistribution) =====
 export { aggregateReviewStats } from './reviews/aggregateReviewStats';

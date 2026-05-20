@@ -86,6 +86,25 @@ export async function disableNotifications(uid: string, token: string): Promise<
   }
 }
 
+/**
+ * 로그아웃 시 호출 — 현재 디바이스의 FCM 토큰을 users/{uid}/fcmTokens에서 제거.
+ * 동일 디바이스에 다른 사용자가 로그인하면 그 토큰이 옛 사용자에게 가던 잘못된 알림을 차단.
+ */
+export async function disableCurrentDeviceNotifications(uid: string): Promise<void> {
+  if (!uid) return;
+  if (!VAPID_KEY) return;
+  if (!(await isMessagingSupported())) return;
+  try {
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY }).catch(() => null);
+    if (!token) return;
+    const tokenId = token.slice(0, 16);
+    await deleteDoc(doc(db, 'users', uid, 'fcmTokens', tokenId));
+  } catch {
+    // 토큰 없거나 권한 거부 — 무시
+  }
+}
+
 /** 포그라운드 메시지 수신 콜백 등록 */
 export async function onForegroundMessage(
   cb: (payload: MessagePayload) => void,
