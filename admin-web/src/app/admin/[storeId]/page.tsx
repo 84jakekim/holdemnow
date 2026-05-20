@@ -20,7 +20,9 @@ import JobsPanel from '@/components/admin/JobsPanel';
 import UsedItemsPanel from '@/components/admin/UsedItemsPanel';
 import DealerPoolPanel from '@/components/admin/DealerPoolPanel';
 import ReservationsPanel from '@/components/admin/ReservationsPanel';
+import AdminNotificationBell from '@/components/admin/AdminNotificationBell';
 import AdminIdentityBadge from '@/components/admin/AdminIdentityBadge';
+import { useReservationSoundAlert } from '@/hooks/useReservationSoundAlert';
 import ThemeToggle from '@/components/admin/ThemeToggle';
 import { useTheme } from '@/lib/theme';
 import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
@@ -93,6 +95,9 @@ function AdminPageInner({ storeId }: { storeId: string }) {
     return <AdminAccessDenied isLoggedIn myStoreId={userDoc?.storeId ?? null} />;
   }
 
+  // 사운드 알림 훅 (마운트 시 활성)
+  useReservationSoundAlert(storeId);
+
   const isPending = store.status === 'pending';
   // platform_admin은 심사 차원에서 모든 메뉴 접근 가능. owner+pending만 메뉴 잠금.
   const isMenuLocked = (id: string) =>
@@ -124,13 +129,17 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           </div>
         </div>
 
-        {/* 매장 사장 식별 뱃지 */}
-        <div className="p-3" style={{ borderBottom: '1px solid var(--border)' }}>
+        {/* 알림 종 + 사장 식별 뱃지 */}
+        <div className="px-3 pt-2 pb-1 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
           <AdminIdentityBadge
             context="store"
             name={store.name}
             email={authState.user.email ?? undefined}
             subLabel={isPending ? '⏳ 심사 대기' : undefined}
+          />
+          <AdminNotificationBell
+            storeId={storeId}
+            onNavigate={() => setActiveMenu('reservations')}
           />
         </div>
 

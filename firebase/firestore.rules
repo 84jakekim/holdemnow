@@ -136,8 +136,10 @@ service cloud.firestore {
           && request.resource.data.partySize <= 20
           && request.resource.data.status == 'pending';
         allow update: if isSignedIn() && (
+          // 예약자 본인: status='cancelled' 로만 취소 가능
           (resource.data.authorUid == request.auth.uid
             && request.resource.data.status == 'cancelled')
+          // 매장 owner/member: 운영 상태·readByStore·confirmedAt 갱신 가능
           || isStoreOwner(storeId)
           || isStoreMember(storeId)
           || isPlatformAdmin()

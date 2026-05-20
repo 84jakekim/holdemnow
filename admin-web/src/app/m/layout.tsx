@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NoticePopup from '@/components/mobile/NoticePopup';
+import InAppToast from '@/components/mobile/InAppToast';
+import ConfirmedReservationBanner from '@/components/mobile/ConfirmedReservationBanner';
 import AuthGate from '@/components/AuthGate';
 import { useAuth, useUserDoc } from '@/lib/hooks';
 import { useHeartbeat } from '@/lib/heartbeat';
@@ -113,6 +115,14 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     <AuthGate>
       <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
         <div className="max-w-md mx-auto min-h-screen relative" style={{ background: 'var(--bg)' }}>
+          {/* 인앱 FCM 예약 확정 토스트 (전역) */}
+          <InAppToast />
+          {/* 녹색 마퀴 띠 — 헤더 바로 아래 sticky */}
+          {!isFullscreen && (
+            <div className="sticky top-0 z-30">
+              <ConfirmedReservationBanner />
+            </div>
+          )}
           <div className={isFullscreen ? '' : 'pb-[88px]'}>{children}</div>
           {!isFullscreen && <TabBar pathname={pathname} />}
           <NoticePopup />

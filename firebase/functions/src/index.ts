@@ -37,6 +37,8 @@ export { marketingBroadcast } from './notifications/marketingBroadcast';
 export { processScheduledCampaigns } from './notifications/processScheduledCampaigns';
 // 새 예약 생성 시 매장 owner에게 FCM 푸시.
 export { notifyStoreOnReservation } from './notifications/notifyStoreOnReservation';
+// 예약 확정 시 예약자에게 FCM 푸시 (pending → confirmed).
+export { notifyUserOnReservationConfirmed } from './notifications/notifyUserOnReservationConfirmed';
 // 종료된 관심 토너 자동 삭제 — 매시간, 시작 시각+6h 지난 doc 정리
 export { cleanupExpiredInterests } from './notifications/cleanupExpiredInterests';
 // 시작 시각+3h 지났는데 LIVE 시작 안 된 scheduled 토너를 expired로 자동 변경

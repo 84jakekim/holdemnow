@@ -53,6 +53,12 @@ export interface Reservation {
   respondedAt?: Timestamp | null;
   respondedBy?: string | null;
   responseNote?: string | null;
+  /** 매장 어드민이 종 알림에서 읽었는지 여부 — false=읽지 않음 */
+  readByStore?: boolean;
+  /** 예약 유효 시간(분) — 기본 120. 마퀴 띠 만료 판정에 사용 */
+  durationMinutes?: number;
+  /** 확정 처리 시각 */
+  confirmedAt?: Timestamp | null;
 }
 
 export const MAX_RESERVATION_NOTE_LEN = 200;
@@ -90,6 +96,9 @@ function toReservation(
     respondedAt: (data.respondedAt as Timestamp | null | undefined) ?? null,
     respondedBy: (data.respondedBy as string | null | undefined) ?? null,
     responseNote: (data.responseNote as string | null | undefined) ?? null,
+    readByStore: (data.readByStore as boolean | undefined) ?? false,
+    durationMinutes: (data.durationMinutes as number | undefined) ?? undefined,
+    confirmedAt: (data.confirmedAt as Timestamp | null | undefined) ?? null,
   };
 }
 
@@ -110,6 +119,7 @@ export async function createReservation(input: {
   partySize: number;
   note?: string | null;
   participatingGame?: string | null;
+  durationMinutes?: number;
 }): Promise<string> {
   if (!input.storeId) throw new Error('storeId가 필요합니다.');
   if (!input.authorUid) throw new Error('로그인이 필요합니다.');
@@ -154,6 +164,9 @@ export async function createReservation(input: {
     respondedAt: null,
     respondedBy: null,
     responseNote: null,
+    readByStore: false,
+    durationMinutes: input.durationMinutes ?? 120,
+    confirmedAt: null,
   };
 
   const ref = await addDoc(reservationsCol(input.storeId), payload);
@@ -201,9 +214,25 @@ export async function respondToReservation(
     respondedAt: serverTimestamp(),
     respondedBy: uid,
     responseNote: note || null,
+    readByStore: true,
+    ...(status === 'confirmed' ? { confirmedAt: serverTimestamp() } : {}),
   };
 
   await updateDoc(doc(reservationsCol(storeId), reservationId), patch);
+}
+
+/**
+ * 매장 어드민이 예약을 읽음 처리 — readByStore: true.
+ */
+export async function markReservationRead(
+  storeId: string,
+  reservationId: string,
+): Promise<void> {
+  if (!storeId || !reservationId) return;
+  await updateDoc(doc(reservationsCol(storeId), reservationId), {
+    readByStore: true,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 // ─────────────────────────────────────────────────────────────

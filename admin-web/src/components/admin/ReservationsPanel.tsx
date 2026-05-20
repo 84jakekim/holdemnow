@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   subscribeStoreReservations,
   respondToReservation,
+  markReservationRead,
   reservationStatusLabel,
   type Reservation,
   type ReservationStatus,
@@ -179,6 +180,7 @@ export default function ReservationsPanel({ storeId }: Props) {
             <ReservationCard
               key={r.id}
               reservation={r}
+              storeId={storeId}
               busy={busyId === r.id}
               onApprove={() => handleApprove(r)}
               onRejectOpen={() => setRejectTarget(r)}
@@ -234,13 +236,15 @@ function EmptyState({ filter }: { filter: FilterKey }) {
 
 interface CardProps {
   reservation: Reservation;
+  storeId: string;
   busy: boolean;
   onApprove: () => void;
   onRejectOpen: () => void;
 }
 
-function ReservationCard({ reservation: r, busy, onApprove, onRejectOpen }: CardProps) {
+function ReservationCard({ reservation: r, storeId, busy, onApprove, onRejectOpen }: CardProps) {
   const [noteOpen, setNoteOpen] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tone = statusTone(r.status);
   const reservedMs = r.reservedFor?.toMillis?.() ?? 0;
   const now = Date.now();
@@ -249,15 +253,40 @@ function ReservationCard({ reservation: r, busy, onApprove, onRejectOpen }: Card
   const phone = r.authorPhone?.trim();
   const note = r.note?.trim();
   const responseNote = r.responseNote?.trim();
+  const isUnread = !r.readByStore && r.status === 'pending';
+
+  function handleMouseEnter() {
+    if (!isUnread) return;
+    hoverTimerRef.current = setTimeout(() => {
+      markReservationRead(storeId, r.id).catch(() => {});
+    }, 1000);
+  }
+
+  function handleMouseLeave() {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }
+
+  function handleCardClick() {
+    if (isUnread) {
+      markReservationRead(storeId, r.id).catch(() => {});
+    }
+  }
 
   return (
     <div
       className="p-4"
+      onClick={handleCardClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
         background: tone.bg,
         border: `1px solid ${tone.border}`,
-        borderLeft: `4px solid ${tone.leftBar}`,
+        borderLeft: isUnread ? '4px solid #F59E0B' : `4px solid ${tone.leftBar}`,
         borderRadius: 'var(--r-lg)',
+        cursor: 'default',
       }}
     >
       {/* 상단 — 상태 + 시간 임박 배지 */}
@@ -268,6 +297,14 @@ function ReservationCard({ reservation: r, busy, onApprove, onRejectOpen }: Card
         >
           {reservationStatusLabel(r.status)}
         </span>
+        {isUnread && (
+          <span
+            className="text-[10px] font-extrabold tracking-wider px-2 py-0.5 rounded-full"
+            style={{ background: '#F59E0B', color: '#fff' }}
+          >
+            NEW
+          </span>
+        )}
         {isSoon && r.status !== 'cancelled' && r.status !== 'rejected' && (
           <span
             className="text-[10px] font-extrabold tracking-wider px-2 py-0.5 rounded-full"
