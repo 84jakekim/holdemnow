@@ -36,33 +36,23 @@ export default function InterestsPage() {
     return unsub;
   }, [authState]);
 
-  // 모든 관심 토너 표시 — 다가오는 토너 먼저, 지난 토너 뒤로
-  // (이전 버전은 startsAt 없거나 1시간 이상 과거면 숨김 → 통계는 1인데 목록은 비어 보이는 문제)
-  const { upcoming, past } = useMemo(() => {
-    const now = Date.now();
-    const up: InterestDoc[] = [];
-    const ps: InterestDoc[] = [];
-    for (const it of items) {
-      const ms = it.startsAt && typeof (it.startsAt as Timestamp).toDate === 'function'
-        ? (it.startsAt as Timestamp).toDate().getTime()
-        : null;
-      // startsAt 없거나 미래·1시간 이내 과거 → 다가오는
-      if (ms == null || ms > now - 60 * 60 * 1000) up.push(it);
-      else ps.push(it);
-    }
-    up.sort((a, b) => {
-      const ta = a.startsAt ? (a.startsAt as Timestamp).toDate().getTime() : Infinity;
-      const tb = b.startsAt ? (b.startsAt as Timestamp).toDate().getTime() : Infinity;
-      return ta - tb;
-    });
-    ps.sort((a, b) => {
-      const ta = a.startsAt ? (a.startsAt as Timestamp).toDate().getTime() : 0;
-      const tb = b.startsAt ? (b.startsAt as Timestamp).toDate().getTime() : 0;
-      return tb - ta; // 지난 토너는 최근부터
-    });
-    return { upcoming: up, past: ps };
+  // 다가오는 토너만 표시. 종료된 토너(startsAt + 6h 지남)는 Cloud Function
+  // cleanupExpiredInterests가 자동 정리. 매장이 같은 토너를 매번 새 인스턴스로
+  // 등록하므로 "지난 토너" 기록 보존은 무의미.
+  const upcoming = useMemo(() => {
+    const cutoff = Date.now() - 6 * 60 * 60 * 1000; // -6h 보다 새것만 (cron 사이클 안 잔존분)
+    return [...items]
+      .filter((it) => {
+        if (!it.startsAt || typeof (it.startsAt as Timestamp).toDate !== 'function') return true;
+        return (it.startsAt as Timestamp).toDate().getTime() > cutoff;
+      })
+      .sort((a, b) => {
+        const ta = a.startsAt ? (a.startsAt as Timestamp).toDate().getTime() : Infinity;
+        const tb = b.startsAt ? (b.startsAt as Timestamp).toDate().getTime() : Infinity;
+        return ta - tb;
+      });
   }, [items]);
-  const totalCount = upcoming.length + past.length;
+  const totalCount = upcoming.length;
 
   // 비로그인 → /m (effect로)
   useEffect(() => {
@@ -100,31 +90,10 @@ export default function InterestsPage() {
           </div>
         </div>
       ) : (
-        <div className="p-5 space-y-4">
-          {upcoming.length > 0 && (
-            <div>
-              <div className="text-xs font-extrabold text-gray-700 mb-2 px-1">
-                다가오는 토너 ({upcoming.length})
-              </div>
-              <div className="space-y-2">
-                {upcoming.map((it) => (
-                  <InterestRow key={it.tournamentId} it={it} past={false} onOpen={() => router.push(`/m/store/${it.storeId}`)} onRemove={() => { if (window.confirm('관심 해제할까요?')) removeInterest(it.tournamentId); }} />
-                ))}
-              </div>
-            </div>
-          )}
-          {past.length > 0 && (
-            <div>
-              <div className="text-xs font-extrabold text-gray-500 mb-2 px-1">
-                지난 토너 ({past.length})
-              </div>
-              <div className="space-y-2">
-                {past.map((it) => (
-                  <InterestRow key={it.tournamentId} it={it} past={true} onOpen={() => router.push(`/m/store/${it.storeId}`)} onRemove={() => { if (window.confirm('관심 해제할까요?')) removeInterest(it.tournamentId); }} />
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="p-5 space-y-2">
+          {upcoming.map((it) => (
+            <InterestRow key={it.tournamentId} it={it} onOpen={() => router.push(`/m/store/${it.storeId}`)} onRemove={() => { if (window.confirm('관심 해제할까요?')) removeInterest(it.tournamentId); }} />
+          ))}
         </div>
       )}
 
@@ -140,12 +109,10 @@ export default function InterestsPage() {
  * ========================================================== */
 function InterestRow({
   it,
-  past,
   onOpen,
   onRemove,
 }: {
   it: InterestDoc;
-  past: boolean;
   onOpen: () => void;
   onRemove: () => void;
 }) {
@@ -162,16 +129,12 @@ function InterestRow({
     t.getMonth() === today.getMonth() &&
     t.getDate() === today.getDate();
   const minutesUntil = startsMs != null ? Math.floor((startsMs - Date.now()) / (1000 * 60)) : null;
-  const imminent = !past && minutesUntil != null && minutesUntil >= -60 && minutesUntil <= 60;
+  const imminent = minutesUntil != null && minutesUntil >= -60 && minutesUntil <= 60;
 
   return (
     <div
       className={`flex items-center gap-3 p-3 rounded-2xl border ${
-        past
-          ? 'bg-gray-50 border-gray-200 opacity-70'
-          : imminent
-            ? 'bg-red-50 border-red-200'
-            : 'bg-white border-gray-200'
+        imminent ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'
       }`}
     >
       <button
@@ -180,18 +143,18 @@ function InterestRow({
       >
         <div
           className="w-12 h-16 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
-          style={{ background: poster.bg, color: poster.color, opacity: past ? 0.6 : 1 }}
+          style={{ background: poster.bg, color: poster.color }}
         >
           {it.tournamentName.split(' ')[0]}
         </div>
         <div className="flex-1 min-w-0">
-          <div className={`text-sm font-bold truncate ${past ? 'text-gray-600' : 'text-gray-900'}`}>
+          <div className="text-sm font-bold truncate text-gray-900">
             {it.tournamentName}
           </div>
           <div className="text-[11px] text-gray-500 mt-0.5">
             {t ? (
               <>
-                <span className={`font-mono font-bold ${past ? 'text-gray-500' : 'text-gray-900'}`}>
+                <span className="font-mono font-bold text-gray-900">
                   {isToday ? '오늘' : `${t.getMonth() + 1}/${t.getDate()}`} {hh}:{mm}
                 </span>{' '}
               </>
@@ -203,11 +166,6 @@ function InterestRow({
           {imminent && minutesUntil != null && (
             <div className="inline-flex items-center gap-1 mt-1.5 bg-red-100 text-red-700 rounded px-1.5 py-0.5 text-[10px] font-extrabold">
               ⏰ {minutesUntil > 0 ? `${minutesUntil}분 후 시작` : '진행 중'}
-            </div>
-          )}
-          {past && (
-            <div className="inline-flex items-center gap-1 mt-1.5 bg-gray-200 text-gray-600 rounded px-1.5 py-0.5 text-[10px] font-bold">
-              종료
             </div>
           )}
         </div>

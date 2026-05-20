@@ -29,6 +29,8 @@ export { notifyTournamentStart } from './notifications/notifyTournamentStart';
 export { notifyLateRegImminent } from './notifications/notifyLateRegImminent';
 export { marketingBroadcast } from './notifications/marketingBroadcast';
 export { processScheduledCampaigns } from './notifications/processScheduledCampaigns';
+// 종료된 관심 토너 자동 삭제 — 매시간, 시작 시각+6h 지난 doc 정리
+export { cleanupExpiredInterests } from './notifications/cleanupExpiredInterests';
 
 // ===== LIVE =====
 // 마지막 레벨 종료 후 그레이스(180초) 만료된 세션을 status=completed로 자동 정리.
