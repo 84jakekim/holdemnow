@@ -34,6 +34,7 @@ const Timestamp = admin.firestore.Timestamp;
 
 interface YoutuberDoc {
   channelId?: string;
+  channelUrl?: string;
   isActive?: boolean;
 }
 
@@ -127,6 +128,59 @@ async function fetchVideoDetails(
   return results;
 }
 
+/**
+ * channelUrl에서 channelId(UC...) 자동 추출 + hotYoutubers doc 업데이트.
+ * - youtube.com/channel/UCxxxx → 직접 추출
+ * - youtube.com/@handle, /c/customName, /user/oldUsername → HTML fetch + og:meta 또는 html 정규식
+ */
+async function backfillChannelId(
+  docId: string,
+  channelUrl: string,
+): Promise<string | null> {
+  try {
+    // 항상 HTML fetch — URL의 /channel/UC... 는 일부 채널에서 externalId(표시용)이며
+    // RSS feed가 받는 internal channelId와 다를 수 있어 신뢰 불가.
+    // 진짜 channelId는 페이지 HTML의 "channelId":"UC..." 키에 있음.
+    const res = await axios.get<string>(channelUrl, {
+      timeout: 8000,
+      responseType: 'text',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+      },
+    });
+    const html = typeof res.data === 'string' ? res.data : String(res.data);
+    // 우선순위: HTML "channelId" (RSS 작동 ID) > meta itemprop > URL 직접 추출 (fallback)
+    const m =
+      html.match(/"channelId":"(UC[\w-]+)"/) ??
+      html.match(/<meta itemprop="channelId" content="(UC[\w-]+)"/) ??
+      html.match(/"externalId":"(UC[\w-]+)"/);
+    let cid = m?.[1];
+
+    if (!cid) {
+      // 최후 fallback: URL /channel/UC...
+      const directMatch = channelUrl.match(/\/channel\/(UC[\w-]+)/);
+      cid = directMatch?.[1];
+    }
+
+    if (!cid) {
+      logger.warn(`channelId 추출 실패: ${docId} (${channelUrl})`);
+      return null;
+    }
+    await db().collection('hotYoutubers').doc(docId).update({
+      channelId: cid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    logger.info(`channelId 추출: ${docId} → ${cid}`);
+    return cid;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`backfillChannelId 실패 ${docId}: ${msg}`);
+    return null;
+  }
+}
+
 function calcScore(viewCount: number, publishedAtMs: number): number {
   const now = Date.now();
   const daysSince = Math.max(1, (now - publishedAtMs) / 86_400_000);
@@ -141,25 +195,35 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
   const cutoffMs = Date.now() - 90 * 86_400_000;
   const cutoffTs = Timestamp.fromMillis(cutoffMs);
 
-  // 1. 활성 유튜버 channelId 수집
+  // 1. 활성 유튜버 channelId 수집 — 빈 doc은 channelUrl로 자동 backfill
   const youtubersSnap = await firestore
     .collection('hotYoutubers')
     .where('isActive', '==', true)
     .get();
 
-  const channelIds: string[] = youtubersSnap.docs
-    .map((d) => (d.data() as YoutuberDoc).channelId?.trim() ?? '')
-    .filter((id) => id.startsWith('UC'));
+  const channelIds: string[] = [];
+  for (const doc of youtubersSnap.docs) {
+    const data = doc.data() as YoutuberDoc;
+    let cid = data.channelId?.trim() ?? '';
+
+    // channelId 비어있거나 RSS가 실패하는 잘못된 ID 가능성 →
+    // channelUrl 있으면 항상 HTML 재추출 (진짜 channelId 확보)
+    if (data.channelUrl) {
+      const filled = await backfillChannelId(doc.id, data.channelUrl);
+      if (filled) cid = filled;
+    }
+    if (cid.startsWith('UC')) channelIds.push(cid);
+  }
 
   if (channelIds.length === 0) {
     logger.info('활성 채널 없음 — 큐레이션 종료');
     return {
       channelsActive: 0, videoIdsCollected: 0, apiResponses: 0,
       upserted: 0, expiredDeleted: 0, durationMs: Date.now() - startedAt,
-      message: '활성 채널(UC...로 시작하는 channelId 등록)이 없습니다.',
+      message: '활성 채널(UC...로 시작하는 channelId 등록)이 없습니다. channelUrl도 비어있거나 og:meta 추출 실패.',
     };
   }
-  logger.info(`활성 채널 ${channelIds.length}개 발견`);
+  logger.info(`활성 채널 ${channelIds.length}개 발견 (backfill 포함)`);
 
   // 2. RSS → videoId 수집
   const allVideoIds: string[] = [];
@@ -244,17 +308,18 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
   }
   await flushBatch();
 
-  // 5. 만료 auto doc 삭제
-  const expiredSnap = await videosCol
-    .where('source', '==', 'auto')
-    .where('publishedAt', '<', cutoffTs)
-    .get();
+  // 5. 만료 auto doc 삭제 — single where + 클라이언트 필터 (composite index 회피)
+  const autoSnap = await videosCol.where('source', '==', 'auto').get();
+  const expiredDocs = autoSnap.docs.filter((d) => {
+    const ts = d.data().publishedAt as admin.firestore.Timestamp | undefined;
+    return ts && ts.toMillis() < cutoffMs;
+  });
 
   let deletedCount = 0;
-  if (!expiredSnap.empty) {
+  if (expiredDocs.length > 0) {
     let delBatch = firestore.batch();
     let delCount = 0;
-    for (const d of expiredSnap.docs) {
+    for (const d of expiredDocs) {
       delBatch.delete(d.ref);
       delCount++;
       deletedCount++;
