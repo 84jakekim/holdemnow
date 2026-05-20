@@ -352,31 +352,39 @@ export default function PrimaryLiveCard({ sessions, thumbnails }: Props) {
   /* 2개 이상 — 가로 scroll-snap 스와이프 */
   return (
     <section aria-label="HOT LIVE" className="pb-1">
-      {/* 스와이프 컨테이너 */}
-      <div
-        className="flex overflow-x-auto gap-3 px-4 scrollbar-none"
-        style={{
-          scrollSnapType: 'x mandatory',
-          WebkitOverflowScrolling: 'touch',
-        }}
-        role="list"
-      >
-        {runningSessions.map((s) => (
-          <div
-            key={s.id}
-            role="listitem"
-            className="flex-shrink-0"
-            style={{
-              /* 뷰포트 한 폭 - 양쪽 패딩 + 다음 카드 peek */
-              width: 'calc(100vw - 48px)',
-              scrollSnapAlign: 'start',
-            }}
-          >
-            <BigCard session={s} thumbnail={thumbnails?.[s.storeId]} />
-          </div>
-        ))}
-        {/* 오른쪽 여백 */}
-        <div className="w-4 flex-shrink-0" aria-hidden="true" />
+      {/* 스와이프 컨테이너 + 우측 페이드 */}
+      <div className="relative">
+        <div
+          className="flex overflow-x-auto gap-3 px-4 scrollbar-none"
+          style={{
+            scrollSnapType: 'x mandatory',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          role="list"
+        >
+          {runningSessions.map((s) => (
+            <div
+              key={s.id}
+              role="listitem"
+              className="flex-shrink-0"
+              style={{
+                /* 뷰포트 한 폭 - 양쪽 패딩 + 다음 카드 peek */
+                width: 'calc(100vw - 48px)',
+                scrollSnapAlign: 'start',
+              }}
+            >
+              <BigCard session={s} thumbnail={thumbnails?.[s.storeId]} />
+            </div>
+          ))}
+          {/* 오른쪽 여백 */}
+          <div className="w-4 flex-shrink-0" aria-hidden="true" />
+        </div>
+        {/* 우측 페이드 — 스와이프 어포던스 */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-10 pointer-events-none"
+          style={{ background: 'linear-gradient(to right, transparent, var(--bg))' }}
+          aria-hidden="true"
+        />
       </div>
 
       {/* 페이지 인디케이터 (점) */}

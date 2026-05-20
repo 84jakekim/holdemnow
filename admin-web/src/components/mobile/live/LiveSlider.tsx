@@ -56,8 +56,8 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
       href={`/m/store/${session.storeId}`}
       className="flex-shrink-0 rounded-xl overflow-hidden transition active:scale-[0.97] block relative"
       style={{
-        /* 한 화면 3개: (뷰포트 - 좌패딩16 - 우여백16 - gap12×2) / 3 */
-        width: 'calc((100vw - 32px - 24px) / 3)',
+        /* 한 화면 3개 + peek: (뷰포트 - 좌패딩16 - 우여백16 - gap12×2) / 3.3 */
+        width: 'calc((100vw - 32px - 24px) / 3.3)',
         minHeight: 120,
         background: 'var(--surface-1)',
         border: '1.5px solid rgba(255,255,255,0.08)',
@@ -175,25 +175,33 @@ export default function LiveSlider({ sessions, thumbnails }: Props) {
         </span>
       </div>
 
-      {/* 가로 슬라이드 — snap = 카드 1개, 한 화면 3개 노출 */}
-      <div
-        className="pl-4 flex gap-3 overflow-x-auto pb-1 scrollbar-none"
-        style={{
-          scrollSnapType: 'x mandatory',
-          WebkitOverflowScrolling: 'touch',
-        }}
-        role="list"
-      >
-        {sessions.map((s) => (
-          <div
-            key={s.id}
-            role="listitem"
-          >
-            <SmallCard session={s} thumbnail={thumbnails?.[s.storeId]} />
-          </div>
-        ))}
-        {/* 오른쪽 여백 */}
-        <div className="w-3 flex-shrink-0" aria-hidden="true" />
+      {/* 가로 슬라이드 — snap = 카드 1개, 한 화면 3.3개 노출 (peek) */}
+      <div className="relative">
+        <div
+          className="pl-4 flex gap-3 overflow-x-auto pb-1 scrollbar-none"
+          style={{
+            scrollSnapType: 'x mandatory',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          role="list"
+        >
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              role="listitem"
+            >
+              <SmallCard session={s} thumbnail={thumbnails?.[s.storeId]} />
+            </div>
+          ))}
+          {/* 오른쪽 여백 */}
+          <div className="w-3 flex-shrink-0" aria-hidden="true" />
+        </div>
+        {/* 우측 페이드 — 스와이프 어포던스 */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-10 pointer-events-none"
+          style={{ background: 'linear-gradient(to right, transparent, var(--bg))' }}
+          aria-hidden="true"
+        />
       </div>
     </section>
   );
