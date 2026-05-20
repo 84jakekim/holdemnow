@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   createReservation,
+  MAX_PARTICIPATING_GAME_LEN,
   MAX_PARTY_SIZE,
   MAX_RESERVATION_NOTE_LEN,
   MIN_PARTY_SIZE,
@@ -12,15 +13,19 @@ import { checkWriteRateLimit, moderateText } from '@/lib/moderation';
 /**
  * 매장 예약 작성 바텀시트.
  *
- * 필드:
- *   - 방문 일시 (datetime-local, 현재 + 30분 이후 권장)
- *   - 인원수 (1~20, 기본 2명)
- *   - 연락처 (tel, defaultPhone 자동 입력)
- *   - 요청 사항 (textarea, 200자 이내, 선택)
+ * 필드 순서:
+ *   1. 참가 닉네임 * (user.displayName 기본, 별칭 가능, 30자 이내)
+ *   2. 방문 예정 시간 * (datetime-local, 현재 + 30분 이후 권장)
+ *   3. 참가 인원 * (1~20, 기본 2명)
+ *   4. 참가 게임 (선택, 200자 이내)
+ *   5. 연락처 (선택)
+ *   6. 요청 사항 (선택, 200자 이내)
  *
  * 저장: createReservation(...) 호출 → 성공 시 alert + onClose.
  * 디자인: 핫핑크 #FF1F8F, ReviewWriteSheet/LogoutConfirmSheet 패턴 일치.
  */
+
+const MAX_DISPLAY_NAME_LEN = 30;
 
 interface Props {
   storeId: string;
@@ -50,9 +55,11 @@ export default function ReservationSheet({
   onClose,
 }: Props) {
   // 기본/최소 일시는 마운트 후 useEffect에서 계산 (Date.now()는 impure — 렌더 중 호출 금지)
+  const [displayName, setDisplayName] = useState<string>(authorName ?? '');
   const [reservedFor, setReservedFor] = useState<string>('');
   const [minDateTime, setMinDateTime] = useState<string>('');
   const [partySize, setPartySize] = useState<number>(2);
+  const [participatingGame, setParticipatingGame] = useState<string>('');
   const [phone, setPhone] = useState<string>(defaultPhone ?? '');
   const [note, setNote] = useState<string>('');
   const [busy, setBusy] = useState(false);
@@ -94,8 +101,17 @@ export default function ReservationSheet({
       setError('로그인이 필요합니다.');
       return;
     }
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      setError('참가 닉네임을 입력해주세요.');
+      return;
+    }
+    if (trimmedName.length > MAX_DISPLAY_NAME_LEN) {
+      setError(`참가 닉네임은 ${MAX_DISPLAY_NAME_LEN}자 이내로 입력해주세요.`);
+      return;
+    }
     if (!reservedFor) {
-      setError('방문 일시를 선택해주세요.');
+      setError('방문 예정 시간을 선택해주세요.');
       return;
     }
     const reservedDate = new Date(reservedFor);
@@ -126,6 +142,21 @@ export default function ReservationSheet({
         return;
       }
     }
+    const trimmedGame = participatingGame.trim();
+    if (trimmedGame) {
+      if (trimmedGame.length > MAX_PARTICIPATING_GAME_LEN) {
+        setError(`참가 게임은 ${MAX_PARTICIPATING_GAME_LEN}자 이내로 입력해주세요.`);
+        return;
+      }
+      const gameCheck = moderateText(trimmedGame, {
+        allowEmpty: true,
+        maxLength: MAX_PARTICIPATING_GAME_LEN,
+      });
+      if (!gameCheck.ok) {
+        setError(gameCheck.message ?? '참가 게임에 부적절한 표현이 포함되어 있습니다.');
+        return;
+      }
+    }
     // 단시간 다수 작성 차단
     const ok = await checkWriteRateLimit(authorUid, 'reservation');
     if (!ok) {
@@ -139,10 +170,11 @@ export default function ReservationSheet({
         storeId,
         storeName,
         authorUid,
-        authorName,
+        authorName: trimmedName,
         authorPhone: phone.trim() || null,
         reservedFor: reservedDate,
         partySize,
+        participatingGame: trimmedGame || null,
         note: trimmedNote || null,
       });
       alert('예약이 접수되었습니다. 매장 확인 후 알림드립니다.');
@@ -185,10 +217,44 @@ export default function ReservationSheet({
         </div>
         <div className="text-[12px] mb-5" style={{ color: 'var(--text-3)' }}>{storeName}</div>
 
-        {/* 방문 일시 */}
+        {/* 1. 참가 닉네임 */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[12px] font-bold" style={{ color: 'var(--text-2)' }}>
+              참가 닉네임 <span style={{ color: '#FF1F8F' }}>*</span>
+            </div>
+            <div
+              className="text-[11px] font-mono"
+              style={{
+                color:
+                  displayName.length > MAX_DISPLAY_NAME_LEN ? 'var(--live)' : 'var(--text-3)',
+              }}
+            >
+              {displayName.length}/{MAX_DISPLAY_NAME_LEN}
+            </div>
+          </div>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            maxLength={MAX_DISPLAY_NAME_LEN + 10}
+            placeholder="예: 홍길동"
+            className="w-full px-3 py-2.5 rounded-xl text-[14px] outline-none"
+            style={{
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+          />
+          <div className="text-[10px] mt-1.5" style={{ color: 'var(--text-3)' }}>
+            매장에 보일 이름이에요. 별칭으로 바꿔도 됩니다.
+          </div>
+        </div>
+
+        {/* 2. 방문 예정 시간 */}
         <div className="mb-5">
           <div className="text-[12px] font-bold mb-2" style={{ color: 'var(--text-2)' }}>
-            방문 일시 <span style={{ color: '#FF1F8F' }}>*</span>
+            방문 예정 시간 <span style={{ color: '#FF1F8F' }}>*</span>
           </div>
           <input
             type="datetime-local"
@@ -207,10 +273,10 @@ export default function ReservationSheet({
           </div>
         </div>
 
-        {/* 인원수 */}
+        {/* 3. 참가 인원 */}
         <div className="mb-5">
           <div className="text-[12px] font-bold mb-2" style={{ color: 'var(--text-2)' }}>
-            인원수 <span style={{ color: '#FF1F8F' }}>*</span>
+            참가 인원 <span style={{ color: '#FF1F8F' }}>*</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -246,10 +312,43 @@ export default function ReservationSheet({
           </div>
         </div>
 
-        {/* 연락처 */}
+        {/* 4. 참가 게임 (선택) */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[12px] font-bold" style={{ color: 'var(--text-2)' }}>
+              참가 게임 <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>(선택)</span>
+            </div>
+            <div
+              className="text-[11px] font-mono"
+              style={{
+                color:
+                  participatingGame.length > MAX_PARTICIPATING_GAME_LEN
+                    ? 'var(--live)'
+                    : 'var(--text-3)',
+              }}
+            >
+              {participatingGame.length}/{MAX_PARTICIPATING_GAME_LEN}
+            </div>
+          </div>
+          <input
+            type="text"
+            value={participatingGame}
+            onChange={(e) => setParticipatingGame(e.target.value)}
+            maxLength={MAX_PARTICIPATING_GAME_LEN + 10}
+            placeholder="예: NL 100/200 캐시, 무료 토너"
+            className="w-full px-3 py-2.5 rounded-xl text-[14px] outline-none"
+            style={{
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+          />
+        </div>
+
+        {/* 5. 연락처 (선택) */}
         <div className="mb-5">
           <div className="text-[12px] font-bold mb-2" style={{ color: 'var(--text-2)' }}>
-            연락처 <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>(매장이 변경 사항 안내 시 사용)</span>
+            연락처 <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>(선택 · 매장이 변경 사항 안내 시 사용)</span>
           </div>
           <input
             type="tel"
@@ -267,7 +366,7 @@ export default function ReservationSheet({
           />
         </div>
 
-        {/* 요청 사항 */}
+        {/* 6. 요청 사항 (선택) */}
         <div className="mb-5">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[12px] font-bold" style={{ color: 'var(--text-2)' }}>

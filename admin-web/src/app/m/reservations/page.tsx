@@ -256,6 +256,12 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
           <span aria-hidden="true">👥</span>
           <span>{reservation.partySize}명</span>
         </div>
+        {reservation.participatingGame && (
+          <div className="flex items-start gap-2">
+            <span aria-hidden="true">🎮</span>
+            <span className="break-words">{reservation.participatingGame}</span>
+          </div>
+        )}
         {reservation.note && (
           <div className="flex items-start gap-2 pt-0.5">
             <span aria-hidden="true">📝</span>
