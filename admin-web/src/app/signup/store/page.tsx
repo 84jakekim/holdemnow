@@ -458,8 +458,8 @@ export default function StoreSignupPage() {
                   maxBytes={MAX_SIGNAGE_BYTES}
                 />
                 <div className="text-[10px] text-gray-400 mt-1 leading-relaxed">
-                  매장 간판이 잘 보이는 사진 1장을 첨부해 주세요. (JPG/PNG, 5MB 이하)<br />
-                  본사 심사 시 매장 실존 확인에 사용됩니다. 사업자등록증 대체.
+                  가로형 사진 권장 (예: 1600×900px). 세로 사진은 가운데 부분만 노출됩니다.<br />
+                  JPG/PNG, 5MB 이하 · 본사 심사 시 매장 실존 확인에 사용됩니다.
                 </div>
               </Field>
             </>

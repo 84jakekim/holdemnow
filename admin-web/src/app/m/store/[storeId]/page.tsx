@@ -232,7 +232,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   if (store === undefined) {
     return (
       <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
-        <div className="skeleton" style={{ aspectRatio: '3/4', width: '100%' }} />
+        <div className="skeleton" style={{ aspectRatio: '16/9', width: '100%' }} />
         <div className="p-5 space-y-3">
           <div className="skeleton h-7 w-2/3 rounded-lg" />
           <div className="skeleton h-4 w-full rounded" />
@@ -273,10 +273,10 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
     <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 80 }}>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          히어로 사진 영역 — 야놀자 스타일 큰 사진 (3:4 비율)
+          히어로 사진 영역 — 가로형 사진 (16:9 비율)
           헤더는 사진 위에 오버레이 (투명 그라데이션)
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="relative" style={{ aspectRatio: hasPhotos ? '3/4' : '4/3' }}>
+      <div className="relative" style={{ aspectRatio: '16/9' }}>
 
         {/* 사진 */}
         {hasPhotos ? (

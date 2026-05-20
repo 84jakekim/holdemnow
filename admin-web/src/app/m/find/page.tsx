@@ -1167,7 +1167,7 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
           const photo = st.photoUrls[0];
           return (
             <Link key={st.id} href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
-              <div className="relative overflow-hidden" style={{ aspectRatio: '1', background: 'var(--surface-2)' }}>
+              <div className="relative overflow-hidden" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
                 {photo
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={photo} alt={st.name} className="w-full h-full object-cover" />
@@ -1261,7 +1261,7 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
       {/* 가로 스크롤 */}
       <div className="pl-4 flex gap-3 overflow-x-auto scrollbar-none pb-2">
         {visible.slice(0, 10).map((st) => <NearbyStoreSquareCard key={st.id} store={st} live={liveByStore[st.id] || 0} />)}
-        <button onClick={() => window.location.href = '/m/find?mode=map'} className="w-[140px] flex-shrink-0 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95" style={{ aspectRatio: '1', background: 'var(--surface-2)', border: '1px solid var(--border)' }} aria-label="전체 매장 지도로 보기">
+        <button onClick={() => window.location.href = '/m/find?mode=map'} className="w-[140px] flex-shrink-0 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95" style={{ aspectRatio: '4/3', background: 'var(--surface-2)', border: '1px solid var(--border)' }} aria-label="전체 매장 지도로 보기">
           <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--surface-3)' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </div>
@@ -1301,7 +1301,7 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
   useEffect(() => { trackImpressionOnce(st.id, 'find-nearby'); }, [st.id]);
   return (
     <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
-      <div className="relative overflow-hidden" style={{ aspectRatio: '1', background: 'var(--surface-2)' }}>
+      <div className="relative overflow-hidden" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
         {st.photoUrl ? <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[24px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.4 }}>{st.name.charAt(0)}</span></div>}
         <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
           {st.distance != null && <span className="text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)' }}>{formatDistance(st.distance)}</span>}

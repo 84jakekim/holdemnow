@@ -43,11 +43,11 @@ export default function StoreInfoCard({
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
       {/* 간판사진 미리보기 */}
       {signageImageUrl && !imgError && (
-        <div className="w-full h-40 bg-gray-100 overflow-hidden">
+        <div className="relative w-full bg-gray-100 overflow-hidden" style={{ aspectRatio: '16/9' }}>
           <img
             src={signageImageUrl}
             alt="매장 간판 사진"
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
             onError={() => setImgError(true)}
           />
         </div>

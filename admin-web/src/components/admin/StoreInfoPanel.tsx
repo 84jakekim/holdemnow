@@ -162,7 +162,7 @@ export default function StoreInfoPanel({ storeId }: Props) {
             {photoUrls.map((url) => (
               <div
                 key={url}
-                className="aspect-square rounded-lg bg-gray-100 relative overflow-hidden group"
+                className="aspect-video rounded-lg bg-gray-100 relative overflow-hidden group"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt="매장" className="w-full h-full object-cover" />
@@ -178,7 +178,7 @@ export default function StoreInfoPanel({ storeId }: Props) {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="aspect-square rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-500 transition flex flex-col items-center justify-center text-xs font-bold text-gray-500"
+                className="aspect-video rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-500 transition flex flex-col items-center justify-center text-xs font-bold text-gray-500"
               >
                 {uploading ? '⏳' : '+ 사진'}
               </button>
