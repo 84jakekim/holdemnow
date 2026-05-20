@@ -198,6 +198,17 @@ export default function BusinessLoginPage() {
               </div>
             )}
 
+            {/* 비번 찾기 — 폼 안 우측 정렬, 핑크 강조로 분실 사용자가 즉시 발견 */}
+            <div className="flex justify-end -mt-1">
+              <Link
+                href="/login/recover"
+                className="text-xs font-bold underline underline-offset-2"
+                style={{ color: 'var(--brand, #FF1F8F)' }}
+              >
+                비밀번호를 잊으셨나요?
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={loggingIn || !email.trim() || !password}
@@ -207,16 +218,6 @@ export default function BusinessLoginPage() {
               {loggingIn ? '로그인 중…' : '매장 / 대회사 로그인'}
             </button>
           </form>
-
-          {/* 비밀번호 찾기 */}
-          <div className="text-center mt-3">
-            <Link
-              href="/login/recover"
-              className="text-xs text-gray-500 hover:text-gray-900 underline underline-offset-2"
-            >
-              비밀번호를 잊으셨나요?
-            </Link>
-          </div>
 
           {/* 가입신청 카드 */}
           <div className="mt-6 bg-gray-50 rounded-xl p-4 space-y-2">

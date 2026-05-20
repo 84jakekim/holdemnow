@@ -268,6 +268,17 @@ function LoginPageInner() {
               </div>
             )}
 
+            {/* 비번 찾기 — 폼 안 우측 정렬, 핑크 강조로 분실 사용자가 즉시 발견 */}
+            <div className="flex justify-end -mt-1">
+              <Link
+                href="/login/recover"
+                className="text-xs font-bold underline underline-offset-2"
+                style={{ color: 'var(--brand, #FF1F8F)' }}
+              >
+                비밀번호를 잊으셨나요?
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={loggingIn || !email.trim() || !password}
@@ -278,12 +289,8 @@ function LoginPageInner() {
             </button>
           </form>
 
-          {/* 보조 링크 — 비번 찾기 / 일반 가입 */}
+          {/* 보조 링크 — 일반 가입 */}
           <div className="flex items-center justify-center gap-3 mt-3 text-xs text-gray-500">
-            <Link href="/login/recover" className="hover:text-gray-900 underline underline-offset-2">
-              비밀번호 찾기
-            </Link>
-            <span className="text-gray-300">|</span>
             <Link href="/signup/player" className="hover:text-gray-900 underline underline-offset-2 font-bold text-[#FF1F8F]">
               일반 가입
             </Link>
