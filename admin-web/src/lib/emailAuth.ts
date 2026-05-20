@@ -25,6 +25,8 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from './firebase';
+import { setUserPhone } from './userProfile';
+import { normalizePhone } from './phone';
 
 // =====================================================================
 // 타입 정의
@@ -174,6 +176,7 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
   //   - 매장 가입자는 대표자명/대표 연락처를 이미 필수 입력했으므로
   //     realName/phone에 자동 매핑하고 KYC를 즉시 완료 처리 (AuthGate가 /onboarding/kyc로
   //     잘못 가로채지 않도록 함). signupSource='store-signup' 이면 별도 KYC 절차 불필요.
+  //   - phone은 setUserPhone에서 phoneIndex와 함께 트랜잭션으로 등록 (아래).
   await setDoc(doc(db, 'users', uid), {
     uid,
     email: payload.email.trim().toLowerCase(),
@@ -187,14 +190,20 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
     passwordHint: payload.passwordHint.trim(),
     recoveryLast4: payload.recoveryLast4.trim().slice(-4),
     realName: payload.representativeName.trim(),
-    phone: payload.representativePhone.trim(),
     kycCompletedAt: serverTimestamp(),
     kycSource: 'signup',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 
-  // 4. passwordRecovery/{email} 문서 생성 (비밀번호 분실 시 빠른 조회용)
+  // 4. 대표자 연락처를 phoneIndex에 등록 — 1인 1번호 정책.
+  //    정규화 가능한 경우만 시도하고, 중복(다른 계정 사용)이면 throw하므로
+  //    signup 흐름 자체가 실패해 사용자에게 알림이 전달된다.
+  if (normalizePhone(payload.representativePhone)) {
+    await setUserPhone(uid, payload.representativePhone);
+  }
+
+  // 5. passwordRecovery/{email} 문서 생성 (비밀번호 분실 시 빠른 조회용)
   await setDoc(doc(db, 'passwordRecovery', payload.email.trim().toLowerCase()), {
     uid,
     passwordHint: payload.passwordHint.trim(),
@@ -246,6 +255,8 @@ export async function signupAsOrganizer(payload: OrganizerSignupPayload): Promis
   });
 
   // 대회사 가입자도 담당자/대표자 정보를 이미 필수 입력 → realName/phone 자동 매핑 + KYC 즉시 완료
+  // phone은 아래 setUserPhone으로 phoneIndex와 함께 트랜잭션 등록.
+  const organizerPhone = payload.contactPersonPhone.trim() || payload.representativePhone.trim();
   await setDoc(doc(db, 'users', uid), {
     uid,
     email: payload.email.trim().toLowerCase(),
@@ -257,7 +268,6 @@ export async function signupAsOrganizer(payload: OrganizerSignupPayload): Promis
     signupAt: serverTimestamp(),
     status: 'active',
     realName: payload.contactPersonName.trim() || payload.representativeName.trim(),
-    phone: payload.contactPersonPhone.trim() || payload.representativePhone.trim(),
     kycCompletedAt: serverTimestamp(),
     kycSource: 'signup',
     passwordHint: payload.passwordHint.trim(),
@@ -265,6 +275,11 @@ export async function signupAsOrganizer(payload: OrganizerSignupPayload): Promis
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  // 담당자/대표자 연락처를 phoneIndex에 등록 — 1인 1번호 정책.
+  if (normalizePhone(organizerPhone)) {
+    await setUserPhone(uid, organizerPhone);
+  }
 
   await setDoc(doc(db, 'passwordRecovery', payload.email.trim().toLowerCase()), {
     uid,
@@ -303,6 +318,7 @@ export async function signupAsPlayer(payload: PlayerSignupPayload): Promise<void
   const email = payload.email.trim().toLowerCase();
 
   // 2) users/{uid} 문서 생성
+  //    phone은 아래 setUserPhone으로 phoneIndex와 함께 트랜잭션 등록.
   await setDoc(doc(db, 'users', uid), {
     uid,
     email,
@@ -314,7 +330,6 @@ export async function signupAsPlayer(payload: PlayerSignupPayload): Promise<void
     displayName: payload.nickname.trim(),
     nickname: payload.nickname.trim(),
     realName: payload.realName.trim(),
-    phone: payload.phone.trim(),
     kycCompletedAt: serverTimestamp(),
     kycSource: 'signup',
     ...(payload.passwordHint?.trim() ? { passwordHint: payload.passwordHint.trim() } : {}),
@@ -323,6 +338,11 @@ export async function signupAsPlayer(payload: PlayerSignupPayload): Promise<void
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  // 플레이어 전화번호 — phoneIndex 트랜잭션으로 1인 1번호 정책 적용.
+  if (normalizePhone(payload.phone)) {
+    await setUserPhone(uid, payload.phone);
+  }
 
   // 3) 힌트가 있을 때만 passwordRecovery/{email} 문서 생성
   if (payload.passwordHint?.trim()) {

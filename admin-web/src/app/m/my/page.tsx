@@ -11,6 +11,8 @@ import RecentVisitsSection from '@/components/mobile/my/RecentVisitsSection';
 import { doc, setDoc, onSnapshot, serverTimestamp, collection, collectionGroup, query, where } from 'firebase/firestore';
 import { enableNotifications, getNotificationPermission, isMessagingSupported } from '@/lib/messaging';
 import { moderateText, checkWriteRateLimit } from '@/lib/moderation';
+import { normalizePhone } from '@/lib/phone';
+import { setUserPhone } from '@/lib/userProfile';
 
 interface ProfileFields {
   displayName?: string;
@@ -398,11 +400,30 @@ function EditProfileSheet({
       setError('프로필 변경이 너무 잦습니다. 잠시 후 다시 시도해주세요');
       return;
     }
+    // 전화번호 — 본인 기존 번호와 다르면 setUserPhone으로 중복 검사 + 인덱스 갱신
+    if (phone.trim()) {
+      const normalized = normalizePhone(phone);
+      if (!normalized) {
+        setError('유효하지 않은 전화번호 형식입니다 (예: 010-1234-5678)');
+        return;
+      }
+      if (normalized !== normalizePhone(initial.phone)) {
+        setBusy(true);
+        try {
+          await setUserPhone(uid, phone);
+        } catch (e: unknown) {
+          setError(e instanceof Error ? e.message : String(e));
+          setBusy(false);
+          return;
+        }
+      }
+    }
     setError(null);
     setBusy(true);
     try {
       // Firebase Auth + Firestore 양쪽 동기화. Auth는 다른 클라이언트에 즉시 반영,
       // Firestore는 이 페이지의 onSnapshot이 즉시 잡아 UI에 반영.
+      // phone은 setUserPhone에서 처리하므로 setDoc에서 제외 (중복 작업 방지).
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, { displayName: trimmedName });
       }
@@ -411,7 +432,6 @@ function EditProfileSheet({
         {
           displayName: trimmedName,
           bio: bio.trim(),
-          phone: phone.trim(),
           updatedAt: serverTimestamp(),
         },
         { merge: true },

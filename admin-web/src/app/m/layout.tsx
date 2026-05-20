@@ -1,10 +1,11 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NoticePopup from '@/components/mobile/NoticePopup';
 import AuthGate from '@/components/AuthGate';
-import { useAuth } from '@/lib/hooks';
+import { useAuth, useUserDoc } from '@/lib/hooks';
 import { useHeartbeat } from '@/lib/heartbeat';
 
 /* ============================================================
@@ -84,13 +85,29 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
   const uid = authState.status === 'authenticated' ? authState.user.uid : null;
   useHeartbeat(uid);
 
+  const router = useRouter();
   const pathname = usePathname() ?? '';
-  // 풀스크린 페이지 — 탭바 숨김
+  const userDoc = useUserDoc(uid);
+
+  // 풀스크린 페이지 — 탭바 숨김 (온보딩 포함)
   const isFullscreen =
     pathname.startsWith('/m/store/') ||
     pathname.startsWith('/m/live/') ||
     pathname.startsWith('/m/events/') ||
-    pathname.startsWith('/m/campaigns/');
+    pathname.startsWith('/m/campaigns/') ||
+    pathname.startsWith('/m/onboarding/');
+
+  // 전화번호 미등록 사용자는 /m/onboarding/phone으로 강제
+  // (users doc 존재 + phone 필드 비어있음 → 강제 게이트)
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return;
+    if (userDoc === undefined) return;     // 로딩 중
+    if (userDoc === null) return;          // 신규 — users doc 아직 생성 전, AuthGate가 처리
+    if (userDoc.phone) return;             // 이미 등록
+    if (pathname.startsWith('/m/onboarding')) return;  // 온보딩 페이지 자체는 통과
+    const next = pathname && pathname.startsWith('/m') ? pathname : '/m';
+    router.replace(`/m/onboarding/phone?next=${encodeURIComponent(next)}`);
+  }, [authState.status, userDoc, pathname, router]);
 
   return (
     <AuthGate>
