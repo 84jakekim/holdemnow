@@ -46,6 +46,7 @@ export interface Reservation {
   reservedFor: Timestamp;
   partySize: number;
   note?: string | null;
+  participatingGame?: string | null;
   status: ReservationStatus;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -55,6 +56,7 @@ export interface Reservation {
 }
 
 export const MAX_RESERVATION_NOTE_LEN = 200;
+export const MAX_PARTICIPATING_GAME_LEN = 200;
 export const MIN_PARTY_SIZE = 1;
 export const MAX_PARTY_SIZE = 20;
 
@@ -81,6 +83,7 @@ function toReservation(
     reservedFor: data.reservedFor as Timestamp,
     partySize: (data.partySize as number) ?? 1,
     note: (data.note as string | null | undefined) ?? null,
+    participatingGame: (data.participatingGame as string | null | undefined) ?? null,
     status: (data.status as ReservationStatus) ?? 'pending',
     createdAt: data.createdAt as Timestamp,
     updatedAt: data.updatedAt as Timestamp,
@@ -106,6 +109,7 @@ export async function createReservation(input: {
   reservedFor: Date;
   partySize: number;
   note?: string | null;
+  participatingGame?: string | null;
 }): Promise<string> {
   if (!input.storeId) throw new Error('storeId가 필요합니다.');
   if (!input.authorUid) throw new Error('로그인이 필요합니다.');
@@ -127,6 +131,11 @@ export async function createReservation(input: {
     throw new Error(`메모는 ${MAX_RESERVATION_NOTE_LEN}자 이내로 작성해주세요.`);
   }
 
+  const participatingGame = (input.participatingGame ?? '').trim();
+  if (participatingGame.length > MAX_PARTICIPATING_GAME_LEN) {
+    throw new Error(`참가 게임은 ${MAX_PARTICIPATING_GAME_LEN}자 이내로 작성해주세요.`);
+  }
+
   const phone = (input.authorPhone ?? '').trim();
 
   const payload: Record<string, unknown> = {
@@ -138,6 +147,7 @@ export async function createReservation(input: {
     reservedFor: Timestamp.fromDate(input.reservedFor),
     partySize,
     note: note || null,
+    participatingGame: participatingGame || null,
     status: 'pending' as ReservationStatus,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
