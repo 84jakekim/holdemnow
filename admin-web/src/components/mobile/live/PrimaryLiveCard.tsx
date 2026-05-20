@@ -57,8 +57,49 @@ function LevelCountdown({ session }: { session: LiveSession }) {
 }
 
 export default function PrimaryLiveCard({ sessions, thumbnails }: Props) {
-  const hot = pickHot(sessions);
-  if (!hot) return null;
+  const runningSessions = sessions.filter((s) => s.status === 'running');
+  const hot = pickHot(runningSessions);
+
+  // 빈 상태 placeholder — 시그니처 자리 항상 가시화
+  if (!hot) {
+    return (
+      <section aria-label="LIVE" className="px-4 pt-4 pb-1">
+        <div
+          className="relative rounded-2xl overflow-hidden flex items-center gap-3 px-4 py-4"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1.5px dashed var(--border)',
+          }}
+        >
+          <span
+            className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: 'rgba(255,0,80,0.10)' }}
+            aria-hidden="true"
+          >
+            <span
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ background: 'var(--live, #FF0050)' }}
+            />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-extrabold" style={{ color: 'var(--text-1)' }}>
+              지금 LIVE 진행 중인 매장이 없습니다
+            </div>
+            <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+              LIVE가 시작되면 여기에 가장 먼저 표시됩니다
+            </div>
+          </div>
+          <Link
+            href="/m/find"
+            className="flex-shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full transition active:opacity-70"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-1)' }}
+          >
+            매장 둘러보기 →
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   const thumb = thumbnails?.[hot.storeId];
   const lateRegMin = computeLateRegMinutes(hot, computeRemainingSec(hot));
