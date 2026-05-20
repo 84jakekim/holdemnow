@@ -54,6 +54,11 @@ import {
   loadTopStoresByMetric,
   loadAllStoresMetrics,
   loadRecentUsers,
+  loadStoreRegionDistribution,
+  loadUserRegionDistribution,
+  loadLiveRegionDistribution,
+  loadRegionOpportunities,
+  loadUserRegionTimeSeries,
   type UserStats,
   type StoreStats,
   type OrganizerStats,
@@ -67,6 +72,9 @@ import {
   type TopStore,
   type StoreMetricsRow,
   type UserSummary,
+  type RegionDistribution,
+  type RegionOpportunity,
+  type RegionTimeSeries,
 } from '@/lib/stats';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -81,6 +89,16 @@ const COLOR_GOLD = '#F59E0B'; // 골드 — 매장
 const COLOR_LIVE = '#E53E3E'; // 빨강 — LIVE
 const COLOR_SUCCESS = '#10B981';
 const COLOR_MUTED = '#9CA3AF';
+
+// 지역별 라인차트 팔레트 — 부산(핑크)·서울(골드)·경기(빨강) 후속은 다채로운 톤
+const REGION_PALETTE = [
+  '#FF1F8F', // 핑크 (Top 1 — 보통 부산)
+  '#F59E0B', // 골드 (Top 2)
+  '#E53E3E', // 빨강 (Top 3)
+  '#10B981', // 그린 (Top 4)
+  '#3B82F6', // 블루 (Top 5)
+  '#9CA3AF', // 회색 (기타)
+];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 포맷 헬퍼
@@ -156,6 +174,11 @@ interface DashboardData {
   bottomByImpressions: TopStore[];
   allMetrics: StoreMetricsRow[];
   recentUsers: UserSummary[];
+  storeRegion: RegionDistribution[];
+  userRegion: RegionDistribution[];
+  liveRegion: RegionDistribution[];
+  opportunities: RegionOpportunity[];
+  regionTimeSeries: RegionTimeSeries[];
 }
 
 type RangeToggle = 7 | 30;
@@ -191,6 +214,11 @@ export default function PlatformDashboard() {
         bottomByImpressions,
         allMetrics,
         recentUsers,
+        storeRegion,
+        userRegion,
+        liveRegion,
+        opportunities,
+        regionTimeSeries,
       ] = await Promise.all([
         loadUserStats(),
         loadStoreStats(),
@@ -209,6 +237,11 @@ export default function PlatformDashboard() {
         loadTopStoresByMetric('impressions', 10, true),
         loadAllStoresMetrics(),
         loadRecentUsers(10),
+        loadStoreRegionDistribution(),
+        loadUserRegionDistribution(),
+        loadLiveRegionDistribution(),
+        loadRegionOpportunities(),
+        loadUserRegionTimeSeries(30),
       ]);
       setData({
         users,
@@ -228,6 +261,11 @@ export default function PlatformDashboard() {
         bottomByImpressions,
         allMetrics,
         recentUsers,
+        storeRegion,
+        userRegion,
+        liveRegion,
+        opportunities,
+        regionTimeSeries,
       });
       setLastUpdate(new Date());
     } catch (err) {
@@ -327,6 +365,81 @@ export default function PlatformDashboard() {
         shortName: truncate(r.storeName, 8),
         value: r.cardClicks ?? 0,
       }));
+  }, [data]);
+
+  // ━━ 지역 분석 — 막대/테이블/시계열 ━━
+  const storeRegionBarData = useMemo(() => {
+    const rows = data?.storeRegion ?? [];
+    return rows.slice(0, 12).map((r) => ({ name: r.region, value: r.count }));
+  }, [data]);
+
+  const userRegionBarData = useMemo(() => {
+    const rows = data?.userRegion ?? [];
+    return rows.slice(0, 12).map((r) => ({ name: r.region, value: r.count }));
+  }, [data]);
+
+  const opportunityRows = useMemo(() => {
+    const rows = data?.opportunities ?? [];
+    // 이미 백엔드에서 opportunityScore 내림차순 정렬되어 있지만 안전하게 재정렬
+    return [...rows]
+      .sort((a, b) => b.opportunityScore - a.opportunityScore)
+      .slice(0, 10);
+  }, [data]);
+
+  // 지역별 시계열 — Top 5 + '기타' 묶기, recharts용 wide row 변환
+  const regionLineSeries = useMemo(() => {
+    const all = data?.regionTimeSeries ?? [];
+    if (all.length === 0) return { rows: [] as Array<Record<string, number | string>>, regions: [] as string[] };
+
+    // 총합 기준 정렬 (이미 정렬되어 있을 가능성 높지만 방어적)
+    const withTotals = all.map((rs) => ({
+      ...rs,
+      total: rs.series.reduce((acc, p) => acc + p.value, 0),
+    }));
+    withTotals.sort((a, b) => b.total - a.total);
+
+    const top = withTotals.slice(0, 5);
+    const rest = withTotals.slice(5);
+
+    // 모든 date 키 수집 (top 첫 항목 series 기준)
+    const dateKeys = top[0]?.series.map((p) => p.date) ?? [];
+
+    // date → row
+    const rowMap = new Map<string, Record<string, number | string>>();
+    dateKeys.forEach((dk) => {
+      rowMap.set(dk, { date: dk, label: shortDate(dk) });
+    });
+
+    top.forEach((rs) => {
+      rs.series.forEach((p) => {
+        const row = rowMap.get(p.date);
+        if (row) row[rs.region] = p.value;
+      });
+    });
+
+    // 기타 묶기
+    if (rest.length > 0) {
+      dateKeys.forEach((dk) => {
+        const row = rowMap.get(dk);
+        if (!row) return;
+        let acc = 0;
+        rest.forEach((rs) => {
+          const p = rs.series.find((x) => x.date === dk);
+          acc += p?.value ?? 0;
+        });
+        row['기타'] = acc;
+      });
+    }
+
+    const regions = top.map((rs) => rs.region);
+    if (rest.length > 0) regions.push('기타');
+
+    return {
+      rows: Array.from(rowMap.values()).sort((a, b) =>
+        String(a.date).localeCompare(String(b.date)),
+      ),
+      regions,
+    };
   }, [data]);
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -879,6 +992,177 @@ export default function PlatformDashboard() {
         총 발송 수 <strong style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmt(data?.campaigns.totalDelivered)}</strong>
         {' · '}
         총 도달 (recipients) <strong style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmt(data?.campaigns.totalRecipients)}</strong>
+      </div>
+
+      {/* ━━ 4-4. 지역 분석 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 800,
+          color: 'var(--text-3)',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          marginTop: 24,
+          marginBottom: 10,
+          paddingBottom: 6,
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        ━━ 지역 분석 ━━
+      </div>
+
+      {/* 4-4-1. 지역별 분포 (매장 / 사용자) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+        <ChartCard
+          title="지역별 매장 분포"
+          subtitle="status=active 또는 isDemo 기준"
+        >
+          {storeRegionBarData.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+              {loading && !data ? '불러오는 중…' : '데이터가 아직 없습니다.'}
+            </div>
+          ) : (
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={storeRegionBarData}
+                  margin={{ top: 10, right: 16, left: 0, bottom: 10 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: 'var(--text-2)', fontSize: 11, fontWeight: 600 }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'var(--border)' }}
+                    interval={0}
+                  />
+                  <YAxis
+                    tick={{ fill: 'var(--text-3)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'var(--border)' }}
+                    allowDecimals={false}
+                    width={32}
+                  />
+                  <Tooltip content={<SimpleTooltip />} cursor={{ fill: 'var(--surface-3)', opacity: 0.4 }} />
+                  <Bar
+                    dataKey="value"
+                    name="매장 수"
+                    fill="var(--brand)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartCard>
+
+        <ChartCard
+          title="지역별 사용자 분포"
+          subtitle="즐겨찾기 매장 지역 최다 빈도 기반 추정"
+        >
+          {userRegionBarData.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+              {loading && !data ? '불러오는 중…' : '데이터가 아직 없습니다.'}
+            </div>
+          ) : (
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={userRegionBarData}
+                  margin={{ top: 10, right: 16, left: 0, bottom: 10 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: 'var(--text-2)', fontSize: 11, fontWeight: 600 }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'var(--border)' }}
+                    interval={0}
+                  />
+                  <YAxis
+                    tick={{ fill: 'var(--text-3)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'var(--border)' }}
+                    allowDecimals={false}
+                    width={32}
+                  />
+                  <Tooltip content={<SimpleTooltip />} cursor={{ fill: 'var(--surface-3)', opacity: 0.4 }} />
+                  <Bar
+                    dataKey="value"
+                    name="사용자 수"
+                    fill="var(--gold)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartCard>
+      </div>
+
+      {/* 4-4-2. 영업 기회 매트릭스 */}
+      <SectionLabel>영업 기회 매트릭스</SectionLabel>
+      <RegionOpportunityTable rows={opportunityRows} loading={loading && !data} />
+
+      {/* 4-4-3. 지역별 가입자 추이 (30일) */}
+      <div className="mt-3 mb-8">
+        <ChartCard
+          title="지역별 신규 가입자 추이 (30일)"
+          subtitle="Top 5 지역 + 기타 — 사용자 누적 많은 순"
+        >
+          {regionLineSeries.rows.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+              {loading && !data ? '불러오는 중…' : '데이터가 아직 없습니다.'}
+            </div>
+          ) : (
+            <>
+              <div style={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={regionLineSeries.rows}
+                    margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: 'var(--text-3)', fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={{ stroke: 'var(--border)' }}
+                      interval="preserveStartEnd"
+                      minTickGap={20}
+                    />
+                    <YAxis
+                      tick={{ fill: 'var(--text-3)', fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={{ stroke: 'var(--border)' }}
+                      allowDecimals={false}
+                      width={32}
+                    />
+                    <Tooltip content={<TrendTooltip />} />
+                    {regionLineSeries.regions.map((region, idx) => (
+                      <Line
+                        key={region}
+                        type="monotone"
+                        dataKey={region}
+                        name={region}
+                        stroke={REGION_PALETTE[idx % REGION_PALETTE.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <LegendRow
+                items={regionLineSeries.regions.map((region, idx) => ({
+                  color: REGION_PALETTE[idx % REGION_PALETTE.length],
+                  label: region,
+                }))}
+              />
+            </>
+          )}
+        </ChartCard>
       </div>
 
       {/* ━━ 5. 빠른 진입 액션 ━━ */}
@@ -1562,6 +1846,175 @@ function BarStoreTooltip({
       >
         카드 클릭 {fmt(p.value)}회
       </div>
+    </div>
+  );
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// RegionOpportunityTable — 지역별 영업 우선순위
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function recommendationLabel(score: number): { text: string; tone: 'urgent' | 'gold' | 'idle' } {
+  if (score >= 70) return { text: '🔥 즉시 영업 추천', tone: 'urgent' };
+  if (score >= 50) return { text: '📈 영업 검토', tone: 'gold' };
+  return { text: '✅ 안정', tone: 'idle' };
+}
+
+function opportunityBarColor(score: number): string {
+  if (score >= 70) return 'linear-gradient(90deg, #E53E3E 0%, #FCA5A5 100%)';
+  if (score >= 50) return 'var(--gold)';
+  return 'var(--text-3)';
+}
+
+function recommendationStyle(tone: 'urgent' | 'gold' | 'idle'): React.CSSProperties {
+  if (tone === 'urgent') {
+    return {
+      color: '#FCA5A5',
+      background: 'rgba(229, 62, 62, 0.12)',
+      border: '1px solid rgba(229, 62, 62, 0.4)',
+    };
+  }
+  if (tone === 'gold') {
+    return {
+      color: '#FCD34D',
+      background: 'rgba(245, 158, 11, 0.12)',
+      border: '1px solid rgba(245, 158, 11, 0.4)',
+    };
+  }
+  return {
+    color: 'var(--text-3)',
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border)',
+  };
+}
+
+function RegionOpportunityTable({
+  rows,
+  loading,
+}: {
+  rows: RegionOpportunity[];
+  loading?: boolean;
+}) {
+  if (loading) {
+    return (
+      <div
+        style={{
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-md)',
+          padding: '14px 16px',
+          fontSize: 12,
+          color: 'var(--text-3)',
+        }}
+      >
+        불러오는 중…
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <div
+        style={{
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-md)',
+          padding: '14px 16px',
+          fontSize: 12,
+          color: 'var(--text-3)',
+        }}
+      >
+        영업 기회 데이터가 아직 없습니다.
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--r-md)',
+        padding: '8px 4px',
+        overflowX: 'auto',
+      }}
+    >
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 12,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <thead>
+          <tr style={{ color: 'var(--text-3)', fontSize: 11 }}>
+            <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)', width: 48 }}>순위</th>
+            <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>지역</th>
+            <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>사용자</th>
+            <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>매장</th>
+            <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>매장당 사용자</th>
+            <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>LIVE 누적</th>
+            <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)', minWidth: 180 }}>기회 점수</th>
+            <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 700, borderBottom: '1px solid var(--border)', width: 150 }}>추천</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, idx) => {
+            const rec = recommendationLabel(r.opportunityScore);
+            const pct = Math.max(0, Math.min(100, r.opportunityScore));
+            return (
+              <tr key={r.region} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '10px', color: 'var(--text-3)', fontWeight: 700 }}>{idx + 1}</td>
+                <td style={{ padding: '10px', color: 'var(--text-1)', fontWeight: 700 }}>{r.region}</td>
+                <td style={{ padding: '10px', textAlign: 'right', color: 'var(--text-1)' }}>{fmt(r.userCount)}</td>
+                <td style={{ padding: '10px', textAlign: 'right', color: 'var(--text-1)' }}>{fmt(r.storeCount)}</td>
+                <td style={{ padding: '10px', textAlign: 'right', color: 'var(--text-2)' }}>{r.userToStoreRatio.toFixed(1)}</td>
+                <td style={{ padding: '10px', textAlign: 'right', color: 'var(--text-2)' }}>{fmt(r.liveSessionsTotal)}</td>
+                <td style={{ padding: '10px' }}>
+                  <div className="flex items-center gap-2">
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 8,
+                        background: 'var(--surface-2)',
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                        minWidth: 80,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${pct}%`,
+                          height: '100%',
+                          background: opportunityBarColor(r.opportunityScore),
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </div>
+                    <span style={{ width: 40, textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
+                      {r.opportunityScore.toFixed(1)}
+                    </span>
+                  </div>
+                </td>
+                <td style={{ padding: '10px' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      padding: '3px 8px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      ...recommendationStyle(rec.tone),
+                    }}
+                  >
+                    {rec.text}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
