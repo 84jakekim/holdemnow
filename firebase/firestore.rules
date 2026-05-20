@@ -386,6 +386,34 @@ service cloud.firestore {
       allow create, update, delete: if isPlatformAdmin();
     }
 
+    // ===== 신고 (reports) — Phase B 모더레이션 =====
+    // reportId = `${reviewId}_${reporterUid}` 형식 → 같은 사용자 중복 신고 차단.
+    // - read: 본인 신고는 본인 read, platform_admin은 전체 read.
+    // - create: 인증 사용자, reporterUid == 본인 uid 강제.
+    // - update/delete: platform_admin만 (resolved 등 처리).
+    match /reports/{reportId} {
+      allow read: if isSignedIn()
+        && (resource.data.reporterUid == request.auth.uid || isPlatformAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.reporterUid == request.auth.uid;
+      allow update: if isPlatformAdmin();
+      allow delete: if isPlatformAdmin();
+    }
+
+    // ===== 작성 빈도 제한 (writeRateLimits) =====
+    // docId = `${uid}_${namespace}` 형태. doc 안 uid 필드로 본인 검증.
+    // 본인 doc만 read·write — 다른 사람 빈도 카운터 조작 차단.
+    match /writeRateLimits/{docId} {
+      allow read: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
     // ===== 그 외 모두 차단 (default deny) =====
     match /{document=**} {
       allow read, write: if false;

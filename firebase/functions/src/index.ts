@@ -38,6 +38,9 @@ export { autoStopFinishedSessions } from './live/autoStopFinishedSessions';
 // ===== Reviews — 매장 리뷰 집계 (reviewCount/averageRating/ratingDistribution) =====
 export { aggregateReviewStats } from './reviews/aggregateReviewStats';
 
+// ===== Moderation — reports 누적 3건 시 자동 숨김 (Phase B 클린봇) =====
+export { autoHideOnReports } from './moderation/autoHideOnReports';
+
 // ===== Series — 위성 예선 자동 집계 (M19 매핑) (v0.2+ 추가 예정) =====
 // export { onSatelliteResultBatch } from './series/onSatelliteResultBatch';
 

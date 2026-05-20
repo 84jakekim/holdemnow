@@ -16,6 +16,7 @@ import {
   setDoc,
   serverTimestamp,
   Timestamp,
+  type DocumentData,
 } from 'firebase/firestore';
 import {
   ref as storageRef,
@@ -335,6 +336,129 @@ export function subscribeRecentReviews(
         }),
       );
     },
+    (e) => onError(e as Error),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 신고 (reports 컬렉션) — Phase B
+// ─────────────────────────────────────────────────────────────
+
+export type ReportReason = 'spam' | 'offensive' | 'misinformation' | 'advertising' | 'other';
+
+/**
+ * reports/{reportId} — collectionGroup 친화 단일 컬렉션.
+ * Cloud Function `autoHideOnReports`가 동일 targetId의 신고 수가
+ * 임계값(REPORT_THRESHOLD=3) 이상이면 자동으로 대상 리뷰의 hidden=true 설정.
+ */
+export interface Report {
+  id: string;
+  targetType: 'review' | 'community' | 'user';
+  /** 리뷰 신고 시 reviewId */
+  targetId: string;
+  /** 대상 doc full path — 예: 'stores/{storeId}/reviews/{reviewId}' */
+  targetParentPath: string;
+  /** review 신고 시 매장 ID (대시보드 그룹화·필터용) */
+  storeId?: string;
+  reporterUid: string;
+  reason: ReportReason;
+  detail?: string;
+  createdAt?: Timestamp;
+  /** 본사 처리 여부 */
+  resolved: boolean;
+  resolvedBy?: string;
+  resolvedAt?: Timestamp | null;
+  resolution?: 'hide' | 'restore' | 'dismiss';
+}
+
+function toReport(id: string, data: DocumentData): Report {
+  return {
+    id,
+    targetType: (data.targetType as Report['targetType']) ?? 'review',
+    targetId: (data.targetId as string) ?? '',
+    targetParentPath: (data.targetParentPath as string) ?? '',
+    storeId: (data.storeId as string | undefined) ?? undefined,
+    reporterUid: (data.reporterUid as string) ?? '',
+    reason: (data.reason as ReportReason) ?? 'other',
+    detail: (data.detail as string | undefined) ?? undefined,
+    createdAt: data.createdAt as Timestamp | undefined,
+    resolved: (data.resolved as boolean | undefined) ?? false,
+    resolvedBy: (data.resolvedBy as string | undefined) ?? undefined,
+    resolvedAt: (data.resolvedAt as Timestamp | null | undefined) ?? null,
+    resolution: (data.resolution as Report['resolution']) ?? undefined,
+  };
+}
+
+/**
+ * 리뷰 신고. 같은 사용자는 같은 리뷰 1회만 가능.
+ * reportId = `${reviewId}_${reporterUid}` → setDoc으로 멱등 보장
+ * (이미 신고했다면 같은 reason으로 갱신되되 createdAt은 보존).
+ */
+export async function reportReview(
+  storeId: string,
+  reviewId: string,
+  reporterUid: string,
+  reason: ReportReason,
+  detail?: string,
+): Promise<void> {
+  if (!storeId || !reviewId || !reporterUid) {
+    throw new Error('storeId·reviewId·reporterUid는 필수입니다.');
+  }
+  const reportId = `${reviewId}_${reporterUid}`;
+  const ref = doc(db, 'reports', reportId);
+
+  // 이미 신고했다면 무시 (중복 방지)
+  const existing = await getDoc(ref);
+  if (existing.exists()) return;
+
+  const payload: Record<string, unknown> = {
+    targetType: 'review',
+    targetId: reviewId,
+    targetParentPath: `stores/${storeId}/reviews/${reviewId}`,
+    storeId,
+    reporterUid,
+    reason,
+    resolved: false,
+    createdAt: serverTimestamp(),
+  };
+  if (detail && detail.trim()) payload.detail = detail.trim().slice(0, 500);
+
+  await setDoc(ref, payload, { merge: false });
+}
+
+/** 이 사용자가 이 리뷰 이미 신고했나? — 신고 버튼 비활성화용 */
+export async function hasReportedReview(
+  _storeId: string,
+  reviewId: string,
+  uid: string,
+): Promise<boolean> {
+  if (!reviewId || !uid) return false;
+  try {
+    const ref = doc(db, 'reports', `${reviewId}_${uid}`);
+    const snap = await getDoc(ref);
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 본사 모더레이션 페이지 — 최근 신고 N건 구독 (최신순).
+ * 인덱스: orderBy('createdAt' desc) — 단일 필드 자동 인덱스.
+ */
+export function subscribeRecentReports(
+  limit: number,
+  onChange: (items: Report[]) => void,
+  onError: (e: Error) => void,
+): () => void {
+  const q = query(
+    collection(db, 'reports'),
+    orderBy('createdAt', 'desc'),
+    fbLimit(limit),
+  );
+  return onSnapshot(
+    q,
+    (snap) => onChange(snap.docs.map((d) => toReport(d.id, d.data()))),
     (e) => onError(e as Error),
   );
 }
