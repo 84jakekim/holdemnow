@@ -375,7 +375,6 @@ function BlindStructureView({
   session: LiveSession;
   currentSeconds: number;
 }) {
-  const currentRowRef = useRef<HTMLDivElement>(null);
   const structure =
     session.blindStructureLocked && session.blindStructureLocked.length > 0
       ? session.blindStructureLocked
@@ -391,13 +390,6 @@ function BlindStructureView({
     return { ...lvl, startOffsetSec };
   });
   const totalMin = Math.round(cum / 60);
-
-  // 현재 레벨로 자동 스크롤
-  useEffect(() => {
-    if (currentRowRef.current) {
-      currentRowRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-  }, [currentLv]);
 
   return (
     <div className="bg-white border-[1.5px] border-gray-200 rounded-2xl overflow-hidden">
@@ -436,7 +428,6 @@ function BlindStructureView({
           return (
             <div
               key={lvl.level}
-              ref={isCurrent ? currentRowRef : undefined}
               className={`flex items-center gap-2 px-3 py-2.5 border-t border-gray-50 transition ${
                 isCurrent ? 'bg-red-50' : isPast ? 'opacity-50 bg-gray-50/50' : ''
               }`}
