@@ -206,8 +206,14 @@ function SessionControls({ session }: { session: LiveSession }) {
   const isRunning = session.status === 'running';
   const lowTime = seconds <= 10 && isRunning;
   const structure = session.blindStructure;
+  const currentLevelObj = structure.find((l) => l.level === session.currentLevel);
   const nextBlind = structure.find((l) => l.level === session.currentLevel + 1);
   const lateMin = computeLateRegMinutes(session, seconds);
+  // 현재 레벨 진행률(0~1) — duration 기준 elapsed/total
+  const currentDur = currentLevelObj?.durationSec ?? 0;
+  const progress =
+    currentDur > 0 ? Math.min(1, Math.max(0, (currentDur - seconds) / currentDur)) : 0;
+  const isCurrentBreak = currentLevelObj?.isBreak === true;
   // useLiveCountdown 1초 tick에 묻어 매초 재계산됨 (running 동안). isFinishing 동안에도 표시 갱신.
   const graceSec = computeFinishingGraceSec(session);
   const isFinishing = graceSec != null && graceSec > 0;
@@ -253,27 +259,52 @@ function SessionControls({ session }: { session: LiveSession }) {
   return (
     <div className="space-y-3">
       {/* 거대 타이머 */}
-      <div className={`bg-white border-[1.5px] rounded-2xl p-6 text-center ${isFinishing ? 'border-orange-300 bg-orange-50 animate-pulse' : 'border-gray-200'}`}>
+      <div className={`bg-white border-[1.5px] rounded-2xl p-6 text-center ${isFinishing ? 'border-orange-300 bg-orange-50 animate-pulse' : isCurrentBreak ? 'border-amber-300 bg-amber-50/60' : 'border-gray-200'}`}>
         <div className="text-[10px] font-bold text-gray-500 tracking-widest mb-1">
           {isFinishing ? (
             <span className="text-orange-700 mr-2">⚠ 모든 레벨 종료 · 자동 정리까지 {fmtTime(graceSec ?? 0)}</span>
           ) : isReady ? (
             <span className="text-emerald-700 mr-2">● 시작 대기</span>
           ) : null}
-          LEVEL {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
-          {session.ante ? ` · ante ${session.ante}` : ''}
+          {isCurrentBreak ? (
+            <span className="text-amber-700">☕ 휴식 (BREAK) · LV {session.currentLevel}</span>
+          ) : (
+            <>
+              LEVEL {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
+              {session.ante ? ` · ante ${session.ante}` : ''}
+            </>
+          )}
         </div>
         <div
           className={`font-mono font-extrabold leading-none transition-colors ${
-            isFinishing ? 'text-orange-600' : lowTime ? 'text-red-500' : isRunning ? 'text-gray-900' : 'text-gray-400'
+            isFinishing ? 'text-orange-600' : isCurrentBreak ? 'text-amber-600' : lowTime ? 'text-red-500' : isRunning ? 'text-gray-900' : 'text-gray-400'
           }`}
-          style={{ fontSize: '64px', letterSpacing: '-0.04em' }}
+          style={{ fontSize: '72px', letterSpacing: '-0.04em' }}
         >
           {isFinishing ? fmtTime(graceSec ?? 0) : fmtTime(seconds)}
         </div>
+        {/* 진행률 바 (running일 때만) */}
+        {isRunning && !isFinishing && currentDur > 0 && (
+          <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all ${
+                lowTime ? 'bg-red-500' : isCurrentBreak ? 'bg-amber-500' : 'bg-gray-900'
+              }`}
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
+        )}
         {nextBlind && !isFinishing && (
-          <div className="text-[10px] text-gray-400 mt-2">
-            다음: Lv {nextBlind.level} · {nextBlind.sb}/{nextBlind.bb}
+          <div className="text-[11px] text-gray-500 mt-3 font-bold">
+            다음:{' '}
+            {nextBlind.isBreak ? (
+              <span className="text-amber-700">☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분</span>
+            ) : (
+              <span className="text-gray-900">
+                Lv{nextBlind.level} · {nextBlind.sb.toLocaleString()}/{nextBlind.bb.toLocaleString()}
+                {nextBlind.ante ? ` · ante ${nextBlind.ante.toLocaleString()}` : ''}
+              </span>
+            )}
           </div>
         )}
         {isReady && (
@@ -330,11 +361,30 @@ function SessionControls({ session }: { session: LiveSession }) {
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label="잔여 인원" value={`${session.playersRemaining}/${session.totalPlayers}명`} />
         <InfoBox label="상금 풀" value={`₩${(session.prizePool / 10000).toFixed(0)}만`} />
-        <InfoBox
-          label={session.lateRegClosed ? '늦은 등록' : '등록 마감까지'}
-          value={session.lateRegClosed ? '마감됨' : `${lateMin}분`}
-          warn={!session.lateRegClosed && lateMin <= 5}
-        />
+        {(() => {
+          const isClosed =
+            session.lateRegClosed || session.currentLevel > session.lateRegEndLevel;
+          if (isClosed) {
+            return <InfoBox label="등록" value="🔒 마감" warn={false} />;
+          }
+          // 분/초 정밀도 — 5분 이내면 mm:ss 표기
+          let totalSec = seconds;
+          for (let lv = session.currentLevel + 1; lv <= session.lateRegEndLevel; lv++) {
+            const item = session.blindStructure.find((l) => l.level === lv);
+            if (item) totalSec += item.durationSec;
+          }
+          const display =
+            totalSec < 300
+              ? fmtTime(Math.max(0, totalSec))
+              : `${Math.ceil(totalSec / 60)}분`;
+          return (
+            <InfoBox
+              label="등록 마감까지"
+              value={display}
+              warn={lateMin <= 5}
+            />
+          );
+        })()}
         <InfoBox label="시청자" value={`${session.viewerCount}명`} />
       </div>
 
@@ -407,7 +457,7 @@ function BlindStructureView({
         </div>
         {startedMs && (
           <div className="text-right">
-            <div className="text-[9px] font-bold text-gray-400 tracking-widest">시작 시각</div>
+            <div className="text-[9px] font-bold text-gray-400 tracking-widest">토너 시작</div>
             <div className="font-mono text-xs font-extrabold text-gray-700 tabular-nums">
               {(() => {
                 const d = new Date(startedMs);
@@ -417,11 +467,20 @@ function BlindStructureView({
           </div>
         )}
       </div>
+      {/* 컬럼 헤더 */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50/80 border-t border-gray-100 text-[9px] font-bold text-gray-500 tracking-widest">
+        <div className="w-4" />
+        <div className="w-8">LEVEL</div>
+        <div className="flex-1">SB / BB · ante</div>
+        <div className="w-10 text-right">기간</div>
+        <div className="w-[68px] text-right">상태 · 시각</div>
+      </div>
       <div className="max-h-[360px] overflow-y-auto">
         {rows.map((lvl) => {
           const isPast = lvl.level < currentLv;
           const isCurrent = lvl.level === currentLv;
           const isLateRegEnd = lvl.level === session.lateRegEndLevel;
+          const isBreak = lvl.isBreak === true;
           const startAt = startedMs
             ? new Date(startedMs + lvl.startOffsetSec * 1000)
             : null;
@@ -429,7 +488,7 @@ function BlindStructureView({
             <div
               key={lvl.level}
               className={`flex items-center gap-2 px-3 py-2.5 border-t border-gray-50 transition ${
-                isCurrent ? 'bg-red-50' : isPast ? 'opacity-50 bg-gray-50/50' : ''
+                isCurrent ? 'bg-red-50' : isPast ? 'opacity-50 bg-gray-50/50' : isBreak ? 'bg-amber-50/40' : ''
               }`}
             >
               <div
@@ -444,11 +503,17 @@ function BlindStructureView({
                   isCurrent ? 'text-red-600' : 'text-gray-900'
                 }`}
               >
-                Lv{lvl.level}
+                {isBreak ? '☕' : `Lv${lvl.level}`}
               </div>
               <div className="flex-1 font-mono text-xs text-gray-700 tabular-nums truncate">
-                {lvl.sb.toLocaleString()}/{lvl.bb.toLocaleString()}
-                {lvl.ante ? ` · ante ${lvl.ante.toLocaleString()}` : ''}
+                {isBreak ? (
+                  <span className="text-amber-700 font-bold not-italic">휴식 (BREAK)</span>
+                ) : (
+                  <>
+                    {lvl.sb.toLocaleString()}/{lvl.bb.toLocaleString()}
+                    {lvl.ante ? ` · ante ${lvl.ante.toLocaleString()}` : ''}
+                  </>
+                )}
               </div>
               {isLateRegEnd && (
                 <div className="text-[9px] bg-amber-100 text-amber-800 rounded-full px-1.5 py-0.5 font-bold whitespace-nowrap">
@@ -459,15 +524,19 @@ function BlindStructureView({
                 {Math.round(lvl.durationSec / 60)}분
               </div>
               {isCurrent ? (
-                <div className="font-mono text-xs font-extrabold text-red-600 tabular-nums w-12 text-right">
-                  {fmtTime(currentSeconds)}
+                <div className="font-mono text-xs font-extrabold text-red-600 tabular-nums w-[68px] text-right">
+                  남은 {fmtTime(currentSeconds)}
+                </div>
+              ) : isPast ? (
+                <div className="text-[10px] text-gray-400 tabular-nums w-[68px] text-right">
+                  완료
                 </div>
               ) : startAt ? (
-                <div className="text-[10px] text-gray-400 tabular-nums w-12 text-right">
-                  {pad2(startAt.getHours())}:{pad2(startAt.getMinutes())}
+                <div className="text-[10px] text-gray-500 tabular-nums w-[68px] text-right">
+                  시작 {pad2(startAt.getHours())}:{pad2(startAt.getMinutes())}
                 </div>
               ) : (
-                <div className="w-12" />
+                <div className="w-[68px]" />
               )}
             </div>
           );
