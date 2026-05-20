@@ -66,7 +66,7 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
       }}
       aria-label={`${session.storeName} LIVE`}
     >
-      {/* 배경 이미지 */}
+      {/* 배경 이미지 — 컬러 살림 (큰 카드와 동일 정책) */}
       {thumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -74,7 +74,7 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
           alt=""
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ opacity: 0.22 }}
+          style={{ opacity: 0.85 }}
         />
       ) : (
         <div
@@ -83,19 +83,19 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
           aria-hidden="true"
         />
       )}
-      {/* 오버레이 */}
+      {/* 하단 그라데이션만 — 회색톤 제거, 텍스트 가독성 영역만 어둡게 */}
       <div
         className="absolute inset-0"
         style={{
           background: thumbnail
-            ? 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.75) 100%)'
-            : 'rgba(0,0,0,0.28)',
+            ? 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.70) 65%, rgba(0,0,0,0.92) 100%)'
+            : 'rgba(0,0,0,0.25)',
         }}
         aria-hidden="true"
       />
 
-      {/* 콘텐츠 */}
-      <div className="relative z-10 flex flex-col h-full px-2 pt-2 pb-2 gap-0">
+      {/* 콘텐츠 — 하단 정렬 (큰 카드와 동일) */}
+      <div className="relative z-10 flex flex-col h-full px-2 pt-2 pb-2 gap-0 justify-end">
 
         {/* LIVE 배지 */}
         <div className="mb-1">
