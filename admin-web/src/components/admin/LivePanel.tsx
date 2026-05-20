@@ -204,6 +204,7 @@ function SessionTab({
 
 function SessionControls({ session }: { session: LiveSession }) {
   const seconds = useLiveCountdown(session);
+  const [showJump, setShowJump] = useState(false);
   const isReady = session.status === 'ready';
   const isPaused = session.status === 'paused';
   const isRunning = session.status === 'running';
@@ -359,6 +360,37 @@ function SessionControls({ session }: { session: LiveSession }) {
           ✕ 탈락
         </ControlBtn>
       </div>
+
+      {/* 보조 컨트롤 — 레벨 점프 + 매장 TV 미러 */}
+      <div className="grid grid-cols-2 gap-2">
+        <ControlBtn
+          disabled={(session.blindStructureLocked || session.blindStructure).length <= 2}
+          onClick={() => setShowJump(true)}
+        >
+          🎯 레벨 점프
+        </ControlBtn>
+        <button
+          onClick={() => {
+            // 새 탭에서 모바일 풀스크린 LIVE 페이지를 그대로 띄움 → 매장 TV/모니터에 드래그
+            const url = `${window.location.origin}/m/live/${session.id}`;
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }}
+          className="py-3 rounded-xl font-bold text-sm bg-gray-900 text-white"
+        >
+          📺 매장 TV 띄우기
+        </button>
+      </div>
+
+      {showJump && (
+        <LevelJumpModal
+          session={session}
+          onClose={() => setShowJump(false)}
+          onJump={(absLevel) => {
+            goToLevelInSession(session, { absLevel }, seconds);
+            setShowJump(false);
+          }}
+        />
+      )}
 
       {/* 정보 박스 */}
       <div className="grid grid-cols-2 gap-2">
@@ -575,6 +607,77 @@ function ControlBtn({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * 레벨 점프 모달 — 100레벨 토너에서 ⏮/⏭ 연타 대신 직접 점프.
+ * blindStructureLocked가 있으면 그걸 사용 (시작 시점 스냅샷 우선).
+ */
+function LevelJumpModal({
+  session,
+  onClose,
+  onJump,
+}: {
+  session: LiveSession;
+  onClose: () => void;
+  onJump: (absLevel: number) => void;
+}) {
+  const structure =
+    session.blindStructureLocked && session.blindStructureLocked.length > 0
+      ? session.blindStructureLocked
+      : session.blindStructure;
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl"
+      >
+        <h3 className="font-extrabold text-gray-900 mb-1">🎯 레벨 점프</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          타임라인이 즉시 재정렬됩니다. 잘못 누르면 다시 점프하세요.
+        </p>
+        <div className="max-h-[360px] overflow-y-auto -mx-1 px-1 mb-3">
+          <div className="grid grid-cols-3 gap-2">
+            {structure.map((lvl) => {
+              const isCurrent = lvl.level === session.currentLevel;
+              const isBreak = lvl.isBreak === true;
+              return (
+                <button
+                  key={lvl.level}
+                  onClick={() => onJump(lvl.level)}
+                  disabled={isCurrent}
+                  className={`p-2 rounded-lg border-[1.5px] text-left transition disabled:opacity-50 ${
+                    isCurrent
+                      ? 'border-red-300 bg-red-50'
+                      : isBreak
+                      ? 'border-amber-200 bg-amber-50/40 hover:border-amber-400'
+                      : 'border-gray-200 hover:border-black'
+                  }`}
+                >
+                  <div className="text-[9px] font-bold text-gray-500 tracking-widest">
+                    {isBreak ? '☕' : `LV ${lvl.level}`}
+                  </div>
+                  <div className="font-mono text-[11px] font-extrabold text-gray-900 tabular-nums">
+                    {isBreak ? '휴식' : `${lvl.sb.toLocaleString()}/${lvl.bb.toLocaleString()}`}
+                  </div>
+                  <div className="text-[9px] text-gray-500">{Math.round(lvl.durationSec / 60)}분</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-lg border-[1.5px] border-gray-200 text-gray-500 font-bold text-sm"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
   );
 }
 

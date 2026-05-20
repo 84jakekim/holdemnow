@@ -467,9 +467,57 @@ export async function togglePauseSession(s: LiveSession, currentSecondsLeft: num
   });
 }
 
-export async function goToLevelInSession(s: LiveSession, delta: 1 | -1, currentSecondsLeft: number) {
-  const target = s.blindStructure.find((l) => l.level === s.currentLevel + delta);
+/**
+ * Deterministic timeline 친화 레벨 점프 — 사용자가 ⏮/⏭ 누르면
+ * computeTimelinePosition이 즉시 새 레벨을 반환하도록 totalStartedAt/totalPausedMs를 재정렬한다.
+ *
+ * 동작 원리: timeline 좌표계에서 "타겟 레벨이 시작하는 누적 ms 위치"를 구한 뒤
+ * elapsed = targetCumulativeMs 가 되도록 totalStartedAt(또는 totalPausedMs)을 역산.
+ *
+ * - running: now - totalStartedAt - totalPausedMs == targetCumulativeMs 가 되도록
+ *   totalStartedAt = now - totalPausedMs - targetCumulativeMs
+ *   (totalPausedMs는 보존, pausedAt도 그대로)
+ * - paused: pausedAt - totalStartedAt - totalPausedMs == targetCumulativeMs
+ *   totalStartedAt = pausedAt - totalPausedMs - targetCumulativeMs
+ *
+ * 타겟 레벨의 시작점으로 점프하므로 secondsLeft는 자동으로 target.durationSec이 된다.
+ * delta 직접 받지 않고 targetLevel을 받도록 absLevel 인자 지원 — UI는 +1/-1만 보내지만
+ * 점프 모달 같은 후속 기능이 절대 레벨로 부르기 쉽도록.
+ */
+export async function goToLevelInSession(
+  s: LiveSession,
+  deltaOrAbs: 1 | -1 | { absLevel: number },
+  _currentSecondsLeft: number,
+) {
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+  if (!structure || structure.length === 0) return;
+
+  const targetLevelNum = typeof deltaOrAbs === 'number'
+    ? s.currentLevel + deltaOrAbs
+    : deltaOrAbs.absLevel;
+  const target = structure.find((l) => l.level === targetLevelNum);
   if (!target) return;
+
+  // 타겟 레벨의 누적 시작 ms 계산 (timeline 좌표계)
+  let cumulativeMs = 0;
+  for (const lvl of structure) {
+    if (lvl.level === target.level) break;
+    cumulativeMs += Math.max(0, lvl.durationSec) * 1000;
+  }
+  const targetCumulativeMs = cumulativeMs;
+
+  // totalStartedAt이 없는 레거시 세션은 박아준다 (점프 직후부터 deterministic 진입)
+  const hasTimeline = !!s.totalStartedAt;
+  const totalPausedMs = s.totalPausedMs ?? 0;
+  const refNowMs = s.status === 'paused' && s.pausedAt
+    ? s.pausedAt.toMillis()
+    : Date.now();
+  // refNow - newTotalStartedMs - totalPausedMs == targetCumulativeMs
+  const newTotalStartedMs = refNowMs - totalPausedMs - targetCumulativeMs;
+  const newTotalStartedTs = Timestamp.fromMillis(newTotalStartedMs);
+
   await patchSession(s.id, {
     currentLevel: target.level,
     smallBlind: target.sb,
@@ -477,16 +525,44 @@ export async function goToLevelInSession(s: LiveSession, delta: 1 | -1, currentS
     ante: target.ante,
     levelSecondsLeft: target.durationSec,
     levelEndsAt: s.status === 'running' ? deadlineFromNow(target.durationSec) : null,
+    // Deterministic timeline 재정렬 — 핵심 fix
+    totalStartedAt: newTotalStartedTs,
+    // blindStructureLocked가 비어있으면 지금 박아준다 (이후 일관성 보장)
+    ...(hasTimeline ? {} : { blindStructureLocked: structure }),
   });
 }
 
+/**
+ * +1분 / −1분 — 현재 레벨의 남은 시간만 조정. timeline 좌표계에서는
+ * elapsed를 delta초만큼 뒤로/앞으로 미는 것과 같다.
+ *
+ * 구현: secondsLeft += delta 하면서 timeline elapsed도 -=delta 만큼 변하도록
+ * totalStartedAt을 delta초만큼 미래로(+1분) 또는 과거로(−1분) 이동.
+ * (그래야 computeTimelinePosition이 다음 tick에서 같은 currentLevel을
+ *  유지하면서 새로운 secondsLeft를 반환한다.)
+ */
 export async function addSecondsToSession(s: LiveSession, currentSecondsLeft: number, delta: number) {
-  const maxSec = (s.blindStructure.find((l) => l.level === s.currentLevel)?.durationSec || 1200) * 3;
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+  const curLvlDur = structure?.find((l) => l.level === s.currentLevel)?.durationSec || 1200;
+  const maxSec = curLvlDur * 3;
   const next = Math.max(0, Math.min(maxSec, currentSecondsLeft + delta));
-  await patchSession(s.id, {
+  const actualDelta = next - currentSecondsLeft; // clamp 반영
+  if (actualDelta === 0) return;
+
+  const updates: Partial<LiveSession> = {
     levelSecondsLeft: next,
     levelEndsAt: s.status === 'running' ? deadlineFromNow(next) : null,
-  });
+  };
+
+  // Deterministic timeline 재정렬 — 시간을 늘리면 elapsed가 줄어야 하므로 totalStartedAt을 +delta초 미래로
+  if (s.totalStartedAt) {
+    const shiftedMs = s.totalStartedAt.toMillis() + actualDelta * 1000;
+    updates.totalStartedAt = Timestamp.fromMillis(shiftedMs);
+  }
+
+  await patchSession(s.id, updates);
 }
 
 export async function eliminatePlayerInSession(s: LiveSession, currentSecondsLeft: number) {
