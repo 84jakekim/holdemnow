@@ -65,7 +65,7 @@ export default function RecoverPage() {
         // 직접 Firebase 표준 reset 메일 발송 fallback.
         try {
           await sendPasswordReset(email);
-          setPhase('done');
+          setPhase('sent');  // 'sent' = 메일 발송 완료 phase 재사용
         } catch {
           setError('해당 이메일로 가입된 계정을 찾을 수 없거나, 재설정 메일 발송에 실패했습니다.');
         }
