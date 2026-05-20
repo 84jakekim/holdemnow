@@ -19,18 +19,31 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 import {
   subscribeRecentReviews,
+  subscribeRecentReports,
   hideReview,
   unhideReview,
   type Review,
+  type Report,
+  type ReportReason,
 } from '@/lib/reviews';
 
 type VisibilityFilter = 'all' | 'visible' | 'hidden';
 type RatingFilter = 'all' | 1 | 2 | 3 | 4 | 5;
 
 const PINK = '#EC4899';
+
+// 신고 사유 라벨 (UI 표시용)
+const REPORT_REASON_LABEL: Record<ReportReason, string> = {
+  spam: '스팸/도배',
+  offensive: '욕설/혐오',
+  misinformation: '허위정보',
+  advertising: '광고/홍보',
+  other: '기타',
+};
 
 // ─────────────────────────────────────────────────────────────
 // helpers
@@ -97,6 +110,7 @@ function StarRow({ rating }: { rating: number }) {
 
 export default function PlatformReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<VisibilityFilter>('all');
@@ -117,6 +131,32 @@ export default function PlatformReviewsPage() {
     return unsub;
   }, []);
 
+  useEffect(() => {
+    const unsub = subscribeRecentReports(
+      200,
+      (items) => {
+        // 리뷰 신고만 필터
+        setReports(items.filter((r) => r.targetType === 'review'));
+      },
+      () => {
+        // 신고 구독 실패는 페이지 렌더 자체는 막지 않음 (리뷰는 계속 표시)
+      },
+    );
+    return unsub;
+  }, []);
+
+  // reviewId(=targetId) 기준 신고 그룹핑 — 미처리(resolved=false)만 카운트
+  const reportsByReviewId = useMemo(() => {
+    const map = new Map<string, Report[]>();
+    for (const rep of reports) {
+      if (rep.resolved) continue;
+      const list = map.get(rep.targetId) ?? [];
+      list.push(rep);
+      map.set(rep.targetId, list);
+    }
+    return map;
+  }, [reports]);
+
   const filtered = useMemo(() => {
     return reviews.filter((r) => {
       if (visibility === 'visible' && r.hidden === true) return false;
@@ -129,6 +169,7 @@ export default function PlatformReviewsPage() {
   const totalCount = reviews.length;
   const hiddenCount = reviews.filter((r) => r.hidden === true).length;
   const visibleCount = totalCount - hiddenCount;
+  const reportedCount = reportsByReviewId.size;
 
   return (
     <div>
@@ -160,6 +201,10 @@ export default function PlatformReviewsPage() {
           <span style={{ color: 'var(--text-3)' }}>·</span>
           <span>
             숨김 <b style={{ color: PINK }}>{hiddenCount}</b>
+          </span>
+          <span style={{ color: 'var(--text-3)' }}>·</span>
+          <span>
+            신고 <b style={{ color: reportedCount > 0 ? '#EF4444' : 'var(--text-1)' }}>{reportedCount}</b>
           </span>
         </div>
       </div>
@@ -223,7 +268,11 @@ export default function PlatformReviewsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((r) => (
-            <ReviewCard key={`${r.storeId}/${r.id}`} review={r} />
+            <ReviewCard
+              key={`${r.storeId}/${r.id}`}
+              review={r}
+              reports={reportsByReviewId.get(r.id) ?? []}
+            />
           ))}
         </div>
       )}
@@ -235,16 +284,41 @@ export default function PlatformReviewsPage() {
 // 카드
 // ─────────────────────────────────────────────────────────────
 
-function ReviewCard({ review }: { review: Review }) {
+function ReviewCard({ review, reports }: { review: Review; reports: Report[] }) {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const hidden = review.hidden === true;
+  const reportCount = reports.length;
+  // 자동 숨김 추정: hidden=true 이면서 hiddenBy가 null/system 또는 신고 ≥ 3건
+  // (Cloud Function `autoHideOnReports`가 hidden=true 설정 시 hiddenBy를 'system' 또는 null로 둔다는 가정)
+  const isAutoHidden =
+    hidden &&
+    reportCount > 0 &&
+    (!review.hiddenBy || review.hiddenBy === 'system' || review.hiddenBy === 'auto');
+
+  /** 미처리 신고 N건을 일괄 resolved 처리 (writeBatch) */
+  const resolveReports = async (resolution: 'hide' | 'restore' | 'dismiss') => {
+    if (reports.length === 0) return;
+    const uid = auth.currentUser?.uid ?? null;
+    const batch = writeBatch(db);
+    for (const rep of reports) {
+      batch.update(doc(db, 'reports', rep.id), {
+        resolved: true,
+        resolvedBy: uid,
+        resolvedAt: serverTimestamp(),
+        resolution,
+      });
+    }
+    await batch.commit();
+  };
 
   const onHide = async () => {
     if (!window.confirm(`이 리뷰를 숨김 처리할까요?\n모바일 사용자에게 노출되지 않습니다.`)) return;
     setBusy(true);
     try {
       await hideReview(review.storeId, review.id);
+      // 신고가 있다면 함께 resolved 처리 (hide)
+      await resolveReports('hide').catch(() => {});
     } catch (e) {
       window.alert(e instanceof Error ? e.message : String(e));
     } finally {
@@ -256,6 +330,28 @@ function ReviewCard({ review }: { review: Review }) {
     setBusy(true);
     try {
       await unhideReview(review.storeId, review.id);
+      // 자동 숨김 잘못된 경우 — 신고도 restore로 처리
+      await resolveReports('restore').catch(() => {});
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 자동 숨김 → 본사가 정식 숨김 확정 (hidden 유지 + reports.resolution='hide') */
+  const onConfirmHide = async () => {
+    if (!window.confirm(`자동 숨김된 리뷰를 본사 확정으로 숨김 처리할까요?`)) return;
+    setBusy(true);
+    try {
+      // hiddenBy를 admin uid로 덮어써서 "사람 검토 완료" 마킹
+      const uid = auth.currentUser?.uid ?? null;
+      await updateDoc(doc(db, 'stores', review.storeId, 'reviews', review.id), {
+        hidden: true,
+        hiddenBy: uid,
+        hiddenAt: serverTimestamp(),
+      });
+      await resolveReports('hide');
     } catch (e) {
       window.alert(e instanceof Error ? e.message : String(e));
     } finally {
@@ -278,6 +374,33 @@ function ReviewCard({ review }: { review: Review }) {
         transition: 'opacity 120ms',
       }}
     >
+      {/* 자동 숨김 배지 (카드 상단) */}
+      {isAutoHidden && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 11,
+            fontWeight: 800,
+            padding: '4px 10px',
+            borderRadius: 6,
+            background: 'var(--surface-2)',
+            color: 'var(--text-2)',
+            border: '1px solid var(--border)',
+            marginBottom: 8,
+          }}
+          title={
+            reports
+              .map((r) => `· ${REPORT_REASON_LABEL[r.reason]}${r.detail ? ` — ${r.detail.slice(0, 40)}` : ''}`)
+              .join('\n') || '자동 숨김된 리뷰'
+          }
+        >
+          <span aria-hidden>🤖</span>
+          <span>자동 숨김 (신고 {reportCount}건)</span>
+        </div>
+      )}
+
       {/* 메타 라인 */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <Link
@@ -311,6 +434,28 @@ function ReviewCard({ review }: { review: Review }) {
         >
           {relTime(review.createdAt) || '시각 미상'}
         </span>
+        {reportCount > 0 && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.04em',
+              padding: '2px 8px',
+              borderRadius: 999,
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#EF4444',
+              border: '1px solid rgba(239, 68, 68, 0.45)',
+              marginLeft: hidden ? 0 : 'auto',
+            }}
+            title={
+              reports
+                .map((r) => `· ${REPORT_REASON_LABEL[r.reason]}${r.detail ? ` — ${r.detail.slice(0, 40)}` : ''}`)
+                .join('\n') || `신고 ${reportCount}건`
+            }
+          >
+            🚩 {reportCount}
+          </span>
+        )}
         {hidden && (
           <span
             style={{
@@ -322,7 +467,7 @@ function ReviewCard({ review }: { review: Review }) {
               background: 'var(--surface-2)',
               color: 'var(--text-3)',
               border: '1px solid var(--border)',
-              marginLeft: 'auto',
+              marginLeft: reportCount > 0 ? 0 : 'auto',
             }}
             title={
               review.hiddenAt
@@ -416,7 +561,7 @@ function ReviewCard({ review }: { review: Review }) {
       )}
 
       {/* 액션 바 */}
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
         {!hidden ? (
           <button
             onClick={onHide}
@@ -435,6 +580,45 @@ function ReviewCard({ review }: { review: Review }) {
           >
             👁️ 숨김 처리
           </button>
+        ) : isAutoHidden ? (
+          <>
+            <button
+              onClick={onConfirmHide}
+              disabled={busy}
+              title="자동 숨김된 리뷰를 본사가 정식 숨김으로 확정 (resolution=hide)"
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                padding: '7px 14px',
+                borderRadius: 8,
+                background: 'rgba(236, 72, 153, 0.12)',
+                color: PINK,
+                border: `1px solid ${PINK}`,
+                cursor: busy ? 'wait' : 'pointer',
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              ✅ 확정 숨김
+            </button>
+            <button
+              onClick={onUnhide}
+              disabled={busy}
+              title="자동 숨김이 잘못된 경우 복원 (resolution=restore)"
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                padding: '7px 14px',
+                borderRadius: 8,
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: 'var(--gold)',
+                border: '1px solid var(--gold)',
+                cursor: busy ? 'wait' : 'pointer',
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              ↻ 복원
+            </button>
+          </>
         ) : (
           <button
             onClick={onUnhide}

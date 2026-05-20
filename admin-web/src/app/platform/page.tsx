@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { subscribeRecentReports, type Report } from '@/lib/reviews';
 import {
   Area,
   AreaChart,
@@ -78,6 +79,15 @@ import {
 } from '@/lib/stats';
 
 const REFRESH_INTERVAL_MS = 30_000;
+
+// 신고 사유 라벨 (대시보드 미니 리스트용)
+const DASHBOARD_REASON_LABEL: Record<string, string> = {
+  spam: '스팸/도배',
+  offensive: '욕설/혐오',
+  misinformation: '허위정보',
+  advertising: '광고/홍보',
+  other: '기타',
+};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 토큰 — 차트 색 (CSS 변수 매핑)
@@ -192,6 +202,7 @@ export default function PlatformDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [rangeDays, setRangeDays] = useState<RangeToggle>(30);
+  const [reports, setReports] = useState<Report[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -280,6 +291,64 @@ export default function PlatformDashboard() {
     const id = setInterval(refresh, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, [refresh]);
+
+  // ━━ 신고 실시간 구독 — 최근 300건 (모더레이션 위젯용) ━━
+  useEffect(() => {
+    const unsub = subscribeRecentReports(
+      300,
+      (items) => setReports(items),
+      (e) => console.warn('[platform/dashboard] reports subscribe failed', e),
+    );
+    return unsub;
+  }, []);
+
+  // ━━ 모더레이션 KPI — 클라이언트 집계 ━━
+  const moderation = useMemo(() => {
+    const now = Date.now();
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const inWeek = (ms: number | null | undefined) => ms != null && ms >= weekAgo && ms <= now;
+    const tsMs = (t: { toMillis?: () => number } | null | undefined): number | null => {
+      if (!t || typeof t.toMillis !== 'function') return null;
+      try {
+        return t.toMillis();
+      } catch {
+        return null;
+      }
+    };
+
+    let pending = 0; // 미처리 신고 (resolved=false)
+    let autoHidden = 0; // 이번주 자동 숨김 (resolution undefined + resolved? — 자동은 resolution=null + resolved=false 형태)
+    let confirmedHidden = 0; // 이번주 본사 확정 숨김 (resolution='hide')
+    let restored = 0; // 이번주 복원 (resolution='restore')
+
+    for (const rep of reports) {
+      if (!rep.resolved) pending += 1;
+
+      // 이번 주 처리된 신고
+      const resolvedMs = tsMs(rep.resolvedAt ?? null);
+      if (inWeek(resolvedMs)) {
+        if (rep.resolution === 'hide') confirmedHidden += 1;
+        else if (rep.resolution === 'restore') restored += 1;
+      }
+    }
+
+    // 자동 숨김: 이번 주 생성된 미처리 신고 중 — 동일 targetId 가 3건 이상이면 자동 숨김 트리거된 것으로 간주
+    // 신고 createdAt이 이번주에 속하는 targetId set 모음
+    const reportsThisWeekByTarget = new Map<string, number>();
+    for (const rep of reports) {
+      const createdMs = tsMs(rep.createdAt ?? null);
+      if (!inWeek(createdMs)) continue;
+      reportsThisWeekByTarget.set(rep.targetId, (reportsThisWeekByTarget.get(rep.targetId) ?? 0) + 1);
+    }
+    for (const cnt of reportsThisWeekByTarget.values()) {
+      if (cnt >= 3) autoHidden += 1;
+    }
+
+    // 최근 5건 (createdAt desc — subscribeRecentReports 가 이미 desc 정렬)
+    const recent = reports.slice(0, 5);
+
+    return { pending, autoHidden, confirmedHidden, restored, recent };
+  }, [reports]);
 
   // ━━ 차트 데이터 — useMemo로 재계산 최소화 ━━
   const trendData = useMemo(() => {
@@ -1164,6 +1233,120 @@ export default function PlatformDashboard() {
           )}
         </ChartCard>
       </div>
+
+      {/* ━━ 4-5. 콘텐츠 모더레이션 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div
+        className="mt-6 mb-2"
+        style={{
+          fontWeight: 800,
+          fontSize: 13,
+          color: 'var(--text-1)',
+          letterSpacing: '-0.01em',
+        }}
+      >
+        <span style={{ color: 'var(--gold)' }}>━━</span> 콘텐츠 모더레이션 ━━
+      </div>
+
+      {/* 4-5-1. 모더레이션 KPI 4 카드 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <SubCard
+          label="미처리 신고"
+          value={fmt(moderation.pending)}
+          accent={moderation.pending > 0 ? 'live' : 'muted'}
+          hint="resolved=false 카운트"
+        />
+        <SubCard
+          label="자동 숨김 (이번주)"
+          value={fmt(moderation.autoHidden)}
+          accent="brand"
+          hint="신고 3건 이상 트리거"
+        />
+        <SubCard
+          label="본사 확정 숨김 (이번주)"
+          value={fmt(moderation.confirmedHidden)}
+          accent="gold"
+          hint="resolution=hide"
+        />
+        <SubCard
+          label="복원 (이번주)"
+          value={fmt(moderation.restored)}
+          accent="success"
+          hint="resolution=restore"
+        />
+      </div>
+
+      {/* 4-5-2. 최근 신고 5건 미니 리스트 */}
+      <ChartCard
+        title="최근 신고 5건"
+        subtitle="자세한 처리는 리뷰 관리 페이지에서"
+        right={
+          <Link
+            href="/platform/reviews"
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--brand)',
+              textDecoration: 'none',
+            }}
+          >
+            리뷰 관리 →
+          </Link>
+        }
+      >
+        {moderation.recent.length === 0 ? (
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text-3)',
+              padding: '16px 4px',
+              textAlign: 'center',
+            }}
+          >
+            최근 신고 없음
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {moderation.recent.map((rep) => (
+              <li
+                key={rep.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 4px',
+                  borderBottom: '1px solid var(--border)',
+                  fontSize: 12,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    padding: '2px 7px',
+                    borderRadius: 4,
+                    background: rep.resolved ? 'var(--surface-2)' : 'rgba(239, 68, 68, 0.12)',
+                    color: rep.resolved ? 'var(--text-3)' : '#EF4444',
+                    border: rep.resolved ? '1px solid var(--border)' : '1px solid rgba(239, 68, 68, 0.45)',
+                    minWidth: 44,
+                    textAlign: 'center',
+                  }}
+                >
+                  {rep.resolved ? '처리됨' : '미처리'}
+                </span>
+                <span style={{ color: 'var(--text-2)', fontWeight: 700, minWidth: 64 }}>
+                  {DASHBOARD_REASON_LABEL[rep.reason] ?? rep.reason}
+                </span>
+                <span style={{ color: 'var(--text-1)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {rep.detail ? rep.detail : `${rep.targetType} · ${rep.targetId.slice(0, 12)}…`}
+                </span>
+                <span style={{ color: 'var(--text-3)', fontSize: 10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  {formatTs(rep.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </ChartCard>
 
       {/* ━━ 5. 빠른 진입 액션 ━━ */}
       <SectionLabel>빠른 진입</SectionLabel>
