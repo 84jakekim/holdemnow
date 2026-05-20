@@ -43,10 +43,11 @@ export async function startKakaoLogin(returnTo: string = '/') {
   const redirectUri = `${window.location.origin}/auth/kakao/callback`;
   // returnTo를 state로 전달 (콜백 이후 어디로 보낼지)
   const state = encodeURIComponent(returnTo);
-  // account_email은 비즈니스 인증 필요 — 일반 개발 앱에선 비활성. 빼고 진행.
+  // account_email은 가능한 범위 (앱 설정에서 동의항목 활성화 시 수집).
+  // phone_number / name 은 카카오 비즈 검수 필요 — 베타엔 보류, 사용자 직접 입력으로 대체.
   kakao.Auth.authorize({
     redirectUri,
-    scope: 'profile_nickname,profile_image',
+    scope: 'profile_nickname,profile_image,account_email',
     state,
   });
 }
