@@ -17,7 +17,12 @@ import {
 import { db } from './firebase';
 import type { BlindLevel, TournamentTemplate, TournamentType } from './templates';
 
-export type TournamentInstanceStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
+export type TournamentInstanceStatus =
+  | 'scheduled'
+  | 'live'
+  | 'completed'
+  | 'cancelled'
+  | 'expired';
 
 export interface TournamentInstance {
   id: string;
@@ -36,6 +41,8 @@ export interface TournamentInstance {
   startsAt: Timestamp;
   status: TournamentInstanceStatus;
   activeLiveSessionId?: string;
+  expiredAt?: Timestamp;
+  autoExpiredReason?: string;
 }
 
 export function tournamentsCol(storeId: string) {
