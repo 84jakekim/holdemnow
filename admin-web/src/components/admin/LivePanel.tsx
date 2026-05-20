@@ -338,6 +338,9 @@ function SessionControls({ session }: { session: LiveSession }) {
         <InfoBox label="시청자" value={`${session.viewerCount}명`} />
       </div>
 
+      {/* 블라인드 스트럭처 — 전체 진행 상황 */}
+      <BlindStructureView session={session} currentSeconds={seconds} />
+
       {/* 보조 액션 */}
       <div className="flex gap-2">
         <button
@@ -356,6 +359,128 @@ function SessionControls({ session }: { session: LiveSession }) {
         >
           ■ 이 세션 종료
         </button>
+      </div>
+    </div>
+  );
+}
+
+function pad2(n: number) {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+function BlindStructureView({
+  session,
+  currentSeconds,
+}: {
+  session: LiveSession;
+  currentSeconds: number;
+}) {
+  const currentRowRef = useRef<HTMLDivElement>(null);
+  const structure =
+    session.blindStructureLocked && session.blindStructureLocked.length > 0
+      ? session.blindStructureLocked
+      : session.blindStructure;
+  const currentLv = session.currentLevel;
+  const startedMs = session.totalStartedAt?.toMillis();
+
+  // 각 레벨의 누적 시작 오프셋(초) 계산
+  let cum = 0;
+  const rows = structure.map((lvl) => {
+    const startOffsetSec = cum;
+    cum += lvl.durationSec;
+    return { ...lvl, startOffsetSec };
+  });
+  const totalMin = Math.round(cum / 60);
+
+  // 현재 레벨로 자동 스크롤
+  useEffect(() => {
+    if (currentRowRef.current) {
+      currentRowRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [currentLv]);
+
+  return (
+    <div className="bg-white border-[1.5px] border-gray-200 rounded-2xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <div className="text-[10px] font-bold text-gray-500 tracking-widest">
+            📋 블라인드 스트럭처
+          </div>
+          <div className="text-sm font-extrabold text-gray-900 mt-0.5">
+            {structure.length}레벨 · 총 {totalMin}분
+            <span className="text-[11px] font-bold text-gray-500 ml-2">
+              · 늦은등록 Lv{session.lateRegEndLevel}까지
+            </span>
+          </div>
+        </div>
+        {startedMs && (
+          <div className="text-right">
+            <div className="text-[9px] font-bold text-gray-400 tracking-widest">시작 시각</div>
+            <div className="font-mono text-xs font-extrabold text-gray-700 tabular-nums">
+              {(() => {
+                const d = new Date(startedMs);
+                return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+              })()}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="max-h-[360px] overflow-y-auto">
+        {rows.map((lvl) => {
+          const isPast = lvl.level < currentLv;
+          const isCurrent = lvl.level === currentLv;
+          const isLateRegEnd = lvl.level === session.lateRegEndLevel;
+          const startAt = startedMs
+            ? new Date(startedMs + lvl.startOffsetSec * 1000)
+            : null;
+          return (
+            <div
+              key={lvl.level}
+              ref={isCurrent ? currentRowRef : undefined}
+              className={`flex items-center gap-2 px-3 py-2.5 border-t border-gray-50 transition ${
+                isCurrent ? 'bg-red-50' : isPast ? 'opacity-50 bg-gray-50/50' : ''
+              }`}
+            >
+              <div
+                className={`w-4 text-center text-[11px] ${
+                  isCurrent ? 'text-red-600' : isPast ? 'text-gray-400' : 'text-gray-300'
+                }`}
+              >
+                {isPast ? '✓' : isCurrent ? '▶' : '○'}
+              </div>
+              <div
+                className={`w-8 font-mono text-[11px] font-extrabold ${
+                  isCurrent ? 'text-red-600' : 'text-gray-900'
+                }`}
+              >
+                Lv{lvl.level}
+              </div>
+              <div className="flex-1 font-mono text-xs text-gray-700 tabular-nums truncate">
+                {lvl.sb.toLocaleString()}/{lvl.bb.toLocaleString()}
+                {lvl.ante ? ` · ante ${lvl.ante.toLocaleString()}` : ''}
+              </div>
+              {isLateRegEnd && (
+                <div className="text-[9px] bg-amber-100 text-amber-800 rounded-full px-1.5 py-0.5 font-bold whitespace-nowrap">
+                  LATE END
+                </div>
+              )}
+              <div className="text-[11px] text-gray-500 tabular-nums w-10 text-right">
+                {Math.round(lvl.durationSec / 60)}분
+              </div>
+              {isCurrent ? (
+                <div className="font-mono text-xs font-extrabold text-red-600 tabular-nums w-12 text-right">
+                  {fmtTime(currentSeconds)}
+                </div>
+              ) : startAt ? (
+                <div className="text-[10px] text-gray-400 tabular-nums w-12 text-right">
+                  {pad2(startAt.getHours())}:{pad2(startAt.getMinutes())}
+                </div>
+              ) : (
+                <div className="w-12" />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
