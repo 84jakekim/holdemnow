@@ -4,7 +4,7 @@
  * LiveSlider — 모든 활성 LIVE 세션을 작은 카드로 가로 슬라이드 (둘러보기 행)
  *
  * - sessions 0개 또는 1개 → null (PrimaryLiveCard 단독으로 충분)
- * - sessions 2개 이상 → 한 화면 2개 보이는 가로 슬라이드 (snap = 카드 1개)
+ * - sessions 2개 이상 → 한 화면 3개 보이는 가로 슬라이드 (snap = 카드 1개)
  *
  * 큰 카드와 완전히 독립 스크롤. 동일 세션 중복 노출 (위=메인, 아래=둘러보기).
  *
@@ -56,9 +56,9 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
       href={`/m/store/${session.storeId}`}
       className="flex-shrink-0 rounded-xl overflow-hidden transition active:scale-[0.97] block relative"
       style={{
-        /* 화면 절반 - 패딩 - 갭 절반 */
-        width: 'calc((100vw - 40px) / 2)',
-        minHeight: 148,
+        /* 한 화면 3개: (뷰포트 - 좌패딩16 - 우여백16 - gap12×2) / 3 */
+        width: 'calc((100vw - 32px - 24px) / 3)',
+        minHeight: 120,
         background: 'var(--surface-1)',
         border: '1.5px solid rgba(255,255,255,0.08)',
         boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
@@ -95,12 +95,12 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
       />
 
       {/* 콘텐츠 */}
-      <div className="relative z-10 flex flex-col h-full px-2.5 pt-2.5 pb-2.5 gap-0">
+      <div className="relative z-10 flex flex-col h-full px-2 pt-2 pb-2 gap-0">
 
         {/* LIVE 배지 */}
-        <div className="mb-1.5">
+        <div className="mb-1">
           <span
-            className="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full"
+            className="inline-flex items-center gap-0.5 text-[8px] font-extrabold px-1 py-0.5 rounded-full"
             style={{ background: 'rgba(220,38,38,0.9)', color: '#fff' }}
           >
             <span
@@ -114,7 +114,7 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
 
         {/* 매장명 */}
         <div
-          className="text-[13px] font-extrabold leading-tight truncate mb-1"
+          className="text-[11px] font-extrabold leading-tight truncate mb-0.5"
           style={{ color: '#fff' }}
         >
           {session.storeName}
@@ -122,9 +122,9 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
 
         {/* 타이머 — 가장 크게 */}
         <div
-          className="font-mono font-extrabold leading-none tabular-nums mb-1"
+          className="font-mono font-extrabold leading-none tabular-nums mb-0.5"
           style={{
-            fontSize: '26px',
+            fontSize: '20px',
             color: isRunning ? '#fff' : 'rgba(255,255,255,0.50)',
             letterSpacing: '-0.02em',
           }}
@@ -135,7 +135,7 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
 
         {/* 레벨 + 블라인드 */}
         <div
-          className="text-[11px] font-bold leading-none mb-1.5"
+          className="text-[9px] font-bold leading-none mb-1"
           style={{ color: 'rgba(255,255,255,0.80)' }}
         >
           Lv.{session.currentLevel} · {blindShort(session)}
@@ -144,7 +144,7 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
         {/* buy-in */}
         {buyIn && (
           <div
-            className="text-[11px] font-semibold leading-none"
+            className="text-[9px] font-semibold leading-none"
             style={{ color: 'rgba(255,255,255,0.65)' }}
           >
             🎫 {buyIn}
@@ -175,9 +175,9 @@ export default function LiveSlider({ sessions, thumbnails }: Props) {
         </span>
       </div>
 
-      {/* 가로 슬라이드 — snap = 카드 1개, 한 화면 2개 노출 */}
+      {/* 가로 슬라이드 — snap = 카드 1개, 한 화면 3개 노출 */}
       <div
-        className="pl-4 flex gap-2 overflow-x-auto pb-1 scrollbar-none"
+        className="pl-4 flex gap-3 overflow-x-auto pb-1 scrollbar-none"
         style={{
           scrollSnapType: 'x mandatory',
           WebkitOverflowScrolling: 'touch',

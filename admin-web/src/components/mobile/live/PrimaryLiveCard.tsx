@@ -94,7 +94,7 @@ function BigCard({
       }}
       aria-label={`${session.storeName} LIVE — ${session.tournamentName}`}
     >
-      {/* 배경: 매장 사진 (어둡게) 또는 그라디언트 */}
+      {/* 배경: 매장 사진 (컬러 살림) 또는 그라디언트 */}
       {thumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -102,7 +102,7 @@ function BigCard({
           alt=""
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ opacity: 0.25 }}
+          style={{ opacity: 0.85 }}
         />
       ) : (
         <div
@@ -114,172 +114,176 @@ function BigCard({
         />
       )}
 
-      {/* 진한 오버레이 — 텍스트 가독성 확보 */}
+      {/* 하단 그라데이션 오버레이 — 텍스트 가독성 (상단 사진 컬러는 유지) */}
       <div
         className="absolute inset-0"
         style={{
           background: thumbnail
-            ? 'linear-gradient(to bottom, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.78) 100%)'
+            ? 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0) 25%, rgba(0,0,0,0.65) 55%, rgba(0,0,0,0.90) 100%)'
             : 'rgba(0,0,0,0.35)',
         }}
         aria-hidden="true"
       />
 
-      {/* 콘텐츠 레이어 */}
-      <div className="relative z-10 flex flex-col h-full px-4 pt-3.5 pb-4 gap-0">
+      {/* 콘텐츠 레이어 — 상단 배지/매장명 + 하단 정렬 정보 */}
+      <div className="relative z-10 flex flex-col h-full px-4 pt-3.5 pb-4">
 
-        {/* ── 상단: LIVE 배지 + 매장명 ── */}
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex flex-col gap-1 min-w-0 flex-1">
-            {/* LIVE 배지 */}
-            <div className="flex items-center gap-2">
-              <span
-                className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(220,38,38,0.92)', color: '#fff' }}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full pulse-live flex-shrink-0"
-                  style={{ background: '#fff' }}
-                  aria-hidden="true"
-                />
-                LIVE
-              </span>
-              <span
-                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)' }}
-              >
-                {statusLabel(session)}
-              </span>
-            </div>
-            {/* 매장명 */}
-            <div
-              className="text-[19px] font-extrabold leading-tight tracking-tight truncate"
-              style={{ color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.7)' }}
+        {/* ── 상단: LIVE 배지 + 매장명 (사진 위에 텍스트 그림자로 가독성) ── */}
+        <div className="flex flex-col gap-1 min-w-0">
+          {/* LIVE 배지 + 상태 */}
+          <div className="flex items-center gap-2">
+            <span
+              className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(220,38,38,0.92)', color: '#fff' }}
             >
-              {session.storeName}
-            </div>
-            {/* 토너먼트명 */}
-            <div
-              className="text-[12px] font-medium truncate"
-              style={{ color: 'rgba(255,255,255,0.72)' }}
+              <span
+                className="w-1.5 h-1.5 rounded-full pulse-live flex-shrink-0"
+                style={{ background: '#fff' }}
+                aria-hidden="true"
+              />
+              LIVE
+            </span>
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+              style={{ background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.9)' }}
             >
-              {session.tournamentName}
-            </div>
+              {statusLabel(session)}
+            </span>
+          </div>
+          {/* 매장명 */}
+          <div
+            className="text-[19px] font-extrabold leading-tight tracking-tight truncate"
+            style={{ color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
+          >
+            {session.storeName}
+          </div>
+          {/* 토너먼트명 */}
+          <div
+            className="text-[12px] font-medium truncate"
+            style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 6px rgba(0,0,0,0.7)' }}
+          >
+            {session.tournamentName}
           </div>
         </div>
 
-        {/* ── 메인: 타이머 (최우선, 가장 크게) ── */}
-        <div className="flex items-baseline gap-2 mb-1">
-          <span
-            className="font-mono font-extrabold leading-none tabular-nums"
-            style={{
-              fontSize: '48px',
-              color: isRunning ? '#fff' : 'rgba(255,255,255,0.55)',
-              textShadow: '0 2px 12px rgba(0,0,0,0.5)',
-              letterSpacing: '-0.02em',
-            }}
-            aria-label={`남은 시간 ${fmtTime(sec)}`}
-          >
-            {fmtTime(sec)}
-          </span>
-          {!isRunning && (
+        {/* 중간 여백 — 사진 상단 노출 영역 */}
+        <div className="flex-1" />
+
+        {/* ── 하단: 타이머 + 게임 정보 (그라데이션 위에 배치) ── */}
+        <div className="flex flex-col gap-0">
+          {/* 타이머 (최우선, 가장 크게) */}
+          <div className="flex items-baseline gap-2 mb-1">
             <span
-              className="text-[12px] font-bold"
-              style={{ color: 'rgba(255,255,255,0.55)' }}
+              className="font-mono font-extrabold leading-none tabular-nums"
+              style={{
+                fontSize: '48px',
+                color: isRunning ? '#fff' : 'rgba(255,255,255,0.55)',
+                textShadow: '0 2px 12px rgba(0,0,0,0.6)',
+                letterSpacing: '-0.02em',
+              }}
+              aria-label={`남은 시간 ${fmtTime(sec)}`}
             >
-              {session.status === 'paused' ? '일시정지' : '브레이크'}
+              {fmtTime(sec)}
             </span>
-          )}
-        </div>
-
-        {/* ── 레벨 + 블라인드 (2순위) ── */}
-        <div
-          className="text-[16px] font-bold leading-snug mb-2"
-          style={{ color: 'rgba(255,255,255,0.92)' }}
-          aria-label={`레벨 ${session.currentLevel}, 블라인드 ${blindLabel(session)}`}
-        >
-          Lv.{session.currentLevel} &nbsp;·&nbsp; {blindLabel(session)}
-        </div>
-
-        {/* ── 구분선 ── */}
-        <div
-          className="mb-2.5"
-          style={{ height: 1, background: 'rgba(255,255,255,0.12)' }}
-          aria-hidden="true"
-        />
-
-        {/* ── 하단 정보 행 ── */}
-        <div className="flex flex-col gap-1.5">
-          {/* buy-in */}
-          {buyIn && (
-            <div className="flex items-center gap-1.5">
-              <span style={{ fontSize: 13 }} aria-hidden="true">🎫</span>
+            {!isRunning && (
               <span
-                className="text-[14px] font-semibold"
-                style={{ color: 'rgba(255,255,255,0.88)' }}
-                aria-label={`바이인 ${buyIn}`}
+                className="text-[12px] font-bold"
+                style={{ color: 'rgba(255,255,255,0.55)' }}
               >
-                {buyIn} buy-in
+                {session.status === 'paused' ? '일시정지' : '브레이크'}
               </span>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Late reg */}
-          {isLateRegOpen ? (
-            <div className="flex items-center gap-1.5">
-              <span style={{ fontSize: 13 }} aria-hidden="true">⏰</span>
-              <span
-                className="text-[13px] font-semibold"
-                style={{ color: '#4ADE80' }}
-                aria-label={`레이트 레지 ${lateRegMin}분 남음`}
-              >
-                Late reg {lateRegMin}분 남음
-              </span>
-            </div>
-          ) : (
-            session.lateRegClosed && (
+          {/* 레벨 + 블라인드 */}
+          <div
+            className="text-[16px] font-bold leading-snug mb-2"
+            style={{ color: 'rgba(255,255,255,0.92)' }}
+            aria-label={`레벨 ${session.currentLevel}, 블라인드 ${blindLabel(session)}`}
+          >
+            Lv.{session.currentLevel} &nbsp;·&nbsp; {blindLabel(session)}
+          </div>
+
+          {/* 구분선 */}
+          <div
+            className="mb-2"
+            style={{ height: 1, background: 'rgba(255,255,255,0.18)' }}
+            aria-hidden="true"
+          />
+
+          {/* 하단 정보 행 */}
+          <div className="flex flex-col gap-1.5">
+            {/* buy-in */}
+            {buyIn && (
+              <div className="flex items-center gap-1.5">
+                <span style={{ fontSize: 13 }} aria-hidden="true">🎫</span>
+                <span
+                  className="text-[14px] font-semibold"
+                  style={{ color: 'rgba(255,255,255,0.88)' }}
+                  aria-label={`바이인 ${buyIn}`}
+                >
+                  {buyIn} buy-in
+                </span>
+              </div>
+            )}
+
+            {/* Late reg */}
+            {isLateRegOpen ? (
               <div className="flex items-center gap-1.5">
                 <span style={{ fontSize: 13 }} aria-hidden="true">⏰</span>
                 <span
                   className="text-[13px] font-semibold"
-                  style={{ color: 'rgba(255,255,255,0.42)' }}
+                  style={{ color: '#4ADE80' }}
+                  aria-label={`레이트 레지 ${lateRegMin}분 남음`}
                 >
-                  Late reg 마감
+                  Late reg {lateRegMin}분 남음
                 </span>
               </div>
-            )
-          )}
+            ) : (
+              session.lateRegClosed && (
+                <div className="flex items-center gap-1.5">
+                  <span style={{ fontSize: 13 }} aria-hidden="true">⏰</span>
+                  <span
+                    className="text-[13px] font-semibold"
+                    style={{ color: 'rgba(255,255,255,0.42)' }}
+                  >
+                    Late reg 마감
+                  </span>
+                </div>
+              )
+            )}
 
-          {/* 인원 */}
-          {typeof session.playersRemaining === 'number' && (
-            <div className="flex items-center gap-1.5">
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.55)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" />
-              </svg>
-              <span
-                className="text-[12px] font-medium"
-                style={{ color: 'rgba(255,255,255,0.65)' }}
-                aria-label={`잔여 ${session.playersRemaining}명 / 전체 ${session.totalPlayers}명`}
-              >
-                잔여 {session.playersRemaining}명
-                {typeof session.totalPlayers === 'number' && session.totalPlayers > 0
-                  ? ` / 신청 ${session.totalPlayers}명`
-                  : ''}
-              </span>
-            </div>
-          )}
+            {/* 인원 */}
+            {typeof session.playersRemaining === 'number' && (
+              <div className="flex items-center gap-1.5">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.55)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" />
+                </svg>
+                <span
+                  className="text-[12px] font-medium"
+                  style={{ color: 'rgba(255,255,255,0.65)' }}
+                  aria-label={`잔여 ${session.playersRemaining}명 / 전체 ${session.totalPlayers}명`}
+                >
+                  잔여 {session.playersRemaining}명
+                  {typeof session.totalPlayers === 'number' && session.totalPlayers > 0
+                    ? ` / 신청 ${session.totalPlayers}명`
+                    : ''}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Link>

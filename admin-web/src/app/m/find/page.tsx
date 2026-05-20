@@ -405,60 +405,48 @@ function ListMode() {
 
 function QuickNavCards() {
   return (
-    <section aria-label="빠른 이동" className="px-4 py-3">
+    <section aria-label="빠른 이동" className="px-4 py-2">
       <div className="flex gap-3">
         {/* 대회정보 */}
         <Link
           href="/m/events"
-          className="flex-1 rounded-xl px-3 pt-3 pb-3 flex flex-col gap-1.5 transition active:scale-[0.97] group"
+          className="flex-1 rounded-xl px-4 flex items-center gap-2.5 transition active:scale-[0.97] group"
           style={{
             background: 'var(--surface-1)',
             border: '1.5px solid var(--border)',
             boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+            height: 56,
           }}
           aria-label="대회정보"
         >
-          <span className="text-[26px] leading-none" aria-hidden="true">🏆</span>
-          <div>
-            <div className="text-[15px] font-extrabold leading-tight tracking-tight" style={{ color: 'var(--text-1)' }}>
-              대회정보
-            </div>
-            <div className="text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--text-2)' }}>
-              메이저 토너 둘러보기
-            </div>
-          </div>
-          <div className="flex justify-end mt-0.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="group-active:stroke-[var(--brand)] transition-colors">
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </div>
+          <span className="text-[22px] leading-none flex-shrink-0" aria-hidden="true">🏆</span>
+          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--text-1)' }}>
+            대회정보
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 group-active:stroke-[var(--brand)] transition-colors">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
         </Link>
 
         {/* 커뮤니티 */}
         <Link
           href="/m/community"
-          className="flex-1 rounded-xl px-3 pt-3 pb-3 flex flex-col gap-1.5 transition active:scale-[0.97] group"
+          className="flex-1 rounded-xl px-4 flex items-center gap-2.5 transition active:scale-[0.97] group"
           style={{
             background: 'var(--surface-1)',
             border: '1.5px solid var(--border)',
             boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+            height: 56,
           }}
           aria-label="커뮤니티"
         >
-          <span className="text-[26px] leading-none" aria-hidden="true">💬</span>
-          <div>
-            <div className="text-[15px] font-extrabold leading-tight tracking-tight" style={{ color: 'var(--text-1)' }}>
-              커뮤니티
-            </div>
-            <div className="text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--text-2)' }}>
-              구인 · 딜러 · 중고
-            </div>
-          </div>
-          <div className="flex justify-end mt-0.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="group-active:stroke-[var(--brand)] transition-colors">
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </div>
+          <span className="text-[22px] leading-none flex-shrink-0" aria-hidden="true">💬</span>
+          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--text-1)' }}>
+            커뮤니티
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 group-active:stroke-[var(--brand)] transition-colors">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
         </Link>
       </div>
     </section>
