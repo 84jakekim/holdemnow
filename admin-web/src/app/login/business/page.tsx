@@ -16,6 +16,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { loginWithEmail } from '@/lib/emailAuth';
 
@@ -29,6 +31,8 @@ export default function BusinessLoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  // 매장·대회사 자격 없는 계정 로그인 시 — 자동 리다이렉트 대신 안내 표시
+  const [noBusinessRole, setNoBusinessRole] = useState(false);
 
   // 로그인 후 role 기반 라우팅
   useEffect(() => {
@@ -48,8 +52,9 @@ export default function BusinessLoginPage() {
         router.replace(`/organizer/${userDoc.organizerId}`);
         return;
       }
-      // role이 매장/대회사가 아니면 일반 사용자 → /m
-      router.replace('/m');
+      // 매장·대회사·본사 자격 없는 일반 사용자가 매장 로그인 페이지로 진입.
+      // 자동 /m 리다이렉트는 혼란 유발 — 명시적 안내 표시.
+      setNoBusinessRole(true);
     }
   }, [authState, userDoc, router]);
 
@@ -78,6 +83,44 @@ export default function BusinessLoginPage() {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
         로딩 중…
+      </main>
+    );
+  }
+  // 자격 없는 계정으로 매장 로그인 시도 — 명시적 안내 (자동 /m 리다이렉트 X)
+  if (authState.status === 'authenticated' && noBusinessRole) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+          <div className="text-4xl mb-3">🔒</div>
+          <div className="text-base font-extrabold text-gray-900 mb-2">
+            매장 어드민 자격이 없는 계정입니다
+          </div>
+          <div className="text-xs text-gray-600 leading-relaxed mb-5">
+            이 계정({authState.user.email})은 매장·대회사·본사 어드민 권한이 없습니다.<br />
+            매장을 운영하시려면 매장 가입 신청을 해주세요.<br />
+            이미 신청하셨다면 본사 승인을 기다리고 있는 상태일 수 있습니다.
+          </div>
+          <div className="flex flex-col gap-2">
+            <Link
+              href="/signup/store"
+              className="block w-full px-4 py-2.5 rounded-xl bg-[#FF1F8F] text-white text-sm font-extrabold"
+            >
+              매장 가입 신청
+            </Link>
+            <Link
+              href="/m"
+              className="block w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-700"
+            >
+              사용자 앱으로 이동
+            </Link>
+            <button
+              onClick={async () => { await signOut(auth); setNoBusinessRole(false); }}
+              className="text-[11px] text-gray-500 underline mt-1"
+            >
+              다른 계정으로 로그인
+            </button>
+          </div>
+        </div>
       </main>
     );
   }
