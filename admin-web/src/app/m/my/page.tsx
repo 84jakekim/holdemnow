@@ -7,6 +7,7 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import LogoutConfirmSheet from '@/components/mobile/LogoutConfirmSheet';
+import RecentVisitsSection from '@/components/mobile/my/RecentVisitsSection';
 import { doc, setDoc, onSnapshot, serverTimestamp, collection } from 'firebase/firestore';
 import { enableNotifications, getNotificationPermission, isMessagingSupported } from '@/lib/messaging';
 import { moderateText, checkWriteRateLimit } from '@/lib/moderation';
@@ -308,6 +309,9 @@ export default function MyPage() {
           </button>
         ))}
       </div>
+
+      {/* ── 최근 방문 매장 ── */}
+      <RecentVisitsSection />
 
       {/* ── 로그아웃 ── */}
       <div className="px-5 py-8">

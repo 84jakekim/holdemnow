@@ -22,6 +22,8 @@ import {
 } from '@/lib/posts';
 import { RatingChip } from '@/components/mobile/RatingChip';
 import StoreFindModeToggle from '@/components/mobile/find/StoreFindModeToggle';
+import PrimaryLiveCard from '@/components/mobile/live/PrimaryLiveCard';
+import LiveSlider from '@/components/mobile/live/LiveSlider';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -311,67 +313,33 @@ function ListMode() {
         )}
       </div>
 
-      {/* ─ 빠른 메뉴 (5 카테고리 아이콘) */}
-      <CategoryIconGrid />
+      {/* ─ HOT LIVE 큰 카드 */}
+      {!loading && !error && (
+        <PrimaryLiveCard
+          sessions={sessions}
+          thumbnails={Object.fromEntries(
+            Object.entries(storeSummaries).map(([k, v]) => [k, v.thumbnail]),
+          )}
+        />
+      )}
+
+      {/* ─ LIVE 슬라이더 (2개 이상일 때만) */}
+      {!loading && !error && (
+        <LiveSlider
+          sessions={sessions}
+          thumbnails={Object.fromEntries(
+            Object.entries(storeSummaries).map(([k, v]) => [k, v.thumbnail]),
+          )}
+        />
+      )}
+
+      {/* ─ 대회정보·커뮤니티 2-column 카드 */}
+      <QuickNavCards />
 
       <div className="brand-strip-divider" />
 
       {/* ─ 오늘의 매장 소식 */}
       <DailyPostsFeed />
-
-      <div className="brand-strip-divider" />
-
-      {/* ─ LIVE 중인 매장 */}
-      <section aria-label="지금 LIVE" className="pt-5">
-        <div className="px-4 flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0 pulse-live"
-              style={{ background: 'var(--live)' }}
-              aria-hidden="true"
-            />
-            <span className="text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-              지금 LIVE
-            </span>
-            {groups.length > 0 && (
-              <span
-                className="text-[11px] font-extrabold rounded-full px-2 py-0.5 stat-number"
-                style={{ background: 'var(--live)', color: '#fff' }}
-              >
-                {groups.length}
-              </span>
-            )}
-          </div>
-          <Link
-            href="/m/live"
-            className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60"
-            style={{ color: 'var(--brand)' }}
-          >
-            전체보기
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-          </Link>
-        </div>
-        {loading ? (
-          <LiveHeroSkeleton />
-        ) : error ? (
-          <div className="mx-4 rounded-2xl p-4 text-sm" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: 'var(--live)' }}>
-            {error}
-          </div>
-        ) : groups.length === 0 ? (
-          <LiveEmptyState />
-        ) : (
-          <div className="pl-4 flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-            {groups.map((g) => (
-              <LiveHeroCard
-                key={g.storeId}
-                group={g}
-                thumbnail={storeSummaries[g.storeId]?.thumbnail}
-              />
-            ))}
-            <div className="w-3 flex-shrink-0" aria-hidden="true" />
-          </div>
-        )}
-      </section>
 
       <div className="brand-strip-divider mt-5" />
 
@@ -429,163 +397,64 @@ function ListMode() {
   );
 }
 
-// ─── 카테고리 아이콘 그리드 (5개) ────────────────────────────
+// ─── 대회정보·커뮤니티 2-column 빠른 이동 카드 ───────────────
 
-function CategoryIconGrid() {
+function QuickNavCards() {
   return (
-    <section aria-label="빠른 메뉴" className="px-4 py-5">
-      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-        <defs>
-          <linearGradient id="fc-cardFace" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="55%" stopColor="#FFF4F9" />
-            <stop offset="100%" stopColor="#FFD9EA" />
-          </linearGradient>
-          <linearGradient id="fc-suitDark" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#5A0830" />
-            <stop offset="100%" stopColor="#2E0418" />
-          </linearGradient>
-          <linearGradient id="fc-suitRed" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FFE2E2" />
-            <stop offset="60%" stopColor="#FF4848" />
-            <stop offset="100%" stopColor="#7A0808" />
-          </linearGradient>
-          <linearGradient id="fc-goldFace" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FFF1B5" />
-            <stop offset="45%" stopColor="#FFC845" />
-            <stop offset="100%" stopColor="#A55F08" />
-          </linearGradient>
-          <radialGradient id="fc-chipRed" cx="35%" cy="30%" r="80%">
-            <stop offset="0%" stopColor="#FFD0D0" />
-            <stop offset="55%" stopColor="#E53E3E" />
-            <stop offset="100%" stopColor="#5A0808" />
-          </radialGradient>
-          <linearGradient id="fc-beamLight" x1="0.5" y1="0" x2="0.5" y2="1">
-            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.85" />
-            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-          </linearGradient>
-          <filter id="fc-innerShade" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="0.8" />
-            <feOffset dx="0" dy="0.6" result="offsetblur" />
-            <feFlood floodColor="#3A0218" floodOpacity="0.6" />
-            <feComposite in2="offsetblur" operator="in" />
-            <feComposite in2="SourceGraphic" operator="arithmetic" k2="-1" k3="1" />
-          </filter>
-          <filter id="fc-innerShadeGold" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="0.8" />
-            <feOffset dx="0" dy="0.6" result="offsetblur" />
-            <feFlood floodColor="#5C2F00" floodOpacity="0.55" />
-            <feComposite in2="offsetblur" operator="in" />
-            <feComposite in2="SourceGraphic" operator="arithmetic" k2="-1" k3="1" />
-          </filter>
-        </defs>
-      </svg>
-
-      <div className="grid grid-cols-5 gap-1">
-        {/* 1. 지도탐색 */}
-        <button
-          onClick={() => window.location.href = '/m/find?mode=map'}
-          className="flex flex-col items-center gap-2 transition active:scale-95"
+    <section aria-label="빠른 이동" className="px-4 py-3">
+      <div className="flex gap-3">
+        {/* 대회정보 */}
+        <Link
+          href="/m/events"
+          className="flex-1 rounded-xl px-3 pt-3 pb-3 flex flex-col gap-1.5 transition active:scale-[0.97] group"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1.5px solid var(--border)',
+            boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+          }}
+          aria-label="대회정보"
         >
-          <div className="cat-icon-wrap">
-            <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
-              <path d="M14 2 L26 2 L31 10 L9 10 Z" fill="url(#fc-beamLight)" opacity="0.55" />
-              <rect x="9" y="14" width="22" height="28" rx="3.2" fill="#5A0830" opacity="0.45" transform="rotate(-6 20 28)" />
-              <rect x="9" y="12" width="22" height="28" rx="3.2" fill="url(#fc-cardFace)" transform="rotate(-6 20 26)" />
-              <rect x="9.5" y="12.5" width="21" height="27" rx="2.8" fill="none" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.8" transform="rotate(-6 20 26)" />
-              <g transform="rotate(-6 20 26)">
-                <path d="M20 18 C16.4 22.8 14.2 24.4 14.2 27.2 C14.2 29.0 15.7 30.3 17.4 30.3 C18.4 30.3 19.2 29.9 19.6 29.2 C19.4 30.6 18.7 31.6 17.8 32.4 L22.2 32.4 C21.3 31.6 20.6 30.6 20.4 29.2 C20.8 29.9 21.6 30.3 22.6 30.3 C24.3 30.3 25.8 29.0 25.8 27.2 C25.8 24.4 23.6 22.8 20 18 Z" fill="url(#fc-suitDark)" filter="url(#fc-innerShade)" />
-              </g>
-              <circle cx="20" cy="5" r="1.4" fill="#FFFFFF" opacity="0.95" />
-              <circle cx="20" cy="5" r="2.6" fill="#FFFFFF" opacity="0.35" />
+          <span className="text-[26px] leading-none" aria-hidden="true">🏆</span>
+          <div>
+            <div className="text-[15px] font-extrabold leading-tight tracking-tight" style={{ color: 'var(--text-1)' }}>
+              대회정보
+            </div>
+            <div className="text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--text-2)' }}>
+              메이저 토너 둘러보기
+            </div>
+          </div>
+          <div className="flex justify-end mt-0.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="group-active:stroke-[var(--brand)] transition-colors">
+              <path d="M9 18l6-6-6-6"/>
             </svg>
           </div>
-          <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>지도탐색</span>
-        </button>
-
-        {/* 2. LIVE */}
-        <Link href="/m/live" className="flex flex-col items-center gap-2 transition active:scale-95">
-          <div className="cat-icon-wrap cat-icon-wrap-live">
-            <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
-              <ellipse cx="20" cy="38" rx="13" ry="2.6" fill="#3A0202" opacity="0.45" />
-              <ellipse cx="20" cy="33" rx="11" ry="3.4" fill="url(#fc-chipRed)" />
-              <path d="M9 33 L9 36 A11 3.4 0 0 0 31 36 L31 33 A11 3.4 0 0 1 9 33 Z" fill="#5A0808" opacity="0.85" />
-              <ellipse cx="20" cy="27" rx="11" ry="3.4" fill="url(#fc-chipRed)" />
-              <path d="M9 27 L9 30 A11 3.4 0 0 0 31 30 L31 27 A11 3.4 0 0 1 9 27 Z" fill="#7A0A0A" opacity="0.7" />
-              <ellipse cx="20" cy="21" rx="11" ry="3.4" fill="url(#fc-chipRed)" />
-              <g transform="translate(20 21)">
-                <rect x="-7" y="-0.6" width="14" height="1.2" rx="0.5" fill="#FFFFFF" opacity="0.85" />
-                <rect x="-0.6" y="-2.4" width="1.2" height="4.8" rx="0.5" fill="#FFFFFF" opacity="0.85" />
-                <circle cx="0" cy="0" r="2" fill="#FF6464" stroke="#FFFFFF" strokeWidth="0.6" />
-              </g>
-              <ellipse cx="17" cy="20" rx="5.5" ry="1.2" fill="#FFFFFF" opacity="0.55" />
-              <path d="M20 4 L20 10" stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="round" opacity="0.85" />
-              <path d="M12 7 L15 11" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity="0.65" />
-              <path d="M28 7 L25 11" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity="0.65" />
-            </svg>
-          </div>
-          <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>LIVE</span>
         </Link>
 
-        {/* 3. 토너먼트 */}
-        <Link href="/m/calendar" className="flex flex-col items-center gap-2 transition active:scale-95">
-          <div className="cat-icon-wrap">
-            <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
-              <rect x="11" y="13" width="20" height="26" rx="3" fill="#7A0840" opacity="0.55" transform="rotate(8 21 26)" />
-              <rect x="11" y="11" width="20" height="26" rx="3" fill="url(#fc-cardFace)" transform="rotate(8 21 24)" />
-              <rect x="8" y="14" width="20" height="26" rx="3" fill="#5A0830" opacity="0.5" transform="rotate(-8 18 27)" />
-              <rect x="8" y="12" width="20" height="26" rx="3" fill="url(#fc-cardFace)" transform="rotate(-8 18 25)" />
-              <rect x="8.5" y="12.5" width="19" height="25" rx="2.6" fill="none" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.85" transform="rotate(-8 18 25)" />
-              <g transform="rotate(-8 18 25)">
-                <path d="M18 18 L24 25 L18 32 L12 25 Z" fill="url(#fc-suitDark)" filter="url(#fc-innerShade)" />
-              </g>
-              <circle cx="32" cy="10" r="5" fill="#FFFFFF" stroke="#7A0840" strokeWidth="0.8" />
-              <path d="M32 10 L32 7 M32 10 L34 11" stroke="#7A0840" strokeWidth="1.1" strokeLinecap="round" />
-              <circle cx="32" cy="10" r="0.7" fill="#7A0840" />
+        {/* 커뮤니티 */}
+        <Link
+          href="/m/community"
+          className="flex-1 rounded-xl px-3 pt-3 pb-3 flex flex-col gap-1.5 transition active:scale-[0.97] group"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1.5px solid var(--border)',
+            boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+          }}
+          aria-label="커뮤니티"
+        >
+          <span className="text-[26px] leading-none" aria-hidden="true">💬</span>
+          <div>
+            <div className="text-[15px] font-extrabold leading-tight tracking-tight" style={{ color: 'var(--text-1)' }}>
+              커뮤니티
+            </div>
+            <div className="text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--text-2)' }}>
+              구인 · 딜러 · 중고
+            </div>
+          </div>
+          <div className="flex justify-end mt-0.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="group-active:stroke-[var(--brand)] transition-colors">
+              <path d="M9 18l6-6-6-6"/>
             </svg>
           </div>
-          <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>토너먼트</span>
-        </Link>
-
-        {/* 4. 대회정보 */}
-        <Link href="/m/events" className="flex flex-col items-center gap-2 transition active:scale-95">
-          <div className="cat-icon-wrap">
-            <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
-              <ellipse cx="20" cy="38" rx="10" ry="2" fill="#5C2F00" opacity="0.5" />
-              <g transform="translate(20 30)">
-                <circle cx="0" cy="-3" r="3.2" fill="url(#fc-suitDark)" filter="url(#fc-innerShade)" />
-                <circle cx="-3.4" cy="0.5" r="3.2" fill="url(#fc-suitDark)" filter="url(#fc-innerShade)" />
-                <circle cx="3.4" cy="0.5" r="3.2" fill="url(#fc-suitDark)" filter="url(#fc-innerShade)" />
-                <path d="M-1.2 1.5 L0 5.5 L1.2 1.5 Z" fill="url(#fc-suitDark)" />
-              </g>
-              <path d="M9 13 L12 20 L16 14 L20 21 L24 14 L28 20 L31 13 L30 24 L10 24 Z" fill="url(#fc-goldFace)" filter="url(#fc-innerShadeGold)" />
-              <circle cx="20" cy="17" r="1.6" fill="#FF1F8F" />
-              <rect x="9" y="22" width="22" height="3" rx="0.6" fill="url(#fc-goldFace)" />
-            </svg>
-          </div>
-          <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>대회정보</span>
-        </Link>
-
-        {/* 5. 커뮤니티 */}
-        <Link href="/m/community" className="flex flex-col items-center gap-2 transition active:scale-95">
-          <div className="cat-icon-wrap">
-            <svg width="32" height="36" viewBox="0 0 40 44" aria-hidden="true">
-              <path d="M20 8 C28 8 32 12 32 17 C32 22 28 26 20 26 C18 26 16.5 25.8 15 25.3 L10 28 L11.5 23.5 C9 22 8 19.5 8 17 C8 12 12 8 20 8 Z" fill="#FFFFFF" opacity="0.97" />
-              <g transform="rotate(10 24 17)">
-                <rect x="20" y="11" width="8" height="11" rx="1.2" fill="url(#fc-cardFace)" />
-                <path d="M24 14 C22.4 15.8 21.6 16.4 21.6 17.4 C21.6 18.0 22.1 18.4 22.7 18.4 C23.0 18.4 23.3 18.3 23.5 18.0 C23.4 18.5 23.1 18.9 22.8 19.2 L25.2 19.2 C24.9 18.9 24.6 18.5 24.5 18.0 C24.7 18.3 25.0 18.4 25.3 18.4 C25.9 18.4 26.4 18.0 26.4 17.4 C26.4 16.4 25.6 15.8 24 14 Z" fill="url(#fc-suitDark)" />
-              </g>
-              <g transform="rotate(-12 16 18)">
-                <rect x="12" y="12" width="8" height="11" rx="1.2" fill="url(#fc-cardFace)" />
-                <path d="M16 20 C16 20 12.8 18.4 12.8 16.4 C12.8 15.4 13.6 14.6 14.6 14.6 C15.3 14.6 15.8 15.0 16 15.5 C16.2 15.0 16.7 14.6 17.4 14.6 C18.4 14.6 19.2 15.4 19.2 16.4 C19.2 18.4 16 20 16 20 Z" fill="url(#fc-suitRed)" />
-              </g>
-              <ellipse cx="32" cy="34" rx="4.5" ry="3.5" fill="#FFFFFF" opacity="0.92" />
-              <circle cx="30" cy="34" r="0.7" fill="#FF1F8F" />
-              <circle cx="32" cy="34" r="0.7" fill="#FF1F8F" />
-              <circle cx="34" cy="34" r="0.7" fill="#FF1F8F" />
-            </svg>
-          </div>
-          <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)' }}>커뮤니티</span>
         </Link>
       </div>
     </section>

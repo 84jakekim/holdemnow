@@ -34,6 +34,7 @@ import {
 } from '@/lib/reviews';
 import ReviewWriteSheet from '@/components/mobile/ReviewWriteSheet';
 import ReportReviewSheet from '@/components/mobile/ReportReviewSheet';
+import { recordRecentVisit } from '@/lib/recentVisits';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -95,6 +96,19 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   }, [storeId]);
 
   useEffect(() => { trackImpressionOnce(storeId, 'store-detail'); }, [storeId]);
+
+  // 최근 방문 기록 — 매장 데이터가 로드된 후 1회 기록
+  useEffect(() => {
+    if (!store) return;
+    recordRecentVisit({
+      storeId,
+      storeName: store.name,
+      photoUrl: store.photoUrls?.[0],
+      visitedAt: new Date().toISOString(),
+    });
+  // store.name/photoUrls가 바뀌면 재기록하지 않도록 storeId만 의존
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, store?.name]);
 
   const [isFav, setIsFav] = useState(false);
   const [favBusy, setFavBusy] = useState(false);

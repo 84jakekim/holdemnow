@@ -14,7 +14,7 @@
  * 카카오 coordToRegionLabel: 위치 라벨용 1회 (기존 캐싱 로직 유지).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -23,6 +23,9 @@ import { coordToRegionLabel } from '@/lib/kakao';
 import HomeAdsCarousel from '@/components/mobile/home/HomeAdsCarousel';
 import HotVideosCarousel from '@/components/mobile/home/HotVideosCarousel';
 import HotYoutubersScroll from '@/components/mobile/home/HotYoutubersScroll';
+import PrimaryLiveCard from '@/components/mobile/live/PrimaryLiveCard';
+import LiveSlider from '@/components/mobile/live/LiveSlider';
+import { subscribeAllLiveSessions, type LiveSession } from '@/lib/live';
 
 /** 활성 콘텐츠 존재 여부를 1회 fetch로 확인 */
 async function hasActiveContent(col: string): Promise<boolean> {
@@ -40,6 +43,39 @@ export default function MobileHome() {
   //  - platform_admin: 본사 어드민 이동 안내 카드
   //  - 일반 사용자: 친화적 빈상태 placeholder ("매장찾기 둘러보기")
   const [allEmpty, setAllEmpty] = useState<boolean | null>(null);
+
+  // LIVE 세션 구독 — 헤더 아래 PrimaryLiveCard + LiveSlider 노출
+  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
+  const [liveStoreSummaries, setLiveStoreSummaries] = useState<Record<string, string | undefined>>({});
+
+  useEffect(() => {
+    const unsub = subscribeAllLiveSessions(setLiveSessions, () => {});
+    return unsub;
+  }, []);
+
+  // 썸네일 lazy-fetch (storeId 단위, 한 번만)
+  const liveThumbnailIds = useMemo(
+    () => liveSessions.map((s) => s.storeId).filter((id) => !(id in liveStoreSummaries)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [liveSessions],
+  );
+  useEffect(() => {
+    if (liveThumbnailIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getDocs: gd, query: q, collection: col, where: wh, documentId } = await import('firebase/firestore');
+        const snap = await gd(q(col(db, 'stores'), wh(documentId(), 'in', liveThumbnailIds.slice(0, 10))));
+        const next: Record<string, string | undefined> = {};
+        snap.forEach((d) => {
+          const data = d.data() as { photoUrls?: string[] };
+          next[d.id] = data.photoUrls?.[0];
+        });
+        if (!cancelled) setLiveStoreSummaries((prev) => ({ ...prev, ...next }));
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [liveThumbnailIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,7 +208,15 @@ export default function MobileHome() {
       </header>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          2. 본사 광고 상단 — 16:9 슬라이드 (어두운 톤)
+          2. HOT LIVE 큰 카드 + 슬라이더 — LIVE 0개면 자동 숨김
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <PrimaryLiveCard sessions={liveSessions} thumbnails={liveStoreSummaries} />
+      <LiveSlider sessions={liveSessions} thumbnails={liveStoreSummaries} />
+
+      {liveSessions.length > 0 && <div className="brand-strip-divider" />}
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          3. 본사 광고 상단 — 16:9 슬라이드 (어두운 톤)
           첫 슬라이드: "내 주변 매장 찾기" CTA 카드 등록 가능
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <HomeAdsCarousel position="top" />
