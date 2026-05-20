@@ -64,7 +64,10 @@ export default function LivePanel({ storeId, storeName }: Props) {
   // 선택 동기화
   useEffect(() => {
     if (sessions.length === 0) {
-      if (selectedId !== null) setSelectedId(null);
+      if (selectedId !== null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSelectedId(null);
+      }
       return;
     }
     if (!sessions.some((s) => s.id === selectedId)) {
@@ -127,7 +130,7 @@ export default function LivePanel({ storeId, storeName }: Props) {
           <div className="text-4xl mb-3">🎬</div>
           <div className="font-bold text-gray-900 mb-2">진행 중인 LIVE가 없습니다</div>
           <div className="text-xs text-gray-500">
-            오른쪽 위 "+ 새 LIVE 시작"으로 토너를 띄우세요. 모바일·TV에 즉시 노출됩니다.
+            오른쪽 위 &quot;+ 새 LIVE 시작&quot;으로 토너를 띄우세요. 모바일·TV에 즉시 노출됩니다.
           </div>
         </div>
       ) : (
@@ -432,14 +435,17 @@ function BlindStructureView({
   const currentLv = session.currentLevel;
   const startedMs = session.totalStartedAt?.toMillis();
 
-  // 각 레벨의 누적 시작 오프셋(초) 계산
-  let cum = 0;
-  const rows = structure.map((lvl) => {
-    const startOffsetSec = cum;
-    cum += lvl.durationSec;
-    return { ...lvl, startOffsetSec };
-  });
-  const totalMin = Math.round(cum / 60);
+  // 각 레벨의 누적 시작 오프셋(초) 계산 — reduce로 acc 명시
+  const rows = structure.reduce<
+    Array<(typeof structure)[number] & { startOffsetSec: number }>
+  >((acc, lvl) => {
+    const startOffsetSec =
+      acc.length === 0 ? 0 : acc[acc.length - 1].startOffsetSec + acc[acc.length - 1].durationSec;
+    acc.push({ ...lvl, startOffsetSec });
+    return acc;
+  }, []);
+  const totalSec = rows.length === 0 ? 0 : rows[rows.length - 1].startOffsetSec + rows[rows.length - 1].durationSec;
+  const totalMin = Math.round(totalSec / 60);
 
   return (
     <div className="bg-white border-[1.5px] border-gray-200 rounded-2xl overflow-hidden">

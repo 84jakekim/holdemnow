@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { subscribeSlot, type DisplaySlot } from '@/lib/slots';
@@ -11,6 +11,13 @@ import {
   computeLateRegMinutes,
   useLiveCountdown,
 } from '@/lib/live';
+import {
+  type TimerDisplaySettings,
+  DEFAULT_TIMER_DISPLAY,
+  subscribeTimerDisplay,
+  buildBackgroundCss,
+} from '@/lib/timerDisplay';
+import { playCountdownBeep, playFinalBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
 
 interface StoreData {
   name: string;
@@ -27,6 +34,7 @@ export default function DisplayPage({
   const [slot, setSlot] = useState<DisplaySlot | null | undefined>(undefined);
   const [storeName, setStoreName] = useState<string>('매장 디스플레이');
   const [session, setSession] = useState<LiveSession | null | undefined>(undefined);
+  const [display, setDisplay] = useState<TimerDisplaySettings>(DEFAULT_TIMER_DISPLAY);
 
   useEffect(() => {
     getDoc(doc(db, 'stores', storeId)).then((snap) => {
@@ -43,7 +51,13 @@ export default function DisplayPage({
   }, [storeId, slotNumInt]);
 
   useEffect(() => {
+    const unsub = subscribeTimerDisplay(storeId, setDisplay, () => {});
+    return unsub;
+  }, [storeId]);
+
+  useEffect(() => {
     if (!slot?.sessionId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSession(null);
       return;
     }
@@ -53,6 +67,48 @@ export default function DisplayPage({
 
   // 절대 시각(levelEndsAt) 기반 카운트다운
   const sec = useLiveCountdown(session ?? null);
+
+  // 사용자 첫 터치(또는 클릭) 시 오디오 활성화
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('click', unlock, { once: true });
+    window.addEventListener('touchstart', unlock, { once: true });
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+  }, []);
+
+  // 사운드 트리거 — prev sec를 추적해 정확한 임계값에서만 1번 울리도록
+  const prevSecRef = useRef<number>(sec);
+  const prevLevelRef = useRef<number | undefined>(session?.currentLevel);
+  useEffect(() => {
+    const prev = prevSecRef.current;
+    // 임계값 통과(prev > t && sec <= t)에서만 1회 울림
+    if (session?.status === 'running') {
+      if (display.soundWarn60 && prev > 60 && sec <= 60) playCountdownBeep();
+      if (display.soundWarn30 && prev > 30 && sec <= 30) playCountdownBeep();
+      // 마지막 5초 카운트다운 — 30s 옵션과 묶어 동작
+      if (display.soundWarn30 && prev > 5 && sec <= 5 && sec > 0) playCountdownBeep();
+      if (display.soundLevelEnd && prev > 0 && sec <= 0) playFinalBeep();
+    }
+    prevSecRef.current = sec;
+  }, [sec, session?.status, display.soundWarn60, display.soundWarn30, display.soundLevelEnd]);
+
+  // 레벨 전환 시 블라인드업 차임
+  useEffect(() => {
+    const prevLv = prevLevelRef.current;
+    if (
+      display.soundLevelEnd &&
+      session?.status === 'running' &&
+      prevLv != null &&
+      session.currentLevel !== prevLv &&
+      session.currentLevel > prevLv
+    ) {
+      playBlindUp();
+    }
+    prevLevelRef.current = session?.currentLevel;
+  }, [session?.currentLevel, session?.status, display.soundLevelEnd]);
 
   // F11 안내 (한 번만)
   const [showHint, setShowHint] = useState(true);
@@ -68,7 +124,7 @@ export default function DisplayPage({
     return () => clearInterval(t);
   }, []);
 
-  // 동기화 상태 — navigator.onLine 기반 + 30초 지연
+  // 동기화 상태
   const [online, setOnline] = useState<boolean>(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
   );
@@ -86,13 +142,16 @@ export default function DisplayPage({
   }, []);
   useEffect(() => {
     if (online) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowStale(false);
       return;
     }
-    // 끊김 30초 후에만 표시 (짧은 끊김은 노이즈로 간주)
     const t = setTimeout(() => setShowStale(true), 30_000);
     return () => clearTimeout(t);
   }, [online]);
+
+  // 배경 CSS — 메모이즈
+  const bgStyle = useMemo<React.CSSProperties>(() => ({ background: buildBackgroundCss(display) }), [display]);
 
   if (slot === undefined) {
     return <DarkScreen>로딩 중…</DarkScreen>;
@@ -112,36 +171,83 @@ export default function DisplayPage({
   }
 
   const paused = session?.status === 'paused';
-  const lowTime = session && sec <= 10 && !paused;
-  const nextBlind = session?.blindStructure.find((l) => l.level === session.currentLevel + 1);
+  const isRunning = session?.status === 'running';
+  const lowTime = session && sec <= 10 && isRunning;
+  const veryLow = session && sec <= 3 && isRunning;
+
+  // 다음 블라인드 — 현재 구조에서 currentLevel + 1
+  const structure = session?.blindStructureLocked && session.blindStructureLocked.length > 0
+    ? session.blindStructureLocked
+    : session?.blindStructure;
+  const currentLevelObj = structure?.find((l) => l.level === session?.currentLevel);
+  const nextBlind = structure?.find((l) => l.level === (session?.currentLevel ?? 0) + 1);
+  const isCurrentBreak = currentLevelObj?.isBreak === true;
+
+  // 현재 레벨 진행률
+  const currentDur = currentLevelObj?.durationSec ?? 0;
+  const progress = currentDur > 0 ? Math.min(1, Math.max(0, (currentDur - sec) / currentDur)) : 0;
+
   const lateMin = session ? computeLateRegMinutes(session, sec) : 0;
+  const lateClosed = session
+    ? session.lateRegClosed || session.currentLevel > session.lateRegEndLevel
+    : false;
+  // 5분 이내면 mm:ss 정밀
+  const lateRegDisplay = session
+    ? lateClosed
+      ? '🔒 마감'
+      : (() => {
+          let total = sec;
+          for (let lv = session.currentLevel + 1; lv <= session.lateRegEndLevel; lv++) {
+            const item = session.blindStructure.find((l) => l.level === lv);
+            if (item) total += item.durationSec;
+          }
+          return total < 300 ? fmtTime(Math.max(0, total)) : `${Math.ceil(total / 60)}분`;
+        })()
+    : '';
+
+  const heroTitle = display.customTournamentTitle || session?.tournamentName || '대기 중';
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col">
-      {/* 좌상단 매장명 + 우상단 시계 */}
-      <div className="px-10 pt-8 flex items-start justify-between gap-6">
-        <div>
-          <div className="text-xs text-gray-500 tracking-widest mb-1">STORE</div>
-          <div className="text-2xl font-extrabold tracking-tight">{storeName}</div>
+    <div className="min-h-screen text-white flex flex-col relative overflow-hidden" style={bgStyle}>
+      {/* 이미지 배경 시 어둠 overlay */}
+      {display.backgroundType === 'image' && display.backgroundImageUrl && (
+        <div className="absolute inset-0 pointer-events-none" style={{ background: `rgba(0,0,0,${display.overlayOpacity})` }} />
+      )}
+
+      {/* 상단: 좌상단 매장명/로고 · 우상단 시계 */}
+      <div className="relative px-10 pt-8 flex items-start justify-between gap-6">
+        <div className="flex items-center gap-3">
+          {display.storeLogoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={display.storeLogoUrl} alt="logo" className="h-12 w-12 rounded-lg object-cover" />
+          )}
+          <div>
+            <div className="text-xs tracking-widest mb-1" style={{ color: display.textColor, opacity: 0.6 }}>
+              STORE
+            </div>
+            <div className="text-2xl font-extrabold tracking-tight" style={{ color: display.textColor }}>
+              {storeName}
+            </div>
+          </div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] text-gray-500 tracking-widest mb-1">
+          <div className="text-[10px] tracking-widest mb-1" style={{ color: display.textColor, opacity: 0.6 }}>
             {`${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(
               now.getDate(),
             ).padStart(2, '0')}`}{' '}
             ·{' '}
             {['일', '월', '화', '수', '목', '금', '토'][now.getDay()]}
           </div>
-          <div className="font-mono text-2xl font-extrabold leading-none">
+          <div className="font-mono text-2xl font-extrabold leading-none" style={{ color: display.textColor }}>
             {String(now.getHours()).padStart(2, '0')}:{String(now.getMinutes()).padStart(2, '0')}
           </div>
-          <div className="text-[10px] text-gray-500 mt-2">
+          <div className="text-[10px] mt-2" style={{ color: display.textColor, opacity: 0.5 }}>
             {slot.name ?? `${slot.slotNum}번 TV`}
           </div>
         </div>
       </div>
 
-      {/* 동기화 끊김 배너 (30초 이상 오프라인 시) */}
+      {/* 동기화 끊김 배너 */}
       {showStale && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-20 bg-amber-500/90 text-black px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 backdrop-blur shadow-lg">
           <span className="w-2 h-2 rounded-full bg-black animate-pulse" />
@@ -151,60 +257,104 @@ export default function DisplayPage({
 
       {/* 중앙 */}
       {!session || session.status === 'completed' ? (
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <div className="text-7xl font-extrabold text-gray-700 mb-6" style={{ letterSpacing: '-0.04em' }}>
+        <div className="relative flex-1 flex flex-col items-center justify-center">
+          <div
+            className="text-7xl font-extrabold mb-6"
+            style={{ letterSpacing: '-0.04em', color: display.textColor, opacity: 0.3 }}
+          >
             대기 중
           </div>
-          <div className="text-sm text-gray-500 max-w-md text-center leading-relaxed">
-            어드민에서 이 슬롯에 LIVE 세션을 매핑하면<br />
-            이 화면에 실시간 송출됩니다
+          <div className="text-sm max-w-md text-center leading-relaxed" style={{ color: display.textColor, opacity: 0.6 }}>
+            어드민에서 이 슬롯에 LIVE 세션을 매핑하면
+            <br />이 화면에 실시간 송출됩니다
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col justify-center items-center pb-10">
-          {/* LIVE / PAUSED */}
+        <div className="relative flex-1 flex flex-col justify-center items-center pb-10">
+          {/* LIVE / PAUSED / BREAK */}
           <div className="flex items-center gap-3 mb-2">
             {paused ? (
-              <span className="text-amber-400 font-extrabold tracking-[0.3em] text-sm">⏸ PAUSED</span>
+              <span className="font-extrabold tracking-[0.3em] text-sm" style={{ color: '#FFD166' }}>
+                ⏸ PAUSED
+              </span>
+            ) : isCurrentBreak ? (
+              <span className="font-extrabold tracking-[0.3em] text-sm" style={{ color: '#FFD166' }}>
+                ☕ BREAK
+              </span>
             ) : (
               <>
-                <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-red-500 font-extrabold tracking-[0.3em] text-sm">LIVE</span>
+                <span
+                  className="w-3 h-3 rounded-full animate-pulse"
+                  style={{ background: display.accentColor }}
+                />
+                <span
+                  className="font-extrabold tracking-[0.3em] text-sm"
+                  style={{ color: display.accentColor }}
+                >
+                  LIVE
+                </span>
               </>
             )}
           </div>
 
-          <div className="text-xs text-gray-400 tracking-widest mb-6">{session.tournamentName}</div>
-          <div className="text-[10px] text-gray-500 tracking-[0.3em] mb-3">
-            LEVEL {session.currentLevel}
+          <div className="text-xs tracking-widest mb-6 max-w-[80%] truncate" style={{ color: display.textColor }}>
+            {heroTitle}
+          </div>
+          <div className="text-[10px] tracking-[0.3em] mb-3" style={{ color: display.textColor, opacity: 0.7 }}>
+            {isCurrentBreak ? `BREAK · ${currentLevelObj?.level ?? ''}레벨` : `LEVEL ${session.currentLevel}`}
           </div>
 
           {/* 거대 카운트다운 */}
           <div
-            className="font-mono font-extrabold leading-none"
+            className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
             style={{
               fontSize: 'clamp(150px, 18vw, 280px)',
               letterSpacing: '-0.05em',
-              color: paused ? '#A8A8A8' : lowTime ? '#FF4757' : '#fff',
+              color: paused
+                ? '#A8A8A8'
+                : lowTime
+                ? display.accentColor
+                : isCurrentBreak
+                ? '#FFD166'
+                : display.timerColor,
               transition: 'color 0.2s',
             }}
           >
             {fmtTime(sec)}
           </div>
 
-          {/* 블라인드 */}
-          <div className="mt-6 text-center">
-            <div className="text-[10px] text-gray-500 tracking-[0.3em] mb-2">BLINDS</div>
-            <div
-              className="font-mono font-extrabold"
-              style={{ fontSize: 'clamp(36px, 5vw, 64px)', color: '#FFB800' }}
-            >
-              {session.smallBlind} / {session.bigBlind}
+          {/* 진행률 바 (running이면서 break 아닐 때만 강조) */}
+          {isRunning && currentDur > 0 && (
+            <div className="mt-5 h-1.5 w-[60%] max-w-[700px] bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full transition-all"
+                style={{
+                  width: `${progress * 100}%`,
+                  background: lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor,
+                }}
+              />
             </div>
-            {session.ante > 0 && (
-              <div className="font-mono text-base text-gray-500 mt-2">Ante {session.ante}</div>
-            )}
-          </div>
+          )}
+
+          {/* 블라인드 (break 아닐 때만 표시) */}
+          {!isCurrentBreak && (
+            <div className="mt-6 text-center">
+              <div className="text-[10px] tracking-[0.3em] mb-2" style={{ color: display.textColor, opacity: 0.6 }}>
+                BLINDS
+              </div>
+              <div
+                className="font-mono font-extrabold"
+                style={{ fontSize: 'clamp(36px, 5vw, 64px)', color: display.blindsColor }}
+              >
+                {session.smallBlind.toLocaleString()} / {session.bigBlind.toLocaleString()}
+              </div>
+              {session.ante > 0 && (
+                <div className="font-mono text-base mt-2" style={{ color: display.textColor, opacity: 0.6 }}>
+                  Ante {session.ante.toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 하단 stats */}
           <div className="mt-10 grid grid-cols-3 gap-12 max-w-3xl">
@@ -212,51 +362,82 @@ export default function DisplayPage({
               label="PLAYERS"
               value={`${session.playersRemaining}/${session.totalPlayers}`}
               sub={`${session.tablesRemaining}테이블`}
+              color={display.textColor}
             />
             <Stat
               label="PRIZE POOL"
-              value={`₩${(session.prizePool / 10000).toFixed(0)}만`}
+              value={display.prizeOverride || `₩${(session.prizePool / 10000).toFixed(0)}만`}
               sub=""
+              color={display.textColor}
             />
             <Stat
               label="LATE REG"
-              value={session.lateRegClosed ? '마감' : `${lateMin}분`}
-              sub={session.lateRegClosed ? '' : '남음'}
-              highlight={!session.lateRegClosed && lateMin <= 5}
+              value={lateRegDisplay}
+              sub={lateClosed ? '' : '남음'}
+              highlight={!lateClosed && lateMin <= 5}
+              color={display.textColor}
+              accentColor={display.accentColor}
             />
           </div>
 
-          {/* 다음 레벨 */}
+          {/* 다음 레벨 / 휴식 */}
           {nextBlind && (
-            <div className="mt-10 text-xs text-gray-500 tracking-wider">
-              NEXT · LV {nextBlind.level} ·{' '}
-              <span className="font-mono">
-                {nextBlind.sb}/{nextBlind.bb}
-              </span>
+            <div className="mt-10 text-sm tracking-wider font-bold" style={{ color: display.textColor, opacity: 0.7 }}>
+              NEXT ·{' '}
+              {nextBlind.isBreak ? (
+                <span style={{ color: '#FFD166' }}>
+                  ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+                </span>
+              ) : (
+                <span className="font-mono">
+                  LV {nextBlind.level} · {nextBlind.sb.toLocaleString()}/
+                  {nextBlind.bb.toLocaleString()}
+                  {nextBlind.ante ? ` · ante ${nextBlind.ante.toLocaleString()}` : ''}
+                </span>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* 워터마크 */}
-      <div className="px-10 pb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-gray-600">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span className="font-bold tracking-tight">HoldemNow</span>
+      {/* 공지 띠 (announcement) */}
+      {display.announcement && session && session.status !== 'completed' && (
+        <div
+          className="relative px-10 py-3 text-center font-bold text-sm border-t"
+          style={{
+            background: 'rgba(0,0,0,0.35)',
+            color: display.timerColor,
+            borderColor: 'rgba(255,255,255,0.1)',
+          }}
+        >
+          📢 {display.announcement}
         </div>
-        <div className="text-[10px] text-gray-600 font-mono">
+      )}
+
+      {/* 워터마크 / 스폰서 */}
+      <div className="relative px-10 pb-6 pt-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs" style={{ color: display.textColor, opacity: 0.5 }}>
+          <span
+            className="w-2 h-2 rounded-full animate-pulse"
+            style={{ background: display.accentColor }}
+          />
+          <span className="font-bold tracking-tight">HoldemNow</span>
+          {display.sponsorText && (
+            <span className="ml-3 tracking-widest text-[10px]" style={{ opacity: 0.8 }}>
+              · {display.sponsorText}
+            </span>
+          )}
+        </div>
+        <div className="text-[10px] font-mono" style={{ color: display.textColor, opacity: 0.3 }}>
           display.holdemnow.com/{storeId}/slot/{slot.slotNum}
         </div>
       </div>
 
-      {/* F11 안내 (6초 후 사라짐) */}
+      {/* F11 안내 */}
       {showHint && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur text-white px-5 py-3 rounded-xl text-xs flex items-center gap-3">
-          <span>💡 F11로 풀스크린 진입</span>
-          <button
-            onClick={() => setShowHint(false)}
-            className="text-white/60 hover:text-white"
-          >
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur text-white px-5 py-3 rounded-xl text-xs flex items-center gap-3 z-30">
+          <span>💡 F11 풀스크린 · 화면을 한 번 클릭하면 사운드 활성화</span>
+          <button onClick={() => setShowHint(false)} className="text-white/60 hover:text-white">
             ✕
           </button>
         </div>
@@ -278,22 +459,35 @@ function Stat({
   value,
   sub,
   highlight,
+  color,
+  accentColor,
 }: {
   label: string;
   value: string;
   sub: string;
   highlight?: boolean;
+  color: string;
+  accentColor?: string;
 }) {
   return (
     <div className="text-center">
-      <div className="text-[10px] text-gray-500 tracking-[0.3em] mb-2">{label}</div>
+      <div className="text-[10px] tracking-[0.3em] mb-2" style={{ color, opacity: 0.6 }}>
+        {label}
+      </div>
       <div
-        className={`font-mono font-extrabold ${highlight ? 'text-red-500' : 'text-white'}`}
-        style={{ fontSize: 'clamp(28px, 3.5vw, 44px)' }}
+        className="font-mono font-extrabold"
+        style={{
+          fontSize: 'clamp(28px, 3.5vw, 44px)',
+          color: highlight && accentColor ? accentColor : color,
+        }}
       >
         {value}
       </div>
-      {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+      {sub && (
+        <div className="text-xs mt-1" style={{ color, opacity: 0.6 }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }

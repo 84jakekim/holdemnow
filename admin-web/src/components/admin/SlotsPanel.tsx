@@ -10,12 +10,16 @@ import {
   renameSlot,
 } from '@/lib/slots';
 import { subscribeStoreLiveSessions, type LiveSession, fmtTime } from '@/lib/live';
+import TimerDisplaySettingsEditor from './TimerDisplaySettingsEditor';
 
 interface Props {
   storeId: string;
 }
 
+type Tab = 'slots' | 'display';
+
 export default function SlotsPanel({ storeId }: Props) {
+  const [tab, setTab] = useState<Tab>('slots');
   const [slots, setSlots] = useState<DisplaySlot[]>([]);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,9 +52,36 @@ export default function SlotsPanel({ storeId }: Props) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📺 디스플레이 슬롯</h1>
-        <p className="text-sm text-gray-500 mt-1">매장 TV별 슬롯 — 각 슬롯에 진행 중 세션을 매핑</p>
+      <div className="mb-4">
+        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📺 디스플레이</h1>
+        <p className="text-sm text-gray-500 mt-1">매장 TV 슬롯과 토너 타이머 화면 커스터마이징</p>
+      </div>
+
+      {/* 탭바 */}
+      <div className="mb-5 flex gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setTab('slots')}
+          className={`px-4 py-2.5 text-sm font-bold border-b-2 transition ${
+            tab === 'slots' ? 'border-black text-gray-900' : 'border-transparent text-gray-500'
+          }`}
+        >
+          📺 슬롯 관리
+        </button>
+        <button
+          onClick={() => setTab('display')}
+          className={`px-4 py-2.5 text-sm font-bold border-b-2 transition ${
+            tab === 'display' ? 'border-black text-gray-900' : 'border-transparent text-gray-500'
+          }`}
+        >
+          🎨 타이머 화면 설정
+        </button>
+      </div>
+
+      {tab === 'display' && <TimerDisplaySettingsEditor storeId={storeId} />}
+      {tab === 'slots' && (
+      <>
+      <div className="mb-3">
+        <p className="text-sm text-gray-500">매장 TV별 슬롯 — 각 슬롯에 진행 중 세션을 매핑</p>
       </div>
 
       {error && (
@@ -73,7 +104,7 @@ export default function SlotsPanel({ storeId }: Props) {
           <div className="text-4xl mb-3">📺</div>
           <div className="font-bold text-gray-900 mb-2">디스플레이 슬롯이 없습니다</div>
           <div className="text-xs text-gray-500 leading-relaxed">
-            "+ 슬롯 추가"로 매장 TV 슬롯을 만드세요.<br />
+            &quot;+ 슬롯 추가&quot;로 매장 TV 슬롯을 만드세요.<br />
             각 슬롯은 고유 URL을 가져 TV 브라우저에서 열 수 있습니다.
           </div>
         </div>
@@ -104,8 +135,10 @@ export default function SlotsPanel({ storeId }: Props) {
       )}
 
       <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-900 leading-relaxed">
-        💡 <b>사용 방법</b>: 매장 TV의 브라우저로 슬롯 URL을 열어 F11(풀스크린). 어드민에서 슬롯에 세션을 할당하면 그 TV에 즉시 송출됩니다.
+        💡 <b>사용 방법</b>: 매장 TV의 브라우저로 슬롯 URL을 열어 F11(풀스크린). 어드민에서 슬롯에 세션을 할당하면 그 TV에 즉시 송출됩니다. <b>&quot;🎨 타이머 화면 설정&quot;</b> 탭에서 배경·색·공지를 매장 브랜드에 맞게 커스터마이징하세요.
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -91,6 +91,14 @@ service cloud.firestore {
         allow write: if isStoreOwnerOrMember(storeId);
       }
 
+      // 매장별 토너 타이머 디스플레이 prefs (배경/색/공지/스폰서) —
+      // TV 풀스크린이 URL만으로 접근 가능해야 하므로 read=public.
+      // write는 매장 owner/member 또는 platform_admin만.
+      match /timerDisplay/{docId} {
+        allow read: if true;
+        allow write: if isStoreOwnerOrMember(storeId) || isPlatformAdmin();
+      }
+
       // 노출·클릭 카운터 (sharded-free, v0.1 demo)
       // v0.1: 누구나 increment 가능 — 베타에서 abuse 감지 시 Cloud Function 인덱싱으로 이관
       match /metrics/{metricId} {
