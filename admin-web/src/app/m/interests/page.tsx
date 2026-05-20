@@ -36,13 +36,33 @@ export default function InterestsPage() {
     return unsub;
   }, [authState]);
 
-  // 시작 시간 순 정렬 (과거 제외)
-  const sorted = useMemo(() => {
+  // 모든 관심 토너 표시 — 다가오는 토너 먼저, 지난 토너 뒤로
+  // (이전 버전은 startsAt 없거나 1시간 이상 과거면 숨김 → 통계는 1인데 목록은 비어 보이는 문제)
+  const { upcoming, past } = useMemo(() => {
     const now = Date.now();
-    return [...items]
-      .filter((it) => it.startsAt && (it.startsAt as Timestamp).toDate().getTime() > now - 60 * 60 * 1000)
-      .sort((a, b) => (a.startsAt as Timestamp).toDate().getTime() - (b.startsAt as Timestamp).toDate().getTime());
+    const up: InterestDoc[] = [];
+    const ps: InterestDoc[] = [];
+    for (const it of items) {
+      const ms = it.startsAt && typeof (it.startsAt as Timestamp).toDate === 'function'
+        ? (it.startsAt as Timestamp).toDate().getTime()
+        : null;
+      // startsAt 없거나 미래·1시간 이내 과거 → 다가오는
+      if (ms == null || ms > now - 60 * 60 * 1000) up.push(it);
+      else ps.push(it);
+    }
+    up.sort((a, b) => {
+      const ta = a.startsAt ? (a.startsAt as Timestamp).toDate().getTime() : Infinity;
+      const tb = b.startsAt ? (b.startsAt as Timestamp).toDate().getTime() : Infinity;
+      return ta - tb;
+    });
+    ps.sort((a, b) => {
+      const ta = a.startsAt ? (a.startsAt as Timestamp).toDate().getTime() : 0;
+      const tb = b.startsAt ? (b.startsAt as Timestamp).toDate().getTime() : 0;
+      return tb - ta; // 지난 토너는 최근부터
+    });
+    return { upcoming: up, past: ps };
   }, [items]);
+  const totalCount = upcoming.length + past.length;
 
   // 비로그인 → /m (effect로)
   useEffect(() => {
@@ -70,7 +90,7 @@ export default function InterestsPage() {
 
       {loading ? (
         <div className="p-8 text-center text-sm text-gray-500">로딩 중…</div>
-      ) : sorted.length === 0 ? (
+      ) : totalCount === 0 ? (
         <div className="p-8 text-center">
           <div className="text-4xl mb-3">⭐</div>
           <div className="font-bold text-gray-900 mb-2">관심 토너가 없습니다</div>
@@ -80,72 +100,125 @@ export default function InterestsPage() {
           </div>
         </div>
       ) : (
-        <div className="p-5 space-y-2">
-          {sorted.map((it) => {
-            const poster = posterStyleFor(it.posterStyle);
-            const t = (it.startsAt as Timestamp).toDate();
-            const hh = String(t.getHours()).padStart(2, '0');
-            const mm = String(t.getMinutes()).padStart(2, '0');
-            const today = new Date();
-            const isToday =
-              t.getFullYear() === today.getFullYear() &&
-              t.getMonth() === today.getMonth() &&
-              t.getDate() === today.getDate();
-            const minutesUntil = Math.floor((t.getTime() - Date.now()) / (1000 * 60));
-            const imminent = minutesUntil >= -60 && minutesUntil <= 60;
-
-            return (
-              <div
-                key={it.tournamentId}
-                className={`flex items-center gap-3 p-3 rounded-2xl border ${
-                  imminent ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'
-                }`}
-              >
-                <button
-                  onClick={() => router.push(`/m/store/${it.storeId}`)}
-                  className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                >
-                  <div
-                    className="w-12 h-16 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
-                    style={{ background: poster.bg, color: poster.color }}
-                  >
-                    {it.tournamentName.split(' ')[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-gray-900 truncate">
-                      {it.tournamentName}
-                    </div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">
-                      <span className="font-mono font-bold text-gray-900">
-                        {isToday ? '오늘' : `${t.getMonth() + 1}/${t.getDate()}`} {hh}:{mm}
-                      </span>{' '}
-                      · {it.storeName}
-                    </div>
-                    {imminent && (
-                      <div className="inline-flex items-center gap-1 mt-1.5 bg-red-100 text-red-700 rounded px-1.5 py-0.5 text-[10px] font-extrabold">
-                        ⏰ {minutesUntil > 0 ? `${minutesUntil}분 후 시작` : '진행 중'}
-                      </div>
-                    )}
-                  </div>
-                </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm('관심 해제할까요?')) removeInterest(it.tournamentId);
-                  }}
-                  className="w-8 h-8 rounded-full bg-yellow-50 text-yellow-500 border border-yellow-300 flex items-center justify-center text-base flex-shrink-0"
-                  title="관심 해제"
-                >
-                  ★
-                </button>
+        <div className="p-5 space-y-4">
+          {upcoming.length > 0 && (
+            <div>
+              <div className="text-xs font-extrabold text-gray-700 mb-2 px-1">
+                다가오는 토너 ({upcoming.length})
               </div>
-            );
-          })}
+              <div className="space-y-2">
+                {upcoming.map((it) => (
+                  <InterestRow key={it.tournamentId} it={it} past={false} onOpen={() => router.push(`/m/store/${it.storeId}`)} onRemove={() => { if (window.confirm('관심 해제할까요?')) removeInterest(it.tournamentId); }} />
+                ))}
+              </div>
+            </div>
+          )}
+          {past.length > 0 && (
+            <div>
+              <div className="text-xs font-extrabold text-gray-500 mb-2 px-1">
+                지난 토너 ({past.length})
+              </div>
+              <div className="space-y-2">
+                {past.map((it) => (
+                  <InterestRow key={it.tournamentId} it={it} past={true} onOpen={() => router.push(`/m/store/${it.storeId}`)} onRemove={() => { if (window.confirm('관심 해제할까요?')) removeInterest(it.tournamentId); }} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       <div className="px-5 py-6 text-center text-[10px] text-gray-400">
         💡 시작 1시간 전, 늦은 등록 30분 전 푸시 알림은 v0.2 (FCM)에서 자동 발송
       </div>
+    </div>
+  );
+}
+
+/* ============================================================
+ * 관심 토너 한 행 — 다가오는·지난 공용
+ * ========================================================== */
+function InterestRow({
+  it,
+  past,
+  onOpen,
+  onRemove,
+}: {
+  it: InterestDoc;
+  past: boolean;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
+  const poster = posterStyleFor(it.posterStyle);
+  const startsMs = it.startsAt && typeof (it.startsAt as Timestamp).toDate === 'function'
+    ? (it.startsAt as Timestamp).toDate().getTime()
+    : null;
+  const t = startsMs != null ? new Date(startsMs) : null;
+  const hh = t ? String(t.getHours()).padStart(2, '0') : '--';
+  const mm = t ? String(t.getMinutes()).padStart(2, '0') : '--';
+  const today = new Date();
+  const isToday = t &&
+    t.getFullYear() === today.getFullYear() &&
+    t.getMonth() === today.getMonth() &&
+    t.getDate() === today.getDate();
+  const minutesUntil = startsMs != null ? Math.floor((startsMs - Date.now()) / (1000 * 60)) : null;
+  const imminent = !past && minutesUntil != null && minutesUntil >= -60 && minutesUntil <= 60;
+
+  return (
+    <div
+      className={`flex items-center gap-3 p-3 rounded-2xl border ${
+        past
+          ? 'bg-gray-50 border-gray-200 opacity-70'
+          : imminent
+            ? 'bg-red-50 border-red-200'
+            : 'bg-white border-gray-200'
+      }`}
+    >
+      <button
+        onClick={onOpen}
+        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+      >
+        <div
+          className="w-12 h-16 rounded-md flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"
+          style={{ background: poster.bg, color: poster.color, opacity: past ? 0.6 : 1 }}
+        >
+          {it.tournamentName.split(' ')[0]}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`text-sm font-bold truncate ${past ? 'text-gray-600' : 'text-gray-900'}`}>
+            {it.tournamentName}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-0.5">
+            {t ? (
+              <>
+                <span className={`font-mono font-bold ${past ? 'text-gray-500' : 'text-gray-900'}`}>
+                  {isToday ? '오늘' : `${t.getMonth() + 1}/${t.getDate()}`} {hh}:{mm}
+                </span>{' '}
+              </>
+            ) : (
+              <span className="font-mono font-bold text-gray-400">시각 미지정 </span>
+            )}
+            · {it.storeName}
+          </div>
+          {imminent && minutesUntil != null && (
+            <div className="inline-flex items-center gap-1 mt-1.5 bg-red-100 text-red-700 rounded px-1.5 py-0.5 text-[10px] font-extrabold">
+              ⏰ {minutesUntil > 0 ? `${minutesUntil}분 후 시작` : '진행 중'}
+            </div>
+          )}
+          {past && (
+            <div className="inline-flex items-center gap-1 mt-1.5 bg-gray-200 text-gray-600 rounded px-1.5 py-0.5 text-[10px] font-bold">
+              종료
+            </div>
+          )}
+        </div>
+      </button>
+      <button
+        onClick={onRemove}
+        className="w-8 h-8 rounded-full bg-yellow-50 text-yellow-500 border border-yellow-300 flex items-center justify-center text-base flex-shrink-0"
+        title="관심 해제"
+      >
+        ★
+      </button>
     </div>
   );
 }
