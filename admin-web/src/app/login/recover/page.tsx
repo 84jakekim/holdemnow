@@ -9,9 +9,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import { fetchRecoveryInfo, sendPasswordReset } from '@/lib/emailAuth';
+import { auth } from '@/lib/firebase';
 
-type Phase = 'email' | 'verify' | 'sent' | 'failed';
+type Phase = 'email' | 'verify' | 'sent' | 'failed' | 'social';
+type SocialKind = 'google' | 'kakao';
 
 const SUPPORT_KAKAO = 'https://open.kakao.com/o/holdemnow'; // 실제 오픈챗 URL로 교체
 const SUPPORT_EMAIL = 'admin@holdemnow.com';
@@ -27,14 +30,35 @@ export default function RecoverPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [socialKind, setSocialKind] = useState<SocialKind | null>(null);
 
-  // Step 1: 이메일로 복구 정보 조회
+  // Step 1: 이메일로 복구 정보 조회 + 소셜 로그인 사전 판별
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading(true);
     setError(null);
     try {
+      // 0) Firebase Auth에서 이 이메일이 어떤 sign-in method로 가입되었는지 확인
+      //    소셜 로그인만 가입된 계정이면 비번 재설정 의미 없음 — 안내 페이즈로 분기
+      let methods: string[] = [];
+      try {
+        methods = await fetchSignInMethodsForEmail(auth, email.trim().toLowerCase());
+      } catch {
+        // Auth 조회 실패 시 무시하고 일반 흐름 진행
+      }
+      if (methods.length > 0 && !methods.includes('password')) {
+        // 비번 가입은 없고 소셜만 있음
+        const isGoogle = methods.includes('google.com');
+        const isKakao = methods.includes('oidc.kakao');
+        if (isGoogle || isKakao) {
+          setSocialKind(isGoogle ? 'google' : 'kakao');
+          setPhase('social');
+          setLoading(false);
+          return;
+        }
+      }
+
       const info = await fetchRecoveryInfo(email);
       if (!info) {
         setError('해당 이메일로 가입된 매장·대회사 계정을 찾을 수 없습니다.');
@@ -97,6 +121,7 @@ export default function RecoverPage() {
               {phase === 'verify' && '본인 확인 정보를 입력하세요'}
               {phase === 'sent' && '이메일을 확인해 주세요'}
               {phase === 'failed' && '본인 확인 실패'}
+              {phase === 'social' && '소셜 로그인 계정입니다'}
             </div>
           </div>
 
@@ -229,6 +254,75 @@ export default function RecoverPage() {
                 >
                   로그인으로 돌아가기
                 </Link>
+              </div>
+            )}
+
+            {/* ── Phase 3.5: 소셜 로그인 계정 안내 ── */}
+            {phase === 'social' && socialKind && (
+              <div className="py-2">
+                <div
+                  className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                    socialKind === 'google' ? 'bg-blue-100' : 'bg-yellow-100'
+                  }`}
+                >
+                  <span className="text-2xl">{socialKind === 'google' ? '🔵' : '🟡'}</span>
+                </div>
+                <div className="font-extrabold text-gray-900 mb-3 text-center">
+                  {socialKind === 'google' ? 'Google' : '카카오'} 계정으로 가입한 이메일입니다
+                </div>
+                <div className="text-sm text-gray-700 leading-relaxed mb-5">
+                  이 이메일은 <b>{socialKind === 'google' ? 'Google' : '카카오'}</b>로 가입한 계정입니다.
+                  <br />
+                  비밀번호는 {socialKind === 'google' ? 'Google' : '카카오'}에서 관리하므로,{' '}
+                  해당 서비스에서 재설정해 주세요.
+                </div>
+
+                {socialKind === 'google' && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-900 leading-relaxed mb-5">
+                    <div className="font-bold mb-2">Google 계정 비밀번호 재설정</div>
+                    <a
+                      href="https://accounts.google.com/signin/recovery"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-blue-700 hover:underline break-all"
+                    >
+                      accounts.google.com/signin/recovery
+                    </a>
+                  </div>
+                )}
+                {socialKind === 'kakao' && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-xs text-yellow-900 leading-relaxed mb-5">
+                    <div className="font-bold mb-2">카카오 계정 비밀번호 재설정</div>
+                    카카오톡 → 더보기 → 설정 → 카카오계정 → 비밀번호 변경
+                  </div>
+                )}
+
+                <div className="flex gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhase('email');
+                      setSocialKind(null);
+                      setError(null);
+                    }}
+                    className="flex-1 py-3.5 rounded-xl border-[1.5px] border-gray-200 font-bold text-sm text-gray-700"
+                  >
+                    다른 이메일
+                  </button>
+                  <Link
+                    href={
+                      socialKind === 'google'
+                        ? 'https://accounts.google.com/signin/recovery'
+                        : 'https://accounts.kakao.com/weblogin/find_password'
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-3.5 rounded-xl font-bold text-sm text-white text-center"
+                    style={{ background: '#FF1F8F' }}
+                  >
+                    바로 이동
+                  </Link>
+                </div>
               </div>
             )}
 

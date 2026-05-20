@@ -7,17 +7,51 @@ import { app, db } from '@/lib/firebase';
 /**
  * 본사 관리자가 특정 사용자에게 비밀번호 재설정 이메일 발송.
  * Cloud Function이 platform_admin 권한 검증 + Firebase Auth가 메일 발송.
+ *
+ * 소셜 로그인(Google/Kakao) 전용 사용자면 success=false + reason='no_password' 반환.
  */
+export interface SendPasswordResetResult {
+  success: boolean;
+  reason?: 'no_password';
+  providers?: string[];
+  sentTo?: string | null;
+}
+
 export async function sendPasswordResetByAdmin(input: {
   targetUid?: string;
   targetEmail?: string;
-}): Promise<{ success: true; sentTo: string }> {
+}): Promise<SendPasswordResetResult> {
   const functions = getFunctions(app, 'asia-northeast3');
-  const fn = httpsCallable<typeof input, { success: true; sentTo: string }>(
+  const fn = httpsCallable<typeof input, SendPasswordResetResult>(
     functions,
     'sendPasswordResetByAdmin',
   );
   const res = await fn(input);
+  return res.data;
+}
+
+/**
+ * 특정 사용자의 인증 방식 조회 (platform_admin only).
+ * providerData + uid 접두사로 Email/Google/Kakao 판별.
+ */
+export interface UserAuthInfo {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  providers: string[];
+  hasPassword: boolean;
+  hasGoogle: boolean;
+  hasKakao: boolean;
+  createdAt: string;
+  lastSignIn: string;
+}
+
+export async function getUserAuthInfo(uid: string): Promise<UserAuthInfo> {
+  const fn = httpsCallable<{ uid: string }, UserAuthInfo>(
+    getFunctions(app, 'asia-northeast3'),
+    'getUserAuthInfo',
+  );
+  const res = await fn({ uid });
   return res.data;
 }
 
@@ -32,6 +66,7 @@ export interface UserSearchResult {
   displayName?: string | null;
   role?: string | null;
   roles?: string[];
+  providers?: string[]; // Firestore users doc의 providers 필드 (가입 시 기록)
   createdAt?: { toDate(): Date } | null;
 }
 
