@@ -16,6 +16,10 @@ admin.initializeApp();
 // ===== Auth =====
 export { kakaoCustomToken } from './auth/kakaoCustomToken';
 
+// ===== Admin — 본사 관리자 전용 =====
+// 사용자 비밀번호 재설정 메일 발송 (platform_admin only, 감사 로그 기록).
+export { sendPasswordResetByAdmin } from './admin/sendPasswordResetByAdmin';
+
 // ===== YouTube — 채널 페이지 메타 추출 (API key 불필요, og:meta 파싱) =====
 export { getYoutubeChannelMeta } from './youtube/getYoutubeChannelMeta';
 

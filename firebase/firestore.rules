@@ -450,6 +450,17 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== 본사 감사 로그 (adminAuditLog) =====
+    // 본사 관리자 행위(비밀번호 재설정 메일 발송 등) 기록.
+    // - read: platform_admin만.
+    // - create: Cloud Functions(Admin SDK)에서만 기록 — 클라는 절대 직접 못 씀.
+    // - update/delete: 불가 — 감사 로그 불변.
+    match /adminAuditLog/{logId} {
+      allow read: if isPlatformAdmin();
+      allow create: if false;  // Functions에서만 (admin SDK는 rules 우회)
+      allow update, delete: if false;
+    }
+
     // ===== 그 외 모두 차단 (default deny) =====
     match /{document=**} {
       allow read, write: if false;
