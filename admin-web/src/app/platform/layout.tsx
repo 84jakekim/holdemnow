@@ -62,6 +62,7 @@ const MENU_GROUPS: MenuGroup[] = [
     items: [
       { id: 'home-content', icon: '📺', label: '홈 콘텐츠', href: '/platform/home-content' },
       { id: 'events', icon: '🎫', label: '대회 큐레이션', href: '/platform/events' },
+      { id: 'reviews', icon: '⭐', label: '리뷰 관리', href: '/platform/reviews' },
       { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
       { id: 'pinned', icon: '📌', label: '홈 고정 공지', href: '/platform/pinned' },
       { id: 'marketing', icon: '📣', label: '마케팅 푸시', href: '/platform/marketing' },
