@@ -1,161 +1,198 @@
 'use client';
 
 /**
- * LiveSlider — 모든 활성 LIVE 세션 가로 슬라이드
+ * LiveSlider — 모든 활성 LIVE 세션을 작은 카드로 가로 슬라이드 (둘러보기 행)
  *
- * - sessions 0개 또는 1개 → null (PrimaryLiveCard만으로 충분)
- * - sessions 2개 이상 → 가로 스크롤 카드 렌더
+ * - sessions 0개 또는 1개 → null (PrimaryLiveCard 단독으로 충분)
+ * - sessions 2개 이상 → 한 화면 2개 보이는 가로 슬라이드 (snap = 카드 1개)
  *
- * 데이터: 부모 subscribeAllLiveSessions 결과를 props로 전달 (신규 호출 0)
+ * 큰 카드와 완전히 독립 스크롤. 동일 세션 중복 노출 (위=메인, 아래=둘러보기).
+ *
+ * 정보 우선순위: 타이머(24~28px) > 레벨/블라인드 > 티켓 > 매장명
+ * 배경: 매장 사진(어둡게) 또는 그라디언트
+ *
+ * 데이터: 부모 subscribeAllLiveSessions 결과를 props로 전달 (신규 fetch 0)
  */
 
 import Link from 'next/link';
 import type { LiveSession } from '@/lib/live';
-import { useLiveCountdown } from '@/lib/live';
+import { useLiveCountdown, fmtTime } from '@/lib/live';
 
 interface Props {
   sessions: LiveSession[];
   thumbnails?: Record<string, string | undefined>;
 }
 
-function statusDot(s: LiveSession): string {
-  if (s.status === 'running') return '#22c55e';
-  if (s.status === 'break') return '#f59e0b';
-  if (s.status === 'paused') return '#94a3b8';
-  return 'var(--live)';
+/** 블라인드 축약: 1,000 → 1k, 2,000 → 2k */
+function shortBlind(n: number): string {
+  if (n >= 1000) return `${n / 1000}k`;
+  return String(n);
 }
 
-function MiniCountdown({ session }: { session: LiveSession }) {
+function blindShort(s: LiveSession): string {
+  const sb = shortBlind(s.smallBlind ?? 0);
+  const bb = shortBlind(s.bigBlind ?? 0);
+  return `${sb}/${bb}`;
+}
+
+function buyInShort(s: LiveSession): string {
+  const b = s.buyIn;
+  if (!b || b <= 0) return '';
+  if (b >= 10000) return `${Math.floor(b / 10000)}만원`;
+  return b.toLocaleString() + '원';
+}
+
+/* ──────────────────────────────────────────────
+   작은 카드
+────────────────────────────────────────────── */
+
+function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: string }) {
   const sec = useLiveCountdown(session);
-  if (session.status !== 'running') return null;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return (
-    <span className="font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>
-      {m}:{String(s).padStart(2, '0')}
-    </span>
-  );
-}
-
-function SliderCard({ session, thumbnail }: { session: LiveSession; thumbnail?: string }) {
-  const dotColor = statusDot(session);
+  const isRunning = session.status === 'running';
+  const buyIn = buyInShort(session);
 
   return (
     <Link
       href={`/m/store/${session.storeId}`}
-      className="flex-shrink-0 w-[148px] rounded-xl overflow-hidden transition active:scale-[0.97]"
+      className="flex-shrink-0 rounded-xl overflow-hidden transition active:scale-[0.97] block relative"
       style={{
-        border: '1.5px solid var(--border)',
+        /* 화면 절반 - 패딩 - 갭 절반 */
+        width: 'calc((100vw - 40px) / 2)',
+        minHeight: 148,
         background: 'var(--surface-1)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+        border: '1.5px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
+        scrollSnapAlign: 'start',
       }}
       aria-label={`${session.storeName} LIVE`}
     >
-      {/* 썸네일 */}
-      <div
-        className="relative w-full"
-        style={{ aspectRatio: '4 / 3', background: 'var(--surface-3)' }}
-      >
-        {thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={thumbnail}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{ background: 'linear-gradient(135deg, #1A0830 0%, #2E0418 100%)' }}
-            aria-hidden="true"
-          />
-        )}
-        {/* LIVE 배지 */}
-        <span
-          className="absolute top-1.5 left-1.5 flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full"
-          style={{ background: 'rgba(220,38,38,0.92)', color: '#fff' }}
-        >
-          <span
-            className="w-1 h-1 rounded-full flex-shrink-0"
-            style={{ background: dotColor }}
-            aria-hidden="true"
-          />
-          LIVE
-        </span>
-      </div>
-
-      {/* 정보 */}
-      <div className="px-2.5 py-2">
+      {/* 배경 이미지 */}
+      {thumbnail ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={thumbnail}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ opacity: 0.22 }}
+        />
+      ) : (
         <div
-          className="text-[13px] font-bold leading-tight truncate"
-          style={{ color: 'var(--text-1)' }}
+          className="absolute inset-0"
+          style={{ background: 'linear-gradient(135deg, #1A0830 0%, #2E0418 100%)' }}
+          aria-hidden="true"
+        />
+      )}
+      {/* 오버레이 */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: thumbnail
+            ? 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.75) 100%)'
+            : 'rgba(0,0,0,0.28)',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* 콘텐츠 */}
+      <div className="relative z-10 flex flex-col h-full px-2.5 pt-2.5 pb-2.5 gap-0">
+
+        {/* LIVE 배지 */}
+        <div className="mb-1.5">
+          <span
+            className="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full"
+            style={{ background: 'rgba(220,38,38,0.9)', color: '#fff' }}
+          >
+            <span
+              className="w-1 h-1 rounded-full pulse-live flex-shrink-0"
+              style={{ background: '#fff' }}
+              aria-hidden="true"
+            />
+            LIVE
+          </span>
+        </div>
+
+        {/* 매장명 */}
+        <div
+          className="text-[13px] font-extrabold leading-tight truncate mb-1"
+          style={{ color: '#fff' }}
         >
           {session.storeName}
         </div>
+
+        {/* 타이머 — 가장 크게 */}
         <div
-          className="text-[11px] mt-0.5 truncate"
-          style={{ color: 'var(--text-2)' }}
+          className="font-mono font-extrabold leading-none tabular-nums mb-1"
+          style={{
+            fontSize: '26px',
+            color: isRunning ? '#fff' : 'rgba(255,255,255,0.50)',
+            letterSpacing: '-0.02em',
+          }}
+          aria-label={`남은 시간 ${fmtTime(sec)}`}
         >
-          {session.tournamentName}
+          {fmtTime(sec)}
         </div>
-        <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold" style={{ color: 'var(--text-3)' }}>
-            {session.playersRemaining}명 · Lv.{session.currentLevel}
-          </span>
-          <MiniCountdown session={session} />
+
+        {/* 레벨 + 블라인드 */}
+        <div
+          className="text-[11px] font-bold leading-none mb-1.5"
+          style={{ color: 'rgba(255,255,255,0.80)' }}
+        >
+          Lv.{session.currentLevel} · {blindShort(session)}
         </div>
+
+        {/* buy-in */}
+        {buyIn && (
+          <div
+            className="text-[11px] font-semibold leading-none"
+            style={{ color: 'rgba(255,255,255,0.65)' }}
+          >
+            🎫 {buyIn}
+          </div>
+        )}
       </div>
     </Link>
   );
 }
+
+/* ──────────────────────────────────────────────
+   메인 컴포넌트
+────────────────────────────────────────────── */
 
 export default function LiveSlider({ sessions, thumbnails }: Props) {
   // 0개 또는 1개면 PrimaryLiveCard가 단독 처리 → 슬라이더 불필요
   if (sessions.length <= 1) return null;
 
   return (
-    <section aria-label="전체 LIVE 목록" className="pt-2 pb-3">
-      {/* 섹션 헤더 */}
-      <div className="px-4 flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="w-2 h-2 rounded-full flex-shrink-0 pulse-live"
-            style={{ background: 'var(--live)' }}
-            aria-hidden="true"
-          />
-          <span className="text-[13px] font-extrabold" style={{ color: 'var(--text-1)' }}>
-            지금 LIVE
-          </span>
-          <span
-            className="text-[10px] font-extrabold rounded-full px-2 py-0.5"
-            style={{ background: 'var(--live)', color: '#fff' }}
-          >
-            {sessions.length}
-          </span>
-        </div>
-        <Link
-          href="/m/live"
-          className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60"
-          style={{ color: 'var(--brand)' }}
+    <section aria-label="LIVE 둘러보기" className="pt-2 pb-3">
+      {/* 서브 타이틀 */}
+      <div className="px-4 mb-2">
+        <span
+          className="text-[11px] font-semibold"
+          style={{ color: 'var(--text-3)' }}
         >
-          전체보기
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
-        </Link>
+          전체 {sessions.length}개 진행 중
+        </span>
       </div>
 
-      {/* 가로 슬라이드 */}
+      {/* 가로 슬라이드 — snap = 카드 1개, 한 화면 2개 노출 */}
       <div
-        className="pl-4 flex gap-2.5 overflow-x-auto pb-1 scrollbar-none"
+        className="pl-4 flex gap-2 overflow-x-auto pb-1 scrollbar-none"
+        style={{
+          scrollSnapType: 'x mandatory',
+          WebkitOverflowScrolling: 'touch',
+        }}
         role="list"
       >
         {sessions.map((s) => (
-          <div key={s.id} role="listitem">
-            <SliderCard session={s} thumbnail={thumbnails?.[s.storeId]} />
+          <div
+            key={s.id}
+            role="listitem"
+          >
+            <SmallCard session={s} thumbnail={thumbnails?.[s.storeId]} />
           </div>
         ))}
+        {/* 오른쪽 여백 */}
         <div className="w-3 flex-shrink-0" aria-hidden="true" />
       </div>
     </section>

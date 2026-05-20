@@ -24,6 +24,7 @@ import { RatingChip } from '@/components/mobile/RatingChip';
 import StoreFindModeToggle from '@/components/mobile/find/StoreFindModeToggle';
 import PrimaryLiveCard from '@/components/mobile/live/PrimaryLiveCard';
 import LiveSlider from '@/components/mobile/live/LiveSlider';
+import LiveSectionHeader from '@/components/mobile/live/LiveSectionHeader';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -313,24 +314,27 @@ function ListMode() {
         )}
       </div>
 
-      {/* ─ HOT LIVE 큰 카드 */}
+      {/* ─ LIVE 섹션 헤더 + 큰 카드 + 작은 카드 슬라이더 */}
       {!loading && !error && (
-        <PrimaryLiveCard
-          sessions={sessions}
-          thumbnails={Object.fromEntries(
-            Object.entries(storeSummaries).map(([k, v]) => [k, v.thumbnail]),
-          )}
-        />
-      )}
-
-      {/* ─ LIVE 슬라이더 (2개 이상일 때만) */}
-      {!loading && !error && (
-        <LiveSlider
-          sessions={sessions}
-          thumbnails={Object.fromEntries(
-            Object.entries(storeSummaries).map(([k, v]) => [k, v.thumbnail]),
-          )}
-        />
+        <>
+          <LiveSectionHeader
+            count={sessions.filter(
+              (s) => s.status === 'running' || s.status === 'paused' || s.status === 'break',
+            ).length}
+          />
+          <PrimaryLiveCard
+            sessions={sessions}
+            thumbnails={Object.fromEntries(
+              Object.entries(storeSummaries).map(([k, v]) => [k, v.thumbnail]),
+            )}
+          />
+          <LiveSlider
+            sessions={sessions}
+            thumbnails={Object.fromEntries(
+              Object.entries(storeSummaries).map(([k, v]) => [k, v.thumbnail]),
+            )}
+          />
+        </>
       )}
 
       {/* ─ 대회정보·커뮤니티 2-column 카드 */}

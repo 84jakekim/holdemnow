@@ -25,6 +25,7 @@ import HotVideosCarousel from '@/components/mobile/home/HotVideosCarousel';
 import HotYoutubersScroll from '@/components/mobile/home/HotYoutubersScroll';
 import PrimaryLiveCard from '@/components/mobile/live/PrimaryLiveCard';
 import LiveSlider from '@/components/mobile/live/LiveSlider';
+import LiveSectionHeader from '@/components/mobile/live/LiveSectionHeader';
 import { subscribeAllLiveSessions, type LiveSession } from '@/lib/live';
 
 /** 활성 콘텐츠 존재 여부를 1회 fetch로 확인 */
@@ -208,8 +209,9 @@ export default function MobileHome() {
       </header>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          2. HOT LIVE 큰 카드 + 슬라이더 — LIVE 0개면 자동 숨김
+          2. HOT LIVE 섹션 헤더 + 큰 카드 + 작은 카드 슬라이더
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <LiveSectionHeader count={liveSessions.filter((s) => s.status === 'running' || s.status === 'paused' || s.status === 'break').length} />
       <PrimaryLiveCard sessions={liveSessions} thumbnails={liveStoreSummaries} />
       <LiveSlider sessions={liveSessions} thumbnails={liveStoreSummaries} />
 
