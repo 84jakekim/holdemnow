@@ -65,6 +65,17 @@ export interface LiveSession {
    *  매장 사장 LivePanel(권한 보유 클라이언트)이 만료 시 자동 호출.
    *  모바일/지도는 그레이스 만료된 세션을 클라이언트 필터로 가림 (안전망). */
   finishingAt?: Timestamp | null;
+  /** Deterministic timeline — 1레벨이 처음 시작한 절대 시각. ready→running 첫 전환 시점에 박힘.
+   *  이후 togglePause·다음 레벨 진입 등으로 절대 갱신되지 않음. */
+  totalStartedAt?: Timestamp | null;
+  /** 누적 일시정지 시간(ms). resume 시점에 (now - pausedAt)을 더함. */
+  totalPausedMs?: number;
+  /** running→paused 전환 시점 절대 시각. resume 시 totalPausedMs 계산에 사용 후 null 해제. */
+  pausedAt?: Timestamp | null;
+  /** 시작 시점에 고정된 blindStructure 스냅샷.
+   *  사장이 도중에 템플릿/blindStructure를 수정해도 영향 없음.
+   *  computeTimelinePosition의 진실의 원천. */
+  blindStructureLocked?: BlindLevel[];
 }
 
 /** 마지막 레벨 종료 후 자동 정리까지의 그레이스(초). */
@@ -123,10 +134,14 @@ function deadlineFromNow(seconds: number): Timestamp {
   return Timestamp.fromMillis(Date.now() + Math.max(0, seconds) * 1000);
 }
 
-/** 세션 객체에서 현재 표시할 남은 초 계산.
- *  running + levelEndsAt 있음 → deadline − now (절대 시각 기반, 폰 재접속해도 정확)
- *  그 외 (paused, break, 레거시) → 저장된 levelSecondsLeft */
+/** 세션 객체에서 현재 표시할 남은 초 계산 (레거시 호환).
+ *  Deterministic timeline이 박혀있으면 그걸 우선 사용.
+ *  없으면 legacy fallback (running + levelEndsAt) → 마지막엔 levelSecondsLeft. */
 export function computeRemainingSec(s: LiveSession): number {
+  if (s.totalStartedAt) {
+    const pos = computeTimelinePosition(s);
+    return pos.secondsLeft;
+  }
   if (s.status === 'running' && s.levelEndsAt) {
     const endsMs = s.levelEndsAt.toMillis();
     return Math.max(0, Math.floor((endsMs - Date.now()) / 1000));
@@ -134,30 +149,120 @@ export function computeRemainingSec(s: LiveSession): number {
   return Math.max(0, s.levelSecondsLeft);
 }
 
-/** 표시용 카운트다운 훅 — 1초 tick + 세션 변화 시 재동기화.
- *  running: levelEndsAt 기반 sec 갱신. ready/finishing: sec는 0이지만 매초 재렌더해서
- *  부르는 측의 computeReadyExpirySec / computeFinishingGraceSec 가 갱신되도록 함. */
+/**
+ * Deterministic timeline 위치 계산.
+ *
+ * 절대 시각 기반으로 "지금 어느 레벨인지·해당 레벨이 몇 초 남았는지" 결정.
+ * - totalStartedAt 없음 → legacy fallback (저장된 currentLevel/levelSecondsLeft/levelEndsAt)
+ * - paused → pausedAt 기준으로 elapsed 정지
+ * - running → now - totalStartedAt - totalPausedMs 만큼 진행된 위치 계산
+ * - 마지막 레벨까지 모두 소진 → isFinishing=true, level=마지막 레벨, secondsLeft=0
+ *
+ * blindStructureLocked가 있으면 그걸 사용 (시작 시점 스냅샷). 없으면 blindStructure.
+ */
+export function computeTimelinePosition(s: LiveSession): {
+  level: number;
+  secondsLeft: number;
+  isFinishing: boolean;
+  sb: number;
+  bb: number;
+  ante: number;
+} {
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+
+  // Fallback: totalStartedAt이 없는 레거시 세션
+  if (!s.totalStartedAt || !structure || structure.length === 0) {
+    const cur = structure?.find((l) => l.level === s.currentLevel) ?? structure?.[0];
+    let secondsLeft = Math.max(0, s.levelSecondsLeft ?? 0);
+    if (s.status === 'running' && s.levelEndsAt) {
+      secondsLeft = Math.max(0, Math.floor((s.levelEndsAt.toMillis() - Date.now()) / 1000));
+    }
+    return {
+      level: s.currentLevel ?? cur?.level ?? 1,
+      secondsLeft,
+      isFinishing: !!s.finishingAt,
+      sb: cur?.sb ?? s.smallBlind ?? 0,
+      bb: cur?.bb ?? s.bigBlind ?? 0,
+      ante: cur?.ante ?? s.ante ?? 0,
+    };
+  }
+
+  // 절대 시각 기반 계산
+  const startedMs = s.totalStartedAt.toMillis();
+  const totalPausedMs = s.totalPausedMs ?? 0;
+  // paused면 elapsed가 pausedAt에서 정지
+  const refNowMs = s.status === 'paused' && s.pausedAt
+    ? s.pausedAt.toMillis()
+    : Date.now();
+  const elapsedMs = Math.max(0, refNowMs - startedMs - totalPausedMs);
+
+  let cumulativeMs = 0;
+  for (const lvl of structure) {
+    const durMs = Math.max(0, lvl.durationSec) * 1000;
+    if (cumulativeMs + durMs > elapsedMs) {
+      const secondsLeft = Math.max(0, Math.ceil((cumulativeMs + durMs - elapsedMs) / 1000));
+      return {
+        level: lvl.level,
+        secondsLeft,
+        isFinishing: false,
+        sb: lvl.sb,
+        bb: lvl.bb,
+        ante: lvl.ante,
+      };
+    }
+    cumulativeMs += durMs;
+  }
+
+  // 마지막 레벨까지 다 지남
+  const last = structure[structure.length - 1];
+  return {
+    level: last.level,
+    secondsLeft: 0,
+    isFinishing: true,
+    sb: last.sb,
+    bb: last.bb,
+    ante: last.ante,
+  };
+}
+
+/** 표시용 카운트다운 훅 — 매초 computeTimelinePosition 호출.
+ *  클라이언트가 자체적으로 레벨 전환 인식 (Firestore doc update 안 기다림 → cron 1분 지연과 무관).
+ *  반환은 number(secondsLeft) — 기존 시그너처 100% 호환.
+ *  level/sb/bb/ante가 필요한 호출자는 useLiveTimelineTick 사용. */
 export function useLiveCountdown(session: LiveSession | null | undefined): number {
-  const [sec, setSec] = useState(() => (session ? computeRemainingSec(session) : 0));
+  const pos = useLiveTimelineTick(session);
+  return pos?.secondsLeft ?? 0;
+}
+
+/** Deterministic timeline 기반 카운트다운 훅 (확장형).
+ *  매초 computeTimelinePosition을 호출해 level/sec/sb/bb/ante/isFinishing을 모두 반환. */
+export function useLiveTimelineTick(
+  session: LiveSession | null | undefined,
+): { level: number; secondsLeft: number; isFinishing: boolean; sb: number; bb: number; ante: number } | null {
+  const [pos, setPos] = useState(() => (session ? computeTimelinePosition(session) : null));
   useEffect(() => {
     if (!session) {
-      setSec(0);
+      setPos(null);
       return;
     }
-    setSec(computeRemainingSec(session));
-    // ready/running: 매초 tick (ready는 sec=0 고정이지만 컴포넌트 재렌더로 외부 만료 카운트 갱신 유도)
-    if (session.status !== 'running' && session.status !== 'ready') return;
-    const t = setInterval(() => setSec(computeRemainingSec(session)), 1000);
+    setPos(computeTimelinePosition(session));
+    // ready/running/paused/break 모두 매초 재계산 (paused는 pausedAt 고정이라 변동 없음 → 무해)
+    if (session.status === 'completed') return;
+    const t = setInterval(() => setPos(computeTimelinePosition(session)), 1000);
     return () => clearInterval(t);
-    // 세션의 정체성 + 타이머 상태가 바뀌면 재구성
   }, [
     session?.id,
     session?.status,
     session?.currentLevel,
     session?.levelSecondsLeft,
     session?.levelEndsAt?.toMillis(),
+    session?.totalStartedAt?.toMillis(),
+    session?.totalPausedMs,
+    session?.pausedAt?.toMillis(),
   ]);
-  return sec;
+  return pos;
 }
 
 /**
@@ -301,20 +406,63 @@ export async function patchSession(sessionId: string, updates: Partial<LiveSessi
 }
 
 /**
- * 시작/일시정지 토글.
- * - ready 또는 paused → running: 남은 시간만큼 새 deadline 박음.
- * - ready→running 첫 전환: startedAt(실제 진행 시작 시각)도 같이 박음.
- * - running → paused: deadline=null, 남은 초만 보존.
+ * 시작/일시정지 토글 — Deterministic timeline 기반.
+ *
+ * ready → running (첫 시작):
+ *   - totalStartedAt = now (전체 타임라인의 절대 origin)
+ *   - totalPausedMs = 0
+ *   - blindStructureLocked = blindStructure 스냅샷 (이후 템플릿 수정과 무관)
+ *   - startedAt = now (레거시 표시용)
+ *   - levelEndsAt = deadlineFromNow(첫 레벨 durationSec) — legacy 호환
+ *
+ * paused → running (재개):
+ *   - 누적 paused 시간: totalPausedMs += (now - pausedAt)
+ *   - pausedAt = null
+ *   - levelEndsAt = deadlineFromNow(currentSecondsLeft) — legacy 호환 (cron이 다음 분에 동기화)
+ *
+ * running → paused:
+ *   - pausedAt = now (이 시점 이후 elapsed 정지)
+ *   - levelEndsAt = null
  */
 export async function togglePauseSession(s: LiveSession, currentSecondsLeft: number) {
   const isStarting = s.status === 'ready' || s.status === 'paused';
   const newStatus: LiveStatus = isStarting ? 'running' : 'paused';
-  const wasReady = s.status === 'ready';
+
+  if (s.status === 'ready' && newStatus === 'running') {
+    // 첫 시작 — 전체 타임라인 결정 시점
+    await patchSession(s.id, {
+      status: 'running',
+      totalStartedAt: serverTimestamp() as unknown as Timestamp,
+      totalPausedMs: 0,
+      blindStructureLocked: s.blindStructure,
+      pausedAt: null,
+      levelSecondsLeft: currentSecondsLeft,
+      levelEndsAt: deadlineFromNow(currentSecondsLeft),
+      startedAt: serverTimestamp(),
+    });
+    return;
+  }
+
+  if (s.status === 'paused' && newStatus === 'running') {
+    // resume — 누적 paused 시간 정산
+    const pausedAtMs = s.pausedAt?.toMillis() ?? Date.now();
+    const additionalPaused = Math.max(0, Date.now() - pausedAtMs);
+    await patchSession(s.id, {
+      status: 'running',
+      pausedAt: null,
+      totalPausedMs: (s.totalPausedMs ?? 0) + additionalPaused,
+      levelSecondsLeft: currentSecondsLeft,
+      levelEndsAt: deadlineFromNow(currentSecondsLeft),
+    });
+    return;
+  }
+
+  // running → paused
   await patchSession(s.id, {
-    status: newStatus,
+    status: 'paused',
+    pausedAt: serverTimestamp() as unknown as Timestamp,
     levelSecondsLeft: currentSecondsLeft,
-    levelEndsAt: isStarting ? deadlineFromNow(currentSecondsLeft) : null,
-    ...(wasReady && newStatus === 'running' ? { startedAt: serverTimestamp() } : {}),
+    levelEndsAt: null,
   });
 }
 
@@ -366,31 +514,15 @@ export async function stopLiveSession(s: LiveSession, currentSecondsLeft: number
   // 영구 삭제는 v0.2에서 (이력 보관 목적)
 }
 
-export async function nextLevelTick(s: LiveSession) {
-  // 카운트다운 0 도달 시 자동 다음 레벨
-  const next = s.blindStructure.find((l) => l.level === s.currentLevel + 1);
-  if (!next) {
-    // 마지막 레벨까지 모두 소진 → 즉시 종료하지 않고 finishingAt 박음.
-    // FINISHING_GRACE_SEC 동안 "곧 종료" 깜빡임 노출 후 stopLiveSession으로 정리.
-    // 매장 사장 LivePanel(권한 보유)이 만료 시 자동 호출. 모바일은 클라이언트 필터로 가림.
-    if (!s.finishingAt) {
-      await patchSession(s.id, {
-        finishingAt: serverTimestamp() as unknown as Timestamp,
-        levelSecondsLeft: 0,
-        levelEndsAt: null,
-      });
-    }
-    return false;
-  }
-  await patchSession(s.id, {
-    currentLevel: next.level,
-    smallBlind: next.sb,
-    bigBlind: next.bb,
-    ante: next.ante,
-    levelSecondsLeft: next.durationSec,
-    levelEndsAt: deadlineFromNow(next.durationSec),
-  });
-  return true;
+/**
+ * @deprecated Deterministic timeline 도입 이후 클라이언트가 호출할 필요 없음.
+ *  레벨 전환은 클라이언트가 매초 computeTimelinePosition으로 인식하고,
+ *  Firestore doc 동기화는 autoAdvanceLevel cron이 담당한다.
+ *  기존 호출자(LivePanel 등) 호환을 위해 no-op로 남겨둠.
+ */
+export async function nextLevelTick(_s: LiveSession): Promise<boolean> {
+  // No-op: 서버 cron이 doc 동기화를, 클라이언트가 화면 갱신을 담당한다.
+  return false;
 }
 
 export function computeLateRegMinutes(s: LiveSession, currentSecondsLeft: number): number {
