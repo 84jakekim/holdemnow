@@ -19,6 +19,7 @@ import PostsPanel from '@/components/admin/PostsPanel';
 import JobsPanel from '@/components/admin/JobsPanel';
 import UsedItemsPanel from '@/components/admin/UsedItemsPanel';
 import DealerPoolPanel from '@/components/admin/DealerPoolPanel';
+import ReservationsPanel from '@/components/admin/ReservationsPanel';
 import AdminIdentityBadge from '@/components/admin/AdminIdentityBadge';
 import ThemeToggle from '@/components/admin/ThemeToggle';
 import { useTheme } from '@/lib/theme';
@@ -33,6 +34,7 @@ const MENUS = [
   { id: 'dealers', icon: '🃏', label: '딜러 풀' },
   { id: 'used', icon: '🛒', label: '중고거래' },
   { id: 'tournaments', icon: '📅', label: '예정 토너' },
+  { id: 'reservations', icon: '📅', label: '예약 관리' },
   { id: 'templates', icon: '🎲', label: '토너 템플릿' },
   { id: 'store', icon: '🏬', label: '매장 정보' },
   { id: 'slots', icon: '📺', label: '디스플레이' },
@@ -255,11 +257,12 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           {activeMenu === 'dealers' && <DealerPoolPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'used' && <UsedItemsPanel storeId={storeId} storeName={store.name} storePhotoUrl={store.photoUrls?.[0]} />}
           {activeMenu === 'tournaments' && <TournamentsPanel storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'reservations' && <ReservationsPanel storeId={storeId} />}
           {activeMenu === 'slots' && <SlotsPanel storeId={storeId} />}
           {activeMenu === 'store' && <StoreInfoPanel storeId={storeId} />}
           {activeMenu === 'ads' && <AdsPanel />}
           {activeMenu === 'stats' && <StatsPanel storeId={storeId} />}
-          {!['dashboard', 'templates', 'live', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'slots', 'store', 'ads', 'stats'].includes(activeMenu) && (
+          {!['dashboard', 'templates', 'live', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'reservations', 'slots', 'store', 'ads', 'stats'].includes(activeMenu) && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />
           )}
         </div>
