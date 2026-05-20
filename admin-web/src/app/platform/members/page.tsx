@@ -2,7 +2,7 @@
 
 /**
  * /platform/members — 본사 회원 통합 관리
- * Tab 1: 일반 사용자 (OAuth) | Tab 2: 매장 가입자 | Tab 3: 대회사 가입자
+ * Tab 1: 본사 어드민 | Tab 2: 일반 사용자 (OAuth) | Tab 3: 매장 가입자 | Tab 4: 대회사 가입자
  */
 
 import { useEffect, useState } from 'react';
@@ -24,7 +24,7 @@ import MembersTabExportButton from '@/components/platform/MembersTabExportButton
 // 타입
 // =====================================================================
 
-type Tab = 'players' | 'stores' | 'organizers';
+type Tab = 'admins' | 'players' | 'stores' | 'organizers';
 
 interface PlayerRow {
   id: string;
@@ -34,6 +34,23 @@ interface PlayerRow {
   signupSource?: string;
   status?: 'active' | 'suspended';
   createdAt?: { toDate: () => Date };
+  roles?: string[];
+  role?: string;
+  storeId?: string;
+  organizerId?: string;
+}
+
+interface AdminRow {
+  id: string;
+  email?: string;
+  displayName?: string;
+  providers?: string[];
+  status?: 'active' | 'suspended';
+  createdAt?: { toDate: () => Date };
+  roles?: string[];
+  role?: string;
+  storeId?: string;
+  organizerId?: string;
 }
 
 interface StoreRow {
@@ -69,13 +86,15 @@ interface OrganizerRow {
 function MembersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tabParam = (searchParams.get('tab') ?? 'players') as Tab;
+  const tabParam = (searchParams.get('tab') ?? 'admins') as Tab;
   const [activeTab, setActiveTab] = useState<Tab>(tabParam);
 
+  const [admins, setAdmins] = useState<AdminRow[]>([]);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adminSearch, setAdminSearch] = useState('');
 
   const [storeFilter, setStoreFilter] = useState<'all' | 'pending' | 'active' | 'rejected' | 'suspended'>('pending');
   const [orgFilter, setOrgFilter] = useState<'all' | 'pending' | 'active' | 'rejected'>('pending');
@@ -94,16 +113,23 @@ function MembersPageInner() {
     setLoading(true);
     const unsubs: (() => void)[] = [];
 
-    // 일반 사용자 — signupSource='oauth' 또는 providers에 google/kakao
-    // v0.1: users 전체 읽어서 클라이언트 필터 (인덱스 비용 절감)
+    // users 전체 — 클라이언트에서 admins / players 분리 (추가 구독 없음)
     const uq = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
     unsubs.push(
       onSnapshot(
         uq,
         (snap) => {
           const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PlayerRow, 'id'>) }));
+
+          // platform_admin 판별: roles 배열 또는 role 단일 필드
+          const isPlatformAdmin = (u: PlayerRow) =>
+            (Array.isArray(u.roles) && u.roles.includes('platform_admin')) ||
+            u.role === 'platform_admin';
+
+          setAdmins(all.filter(isPlatformAdmin) as AdminRow[]);
           setPlayers(
             all.filter((u) => {
+              if (isPlatformAdmin(u)) return false; // 어드민은 일반 탭에서 제외
               const src = u.signupSource;
               const prov = u.providers ?? [];
               return (
@@ -147,6 +173,14 @@ function MembersPageInner() {
   // 탭별 카운트
   const pendingStores = stores.filter((s) => s.status === 'pending').length;
   const pendingOrgs = organizers.filter((o) => o.status === 'pending').length;
+
+  // 본사 어드민 정지/복구
+  const suspendAdmin = async (id: string) => {
+    await updateDoc(doc(db, 'users', id), { status: 'suspended', updatedAt: serverTimestamp() });
+  };
+  const activateAdmin = async (id: string) => {
+    await updateDoc(doc(db, 'users', id), { status: 'active', updatedAt: serverTimestamp() });
+  };
 
   // 승인
   const approveStore = async (id: string) => {
@@ -201,6 +235,15 @@ function MembersPageInner() {
     return o.status === orgFilter;
   });
 
+  const filteredAdmins = admins.filter((a) => {
+    const q = adminSearch.toLowerCase();
+    if (!q) return true;
+    return (
+      (a.email ?? '').toLowerCase().includes(q) ||
+      (a.displayName ?? '').toLowerCase().includes(q)
+    );
+  });
+
   const filteredPlayers = players.filter((p) => {
     const q = playerSearch.toLowerCase();
     if (!q) return true;
@@ -215,13 +258,14 @@ function MembersPageInner() {
       {/* 페이지 헤더 */}
       <div className="mb-6">
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">회원 관리</h1>
-        <p className="text-sm text-gray-500 mt-1">일반 사용자, 매장, 대회사 통합 관리</p>
+        <p className="text-sm text-gray-500 mt-1">본사 어드민, 일반 사용자, 매장, 대회사 통합 관리</p>
       </div>
 
       {/* 탭 */}
       <div className="flex gap-1.5 mb-6 border-b border-gray-100 pb-0">
         {(
           [
+            { id: 'admins' as Tab, label: '본사 어드민', count: admins.length, badge: 0 },
             { id: 'players' as Tab, label: '일반 사용자', count: players.length, badge: 0 },
             { id: 'stores' as Tab, label: '매장', badge: pendingStores, count: stores.length },
             { id: 'organizers' as Tab, label: '대회사', badge: pendingOrgs, count: organizers.length },
@@ -249,7 +293,93 @@ function MembersPageInner() {
 
       {loading && <div className="text-sm text-gray-500">로딩 중…</div>}
 
-      {/* ── Tab 1: 일반 사용자 ── */}
+      {/* ── Tab 1: 본사 어드민 ── */}
+      {activeTab === 'admins' && !loading && (
+        <div>
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <input
+              className="form-input max-w-xs"
+              value={adminSearch}
+              onChange={(e) => setAdminSearch(e.target.value)}
+              placeholder="이메일 또는 이름 검색"
+            />
+            <span className="text-xs text-gray-500">{filteredAdmins.length}명</span>
+          </div>
+
+          {filteredAdmins.length === 0 ? (
+            <EmptyState label="본사 어드민 계정이 없습니다" />
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 tracking-wider">
+                  <tr>
+                    <th className="text-left p-3">어드민</th>
+                    <th className="text-left p-3 hidden md:table-cell">로그인 방법</th>
+                    <th className="text-left p-3 hidden md:table-cell">가입일</th>
+                    <th className="text-left p-3">상태</th>
+                    <th className="text-right p-3">액션</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredAdmins.map((a) => (
+                    <tr
+                      key={a.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/platform/members/user/${a.id}`)}
+                    >
+                      <td className="p-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-gray-900">{a.displayName ?? '(이름 없음)'}</span>
+                          <RoleBadge user={a} />
+                        </div>
+                        <div className="text-[11px] text-gray-500 font-mono mt-0.5">{a.email ?? a.id.slice(0, 16) + '…'}</div>
+                        {a.storeId && (
+                          <div className="text-[10px] text-gray-400 mt-0.5">매장도 운영 중</div>
+                        )}
+                      </td>
+                      <td className="p-3 hidden md:table-cell">
+                        <div className="flex gap-1 flex-wrap">
+                          {(a.providers ?? []).map((pv) => (
+                            <ProviderBadge key={pv} provider={pv} />
+                          ))}
+                          {(!a.providers || a.providers.length === 0) && (
+                            <span className="text-[10px] text-gray-400">-</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 hidden md:table-cell text-[11px] text-gray-500">
+                        {a.createdAt ? formatDate(a.createdAt.toDate()) : '-'}
+                      </td>
+                      <td className="p-3">
+                        <StatusBadge status={a.status ?? 'active'} type="user" />
+                      </td>
+                      <td className="p-3 text-right">
+                        {a.status === 'suspended' ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); activateAdmin(a.id); }}
+                            className="text-[10px] font-bold bg-green-600 text-white rounded px-2 py-1 hover:bg-green-700"
+                          >
+                            복구
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); if (window.confirm('이 어드민 계정을 정지하시겠습니까?')) suspendAdmin(a.id); }}
+                            className="text-[10px] font-bold bg-gray-200 text-gray-700 rounded px-2 py-1 hover:bg-gray-300"
+                          >
+                            정지
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab 2: 일반 사용자 ── */}
       {activeTab === 'players' && !loading && (
         <div>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -298,8 +428,11 @@ function MembersPageInner() {
                       onClick={() => router.push(`/platform/members/user/${p.id}`)}
                     >
                       <td className="p-3">
-                        <div className="font-bold text-gray-900">{p.displayName ?? '(이름 없음)'}</div>
-                        <div className="text-[11px] text-gray-500 font-mono">{p.email ?? p.id.slice(0, 16) + '…'}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-gray-900">{p.displayName ?? '(이름 없음)'}</span>
+                          <RoleBadge user={p} />
+                        </div>
+                        <div className="text-[11px] text-gray-500 font-mono mt-0.5">{p.email ?? p.id.slice(0, 16) + '…'}</div>
                       </td>
                       <td className="p-3 hidden md:table-cell">
                         <div className="flex gap-1 flex-wrap">
@@ -671,6 +804,52 @@ function OrganizerCard({
         </div>
       </div>
     </div>
+  );
+}
+
+// role 배지: platform_admin 우선, 그 다음 storeId/organizerId, 기본 일반
+function RoleBadge({ user }: { user: { roles?: string[]; role?: string; storeId?: string; organizerId?: string } }) {
+  const isPlatformAdmin =
+    (Array.isArray(user.roles) && user.roles.includes('platform_admin')) ||
+    user.role === 'platform_admin';
+
+  if (isPlatformAdmin) {
+    return (
+      <span
+        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+        style={{ background: '#EDE9FE', color: '#7C3AED' }}
+      >
+        본사 어드민
+      </span>
+    );
+  }
+  if (user.storeId) {
+    return (
+      <span
+        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+        style={{ background: '#FFE4F3', color: '#FF1F8F' }}
+      >
+        매장
+      </span>
+    );
+  }
+  if (user.organizerId) {
+    return (
+      <span
+        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+        style={{ background: '#DBEAFE', color: '#2563EB' }}
+      >
+        대회사
+      </span>
+    );
+  }
+  return (
+    <span
+      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+      style={{ background: '#F3F4F6', color: '#6B7280' }}
+    >
+      일반
+    </span>
   );
 }
 
