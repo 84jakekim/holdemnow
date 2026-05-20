@@ -407,44 +407,44 @@ function QuickNavCards() {
   return (
     <section aria-label="빠른 이동" className="px-4 py-2">
       <div className="flex gap-3">
-        {/* 대회정보 */}
+        {/* 대회정보 — 골드 톤 (게런티·트로피 컨셉) */}
         <Link
           href="/m/events"
           className="flex-1 rounded-xl px-4 flex items-center gap-2.5 transition active:scale-[0.97] group"
           style={{
-            background: 'var(--surface-1)',
-            border: '1.5px solid var(--border)',
-            boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(245,158,11,0.04) 100%)',
+            border: '1.5px solid rgba(245,158,11,0.32)',
+            boxShadow: '0 2px 8px rgba(245,158,11,0.12)',
             height: 56,
           }}
           aria-label="대회정보"
         >
           <span className="text-[22px] leading-none flex-shrink-0" aria-hidden="true">🏆</span>
-          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--text-1)' }}>
+          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--gold)' }}>
             대회정보
           </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 group-active:stroke-[var(--brand)] transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0">
             <path d="M9 18l6-6-6-6"/>
           </svg>
         </Link>
 
-        {/* 커뮤니티 */}
+        {/* 커뮤니티 — 핫핑크 톤 (브랜드 톤) */}
         <Link
           href="/m/community"
           className="flex-1 rounded-xl px-4 flex items-center gap-2.5 transition active:scale-[0.97] group"
           style={{
-            background: 'var(--surface-1)',
-            border: '1.5px solid var(--border)',
-            boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+            background: 'linear-gradient(135deg, rgba(255,31,143,0.10) 0%, rgba(255,31,143,0.04) 100%)',
+            border: '1.5px solid rgba(255,31,143,0.32)',
+            boxShadow: '0 2px 8px rgba(255,31,143,0.12)',
             height: 56,
           }}
           aria-label="커뮤니티"
         >
           <span className="text-[22px] leading-none flex-shrink-0" aria-hidden="true">💬</span>
-          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--text-1)' }}>
+          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--brand)' }}>
             커뮤니티
           </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 group-active:stroke-[var(--brand)] transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0">
             <path d="M9 18l6-6-6-6"/>
           </svg>
         </Link>
@@ -1011,18 +1011,26 @@ function PinnedBanner({ post }: { post: PinnedPost }) {
   const photo = post.imageUrls[0];
   const openLink = () => post.ctaUrl && window.open(post.ctaUrl, '_blank', 'noopener,noreferrer');
   return (
-    <button onClick={openLink} disabled={!post.ctaUrl} className="w-full rounded-2xl overflow-hidden card-hover text-left block" style={{ background: 'var(--surface-1)', border: '1.5px solid var(--brand)', boxShadow: '0 2px 12px rgba(255,31,143,0.15)' }}>
-      {photo && (
+    <button
+      onClick={openLink}
+      disabled={!post.ctaUrl}
+      aria-label={post.title}
+      className="w-full rounded-2xl overflow-hidden card-hover text-left block"
+      style={{ background: 'var(--surface-1)', border: '1.5px solid var(--brand)', boxShadow: '0 2px 12px rgba(255,31,143,0.15)' }}
+    >
+      {photo ? (
         <div className="relative w-full" style={{ aspectRatio: '21/9', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt={post.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
         </div>
+      ) : (
+        /* 사진 없는 경우만 텍스트 영역 노출 — 사진 있으면 사진만 보이게 */
+        <div className="px-4 py-4">
+          <div className="text-[15px] font-extrabold mb-1 line-clamp-2" style={{ color: 'var(--text-1)' }}>{post.title}</div>
+          {post.body && <div className="text-[12px] line-clamp-2" style={{ color: 'var(--text-2)' }}>{post.body}</div>}
+          {post.ctaLabel && <div className="text-[13px] font-bold mt-2" style={{ color: 'var(--brand)' }}>{post.ctaLabel} ›</div>}
+        </div>
       )}
-      <div className="px-4 py-3">
-        <div className="text-[15px] font-extrabold mb-1 line-clamp-2" style={{ color: 'var(--text-1)' }}>{post.title}</div>
-        {post.body && <div className="text-[12px] line-clamp-2" style={{ color: 'var(--text-2)' }}>{post.body}</div>}
-        {post.ctaLabel && <div className="text-[13px] font-bold mt-2" style={{ color: 'var(--brand)' }}>{post.ctaLabel} ›</div>}
-      </div>
     </button>
   );
 }
@@ -1031,23 +1039,30 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
   const photo = post.imageUrls[0];
   const summary = post.body.split('\n').slice(0, 4).join('\n');
   return (
-    <Link href={`/m/store/${post.storeId}`} onClick={() => bumpStoreMetric(post.storeId, 'cardClicks')} className="w-[200px] block rounded-2xl overflow-hidden card-hover" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
-      {photo && (
+    <Link
+      href={`/m/store/${post.storeId}`}
+      onClick={() => bumpStoreMetric(post.storeId, 'cardClicks')}
+      aria-label={`${post.storeName ?? '매장'} 소식 보기`}
+      className="w-[200px] block rounded-2xl overflow-hidden card-hover"
+      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}
+    >
+      {photo ? (
         <div className="relative w-full" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-          {post.imageUrls.length > 1 && <span className="absolute bottom-2 right-2 text-[10px] font-bold rounded-full px-2 py-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>+{post.imageUrls.length - 1}</span>}
+          <img src={photo} alt={post.storeName ?? ''} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+          {post.imageUrls.length > 1 && (
+            <span className="absolute bottom-2 right-2 text-[10px] font-bold rounded-full px-2 py-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>
+              +{post.imageUrls.length - 1}
+            </span>
+          )}
+        </div>
+      ) : (
+        /* 사진 없는 경우만 텍스트 본문 노출 (피드 빈 카드 방지) */
+        <div className="px-3 py-3" style={{ minHeight: 150 }}>
+          <div className="text-[12px] font-extrabold mb-1 truncate" style={{ color: 'var(--brand)' }}>{post.storeName ?? '매장'}</div>
+          <div className="text-[11px] leading-relaxed whitespace-pre-wrap line-clamp-5" style={{ color: 'var(--text-2)' }}>{summary}</div>
         </div>
       )}
-      <div className="px-3 py-2.5" style={{ minHeight: photo ? undefined : 100 }}>
-        <div className="text-[12px] font-extrabold mb-1 truncate" style={{ color: 'var(--brand)' }}>{post.storeName ?? '매장'}</div>
-        <div className="text-[11px] leading-relaxed whitespace-pre-wrap line-clamp-3" style={{ color: 'var(--text-2)' }}>{summary}</div>
-        {post.eventTags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {post.eventTags.slice(0, 2).map((t) => <span key={t} className="text-[10px] font-bold rounded px-1.5 py-0.5" style={{ background: 'rgba(255,31,143,0.10)', color: 'var(--brand)' }}>#{t}</span>)}
-          </div>
-        )}
-      </div>
     </Link>
   );
 }
