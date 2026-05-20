@@ -58,3 +58,7 @@ coverage/
 # --- Tooling-local state (not part of project) ---
 .claude/
 **/.claude/
+
+# --- Local secrets (사용자 PC만, git 절대 commit X) ---
+.local-secrets/
+**/.local-secrets/
