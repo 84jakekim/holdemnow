@@ -83,7 +83,7 @@ service cloud.firestore {
 
       match /tournaments/{tournamentId} {
         allow read: if true;                             // 플레이어도 캘린더에서 조회
-        allow write: if isStoreOwnerOrMember(storeId);
+        allow write: if isStoreOwnerOrMember(storeId) || isPlatformAdmin();
       }
 
       match /displaySlots/{slotNum} {
