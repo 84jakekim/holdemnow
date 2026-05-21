@@ -90,15 +90,64 @@ export const CARD_STYLES: Record<PostCardColor, CardStyle> = {
     defaultEmoji: '🔥',
     label: '긴급',
   },
+  // ── 확장 3색 (2026-05-22) ──────────────────────────────────
+  purple: {
+    surface: 'linear-gradient(135deg, #ECDDFF 0%, #F7EEFF 100%)',
+    textPrimary: '#3B1466',
+    textSecondary: '#6B3FA0',
+    accent: '#8B3FE0',
+    accentText: '#fff',
+    border: '#D4B8F4',
+    defaultEmoji: '🃏',
+    label: '라운지',
+  },
+  cyan: {
+    surface: 'linear-gradient(135deg, #CFEFF5 0%, #E6F8FB 100%)',
+    textPrimary: '#003F4D',
+    textSecondary: '#1F6D7A',
+    accent: '#0FA0B8',
+    accentText: '#fff',
+    border: '#9DDDE8',
+    defaultEmoji: '✨',
+    label: '오픈/청량',
+  },
+  orange: {
+    surface: 'linear-gradient(135deg, #FFD9B0 0%, #FFE9CC 100%)',
+    textPrimary: '#5A2B00',
+    textSecondary: '#8C4F1A',
+    accent: '#FF7A1A',
+    accentText: '#fff',
+    border: '#F4B97A',
+    defaultEmoji: '⚡',
+    label: '주말/활기',
+  },
 };
 
-/** post로부터 적용할 스타일 + 표시할 이모지 결정 */
+/**
+ * post로부터 적용할 스타일 + 표시할 이모지 결정.
+ *
+ * - cardEmojis(배열, 신규) 우선 → cardEmoji(단일, 레거시) → 색상 기본 이모지 순.
+ * - 단일/다중 양쪽을 한 번에 처리하므로 호출부는 emojis[]만 보면 됩니다.
+ * - 비어있으면 emojis=[fallback] 1개를 반환해서 카드 비주얼 깨짐 방지.
+ */
 export function resolveCardVisual(post: {
   cardColor?: PostCardColor;
   cardEmoji?: string;
-}): { style: CardStyle; emoji: string } {
+  cardEmojis?: string[];
+}): { style: CardStyle; emoji: string; emojis: string[] } {
   const color: PostCardColor = (post.cardColor && CARD_STYLES[post.cardColor]) ? post.cardColor : 'white';
   const style = CARD_STYLES[color];
-  const emoji = (post.cardEmoji && post.cardEmoji.trim()) || style.defaultEmoji;
-  return { style, emoji };
+
+  const list: string[] = [];
+  if (Array.isArray(post.cardEmojis)) {
+    for (const e of post.cardEmojis) {
+      if (typeof e === 'string' && e.trim()) list.push(e);
+    }
+  }
+  if (list.length === 0 && post.cardEmoji && post.cardEmoji.trim()) {
+    list.push(post.cardEmoji);
+  }
+  const emojis = list.length > 0 ? list : (style.defaultEmoji ? [style.defaultEmoji] : []);
+  const emoji = emojis[0] ?? '';
+  return { style, emoji, emojis };
 }

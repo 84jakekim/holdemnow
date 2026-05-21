@@ -60,16 +60,36 @@ export const MAX_POST_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /**
- * 카드 색상 팔레트 (Phase F, 2026-05-22).
+ * 카드 색상 팔레트 (Phase F+, 2026-05-22 / 확장 2026-05-22).
  * 매장 어드민이 글 작성 시 선택. 홈 캐러셀에서 카드 톤으로 적용.
- * 'white'=기본, 'pink'=이벤트, 'green'=정기토너, 'gold'=프리미엄,
- * 'navy'=공지, 'red'=긴급/마감.
+ * 기본 6색 + 확장 3색: purple(라운지), cyan(청량/오픈), orange(주말/활기).
  */
-export type PostCardColor = 'white' | 'pink' | 'green' | 'gold' | 'navy' | 'red';
-export const POST_CARD_COLORS: PostCardColor[] = ['white', 'pink', 'green', 'gold', 'navy', 'red'];
-/** 큐레이션된 카드 액센트 이모지 (12종) */
-export const POST_CARD_EMOJIS = ['🎰', '🎮', '🃏', '🎯', '☕', '🍻', '🔥', '⭐', '💎', '🎉', '⚡', '🆕'] as const;
-export type PostCardEmoji = typeof POST_CARD_EMOJIS[number];
+export type PostCardColor =
+  | 'white' | 'pink' | 'green' | 'gold' | 'navy' | 'red'
+  | 'purple' | 'cyan' | 'orange';
+export const POST_CARD_COLORS: PostCardColor[] = [
+  'white', 'pink', 'green', 'gold', 'navy', 'red',
+  'purple', 'cyan', 'orange',
+];
+
+/**
+ * 큐레이션된 카드 액센트 이모지 — 5개 카테고리 48종 (2026-05-22 확장).
+ * 어드민 폼에서 카테고리 탭으로 노출. 다중 선택(최대 3개) 지원.
+ */
+export const POST_CARD_EMOJI_GROUPS = {
+  '포커': ['🃏', '🎰', '♠️', '♥️', '♦️', '♣️', '🎯', '💰', '💵', '💸'],
+  '이벤트': ['🎉', '🎊', '🎁', '✨', '🔥', '⚡', '⭐', '💎', '🏆', '🌟'],
+  '식음': ['☕', '🍻', '🍺', '🍷', '🥃', '🍰', '🍕', '🍣'],
+  '안내': ['📢', '🔔', '❗', '⚠️', '💡', '📅', '🕐', '🏬', '📍', '🚨'],
+  '모집': ['👀', '🙋', '👋', '🆕', '🎪', '🤝', '💼', '📝', '🎓', '🚀'],
+} as const;
+
+/** 평탄화된 큐레이션 셋 — 검증/마이그레이션용 */
+export const POST_CARD_EMOJIS: readonly string[] = Object.values(POST_CARD_EMOJI_GROUPS).flat();
+export type PostCardEmoji = string;
+
+/** 카드에 노출할 이모지 최대 개수 (다중 선택) */
+export const POST_CARD_EMOJIS_MAX = 3;
 
 /** grapheme 기준 길이 — 이모지/한글/영문 1자 = 1 */
 export function graphemeLength(s: string): number {
@@ -115,8 +135,18 @@ export interface StorePost {
   headline?: string;
   /** 카드 색상 톤. 미설정 시 'white' (기본). */
   cardColor?: PostCardColor;
-  /** 카드 좌측 액센트 이모지 (단일). 미설정 시 자동 매핑(색상에 따라). */
+  /**
+   * 카드 좌측 액센트 이모지 — 레거시 단일 필드 (2026-05-22 이전 작성 글).
+   * 신규 작성은 cardEmojis 배열을 사용. resolveCardVisual이 자동 승격.
+   * @deprecated cardEmojis 사용
+   */
   cardEmoji?: string;
+  /**
+   * 카드 좌측 액센트 이모지 — 다중 선택 (최대 POST_CARD_EMOJIS_MAX개).
+   * 미설정 시 색상별 기본 이모지가 자동 적용됩니다.
+   * (2026-05-22 신설)
+   */
+  cardEmojis?: string[];
   imageUrls: string[];
   eventTags: string[];
   ctaUrl?: string;
@@ -263,13 +293,35 @@ function sanitizeHeadline(raw: string | undefined): string {
   return truncateGraphemes(capped, HEADLINE_MAX_LENGTH);
 }
 
+/** 큐레이션 셋에 포함된 이모지만 통과시키고 최대 N개로 잘라 반환 */
+function sanitizeCardEmojis(input: {
+  cardEmojis?: string[];
+  cardEmoji?: string;
+}): string[] {
+  const set = new Set(POST_CARD_EMOJIS);
+  const raw: string[] = [];
+  if (Array.isArray(input.cardEmojis)) raw.push(...input.cardEmojis);
+  if (input.cardEmoji) raw.push(input.cardEmoji);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const e of raw) {
+    if (typeof e !== 'string' || !set.has(e) || seen.has(e)) continue;
+    out.push(e);
+    seen.add(e);
+    if (out.length >= POST_CARD_EMOJIS_MAX) break;
+  }
+  return out;
+}
+
 export async function createStorePost(input: {
   storeId: string;
   storeName?: string;
   body: string;
   headline?: string;
   cardColor?: PostCardColor;
+  /** @deprecated cardEmojis 사용 — 호환을 위해 받기는 함 */
   cardEmoji?: string;
+  cardEmojis?: string[];
   imageUrls?: string[];
   eventTags?: string[];
   ctaUrl?: string;
@@ -316,10 +368,10 @@ export async function createStorePost(input: {
   const cardColor: PostCardColor = POST_CARD_COLORS.includes(input.cardColor as PostCardColor)
     ? (input.cardColor as PostCardColor)
     : 'white';
-  // 8) cardEmoji 검증 — 큐레이션 셋에 포함되거나 비어있어야 함 (임의 텍스트 차단)
-  const cardEmoji = input.cardEmoji && (POST_CARD_EMOJIS as readonly string[]).includes(input.cardEmoji)
-    ? input.cardEmoji
-    : '';
+  // 8) cardEmojis 검증 — 큐레이션 셋에 포함된 이모지만 최대 N개. 레거시 cardEmoji도 같이 흡수.
+  const cardEmojis = sanitizeCardEmojis(input);
+  // 백워드 호환: 단일 필드도 같이 저장 (예전 클라이언트 fallback 보호)
+  const cardEmoji = cardEmojis[0] ?? '';
 
   const ref = await addDoc(postsCol(input.storeId), stripUndefined({
     storeId: input.storeId,
@@ -328,6 +380,7 @@ export async function createStorePost(input: {
     headline,
     cardColor,
     cardEmoji,
+    cardEmojis,
     imageUrls: input.imageUrls ?? [],
     eventTags: input.eventTags ?? [],
     ctaUrl: input.ctaUrl ?? '',
@@ -357,10 +410,14 @@ export async function updateStorePost(
       ? updates.cardColor
       : 'white';
   }
-  if (typeof updates.cardEmoji === 'string') {
-    next.cardEmoji = (POST_CARD_EMOJIS as readonly string[]).includes(updates.cardEmoji)
-      ? updates.cardEmoji
-      : '';
+  // cardEmoji(단일·레거시) / cardEmojis(배열·신규) 어느 쪽이 와도 동일 sanitize 후 둘 다 저장
+  if (typeof updates.cardEmoji === 'string' || Array.isArray(updates.cardEmojis)) {
+    const cardEmojis = sanitizeCardEmojis({
+      cardEmoji: typeof updates.cardEmoji === 'string' ? updates.cardEmoji : undefined,
+      cardEmojis: Array.isArray(updates.cardEmojis) ? updates.cardEmojis : undefined,
+    });
+    next.cardEmojis = cardEmojis;
+    next.cardEmoji = cardEmojis[0] ?? '';
   }
   await updateDoc(doc(postsCol(storeId), postId), stripUndefined(next));
 }

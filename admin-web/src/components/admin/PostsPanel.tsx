@@ -15,7 +15,8 @@ import {
   MAX_POST_IMAGES,
   HEADLINE_MAX_LENGTH,
   POST_CARD_COLORS,
-  POST_CARD_EMOJIS,
+  POST_CARD_EMOJI_GROUPS,
+  POST_CARD_EMOJIS_MAX,
   graphemeLength,
   truncateGraphemes,
 } from '@/lib/posts';
@@ -260,30 +261,18 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
   );
 }
 
-function QuickTemplateBtn({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[11px] font-bold px-2.5 py-1 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 active:scale-95"
-    >
-      {label}
-    </button>
-  );
-}
-
 function LivePreviewCard({
   headline,
   cardColor,
-  cardEmoji,
+  cardEmojis,
   storeName,
 }: {
   headline: string;
   cardColor: PostCardColor;
-  cardEmoji: string;
+  cardEmojis: string[];
   storeName: string;
 }) {
-  const { style, emoji } = resolveCardVisual({ cardColor, cardEmoji });
+  const { style, emojis } = resolveCardVisual({ cardColor, cardEmojis });
   const oneLiner = headline.trim() || '카드에 노출될 한 줄을 입력해주세요';
   return (
     <div
@@ -296,17 +285,22 @@ function LivePreviewCard({
       }}
     >
       <div className="flex items-start gap-2 mb-2.5">
-        {emoji && (
-          <div
-            className="flex-shrink-0 flex items-center justify-center rounded-lg"
-            style={{
-              width: 28,
-              height: 28,
-              background: style.accent,
-              fontSize: 15,
-            }}
-          >
-            <span>{emoji}</span>
+        {emojis.length > 0 && (
+          <div className="flex-shrink-0 flex items-center gap-1">
+            {emojis.map((e, i) => (
+              <div
+                key={`${e}_${i}`}
+                className="flex items-center justify-center rounded-lg"
+                style={{
+                  width: 28,
+                  height: 28,
+                  background: style.accent,
+                  fontSize: 15,
+                }}
+              >
+                <span>{e}</span>
+              </div>
+            ))}
           </div>
         )}
         <div
@@ -356,7 +350,8 @@ function PostRow({
   const isActive = !isExpired && !isHidden;
   const hoursLeft = isActive && expMs > now ? Math.max(0, Math.floor((expMs - now) / (60 * 60 * 1000))) : 0;
   const relative = formatRelativeKo(post.createdAt, now);
-  const { style: rowStyle, emoji: rowEmoji } = resolveCardVisual(post);
+  const { style: rowStyle, emojis: rowEmojis } = resolveCardVisual(post);
+  const rowEmojiHead = rowEmojis[0] ?? '';
   const displayHeadline = (post.headline ?? '').trim() || (post.body || '').split('\n')[0]?.trim() || '(제목 없음)';
 
   const remove = async () => {
@@ -382,7 +377,7 @@ function PostRow({
           className="w-16 h-16 rounded-lg flex items-center justify-center text-xl flex-shrink-0"
           style={{ background: rowStyle.surface, border: `1px solid ${rowStyle.border}` }}
         >
-          {rowEmoji || '📝'}
+          {rowEmojiHead || '📝'}
         </div>
       )}
       <div className="flex-1 min-w-0">
@@ -437,7 +432,23 @@ function PostEditModal({
   const [headline, setHeadline] = useState(truncateGraphemes(initialHeadline, HEADLINE_MAX_LENGTH));
   const [body, setBody] = useState(post?.body ?? '');
   const [cardColor, setCardColor] = useState<PostCardColor>((post?.cardColor as PostCardColor) ?? 'white');
-  const [cardEmoji, setCardEmoji] = useState<string>(post?.cardEmoji ?? '');
+  // 다중 이모지 (2026-05-22 신설). 레거시 단일 cardEmoji는 1개짜리 배열로 자동 승격.
+  const [cardEmojis, setCardEmojis] = useState<string[]>(() => {
+    if (Array.isArray(post?.cardEmojis) && post!.cardEmojis!.length > 0) {
+      return post!.cardEmojis!.slice(0, POST_CARD_EMOJIS_MAX);
+    }
+    if (post?.cardEmoji) return [post.cardEmoji];
+    return [];
+  });
+  const [emojiTab, setEmojiTab] = useState<keyof typeof POST_CARD_EMOJI_GROUPS>('포커');
+  const toggleEmoji = (e: string) => {
+    setCardEmojis((prev) => {
+      if (prev.includes(e)) return prev.filter((x) => x !== e);
+      if (prev.length >= POST_CARD_EMOJIS_MAX) return prev; // 캡 도달 시 추가 무시
+      return [...prev, e];
+    });
+  };
+  const clearEmojis = () => setCardEmojis([]);
   const [imageUrls, setImageUrls] = useState<string[]>(post?.imageUrls ?? []);
   const [tagsInput, setTagsInput] = useState((post?.eventTags ?? []).join(', '));
   const [ctaUrl, setCtaUrl] = useState(post?.ctaUrl ?? '');
@@ -495,7 +506,7 @@ function PostEditModal({
           storeId, storeName,
           headline: headline.trim(),
           body: body.trim(),
-          cardColor, cardEmoji,
+          cardColor, cardEmojis,
           imageUrls, eventTags,
           ctaUrl: ctaUrl.trim(), ctaLabel: ctaLabel.trim(), authorUid,
         });
@@ -503,7 +514,7 @@ function PostEditModal({
         await updateStorePost(storeId, post!.id, {
           headline: headline.trim(),
           body: body.trim(),
-          cardColor, cardEmoji,
+          cardColor, cardEmojis,
           imageUrls, eventTags, ctaUrl: ctaUrl.trim(), ctaLabel: ctaLabel.trim(),
         });
       }
@@ -532,7 +543,7 @@ function PostEditModal({
             <LivePreviewCard
               headline={headline}
               cardColor={cardColor}
-              cardEmoji={cardEmoji}
+              cardEmojis={cardEmojis}
               storeName={storeName}
             />
             <div className="text-gray-500 mt-2 leading-snug">
@@ -540,46 +551,6 @@ function PostEditModal({
               · 24시간 후 자동 만료 · 매장 주변 사용자에게 우선 노출
             </div>
           </div>
-
-          {isNew && (
-            <div>
-              <div className="text-[11px] font-bold text-gray-500 mb-1.5">빠른 템플릿 — 클릭해서 내용 자동 채우기</div>
-              <div className="flex flex-wrap gap-1.5">
-                <QuickTemplateBtn
-                  label="토너 시작"
-                  onClick={() => {
-                    setHeadline('오늘 9시 5T 프리롤 토너 시작! 🃏');
-                    setBody(`오늘 ${'00'}:00 ${'0'}T 프리롤 토너 시작!\nOPEN ${'00'}:00\n오픈채팅 https://open.kakao.com/`);
-                    setCardColor('green'); setCardEmoji('🃏');
-                  }}
-                />
-                <QuickTemplateBtn
-                  label="휴무 안내"
-                  onClick={() => {
-                    setHeadline('금일 정기 휴무입니다 🙏');
-                    setBody(`금일 정기 휴무입니다.\n다음 영업일에 뵙겠습니다 :)`);
-                    setCardColor('navy'); setCardEmoji('');
-                  }}
-                />
-                <QuickTemplateBtn
-                  label="신규 이벤트"
-                  onClick={() => {
-                    setHeadline('이번 주 신규 이벤트 OPEN! 🎉');
-                    setBody(`이번 주 신규 이벤트 OPEN!\n· 빙고 / 하이핸드 / 바운티\n오픈채팅 https://open.kakao.com/`);
-                    setCardColor('pink'); setCardEmoji('🎉');
-                  }}
-                />
-                <QuickTemplateBtn
-                  label="딜러 채용"
-                  onClick={() => {
-                    setHeadline('신규 딜러 모집 중 🆕');
-                    setBody(`신규 딜러 모집 중\n· 경력/신입 무관\n· 야간 시급 협의\n문의 010-0000-0000`);
-                    setCardColor('gold'); setCardEmoji('🆕');
-                  }}
-                />
-              </div>
-            </div>
-          )}
 
           {/* 카드 노출 한 줄 (headline) — Phase F */}
           <div>
@@ -626,30 +597,90 @@ function PostEditModal({
             </div>
           </div>
 
-          {/* 카드 이모지 (cardEmoji) */}
+          {/* 카드 이모지 (cardEmojis) — 카테고리 탭 + 다중 선택 (최대 N개) */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">✨ 카드 이모지 (선택)</label>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCardEmoji('')}
-                className={`text-[11px] font-bold px-2.5 py-1.5 rounded-md border ${cardEmoji === '' ? 'border-black bg-black text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-              >
-                없음
-              </button>
-              {POST_CARD_EMOJIS.map((e) => (
+            <div className="flex items-baseline justify-between mb-1.5">
+              <label className="block text-xs font-bold text-gray-700">✨ 카드 이모지 (다중 선택)</label>
+              <span className="text-[10px] font-mono text-gray-400">
+                {cardEmojis.length} / {POST_CARD_EMOJIS_MAX}
+              </span>
+            </div>
+
+            {/* 선택된 이모지 칩 — 클릭하면 해제 */}
+            <div className="mb-2 flex flex-wrap gap-1.5 min-h-[28px]">
+              {cardEmojis.length === 0 ? (
+                <span className="text-[11px] text-gray-400 italic self-center">미선택 시 색상 톤에 맞는 기본 이모지가 자동 적용됩니다</span>
+              ) : (
+                <>
+                  {cardEmojis.map((e, i) => (
+                    <button
+                      key={`${e}_${i}`}
+                      type="button"
+                      onClick={() => toggleEmoji(e)}
+                      className="text-[15px] px-2 py-1 rounded-md border border-black bg-black/5 ring-2 ring-black active:scale-95"
+                      aria-label={`이모지 ${e} 제거`}
+                      title="클릭해서 제거"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={clearEmojis}
+                    className="text-[10px] font-bold px-2 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50"
+                  >
+                    모두 해제
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* 카테고리 탭 */}
+            <div className="flex gap-1 mb-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              {(Object.keys(POST_CARD_EMOJI_GROUPS) as Array<keyof typeof POST_CARD_EMOJI_GROUPS>).map((tab) => (
                 <button
-                  key={e}
+                  key={tab}
                   type="button"
-                  onClick={() => setCardEmoji(e)}
-                  className={`text-[15px] px-2 py-1 rounded-md border active:scale-95 ${cardEmoji === e ? 'border-black bg-black/5 ring-2 ring-black' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                  aria-label={`이모지 ${e}`}
+                  onClick={() => setEmojiTab(tab)}
+                  className={`flex-shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-md transition active:scale-95 ${
+                    emojiTab === tab
+                      ? 'bg-black text-white border border-black'
+                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                  }`}
                 >
-                  {e}
+                  {tab}
                 </button>
               ))}
             </div>
-            <div className="text-[11px] text-gray-400 mt-1">미선택 시 색상 톤에 맞는 기본 이모지가 자동 적용됩니다</div>
+
+            {/* 활성 카테고리의 이모지 그리드 */}
+            <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-gray-50 border border-gray-200">
+              {POST_CARD_EMOJI_GROUPS[emojiTab].map((e) => {
+                const selected = cardEmojis.includes(e);
+                const capReached = !selected && cardEmojis.length >= POST_CARD_EMOJIS_MAX;
+                return (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => toggleEmoji(e)}
+                    disabled={capReached}
+                    title={capReached ? `최대 ${POST_CARD_EMOJIS_MAX}개까지 선택 가능` : selected ? '해제' : '추가'}
+                    className={`text-[16px] px-2 py-1.5 rounded-md border active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
+                      selected
+                        ? 'border-black bg-black/10 ring-2 ring-black'
+                        : 'border-gray-200 bg-white hover:bg-white'
+                    }`}
+                    aria-label={`이모지 ${e}${selected ? ' 선택됨' : ''}`}
+                    aria-pressed={selected}
+                  >
+                    {e}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-[11px] text-gray-400 mt-1.5">
+              카테고리를 바꿔가며 최대 {POST_CARD_EMOJIS_MAX}개까지 선택할 수 있어요 · 칩 클릭으로 해제
+            </div>
           </div>
 
           <div>

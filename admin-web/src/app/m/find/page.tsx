@@ -1156,7 +1156,7 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
   const summary = post.body.split('\n').slice(0, 4).join('\n');
   // Phase F: headline 우선, 없으면 body 첫 줄
   const headline = (post.headline ?? '').trim() || (post.body || '').split('\n')[0]?.trim() || '';
-  const { style, emoji } = resolveCardVisual(post);
+  const { style, emojis } = resolveCardVisual(post);
   const relative = formatRelativeKo(post.createdAt);
   return (
     <Link
@@ -1199,12 +1199,17 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
           style={{ aspectRatio: '2/3', background: style.surface, border: `1px solid ${style.border}` }}
         >
           <div className="flex items-center gap-1.5 mb-1.5">
-            {emoji && (
-              <div
-                className="flex items-center justify-center rounded"
-                style={{ width: 22, height: 22, background: style.accent, fontSize: 13 }}
-              >
-                <span>{emoji}</span>
+            {emojis.length > 0 && (
+              <div className="flex items-center gap-0.5">
+                {emojis.map((e, i) => (
+                  <div
+                    key={`${e}_${i}`}
+                    className="flex items-center justify-center rounded"
+                    style={{ width: 22, height: 22, background: style.accent, fontSize: 13 }}
+                  >
+                    <span>{e}</span>
+                  </div>
+                ))}
               </div>
             )}
             <div className="text-[11px] font-extrabold truncate flex-1" style={{ color: style.textSecondary }}>

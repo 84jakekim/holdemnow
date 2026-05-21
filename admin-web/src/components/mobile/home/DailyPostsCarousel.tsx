@@ -176,7 +176,7 @@ export default function DailyPostsCarousel() {
 // ─────────────────────────────────────────────────────────────
 
 function PostCard({ post, active }: { post: StorePost; active: boolean }) {
-  const { style, emoji } = useMemo(() => resolveCardVisual(post), [post]);
+  const { style, emojis } = useMemo(() => resolveCardVisual(post), [post]);
   const now = useTickingNow();
   const relative = useMemo(() => formatRelativeKo(post.createdAt, now), [post.createdAt, now]);
 
@@ -204,20 +204,24 @@ function PostCard({ post, active }: { post: StorePost; active: boolean }) {
       }}
       aria-label={`${post.storeName ?? '매장'} 소식 보기`}
     >
-      {/* 상단: 이모지 액센트 + 헤드라인 */}
+      {/* 상단: 이모지 액센트(최대 3개) + 헤드라인 */}
       <div className="flex items-start gap-2 mb-2.5">
-        {emoji && (
-          <div
-            className="flex-shrink-0 flex items-center justify-center rounded-lg"
-            style={{
-              width: '28px',
-              height: '28px',
-              background: style.accent,
-              fontSize: '15px',
-            }}
-            aria-hidden
-          >
-            <span style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.15))' }}>{emoji}</span>
+        {emojis.length > 0 && (
+          <div className="flex-shrink-0 flex items-center gap-1" aria-hidden>
+            {emojis.map((e, i) => (
+              <div
+                key={`${e}_${i}`}
+                className="flex items-center justify-center rounded-lg"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  background: style.accent,
+                  fontSize: '15px',
+                }}
+              >
+                <span style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.15))' }}>{e}</span>
+              </div>
+            ))}
           </div>
         )}
         <div
