@@ -474,6 +474,23 @@ service cloud.firestore {
       allow create, update, delete: if isPlatformAdmin();
     }
 
+    // ===== 광고 슬롯 (adSlots) — Sprint 3 Phase C =====
+    // 매장 광고 노출권. v0.1은 본사 수동 부여만(클라 결제 없음).
+    // - read: 누구나 (모바일 홈/매장찾기 슬롯 분배에 사용).
+    // - write: platform_admin만 (v0.1). v0.2에 매장 owner self-purchase 권한 확장 예정.
+    // - 클라이언트가 impressions/clicks 카운트를 직접 increment하는 것을 허용 (writeRateLimits 패턴 동일).
+    match /adSlots/{adId} {
+      allow read: if true;
+      allow create, delete: if isPlatformAdmin();
+      // platform_admin은 모든 필드 변경 가능. 일반 사용자는 impressions/clicks 카운트만 increment 허용.
+      allow update: if isPlatformAdmin()
+        || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['impressions', 'clicks', 'updatedAt'])
+        );
+    }
+
     // ===== 신고 (reports) — Phase B 모더레이션 =====
     // reportId = `${reviewId}_${reporterUid}` 형식 → 같은 사용자 중복 신고 차단.
     // - read: 본인 신고는 본인 read, platform_admin은 전체 read.

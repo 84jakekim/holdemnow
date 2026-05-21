@@ -71,6 +71,12 @@ const MENU_GROUPS: MenuGroup[] = [
     ],
   },
   {
+    title: '광고',
+    items: [
+      { id: 'ads', icon: '💰', label: '광고 슬롯 관리', href: '/platform/ads' },
+    ],
+  },
+  {
     title: '데이터/시스템',
     items: [
       { id: 'demo', icon: '🛠', label: '데모 데이터', href: '/platform/demo' },

@@ -59,6 +59,14 @@ export { aggregateReviewStats } from './reviews/aggregateReviewStats';
 // ===== Moderation — reports 누적 3건 시 자동 숨김 (Phase B 클린봇) =====
 export { autoHideOnReports } from './moderation/autoHideOnReports';
 
+// ===== AdSlots — 매장 광고 노출권 (Sprint 3 Phase C, 2026-05-21) =====
+// 활성 전이 시 stores 캐싱 필드 동기화.
+export { onAdSlotActivate } from './ads/onAdSlotActivate';
+// 매시간: 만료 → expired, 시작 → active 자동 전이.
+export { scheduledAdSlotExpiry } from './ads/scheduledAdSlotExpiry';
+// 매시간: impressions/clicks를 stores/{id}/metrics/ad_summary로 미러.
+export { aggregateAdSlotImpressions } from './ads/aggregateAdSlotImpressions';
+
 // ===== Series — 위성 예선 자동 집계 (M19 매핑) (v0.2+ 추가 예정) =====
 // export { onSatelliteResultBatch } from './series/onSatelliteResultBatch';
 
