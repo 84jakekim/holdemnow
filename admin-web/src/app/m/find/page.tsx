@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
@@ -960,13 +960,123 @@ function DailyPostsFeed() {
         </div>
       </div>
       {pinned.length > 0 && <div className="px-4 mb-3"><PinnedCarousel items={pinned} /></div>}
-      {posts.length > 0 && (
-        <ul role="list" className="pl-4 flex gap-2.5 overflow-x-auto scrollbar-none pb-2" aria-label="매장 데일리 소식 리스트">
-          {posts.map((p) => <li role="listitem" key={p.id} className="flex-shrink-0"><StorePostMiniCard post={p} /></li>)}
-          <li aria-hidden="true" className="w-3 flex-shrink-0" />
-        </ul>
-      )}
+      {posts.length > 0 && <StorePostsPortraitCarousel posts={posts} />}
     </section>
+  );
+}
+
+/**
+ * 세로 포스터 2개씩 노출 + 자동 슬라이드.
+ * 사장님이 카톡방용 세로 포스터(2:3, 3:4 등)를 그대로 올려도 잘리지 않도록 비율 자유.
+ * 페이지(2개)당 5초마다 다음 슬라이드로 자동 회전. 사용자가 직접 스크롤·터치하면 5초 일시정지.
+ */
+function StorePostsPortraitCarousel({ posts }: { posts: StorePost[] }) {
+  const pages = useMemo(() => {
+    const chunks: StorePost[][] = [];
+    for (let i = 0; i < posts.length; i += 2) chunks.push(posts.slice(i, i + 2));
+    return chunks;
+  }, [posts]);
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [inView, setInView] = useState(true);
+
+  // viewport 가시성
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const ob = new IntersectionObserver(
+      (entries) => setInView(entries[0]?.isIntersecting ?? true),
+      { threshold: 0.4 },
+    );
+    ob.observe(el);
+    return () => ob.disconnect();
+  }, []);
+
+  // 사용자 스크롤로 인덱스 동기화
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || pages.length < 2) return;
+    const handleScroll = () => {
+      const w = el.clientWidth;
+      if (w === 0) return;
+      const newIdx = Math.round(el.scrollLeft / w);
+      setActiveIdx(Math.min(newIdx, pages.length - 1));
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [pages.length]);
+
+  const scrollTo = useCallback((i: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' });
+    setActiveIdx(i);
+  }, []);
+
+  // 자동 슬라이드
+  useEffect(() => {
+    if (pages.length < 2 || !inView || paused) return;
+    const t = setInterval(() => {
+      setActiveIdx((prev) => {
+        const next = (prev + 1) % pages.length;
+        scrollTo(next);
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(t);
+  }, [pages.length, inView, paused, scrollTo]);
+
+  const handleUserInteraction = useCallback(() => {
+    setPaused(true);
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    resumeTimer.current = setTimeout(() => setPaused(false), 5000);
+  }, []);
+
+  useEffect(() => () => { if (resumeTimer.current) clearTimeout(resumeTimer.current); }, []);
+
+  return (
+    <div ref={containerRef} className="w-full">
+      <div
+        ref={scrollRef}
+        className="flex overflow-x-auto scrollbar-none"
+        style={{ scrollSnapType: 'x mandatory' }}
+        onTouchStart={handleUserInteraction}
+        onPointerDown={handleUserInteraction}
+        aria-label="매장 데일리 소식 슬라이드"
+      >
+        {pages.map((page, pageIdx) => (
+          <div
+            key={pageIdx}
+            className="flex-shrink-0 w-full px-4 grid grid-cols-2 gap-3"
+            style={{ scrollSnapAlign: 'start' }}
+          >
+            {page.map((p) => <StorePostMiniCard key={p.id} post={p} />)}
+            {/* 마지막 페이지 카드가 1장이면 빈 자리 균형 유지 */}
+            {page.length < 2 && <div aria-hidden="true" />}
+          </div>
+        ))}
+      </div>
+      {pages.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-3" aria-label="페이지 인디케이터">
+          {pages.map((_, i) => (
+            <span
+              key={i}
+              aria-hidden="true"
+              className="block rounded-full transition-all duration-200"
+              style={{
+                width: i === activeIdx ? 18 : 5,
+                height: 5,
+                background: i === activeIdx ? 'var(--brand)' : 'rgba(255,31,143,0.30)',
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1044,28 +1154,38 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
   const summary = post.body.split('\n').slice(0, 4).join('\n');
   return (
     <Link
-      href={`/m/store/${post.storeId}`}
+      href={`/m/post/${post.storeId}/${post.id}`}
       onClick={() => bumpStoreMetric(post.storeId, 'cardClicks')}
       aria-label={`${post.storeName ?? '매장'} 소식 보기`}
-      className="w-[320px] block rounded-2xl overflow-hidden card-hover"
+      className="block w-full rounded-xl overflow-hidden card-hover"
       style={{ background: 'var(--surface-1)' }}
     >
       {photo ? (
-        /* 홈 광고 카드와 동일 16:9 — 유튜브 표준 가로 비율 */
-        <div className="relative w-full" style={{ aspectRatio: '16/9', background: 'var(--surface-2)' }}>
+        /* 세로 포스터(2:3) — 사장님이 카톡방용 세로 포스터 업로드해도 잘리지 않게.
+         * 작은 카드(2개씩 노출) → 터치해서 상세 페이지에서 크게 본다. */
+        <div className="relative w-full" style={{ aspectRatio: '2/3', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt={post.storeName ?? ''} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
           {post.imageUrls.length > 1 && (
-            <span className="absolute bottom-2 right-2 text-[10px] font-bold rounded-full px-2 py-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>
+            <span className="absolute top-2 right-2 text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>
               +{post.imageUrls.length - 1}
             </span>
           )}
+          {/* 매장명 — 하단 그라데이션 위에 작게 */}
+          {post.storeName && (
+            <>
+              <div className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.75) 100%)' }} />
+              <div className="absolute bottom-1.5 left-2 right-2 text-[11px] font-extrabold text-white truncate" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                {post.storeName}
+              </div>
+            </>
+          )}
         </div>
       ) : (
-        /* 사진 없는 경우만 텍스트 본문 노출 (피드 빈 카드 방지) */
-        <div className="px-3 py-3" style={{ minHeight: 150, background: 'var(--surface-2)' }}>
-          <div className="text-[12px] font-extrabold mb-1 truncate" style={{ color: 'var(--brand)' }}>{post.storeName ?? '매장'}</div>
-          <div className="text-[11px] leading-relaxed whitespace-pre-wrap line-clamp-5" style={{ color: 'var(--text-2)' }}>{summary}</div>
+        /* 사진 없는 경우 — 세로 비율 텍스트 카드 */
+        <div className="px-3 py-3" style={{ aspectRatio: '2/3', background: 'var(--surface-2)' }}>
+          <div className="text-[11px] font-extrabold mb-1 truncate" style={{ color: 'var(--brand)' }}>{post.storeName ?? '매장'}</div>
+          <div className="text-[10px] leading-relaxed whitespace-pre-wrap line-clamp-[10]" style={{ color: 'var(--text-2)' }}>{summary}</div>
         </div>
       )}
     </Link>
