@@ -33,6 +33,9 @@ interface FormState {
   excludeShorts: boolean;
   minDurationSec: number;
   maxAgeDays: number;
+  refreshIntervalDays: number;
+  expirePreviousOnRefresh: boolean;
+  autoVideoMaxAgeDays: number;
 }
 
 function configToForm(cfg: YoutubeCurationConfig): FormState {
@@ -44,6 +47,9 @@ function configToForm(cfg: YoutubeCurationConfig): FormState {
     excludeShorts: cfg.excludeShorts,
     minDurationSec: cfg.minDurationSec,
     maxAgeDays: cfg.maxAgeDays,
+    refreshIntervalDays: cfg.refreshIntervalDays ?? 1,
+    expirePreviousOnRefresh: cfg.expirePreviousOnRefresh ?? true,
+    autoVideoMaxAgeDays: cfg.autoVideoMaxAgeDays ?? 7,
   };
 }
 
@@ -102,7 +108,10 @@ export default function PlatformVideosPage() {
       cur.scheduleHourKst !== form.scheduleHourKst ||
       cur.excludeShorts !== form.excludeShorts ||
       cur.minDurationSec !== form.minDurationSec ||
-      cur.maxAgeDays !== form.maxAgeDays
+      cur.maxAgeDays !== form.maxAgeDays ||
+      cur.refreshIntervalDays !== form.refreshIntervalDays ||
+      cur.expirePreviousOnRefresh !== form.expirePreviousOnRefresh ||
+      cur.autoVideoMaxAgeDays !== form.autoVideoMaxAgeDays
     );
   }, [config, form]);
 
@@ -129,6 +138,19 @@ export default function PlatformVideosPage() {
           DEFAULT_CURATION_CONFIG.minDurationSec,
         ),
         maxAgeDays: clampInt(form.maxAgeDays, 1, 365, DEFAULT_CURATION_CONFIG.maxAgeDays),
+        refreshIntervalDays: clampInt(
+          form.refreshIntervalDays,
+          1,
+          90,
+          DEFAULT_CURATION_CONFIG.refreshIntervalDays,
+        ),
+        expirePreviousOnRefresh: !!form.expirePreviousOnRefresh,
+        autoVideoMaxAgeDays: clampInt(
+          form.autoVideoMaxAgeDays,
+          1,
+          90,
+          DEFAULT_CURATION_CONFIG.autoVideoMaxAgeDays ?? 7,
+        ),
       });
       setSavedAt(Date.now());
     } catch (e) {
@@ -351,6 +373,124 @@ export default function PlatformVideosPage() {
                 style={fieldStyle}
               />
               <span className="text-sm" style={{ color: 'var(--text-3)' }}>일</span>
+            </div>
+          </Field>
+        </div>
+
+        {/* 교체 주기 · 기존 영상 처리 정책 */}
+        <div
+          className="rounded-xl p-4 mb-4"
+          style={{
+            background: 'rgba(245,158,11,0.06)',
+            border: '1px dashed rgba(245,158,11,0.35)',
+          }}
+        >
+          <div
+            className="text-[11px] font-extrabold mb-3 tracking-widest"
+            style={{ color: 'var(--gold)' }}
+          >
+            🔄 교체 주기 · 기존 영상 처리
+          </div>
+          <div className="text-[11px] mb-3" style={{ color: 'var(--text-3)' }}>
+            💡 매일 새 영상으로 바꾸려면 “1일”, 같은 영상을 오래 보여주려면 “7일” 추천.<br />
+            “전부 삭제하고 새 목록”을 켜두면 매번 깔끔하게 새 영상만 노출됩니다.
+          </div>
+
+          <Field
+            label="🔁 교체 주기"
+            help="N일마다 새 영상으로 교체. 1=매일, 2=이틀마다, 7=주1회. 지정 시각이 와도 N일이 안 지났으면 건너뜁니다."
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={form.refreshIntervalDays}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    refreshIntervalDays: parseInt(e.target.value, 10) || 0,
+                  })
+                }
+                className="w-full rounded-lg px-3 py-2 text-sm"
+                style={fieldStyle}
+              />
+              <span className="text-sm" style={{ color: 'var(--text-3)' }}>일마다</span>
+            </div>
+          </Field>
+
+          <Field
+            label="🧹 새 큐레이션 실행 시 기존 영상 처리"
+            help="자동 등록된 영상의 만료 방식. 본사가 수동으로 등록한 영상은 어느 옵션이든 절대 삭제되지 않습니다."
+          >
+            <div className="flex flex-col gap-2">
+              <label
+                className="flex items-start gap-2 rounded-lg px-3 py-2 cursor-pointer"
+                style={fieldStyle}
+              >
+                <input
+                  type="radio"
+                  name="expirePolicy"
+                  className="mt-0.5"
+                  checked={form.expirePreviousOnRefresh === true}
+                  onChange={() => setForm({ ...form, expirePreviousOnRefresh: true })}
+                />
+                <span className="text-sm" style={{ color: 'var(--text-1)' }}>
+                  전부 삭제하고 새 목록으로 교체{' '}
+                  <span style={{ color: 'var(--gold)' }}>(권장)</span>
+                  <span
+                    className="block text-[11px] mt-0.5"
+                    style={{ color: 'var(--text-3)' }}
+                  >
+                    매번 깔끔한 새 영상 {form.maxResults}개만 노출.
+                  </span>
+                </span>
+              </label>
+              <label
+                className="flex items-start gap-2 rounded-lg px-3 py-2 cursor-pointer"
+                style={fieldStyle}
+              >
+                <input
+                  type="radio"
+                  name="expirePolicy"
+                  className="mt-0.5"
+                  checked={form.expirePreviousOnRefresh === false}
+                  onChange={() => setForm({ ...form, expirePreviousOnRefresh: false })}
+                />
+                <span className="text-sm" style={{ color: 'var(--text-1)' }}>
+                  점진적 — 일정 기간 지난 영상만 자동 삭제
+                  <span
+                    className="block text-[11px] mt-0.5"
+                    style={{ color: 'var(--text-3)' }}
+                  >
+                    기존 영상도 N일 동안 유지하면서 새 영상을 추가.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </Field>
+
+          <Field
+            label="🗑️ 자동 삭제 기준 (점진적 모드 전용)"
+            help='위에서 "점진적"을 선택했을 때만 작동. N일 이상 지난 자동 영상은 다음 큐레이션 때 제거.'
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={form.autoVideoMaxAgeDays}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    autoVideoMaxAgeDays: parseInt(e.target.value, 10) || 0,
+                  })
+                }
+                disabled={form.expirePreviousOnRefresh}
+                className="w-full rounded-lg px-3 py-2 text-sm disabled:opacity-40"
+                style={fieldStyle}
+              />
+              <span className="text-sm" style={{ color: 'var(--text-3)' }}>일 지난 영상</span>
             </div>
           </Field>
         </div>

@@ -129,30 +129,57 @@ const DEFAULT_CONFIG: YoutubeCurationConfig = {
 /**
  * platformConfig/youtubeCuration doc fetch.
  * 없거나 일부 필드가 비면 DEFAULT_CONFIG 값으로 보충.
+ * lastRunAt도 함께 반환 (refreshIntervalDays 검사용).
  */
-async function loadCurationConfig(): Promise<YoutubeCurationConfig> {
+async function loadCurationConfig(): Promise<{
+  config: YoutubeCurationConfig;
+  lastRunAt: admin.firestore.Timestamp | null;
+}> {
   try {
     const snap = await db().collection('platformConfig').doc('youtubeCuration').get();
-    if (!snap.exists) return { ...DEFAULT_CONFIG };
+    if (!snap.exists) return { config: { ...DEFAULT_CONFIG }, lastRunAt: null };
     const data = snap.data() ?? {};
+    const lastRunAt =
+      data.lastRunAt instanceof Timestamp ? (data.lastRunAt as admin.firestore.Timestamp) : null;
     return {
-      includeKeywords: Array.isArray(data.includeKeywords)
-        ? (data.includeKeywords as string[])
-        : DEFAULT_CONFIG.includeKeywords,
-      excludeKeywords: Array.isArray(data.excludeKeywords)
-        ? (data.excludeKeywords as string[])
-        : DEFAULT_CONFIG.excludeKeywords,
-      maxResults: clampInt(data.maxResults, 5, 50, DEFAULT_CONFIG.maxResults),
-      scheduleHourKst: clampInt(data.scheduleHourKst, 0, 23, DEFAULT_CONFIG.scheduleHourKst),
-      excludeShorts:
-        typeof data.excludeShorts === 'boolean' ? data.excludeShorts : DEFAULT_CONFIG.excludeShorts,
-      minDurationSec: clampInt(data.minDurationSec, 0, 7200, DEFAULT_CONFIG.minDurationSec),
-      maxAgeDays: clampInt(data.maxAgeDays, 1, 365, DEFAULT_CONFIG.maxAgeDays),
+      config: {
+        includeKeywords: Array.isArray(data.includeKeywords)
+          ? (data.includeKeywords as string[])
+          : DEFAULT_CONFIG.includeKeywords,
+        excludeKeywords: Array.isArray(data.excludeKeywords)
+          ? (data.excludeKeywords as string[])
+          : DEFAULT_CONFIG.excludeKeywords,
+        maxResults: clampInt(data.maxResults, 5, 50, DEFAULT_CONFIG.maxResults),
+        scheduleHourKst: clampInt(data.scheduleHourKst, 0, 23, DEFAULT_CONFIG.scheduleHourKst),
+        excludeShorts:
+          typeof data.excludeShorts === 'boolean'
+            ? data.excludeShorts
+            : DEFAULT_CONFIG.excludeShorts,
+        minDurationSec: clampInt(data.minDurationSec, 0, 7200, DEFAULT_CONFIG.minDurationSec),
+        maxAgeDays: clampInt(data.maxAgeDays, 1, 365, DEFAULT_CONFIG.maxAgeDays),
+        refreshIntervalDays: clampInt(
+          data.refreshIntervalDays,
+          1,
+          90,
+          DEFAULT_CONFIG.refreshIntervalDays,
+        ),
+        expirePreviousOnRefresh:
+          typeof data.expirePreviousOnRefresh === 'boolean'
+            ? data.expirePreviousOnRefresh
+            : DEFAULT_CONFIG.expirePreviousOnRefresh,
+        autoVideoMaxAgeDays: clampInt(
+          data.autoVideoMaxAgeDays,
+          1,
+          90,
+          DEFAULT_CONFIG.autoVideoMaxAgeDays,
+        ),
+      },
+      lastRunAt,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn(`curation config 읽기 실패 — default 사용: ${msg}`);
-    return { ...DEFAULT_CONFIG };
+    return { config: { ...DEFAULT_CONFIG }, lastRunAt: null };
   }
 }
 
@@ -326,10 +353,13 @@ async function writeLastRun(result: CurationResult): Promise<void> {
 
 // ─── 메인 로직 (onSchedule + onRequest + onCall 공용) ───────────────
 
-export async function runCuration(apiKey: string): Promise<CurationResult> {
+export async function runCuration(
+  apiKey: string,
+  opts: { force?: boolean } = {},
+): Promise<CurationResult> {
   const startedAt = Date.now();
   const firestore = db();
-  const config = await loadCurationConfig();
+  const { config, lastRunAt } = await loadCurationConfig();
   const cutoffMs = Date.now() - config.maxAgeDays * 86_400_000;
 
   const filtered: CurationFilterStats = {
@@ -339,6 +369,31 @@ export async function runCuration(apiKey: string): Promise<CurationResult> {
     minDurationExcluded: 0,
     maxResultsCut: 0,
   };
+
+  // 0. refreshIntervalDays 검사 — 마지막 실행 이후 N일 안 지났으면 skip
+  //    수동 트리거(force=true)는 무시.
+  if (!opts.force && config.refreshIntervalDays > 1 && lastRunAt) {
+    const intervalMs = config.refreshIntervalDays * 86_400_000;
+    const elapsed = Date.now() - lastRunAt.toMillis();
+    if (elapsed < intervalMs) {
+      const elapsedH = Math.floor(elapsed / 3_600_000);
+      const totalH = config.refreshIntervalDays * 24;
+      logger.info(
+        `[curate] refresh interval not yet elapsed (${elapsedH}h / ${totalH}h) — skip`,
+      );
+      return {
+        channelsActive: 0,
+        videoIdsCollected: 0,
+        apiResponses: 0,
+        upserted: 0,
+        expiredDeleted: 0,
+        durationMs: Date.now() - startedAt,
+        filtered,
+        skippedBySchedule: true,
+        message: `교체 주기 미도달 (${elapsedH}h / ${totalH}h)`,
+      };
+    }
+  }
 
   // 1. 활성 유튜버 channelId 수집
   const youtubersSnap = await firestore
@@ -474,10 +529,39 @@ export async function runCuration(apiKey: string): Promise<CurationResult> {
   const top = scored.slice(0, config.maxResults);
   filtered.maxResultsCut = Math.max(0, beforeCut - top.length);
 
-  // 6. upsert (manual 보호)
-  let upsertedCount = 0;
   const videosCol = firestore.collection('hotYoutubeVideos');
   const BATCH_SIZE = 400;
+
+  // 6-pre. expirePreviousOnRefresh=true — 새 upsert 직전에 기존 auto doc 전부 삭제.
+  //        source !== 'auto' 또는 manualLocked === true 는 절대 삭제하지 않음.
+  let deletedCount = 0;
+  if (config.expirePreviousOnRefresh) {
+    const oldAutoSnap = await videosCol.where('source', '==', 'auto').get();
+    const protectedFilter = (d: admin.firestore.QueryDocumentSnapshot) => {
+      const data = d.data() as { source?: string; manualLocked?: boolean };
+      return data.source === 'auto' && data.manualLocked !== true;
+    };
+    const toWipe = oldAutoSnap.docs.filter(protectedFilter);
+    if (toWipe.length > 0) {
+      let wipeBatch = firestore.batch();
+      let wipeCount = 0;
+      for (const d of toWipe) {
+        wipeBatch.delete(d.ref);
+        wipeCount++;
+        deletedCount++;
+        if (wipeCount >= BATCH_SIZE) {
+          await wipeBatch.commit();
+          wipeBatch = firestore.batch();
+          wipeCount = 0;
+        }
+      }
+      if (wipeCount > 0) await wipeBatch.commit();
+      logger.info(`[curate] expirePreviousOnRefresh — 기존 auto ${deletedCount}개 삭제`);
+    }
+  }
+
+  // 6. upsert (manual 보호)
+  let upsertedCount = 0;
   let batch = firestore.batch();
   let batchCount = 0;
 
@@ -504,8 +588,9 @@ export async function runCuration(apiKey: string): Promise<CurationResult> {
     const docRef = videosCol.doc(item.id);
     const existing = await docRef.get();
     if (existing.exists) {
-      const data = existing.data() as { source?: string };
-      if (data.source !== 'auto') continue; // manual 보호
+      const data = existing.data() as { source?: string; manualLocked?: boolean };
+      // manual doc 보호 — source !== 'auto' 이거나 manualLocked === true
+      if (data.source !== 'auto' || data.manualLocked === true) continue;
     }
     keepIds.add(item.id);
 
@@ -524,6 +609,7 @@ export async function runCuration(apiKey: string): Promise<CurationResult> {
       source: 'auto',
       isActive: true,
       order: 0,
+      curatedAt: FieldValue.serverTimestamp(),
       lastCuratedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
@@ -536,31 +622,46 @@ export async function runCuration(apiKey: string): Promise<CurationResult> {
   }
   await flushBatch();
 
-  // 7. 만료 또는 컷오프된 auto doc 삭제
-  const autoSnap = await videosCol.where('source', '==', 'auto').get();
-  const toDelete = autoSnap.docs.filter((d) => {
-    const data = d.data() as { publishedAt?: admin.firestore.Timestamp };
-    const ts = data.publishedAt;
-    // 만료 (maxAgeDays 초과) OR 이번 큐레이션에서 keep되지 않은 doc
-    if (!ts) return !keepIds.has(d.id);
-    return ts.toMillis() < cutoffMs || !keepIds.has(d.id);
-  });
-
-  let deletedCount = 0;
-  if (toDelete.length > 0) {
-    let delBatch = firestore.batch();
-    let delCount = 0;
-    for (const d of toDelete) {
-      delBatch.delete(d.ref);
-      delCount++;
-      deletedCount++;
-      if (delCount >= BATCH_SIZE) {
-        await delBatch.commit();
-        delBatch = firestore.batch();
-        delCount = 0;
+  // 7. 만료 처리
+  //   - expirePreviousOnRefresh=true: 이미 위에서 wipe 했으므로 추가 작업 없음.
+  //   - expirePreviousOnRefresh=false: autoVideoMaxAgeDays 기반 점진 만료.
+  //     manual doc(source !== 'auto' 또는 manualLocked) 은 절대 건드리지 않음.
+  if (!config.expirePreviousOnRefresh) {
+    const maxAgeDays = config.autoVideoMaxAgeDays ?? DEFAULT_CONFIG.autoVideoMaxAgeDays;
+    const ageCutoffMs = Date.now() - maxAgeDays * 86_400_000;
+    const autoSnap = await videosCol.where('source', '==', 'auto').get();
+    const toDelete = autoSnap.docs.filter((d) => {
+      const data = d.data() as {
+        source?: string;
+        manualLocked?: boolean;
+        curatedAt?: admin.firestore.Timestamp;
+        lastCuratedAt?: admin.firestore.Timestamp;
+        publishedAt?: admin.firestore.Timestamp;
+      };
+      // manual 보호
+      if (data.source !== 'auto' || data.manualLocked === true) return false;
+      // 이번 큐레이션에서 다시 keep 되었으면 유지
+      if (keepIds.has(d.id)) return false;
+      // 큐레이션 시각 기준 점진 만료
+      const refTs = data.curatedAt ?? data.lastCuratedAt ?? data.publishedAt ?? null;
+      if (!refTs) return true; // 시각 없으면 안전하게 정리
+      return refTs.toMillis() < ageCutoffMs;
+    });
+    if (toDelete.length > 0) {
+      let delBatch = firestore.batch();
+      let delCount = 0;
+      for (const d of toDelete) {
+        delBatch.delete(d.ref);
+        delCount++;
+        deletedCount++;
+        if (delCount >= BATCH_SIZE) {
+          await delBatch.commit();
+          delBatch = firestore.batch();
+          delCount = 0;
+        }
       }
+      if (delCount > 0) await delBatch.commit();
     }
-    if (delCount > 0) await delBatch.commit();
   }
 
   logger.info(
@@ -605,7 +706,7 @@ export const curateHotVideos = onSchedule(
       return;
     }
 
-    const config = await loadCurationConfig();
+    const { config } = await loadCurationConfig();
     const nowHour = currentKstHour();
     if (nowHour !== config.scheduleHourKst) {
       logger.info(
@@ -640,7 +741,7 @@ export const triggerCurateHotVideos = onRequest(
       return;
     }
     try {
-      const result = await runCuration(apiKey);
+      const result = await runCuration(apiKey, { force: true });
       res.json({ ok: true, result });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

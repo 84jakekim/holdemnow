@@ -37,7 +37,8 @@ export const triggerYoutubeCurationNow = onCall(
     }
 
     try {
-      const result = await runCuration(apiKey);
+      // 수동 트리거는 refreshIntervalDays 검사를 우회 (force).
+      const result = await runCuration(apiKey, { force: true });
       logger.info(
         `즉시 큐레이션 by ${req.auth.uid} — upsert=${result.upserted}, deleted=${result.expiredDeleted}`,
       );
