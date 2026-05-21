@@ -23,6 +23,7 @@ import {
   type TournamentTemplate,
   subscribeTemplates,
   posterStyleFor,
+  fmtBuyIn,
 } from '@/lib/templates';
 
 interface Props {
@@ -730,8 +731,8 @@ function NewLiveModal({
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-gray-900">{t.name}</div>
                   <div className="text-[11px] text-gray-500">
-                    바이인 ₩{t.buyIn.toLocaleString()} · {t.totalPlayers}명 ·{' '}
-                    {t.blindStructure.length}레벨
+                    바이인 {fmtBuyIn(t.buyIn)} · {t.totalPlayers}명 ·{' '}
+                    {t.blindStructure.filter((b) => !b.isBreak).length}레벨
                   </div>
                 </div>
               </button>

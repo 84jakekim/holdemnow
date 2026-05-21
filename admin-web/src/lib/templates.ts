@@ -43,6 +43,27 @@ export interface TournamentTemplate {
   lateRegEndLevel: number;
   posterStyle: string;
   blindStructure: BlindLevel[];
+  /** 앤티 사용 여부 토글. OFF면 저장 시 모든 레벨 ante=0. */
+  anteEnabled?: boolean;
+}
+
+/** 1티켓 = 10,000원 (사용자 정의, 부산·경남 표준). UI에서만 T 단위 노출, 저장은 원 단위 유지. */
+export const TICKET_WON = 10000;
+
+/** 원 → 티켓 (정수 표시. 1만원 단위 가정). */
+export function wonToTickets(won: number): number {
+  return Math.round((won || 0) / TICKET_WON);
+}
+
+/** 티켓 → 원. */
+export function ticketsToWon(tickets: number): number {
+  return Math.max(0, Math.floor(tickets || 0)) * TICKET_WON;
+}
+
+/** 표시용 — "3T (₩30,000)" 같은 라벨. */
+export function fmtBuyIn(won: number): string {
+  const t = wonToTickets(won);
+  return `${t}T (₩${(won || 0).toLocaleString()})`;
 }
 
 export function templatesCollection(storeId: string) {
@@ -103,13 +124,23 @@ export async function duplicateTemplate(storeId: string, templateId: string) {
   });
 }
 
+/** 신규 템플릿 기본 블라인드 구조 — 100 단위 +linear, 1레벨당 10분(600초). */
 export const DEFAULT_BLIND_STRUCTURE: BlindLevel[] = [
-  { level: 1, sb: 100, bb: 200, ante: 0, durationSec: 1200 },
-  { level: 2, sb: 150, bb: 300, ante: 0, durationSec: 1200 },
-  { level: 3, sb: 200, bb: 400, ante: 50, durationSec: 1200 },
-  { level: 4, sb: 300, bb: 600, ante: 75, durationSec: 1200 },
-  { level: 5, sb: 400, bb: 800, ante: 100, durationSec: 1200 },
+  { level: 1, sb: 100, bb: 200, ante: 0, durationSec: 600 },
+  { level: 2, sb: 200, bb: 400, ante: 0, durationSec: 600 },
+  { level: 3, sb: 300, bb: 600, ante: 0, durationSec: 600 },
+  { level: 4, sb: 400, bb: 800, ante: 0, durationSec: 600 },
+  { level: 5, sb: 500, bb: 1000, ante: 0, durationSec: 600 },
 ];
+
+/** 신규 레벨 추가 시 기본 시간(초) — 10분. */
+export const DEFAULT_LEVEL_DURATION_SEC = 600;
+
+/** 신규 브레이크 추가 시 기본 시간(초) — 10분 (포커 표준 권장). */
+export const DEFAULT_BREAK_DURATION_SEC = 600;
+
+/** SB 증분 단위 — "10단위·1단위 블라인드업은 없다" 사용자 정책. */
+export const BLIND_STEP = 100;
 
 export const POSTER_STYLES = [
   { value: 'poster-dark', label: 'Dark', bg: 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%)', color: '#fff' },

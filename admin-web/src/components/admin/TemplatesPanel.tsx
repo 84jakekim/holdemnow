@@ -11,9 +11,16 @@ import {
   deleteTemplate,
   duplicateTemplate,
   DEFAULT_BLIND_STRUCTURE,
+  DEFAULT_LEVEL_DURATION_SEC,
+  DEFAULT_BREAK_DURATION_SEC,
+  BLIND_STEP,
   POSTER_STYLES,
   posterStyleFor,
   TYPE_LABELS,
+  TICKET_WON,
+  wonToTickets,
+  ticketsToWon,
+  fmtBuyIn,
 } from '@/lib/templates';
 
 interface Props {
@@ -131,7 +138,10 @@ function TemplateCard({
   onDelete: () => void;
 }) {
   const poster = posterStyleFor(tpl.posterStyle);
-  const firstLevel = tpl.blindStructure?.[0];
+  // 첫 블라인드(브레이크 제외)와 일반 레벨 수 분리 표시
+  const playLevels = tpl.blindStructure.filter((b) => !b.isBreak);
+  const breakCount = tpl.blindStructure.length - playLevels.length;
+  const firstBlind = playLevels[0];
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 flex gap-4 items-center">
       <div
@@ -144,11 +154,15 @@ function TemplateCard({
         <div className="font-bold text-gray-900 mb-1">{tpl.name}</div>
         <div className="text-xs text-gray-500 leading-relaxed">
           <span className="text-gray-900 font-bold">{TYPE_LABELS[tpl.type]}</span> · 바이인{' '}
-          <span className="font-mono">₩{tpl.buyIn.toLocaleString()}</span> · {tpl.totalPlayers}명
+          <span className="font-mono">{fmtBuyIn(tpl.buyIn)}</span> · {tpl.totalPlayers}명
           <br />
-          {tpl.blindStructure.length}레벨 · 시작{' '}
+          {playLevels.length}레벨
+          {breakCount > 0 && (
+            <span className="text-amber-700 font-bold"> · 휴식 {breakCount}회</span>
+          )}{' '}
+          · 시작{' '}
           <span className="font-mono">
-            {firstLevel?.sb}/{firstLevel?.bb}
+            {firstBlind?.sb}/{firstBlind?.bb}
           </span>{' '}
           · 늦은 등록 Lv {tpl.lateRegEndLevel}까지
         </div>
@@ -168,6 +182,29 @@ function TemplateCard({
   );
 }
 
+/** 분(min) → 초(sec) 변환. NaN/음수 보호. */
+function minToSec(min: number): number {
+  const n = Math.max(0, Math.floor(min || 0));
+  return n * 60;
+}
+
+/** 초(sec) → 분(min) 표기용. 반올림 (분 단위 입력으로 회귀할 때 정수성 유지). */
+function secToMin(sec: number): number {
+  return Math.max(0, Math.round((sec || 0) / 60));
+}
+
+/** 100 단위로 반올림(min 100). */
+function snap100(n: number): number {
+  const v = Math.round(Math.max(0, n) / BLIND_STEP) * BLIND_STEP;
+  return Math.max(BLIND_STEP, v);
+}
+
+/** ante 기본값 추천 — BB의 1/10, 100 단위로 반올림. */
+function suggestAnte(bb: number): number {
+  const raw = Math.round(bb / 10);
+  return Math.max(BLIND_STEP, Math.round(raw / BLIND_STEP) * BLIND_STEP);
+}
+
 function TemplateEditor({
   initial,
   onSave,
@@ -179,6 +216,10 @@ function TemplateEditor({
   onCancel: () => void;
   onDelete: (() => Promise<void>) | null;
 }) {
+  // 기존 데이터에 anteEnabled 없으면 ante>0이 하나라도 있는지로 추론
+  const initialAnteEnabled =
+    initial?.anteEnabled ?? (initial ? initial.blindStructure.some((b) => (b.ante || 0) > 0) : false);
+
   const [form, setForm] = useState<Omit<TournamentTemplate, 'id'>>(
     initial
       ? {
@@ -192,11 +233,12 @@ function TemplateEditor({
           lateRegEndLevel: initial.lateRegEndLevel,
           posterStyle: initial.posterStyle,
           blindStructure: initial.blindStructure,
+          anteEnabled: initialAnteEnabled,
         }
       : {
           name: '',
           type: 'freezeout',
-          buyIn: 50000,
+          buyIn: 5 * TICKET_WON, // 5T = ₩50,000
           guarantee: 0,
           totalPlayers: 20,
           prizePool: 0,
@@ -204,6 +246,7 @@ function TemplateEditor({
           lateRegEndLevel: 3,
           posterStyle: 'poster-dark',
           blindStructure: DEFAULT_BLIND_STRUCTURE.map((b) => ({ ...b })),
+          anteEnabled: false,
         },
   );
   const [saving, setSaving] = useState(false);
@@ -212,41 +255,105 @@ function TemplateEditor({
   const update = <K extends keyof typeof form>(k: K, v: typeof form[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
+  // 블라인드/브레이크 공통 수정. SB 변경 시 BB = SB*2 자동.
   const updateBlind = (idx: number, k: keyof BlindLevel, v: number) => {
     setForm((f) => ({
       ...f,
-      blindStructure: f.blindStructure.map((b, i) => (i === idx ? { ...b, [k]: v } : b)),
+      blindStructure: f.blindStructure.map((b, i) => {
+        if (i !== idx) return b;
+        if (k === 'sb' && !b.isBreak) {
+          const sb = snap100(v);
+          return { ...b, sb, bb: sb * 2 };
+        }
+        if (k === 'bb' && !b.isBreak) {
+          return { ...b, bb: snap100(v) };
+        }
+        if (k === 'ante' && !b.isBreak) {
+          // ante는 100 단위 강제 + 0 허용 (snap100은 min 100이라 0 별도 처리)
+          const n = Math.max(0, Math.round((v || 0) / BLIND_STEP) * BLIND_STEP);
+          return { ...b, ante: n };
+        }
+        return { ...b, [k]: v };
+      }),
     }));
   };
+
+  // 일반 레벨 추가 — 마지막 일반 레벨 기준 +100, BB=SB*2
   const addBlind = () => {
     setForm((f) => {
-      const last = f.blindStructure[f.blindStructure.length - 1] || {
-        level: 0,
-        sb: 100,
-        bb: 200,
-        ante: 0,
-        durationSec: 1200,
-      };
+      const lastPlay = [...f.blindStructure].reverse().find((b) => !b.isBreak);
+      const baseSb = lastPlay ? lastPlay.sb : 100;
+      const newSb = snap100(baseSb + BLIND_STEP);
+      const newBb = newSb * 2;
+      const newAnte = f.anteEnabled ? suggestAnte(newBb) : 0;
+      const dur = lastPlay?.durationSec || DEFAULT_LEVEL_DURATION_SEC;
       return {
         ...f,
         blindStructure: [
           ...f.blindStructure,
           {
-            level: last.level + 1,
-            sb: Math.round(last.sb * 1.5),
-            bb: Math.round(last.bb * 1.5),
-            ante: Math.round((last.ante || 0) * 1.3),
-            durationSec: last.durationSec,
+            level: f.blindStructure.length + 1, // 임시; 최종 reindex는 저장 시점
+            sb: newSb,
+            bb: newBb,
+            ante: newAnte,
+            durationSec: dur,
           },
         ],
       };
     });
   };
+
+  // 브레이크 추가 — 맨 끝에 삽입 (이후 ↑로 옮길 수 있음)
+  const addBreak = () => {
+    setForm((f) => ({
+      ...f,
+      blindStructure: [
+        ...f.blindStructure,
+        {
+          level: f.blindStructure.length + 1,
+          sb: 0,
+          bb: 0,
+          ante: 0,
+          durationSec: DEFAULT_BREAK_DURATION_SEC,
+          isBreak: true,
+        },
+      ],
+    }));
+  };
+
   const removeBlind = (idx: number) => {
     setForm((f) => ({
       ...f,
-      blindStructure: f.blindStructure.filter((_, i) => i !== idx).map((b, i) => ({ ...b, level: i + 1 })),
+      blindStructure: f.blindStructure.filter((_, i) => i !== idx),
     }));
+  };
+
+  const moveBlind = (idx: number, dir: -1 | 1) => {
+    setForm((f) => {
+      const next = idx + dir;
+      if (next < 0 || next >= f.blindStructure.length) return f;
+      const arr = [...f.blindStructure];
+      [arr[idx], arr[next]] = [arr[next], arr[idx]];
+      return { ...f, blindStructure: arr };
+    });
+  };
+
+  // 앤티 토글
+  const toggleAnte = () => {
+    setForm((f) => {
+      const next = !f.anteEnabled;
+      return {
+        ...f,
+        anteEnabled: next,
+        blindStructure: f.blindStructure.map((b) => {
+          if (b.isBreak) return b;
+          if (!next) return { ...b, ante: 0 };
+          // ON으로 켜질 때, ante 비어있으면 추천값 자동 채움
+          if ((b.ante || 0) === 0) return { ...b, ante: suggestAnte(b.bb) };
+          return b;
+        }),
+      };
+    });
   };
 
   const valid = form.name.trim().length > 0 && form.blindStructure.length > 0;
@@ -258,19 +365,36 @@ function TemplateEditor({
     try {
       await onSave({
         ...form,
-        blindStructure: form.blindStructure.map((b, i) => ({
-          level: i + 1,
-          sb: Math.max(1, b.sb),
-          bb: Math.max(1, b.bb),
-          ante: Math.max(0, b.ante || 0),
-          durationSec: Math.max(30, b.durationSec || 1200),
-        })),
+        blindStructure: form.blindStructure.map((b, i) => {
+          if (b.isBreak) {
+            return {
+              level: i + 1, // 브레이크도 sequence 유지 (LivePanel/display 모두 level 기반)
+              sb: 0,
+              bb: 0,
+              ante: 0,
+              durationSec: Math.max(60, b.durationSec || DEFAULT_BREAK_DURATION_SEC),
+              isBreak: true,
+            };
+          }
+          return {
+            level: i + 1,
+            sb: snap100(b.sb),
+            bb: snap100(b.bb || b.sb * 2),
+            ante: form.anteEnabled
+              ? Math.max(0, Math.round((b.ante || 0) / BLIND_STEP) * BLIND_STEP)
+              : 0,
+            durationSec: Math.max(60, b.durationSec || DEFAULT_LEVEL_DURATION_SEC),
+          };
+        }),
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
       setSaving(false);
     }
   };
+
+  // 바이인 T 단위 입력
+  const buyInTickets = wonToTickets(form.buyIn);
 
   return (
     <div className="max-w-2xl">
@@ -317,21 +441,41 @@ function TemplateEditor({
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <Field label="바이인 (₩)">
-            <input
-              type="number"
-              className="form-input font-mono"
-              value={form.buyIn}
-              onChange={(e) => update('buyIn', parseInt(e.target.value) || 0)}
-            />
+          <Field label="바이인 (T · 1T=1만원)">
+            <div className="relative">
+              <input
+                type="number"
+                min={1}
+                step={1}
+                className="form-input font-mono pr-7"
+                value={buyInTickets}
+                onChange={(e) => update('buyIn', ticketsToWon(parseInt(e.target.value) || 0))}
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
+                T
+              </span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1 font-mono">
+              ≈ ₩{form.buyIn.toLocaleString()}
+            </div>
           </Field>
-          <Field label="게런티 (₩)">
-            <input
-              type="number"
-              className="form-input font-mono"
-              value={form.guarantee}
-              onChange={(e) => update('guarantee', parseInt(e.target.value) || 0)}
-            />
+          <Field label="게런티 (T)">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className="form-input font-mono pr-7"
+                value={wonToTickets(form.guarantee)}
+                onChange={(e) => update('guarantee', ticketsToWon(parseInt(e.target.value) || 0))}
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
+                T
+              </span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1 font-mono">
+              ≈ ₩{form.guarantee.toLocaleString()}
+            </div>
           </Field>
           <Field label="인원">
             <input
@@ -364,42 +508,182 @@ function TemplateEditor({
           </Field>
         </div>
 
+        {/* 앤티 on/off 토글 */}
+        <div className="bg-white border-[1.5px] border-gray-200 rounded-xl px-3.5 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-extrabold text-gray-900">앤티 사용 여부</div>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              {form.anteEnabled
+                ? '각 레벨 ante 입력 활성. 기본값은 BB의 1/10(100 단위 반올림).'
+                : '모든 레벨 ante = 0. 입력란 숨김.'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={toggleAnte}
+            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+              form.anteEnabled ? 'bg-gray-900' : 'bg-gray-300'
+            }`}
+            aria-pressed={form.anteEnabled}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                form.anteEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
         {/* 블라인드 구조 */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] font-bold text-gray-500 tracking-wider">
-              블라인드 구조 ({form.blindStructure.length}레벨)
+              블라인드 구조 ({form.blindStructure.filter((b) => !b.isBreak).length}레벨
+              {form.blindStructure.some((b) => b.isBreak)
+                ? ` + 휴식 ${form.blindStructure.filter((b) => b.isBreak).length}`
+                : ''}
+              )
             </div>
-            <button
-              onClick={addBlind}
-              className="bg-black text-white text-[10px] font-bold px-2 py-1 rounded"
-            >
-              + 레벨 추가
-            </button>
+            <div className="flex gap-1.5">
+              <button
+                onClick={addBreak}
+                className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-1 rounded border border-amber-200"
+              >
+                + 휴식 추가
+              </button>
+              <button
+                onClick={addBlind}
+                className="bg-black text-white text-[10px] font-bold px-2 py-1 rounded"
+              >
+                + 레벨 추가
+              </button>
+            </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-3 max-h-72 overflow-y-auto">
-            <div className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_28px] gap-2 text-[10px] font-bold text-gray-500 tracking-wider pb-2 border-b border-gray-100">
+          <div className="bg-white border border-gray-200 rounded-lg p-3 max-h-80 overflow-y-auto">
+            {/* 헤더 — anteEnabled 따라 컬럼 변동 */}
+            <div
+              className={`grid gap-2 text-[10px] font-bold text-gray-500 tracking-wider pb-2 border-b border-gray-100 items-center ${
+                form.anteEnabled
+                  ? 'grid-cols-[24px_28px_1fr_1fr_1fr_60px_50px]'
+                  : 'grid-cols-[24px_28px_1fr_1fr_60px_50px]'
+              }`}
+            >
+              <div></div>
               <div className="text-center">Lv</div>
-              <div>SB</div>
+              <div>SB (100↑)</div>
               <div>BB</div>
-              <div>Ante</div>
-              <div>시간(초)</div>
+              {form.anteEnabled && <div>Ante</div>}
+              <div className="text-center">분</div>
               <div></div>
             </div>
-            {form.blindStructure.map((b, idx) => (
-              <div key={idx} className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_28px] gap-2 items-center py-1 border-b border-gray-50">
-                <div className="text-center font-mono font-bold text-xs">{idx + 1}</div>
-                <input type="number" className="form-input text-xs font-mono" value={b.sb} onChange={(e) => updateBlind(idx, 'sb', parseInt(e.target.value) || 0)} />
-                <input type="number" className="form-input text-xs font-mono" value={b.bb} onChange={(e) => updateBlind(idx, 'bb', parseInt(e.target.value) || 0)} />
-                <input type="number" className="form-input text-xs font-mono" value={b.ante || 0} onChange={(e) => updateBlind(idx, 'ante', parseInt(e.target.value) || 0)} />
-                <input type="number" className="form-input text-xs font-mono" value={b.durationSec} onChange={(e) => updateBlind(idx, 'durationSec', parseInt(e.target.value) || 60)} />
-                <button onClick={() => removeBlind(idx)} className="text-red-500 font-bold text-base">
-                  ×
-                </button>
-              </div>
-            ))}
+            {form.blindStructure.map((b, idx) => {
+              const isBreak = b.isBreak === true;
+              const minVal = secToMin(b.durationSec);
+              return (
+                <div
+                  key={idx}
+                  className={`grid gap-2 items-center py-1 border-b border-gray-50 ${
+                    isBreak ? 'bg-amber-50/50' : ''
+                  } ${
+                    form.anteEnabled
+                      ? 'grid-cols-[24px_28px_1fr_1fr_1fr_60px_50px]'
+                      : 'grid-cols-[24px_28px_1fr_1fr_60px_50px]'
+                  }`}
+                >
+                  {/* 순서 조정 화살표 */}
+                  <div className="flex flex-col items-center">
+                    <button
+                      type="button"
+                      onClick={() => moveBlind(idx, -1)}
+                      disabled={idx === 0}
+                      className="text-[9px] leading-none text-gray-400 hover:text-gray-900 disabled:opacity-20"
+                      title="위로"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveBlind(idx, +1)}
+                      disabled={idx === form.blindStructure.length - 1}
+                      className="text-[9px] leading-none text-gray-400 hover:text-gray-900 disabled:opacity-20"
+                      title="아래로"
+                    >
+                      ▼
+                    </button>
+                  </div>
+                  <div
+                    className={`text-center font-mono font-bold text-xs ${
+                      isBreak ? 'text-amber-700' : ''
+                    }`}
+                  >
+                    {isBreak ? '☕' : idx + 1}
+                  </div>
+                  {isBreak ? (
+                    <div
+                      className={`text-xs font-bold text-amber-800 ${
+                        form.anteEnabled ? 'col-span-3' : 'col-span-2'
+                      }`}
+                    >
+                      휴식 (BREAK)
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="number"
+                        min={BLIND_STEP}
+                        step={BLIND_STEP}
+                        className="form-input text-xs font-mono"
+                        value={b.sb}
+                        onChange={(e) =>
+                          updateBlind(idx, 'sb', parseInt(e.target.value) || BLIND_STEP)
+                        }
+                      />
+                      <input
+                        type="number"
+                        min={BLIND_STEP}
+                        step={BLIND_STEP}
+                        className="form-input text-xs font-mono"
+                        value={b.bb}
+                        onChange={(e) =>
+                          updateBlind(idx, 'bb', parseInt(e.target.value) || BLIND_STEP * 2)
+                        }
+                      />
+                      {form.anteEnabled && (
+                        <input
+                          type="number"
+                          min={0}
+                          step={BLIND_STEP}
+                          className="form-input text-xs font-mono"
+                          value={b.ante || 0}
+                          onChange={(e) => updateBlind(idx, 'ante', parseInt(e.target.value) || 0)}
+                        />
+                      )}
+                    </>
+                  )}
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    className="form-input text-xs font-mono"
+                    value={minVal}
+                    onChange={(e) =>
+                      updateBlind(idx, 'durationSec', minToSec(parseInt(e.target.value) || 1))
+                    }
+                  />
+                  <button
+                    onClick={() => removeBlind(idx)}
+                    className="text-red-500 font-bold text-base"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          <div className="text-[10px] text-gray-400 mt-1">💡 시간은 초 단위. 일반 운영 1200(20분), 터보 600(10분).</div>
+          <div className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+            💡 시간은 <b>분</b> 단위 (예: 10, 15, 20). SB는 100 단위, BB는 자동으로 SB×2.
+            <br />☕ 휴식은 ↑/↓로 원하는 위치에 끼워 넣을 수 있어요.
+          </div>
         </div>
 
         <div className="flex gap-2 pt-2">
