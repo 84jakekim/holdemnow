@@ -20,6 +20,15 @@ import { db, storage } from '@/lib/firebase';
 import { stripUndefined } from '@/lib/firestoreUtil';
 import { extractYoutubeVideoId, youtubeThumbnailUrl, fetchYoutubeChannelMeta } from '@/lib/youtube';
 import type { HomeAd, HotYoutubeVideo, HotYoutuber } from '@/lib/homeContent';
+import {
+  subscribeCurationConfig,
+  saveCurationConfig,
+  parseKeywordsText,
+  formatKeywordsText,
+  DEFAULT_CURATION_CONFIG,
+  type YoutubeCurationConfig,
+} from '@/lib/curationConfig';
+import Link from 'next/link';
 
 // ─── homeContentCounts 동기화 ─────────────────────────────────
 
@@ -431,6 +440,206 @@ function fmtViewCount(n?: number): string {
   return String(n);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+ * 인기 유튜브 영상 — 자동 큐레이션 설정 카드 (인라인)
+ *
+ * platformConfig/youtubeCuration doc을 실시간 구독·저장.
+ * Cloud Function curateHotVideos가 scheduleHourKst 시각에 이 설정을 읽고
+ * includeKeywords·excludeKeywords·maxResults 등을 적용해 큐레이션 수행.
+ * 고급 설정(refreshInterval, autoVideoMaxAgeDays 등)은 /platform/videos 페이지.
+ * ═══════════════════════════════════════════════════════════════ */
+function CurationSettingsCard() {
+  const [config, setConfig] = useState<YoutubeCurationConfig | null>(null);
+  const [includeText, setIncludeText] = useState<string>('');
+  const [excludeText, setExcludeText] = useState<string>('');
+  const [maxResults, setMaxResults] = useState<number>(20);
+  const [excludeShorts, setExcludeShorts] = useState<boolean>(true);
+  const [scheduleHourKst, setScheduleHourKst] = useState<number>(4);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeCurationConfig(
+      (cfg) => {
+        setConfig(cfg);
+        if (!loaded) {
+          setIncludeText(formatKeywordsText(cfg.includeKeywords));
+          setExcludeText(formatKeywordsText(cfg.excludeKeywords));
+          setMaxResults(cfg.maxResults);
+          setExcludeShorts(cfg.excludeShorts);
+          setScheduleHourKst(cfg.scheduleHourKst);
+          setLoaded(true);
+        }
+      },
+      (e) => setErr(e.message),
+    );
+    return unsub;
+  }, [loaded]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      await saveCurationConfig({
+        includeKeywords: parseKeywordsText(includeText),
+        excludeKeywords: parseKeywordsText(excludeText),
+        maxResults: Math.max(5, Math.min(50, Math.floor(maxResults) || DEFAULT_CURATION_CONFIG.maxResults)),
+        excludeShorts,
+        scheduleHourKst: Math.max(0, Math.min(23, Math.floor(scheduleHourKst))),
+      });
+      setSavedAt(Date.now());
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResetKeywords = () => {
+    if (!window.confirm('포함 키워드를 기본값(홀덤·포커·토너먼트·WSOP 등)으로 되돌릴까요?')) return;
+    setIncludeText(formatKeywordsText(DEFAULT_CURATION_CONFIG.includeKeywords));
+  };
+
+  const lastRunAt = config?.lastRunAt;
+  const lastUpserted = config?.lastRunResult?.upserted;
+
+  return (
+    <div className="mb-5 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5">
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[18px]">⚙️</span>
+            <h3 className="text-[15px] font-extrabold text-amber-900">자동 큐레이션 설정</h3>
+          </div>
+          <p className="text-[11.5px] text-amber-800 mt-1 leading-relaxed">
+            매일 새벽 {config?.scheduleHourKst ?? scheduleHourKst}시 자동 실행 · 포함 키워드 매칭 영상만 추가
+          </p>
+        </div>
+        {lastRunAt && (
+          <div className="text-[11px] text-amber-700 text-right">
+            <div>마지막 실행 {fmtRelative(lastRunAt)}</div>
+            {lastUpserted != null && (
+              <div className="text-[10px] text-amber-600 mt-0.5">{lastUpserted}건 갱신</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {err && (
+        <div className="mb-3 rounded-lg bg-red-100 border border-red-200 px-3 py-2 text-[11.5px] text-red-700">
+          {err}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {/* 포함 키워드 */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11.5px] font-bold text-amber-900">
+              📌 포함 키워드 (영상 제목·설명에 하나라도 있으면 통과)
+            </label>
+            <button
+              onClick={handleResetKeywords}
+              className="text-[10px] font-bold text-amber-700 hover:text-amber-900 underline"
+            >
+              기본값으로
+            </button>
+          </div>
+          <textarea
+            value={includeText}
+            onChange={(e) => setIncludeText(e.target.value)}
+            rows={4}
+            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-[12.5px] font-mono leading-relaxed bg-white"
+            placeholder={'한 줄에 하나씩 또는 쉼표로 구분\n예시:\n홀덤\n포커\nWSOP\nWPT'}
+          />
+          <div className="text-[10.5px] text-amber-700 mt-1">
+            현재 {parseKeywordsText(includeText).length}개 키워드 · 비워두면 키워드 필터 비활성(전체 영상 통과)
+          </div>
+        </div>
+
+        {/* 제외 키워드 */}
+        <div>
+          <label className="block text-[11.5px] font-bold text-amber-900 mb-1.5">
+            🚫 제외 키워드 (있으면 영상 제외)
+          </label>
+          <textarea
+            value={excludeText}
+            onChange={(e) => setExcludeText(e.target.value)}
+            rows={2}
+            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-[12.5px] font-mono leading-relaxed bg-white"
+            placeholder="예시: 도박, 사설, 불법"
+          />
+        </div>
+
+        {/* 갯수 + 시각 + 쇼츠 제외 */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[11px] font-bold text-amber-900 mb-1">
+              🎯 노출 영상 갯수 (5~50)
+            </label>
+            <input
+              type="number"
+              min={5}
+              max={50}
+              value={maxResults}
+              onChange={(e) => setMaxResults(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-amber-300 rounded-lg text-[13px] font-bold bg-white tabular-nums"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold text-amber-900 mb-1">
+              ⏰ 실행 시각 (KST 0~23시)
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={scheduleHourKst}
+              onChange={(e) => setScheduleHourKst(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-amber-300 rounded-lg text-[13px] font-bold bg-white tabular-nums"
+            />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 cursor-pointer w-full px-3 py-2 border border-amber-300 rounded-lg bg-white">
+              <input
+                type="checkbox"
+                checked={excludeShorts}
+                onChange={(e) => setExcludeShorts(e.target.checked)}
+                className="w-4 h-4 accent-amber-600"
+              />
+              <span className="text-[12px] font-bold text-amber-900">쇼츠 제외</span>
+            </label>
+          </div>
+        </div>
+
+        {/* 액션 */}
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <Link
+            href="/platform/videos"
+            className="text-[11.5px] font-bold text-amber-700 hover:text-amber-900 underline"
+          >
+            ⚙️ 고급 설정 + 즉시 실행 →
+          </Link>
+          <div className="flex items-center gap-2">
+            {savedAt != null && Date.now() - savedAt < 4000 && (
+              <span className="text-[11px] text-emerald-700 font-bold">✓ 저장됨</span>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving || !loaded}
+              className="px-5 py-2 bg-amber-600 text-white text-[12.5px] font-extrabold rounded-lg hover:bg-amber-700 disabled:opacity-40 transition"
+            >
+              {saving ? '저장 중…' : '저장'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** relative 날짜 ("N일 전" 등) */
 function fmtRelative(t?: { toMillis(): number } | null): string {
   if (!t) return '';
@@ -491,11 +700,8 @@ function VideosTab() {
 
   return (
     <div>
-      {/* 자동 큐레이션 안내 */}
-      <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 space-y-1">
-        <p>유튜버 탭에 등록된 채널의 최신 영상이 매일 새벽 4시 자동 추가됩니다 (90일 이내, viewCount + 최신순 혼합 점수).</p>
-        <p>자동 큐레이션 영상도 수정·노출 순서 변경이 가능합니다. 수정하면 수동 영상으로 전환됩니다.</p>
-      </div>
+      {/* 자동 큐레이션 설정 (인라인) */}
+      <CurationSettingsCard />
 
       <div className="flex justify-end mb-4">
         <button onClick={() => setEditing('new')} className="px-4 py-2 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition">
