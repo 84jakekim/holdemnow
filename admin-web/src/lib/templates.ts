@@ -45,6 +45,48 @@ export interface TournamentTemplate {
   blindStructure: BlindLevel[];
   /** 앤티 사용 여부 토글. OFF면 저장 시 모든 레벨 ante=0. */
   anteEnabled?: boolean;
+  /** 사장님이 자주 쓰는 템플릿 ★ 표시 — TournamentControlCenter 좌측 사이드의 빠른 선택용 */
+  favorite?: boolean;
+  /** 마지막으로 LIVE 시작에 사용된 시각 — recent 정렬에 사용 (Timestamp.toMillis 호환 number) */
+  lastUsedAt?: number;
+  /** 상금 분배표 — Phase 2.
+   *  ITM(In The Money) 기준 1~N등 비율 분배. 매장 TV·어드민 전용 노출, 사용자 앱에는 노출 안 됨.
+   *  payouts.length 등수만큼. ratio는 [0,1] 합계 1.0. preset='auto'면 ITM 자동 계산. */
+  prizeDistribution?: PrizeDistribution;
+}
+
+/** 상금 분배표 정의. */
+export interface PrizeDistribution {
+  /** 'auto' = ITM 자동 계산 (등록 인원 × 15% 페이드, 상위에 가중), 'custom' = payouts 그대로 사용. */
+  preset: 'auto' | 'custom';
+  /** 등수별 비율 (합계 1.0). 1등이 index 0. */
+  payouts: Array<{ rank: number; ratio: number }>;
+}
+
+/**
+ * ITM 자동 계산 — 등록 인원 기준 ITM 인원과 표준 비율 산출.
+ * Mavens Tournament Payout Calculator 표준을 단순화한 버전:
+ *  - ITM 인원 = max(1, round(totalPlayers * 0.15))
+ *  - 상위 비중: [1등 40%, 2등 25%, 3등 15%, 4등 8%, 5등 5%, 6등 4%, 7등 2%, 8등 1%] 기본.
+ *    ITM 인원이 더 많으면 끝쪽을 균등 분배. 적으면 잘라서 normalize.
+ */
+export function computeAutoITM(totalPlayers: number): Array<{ rank: number; ratio: number }> {
+  const players = Math.max(1, Math.floor(totalPlayers || 0));
+  const itmCount = Math.max(1, Math.round(players * 0.15));
+  const standard = [0.40, 0.25, 0.15, 0.08, 0.05, 0.04, 0.02, 0.01];
+  let ratios: number[] = [];
+  if (itmCount <= standard.length) {
+    ratios = standard.slice(0, itmCount);
+  } else {
+    // 8등까지 표준 + 나머지는 끝 ratio를 균등 분배
+    ratios = [...standard];
+    const remaining = itmCount - standard.length;
+    const tail = 0.005; // 0.5%씩
+    for (let i = 0; i < remaining; i++) ratios.push(tail);
+  }
+  // normalize 합계 1.0
+  const sum = ratios.reduce((a, b) => a + b, 0);
+  return ratios.map((r, i) => ({ rank: i + 1, ratio: r / sum }));
 }
 
 /** 1티켓 = 10,000원 (사용자 정의, 부산·경남 표준). UI에서만 T 단위 노출, 저장은 원 단위 유지. */

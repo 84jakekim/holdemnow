@@ -16,6 +16,7 @@
  */
 
 import {
+  collection,
   doc,
   setDoc,
   onSnapshot,
@@ -67,6 +68,18 @@ export interface TimerDisplaySettings {
 
   /** 매장 로고 URL (좌상단 작은 배지에 표시) */
   storeLogoUrl: string;
+
+  /** ─── 폰트 사이즈 배율 (Phase 3) ────────────────────────────────
+   *  각 텍스트 영역별 독립 배율. 기본 1.0, 슬라이더 0.7 ~ 1.6.
+   *  CSS clamp 결과 값에 곱해 매장 TV 환경(거리·각도)에 따라 조정. */
+  timerScale: number;
+  blindsScale: number;
+  statsScale: number;
+
+  /** ─── 상금 분배표 노출 (Phase 2) ──────────────────────────────
+   *  matchups: 'left' | 'right' | 'hidden'. TV 송출 시 상금 분배표 위치/노출 결정.
+   *  데이터는 LiveSession.prizeDistribution 또는 fallback으로 LiveSession.prizePool에서 계산. */
+  prizeDistributionLayout: 'left' | 'right' | 'hidden';
 }
 
 export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
@@ -92,7 +105,98 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
   soundBlindUp: true,
 
   storeLogoUrl: '',
+
+  timerScale: 1.0,
+  blindsScale: 1.0,
+  statsScale: 1.0,
+
+  prizeDistributionLayout: 'hidden',
 };
+
+/** ─── 다중 프리셋 저장 (Phase 2) ─────────────────────────────────
+ *  스토어당 여러 디스플레이 프리셋을 저장하고 빠르게 전환.
+ *  경로: stores/{storeId}/timerDisplayPresets/{presetId}
+ *  default 프리셋은 기존 stores/{storeId}/timerDisplay/default 유지 (fallback).
+ *  presetId='default'면 기존 경로 그대로 사용. */
+export interface TimerDisplayPreset {
+  id: string;
+  name: string;
+  settings: TimerDisplaySettings;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+function presetsCol(storeId: string) {
+  return collection(db, 'stores', storeId, 'timerDisplayPresets');
+}
+
+/** 매장의 프리셋 목록 실시간 구독. */
+export function subscribeTimerDisplayPresets(
+  storeId: string,
+  onChange: (items: TimerDisplayPreset[]) => void,
+  onError?: (e: Error) => void,
+) {
+  return onSnapshot(
+    presetsCol(storeId),
+    (snap) => {
+      const items: TimerDisplayPreset[] = snap.docs.map((d) => {
+        const data = d.data() as Partial<TimerDisplayPreset> & { settings?: Partial<TimerDisplaySettings> };
+        return {
+          id: d.id,
+          name: data.name ?? d.id,
+          settings: { ...DEFAULT_TIMER_DISPLAY, ...(data.settings ?? {}) },
+        };
+      });
+      onChange(items);
+    },
+    (err) => onError?.(err as Error),
+  );
+}
+
+/** 프리셋 신규 추가 (현재 default 설정을 복제). */
+export async function createTimerDisplayPreset(
+  storeId: string,
+  name: string,
+  baseSettings: TimerDisplaySettings,
+) {
+  await setDoc(doc(presetsCol(storeId), name.replace(/\s+/g, '-').toLowerCase().slice(0, 40)), {
+    name,
+    settings: baseSettings,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** 프리셋 업데이트. */
+export async function updateTimerDisplayPreset(
+  storeId: string,
+  presetId: string,
+  settings: TimerDisplaySettings,
+  name?: string,
+) {
+  await setDoc(
+    doc(presetsCol(storeId), presetId),
+    {
+      ...(name !== undefined ? { name } : {}),
+      settings,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+/** 프리셋 삭제. */
+export async function deleteTimerDisplayPreset(storeId: string, presetId: string) {
+  await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(doc(presetsCol(storeId), presetId)));
+}
+
+/** 프리셋을 default로 적용 — TV 화면에 즉시 반영. */
+export async function applyPresetAsDefault(
+  storeId: string,
+  settings: TimerDisplaySettings,
+) {
+  await saveTimerDisplay(storeId, settings);
+}
 
 function timerDisplayDoc(storeId: string) {
   return doc(db, 'stores', storeId, 'timerDisplay', 'default');
