@@ -261,56 +261,74 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         }}
       />
 
-      {/* 상단행 — 펍 이름(최상단·좌) · LIVE 도트 + 참가가능/마감 칩(우상단) */}
-      <div className="px-4 pt-3 pb-1 flex items-center gap-2">
-        <span
-          className="text-[16px] font-extrabold truncate flex-1 min-w-0"
-          style={{ color: TOSS.textTitle, letterSpacing: '-0.025em' }}
-        >
-          {session.storeName}
-        </span>
-        <span
-          className="inline-flex items-center gap-1 text-[10.5px] font-bold tracking-wider px-1.5 py-[2px] rounded-md flex-shrink-0"
-          style={{ background: TOSS.redSoft, color: TOSS.red }}
-        >
-          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: TOSS.red }} />
-          LIVE
-        </span>
-        <ParticipationBadge open={isLateRegOpen} />
-      </div>
+      {/* 헤더 블록 — 펍명·토너명 두 행을 컬러 배경으로 강조.
+       * 흰색 88% 오버레이 위에 poster.bg를 깔아 어떤 색·그라데이션이든 옅게 보이게.
+       * 좌측 4px 수직 액센트 바로 시각 진입점을 한 번 더 강화. */}
+      <div
+        className="relative"
+        style={{
+          background: `linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.92)), ${poster.bg}`,
+          borderBottom: `1px solid ${TOSS.divider}`,
+        }}
+      >
+        {/* 좌측 4px 수직 액센트 */}
+        <div
+          aria-hidden
+          className="absolute left-0 top-0 bottom-0"
+          style={{ width: 4, background: poster.bg }}
+        />
 
-      {/* 토너명 + 티켓(buy-in) + 상태칩 */}
-      <div className="px-4 pb-2.5 flex items-center gap-1.5 min-w-0">
-        <span
-          className="text-[12.5px] font-medium truncate"
-          style={{ color: TOSS.textBody, letterSpacing: '-0.01em' }}
-        >
-          {session.tournamentName}
-        </span>
-        {buyInLabel && (
-          <>
-            <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
-            <span
-              className="inline-flex items-center gap-0.5 text-[11px] font-bold flex-shrink-0"
-              style={{ color: TOSS.textTitle }}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: poster.bg as string }}>
-                <path d="M3 7v6a2 2 0 002 2h14a2 2 0 002-2V7" />
-                <path d="M3 7l9 6 9-6" />
-                <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2" />
-              </svg>
-              <span className="tabular-nums">{buyInLabel}</span>
-            </span>
-          </>
-        )}
-        {statusChip && (
+        {/* 1행 — 펍 이름(좌·최상단) · LIVE + 참가가능/마감 (우상단) */}
+        <div className="pl-5 pr-4 pt-3 pb-1 flex items-center gap-2">
           <span
-            className={`ml-auto inline-flex items-center text-[10px] font-bold px-1.5 py-[2px] rounded-md flex-shrink-0 ${statusChip.pulse ? 'animate-pulse' : ''}`}
-            style={{ background: statusChip.bg, color: statusChip.color }}
+            className="text-[16px] font-extrabold truncate flex-1 min-w-0"
+            style={{ color: TOSS.textTitle, letterSpacing: '-0.025em' }}
           >
-            {statusChip.label}
+            {session.storeName}
           </span>
-        )}
+          <span
+            className="inline-flex items-center gap-1 text-[10.5px] font-bold tracking-wider px-1.5 py-[2px] rounded-md flex-shrink-0"
+            style={{ background: TOSS.redSoft, color: TOSS.red }}
+          >
+            <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: TOSS.red }} />
+            LIVE
+          </span>
+          <ParticipationBadge open={isLateRegOpen} />
+        </div>
+
+        {/* 2행 — 토너명 · 티켓 · 상태칩 */}
+        <div className="pl-5 pr-4 pb-2.5 flex items-center gap-1.5 min-w-0">
+          <span
+            className="text-[12.5px] font-semibold truncate"
+            style={{ color: TOSS.textBody, letterSpacing: '-0.01em' }}
+          >
+            {session.tournamentName}
+          </span>
+          {buyInLabel && (
+            <>
+              <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
+              <span
+                className="inline-flex items-center gap-0.5 text-[11px] font-bold flex-shrink-0"
+                style={{ color: TOSS.textTitle }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: poster.bg as string }}>
+                  <path d="M3 7v6a2 2 0 002 2h14a2 2 0 002-2V7" />
+                  <path d="M3 7l9 6 9-6" />
+                  <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2" />
+                </svg>
+                <span className="tabular-nums">{buyInLabel}</span>
+              </span>
+            </>
+          )}
+          {statusChip && (
+            <span
+              className={`ml-auto inline-flex items-center text-[10px] font-bold px-1.5 py-[2px] rounded-md flex-shrink-0 ${statusChip.pulse ? 'animate-pulse' : ''}`}
+              style={{ background: statusChip.bg, color: statusChip.color }}
+            >
+              {statusChip.label}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 메인행 — 좌: Lv·블라인드·NEXT  /  우: hero 타이머 */}
