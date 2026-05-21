@@ -957,7 +957,7 @@ function DailyPostsFeed() {
           </div>
         </div>
       </div>
-      {pinned.length > 0 && <div className="px-4 mb-4"><PinnedCarousel items={pinned} /></div>}
+      {pinned.length > 0 && <div className="px-4 mb-3"><PinnedCarousel items={pinned} /></div>}
       {posts.length > 0 && (
         <ul role="list" className="pl-4 flex gap-2.5 overflow-x-auto scrollbar-none pb-2" aria-label="매장 데일리 소식 리스트">
           {posts.map((p) => <li role="listitem" key={p.id} className="flex-shrink-0"><StorePostMiniCard post={p} /></li>)}
@@ -1009,29 +1009,31 @@ function PinnedCarousel({ items }: { items: PinnedPost[] }) {
 
 function PinnedBanner({ post }: { post: PinnedPost }) {
   const photo = post.imageUrls[0];
-  const openLink = () => post.ctaUrl && window.open(post.ctaUrl, '_blank', 'noopener,noreferrer');
   return (
-    <button
-      onClick={openLink}
-      disabled={!post.ctaUrl}
+    <Link
+      href={`/m/notice/${post.id}`}
       aria-label={post.title}
       className="w-full rounded-2xl overflow-hidden card-hover text-left block"
-      style={{ background: 'var(--surface-1)', border: '1.5px solid var(--brand)', boxShadow: '0 2px 12px rgba(255,31,143,0.15)' }}
+      style={{ background: 'var(--surface-1)' }}
     >
       {photo ? (
-        <div className="relative w-full" style={{ aspectRatio: '21/9', background: 'var(--surface-2)' }}>
+        /* 사진 있으면 16:9 사진만. 테두리 제거. */
+        <div className="relative w-full" style={{ aspectRatio: '16/9', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt={post.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
         </div>
       ) : (
-        /* 사진 없는 경우만 텍스트 영역 노출 — 사진 있으면 사진만 보이게 */
-        <div className="px-4 py-4">
+        /* 사진 없으면 제목·본문 요약 (16:9 비율 박스 안에) */
+        <div
+          className="relative w-full flex flex-col justify-center px-4"
+          style={{ aspectRatio: '16/9', background: 'var(--surface-2)' }}
+        >
           <div className="text-[15px] font-extrabold mb-1 line-clamp-2" style={{ color: 'var(--text-1)' }}>{post.title}</div>
           {post.body && <div className="text-[12px] line-clamp-2" style={{ color: 'var(--text-2)' }}>{post.body}</div>}
-          {post.ctaLabel && <div className="text-[13px] font-bold mt-2" style={{ color: 'var(--brand)' }}>{post.ctaLabel} ›</div>}
+          {post.ctaLabel && <div className="text-[13px] font-bold mt-1" style={{ color: 'var(--brand)' }}>{post.ctaLabel} ›</div>}
         </div>
       )}
-    </button>
+    </Link>
   );
 }
 
