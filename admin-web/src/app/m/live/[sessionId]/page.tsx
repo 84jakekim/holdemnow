@@ -116,7 +116,7 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
   const sec = useLiveCountdown(session ?? null);
 
   // ─── 사운드 (카운트다운 비프 · 블라인드업 알림) ───────────────────
-  // 풀스크린 LIVE 페이지에서만 활성 — 사장님이 실제로 화면 켜놓고 보는 페이지.
+  // 풀스크린 LIVE 페이지에서만 활성 — 사용자가 화면 켜놓고 보는 페이지.
   const prevSecRef = useRef<number | null>(null);
   const prevLevelRef = useRef<number | null>(null);
   const [soundOn, setSoundOn] = useState<boolean>(() => {
@@ -124,9 +124,16 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     return window.localStorage.getItem(SOUND_STORAGE_KEY) !== 'off';
   });
 
-  // mount 시 AudioContext unlock 시도 (iOS Safari 등)
+  // mount 시 AudioContext unlock 시도 (iOS Safari 등) + 첫 사용자 제스처에 한 번 더
   useEffect(() => {
     unlockAudio();
+    const handler = () => unlockAudio();
+    window.addEventListener('click', handler, { once: true });
+    window.addEventListener('touchstart', handler, { once: true });
+    return () => {
+      window.removeEventListener('click', handler);
+      window.removeEventListener('touchstart', handler);
+    };
   }, []);
 
   // 토글 상태 영속화
@@ -135,36 +142,45 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     window.localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? 'on' : 'off');
   }, [soundOn]);
 
-  // sec/level 변화 감지 → 비프/블라인드업 트리거
+  // prev sec 추적은 sec가 바뀔 때마다 항상 갱신 (토글 OFF여도 — 안 그러면 ON 토글 시 비프 폭주)
   useEffect(() => {
-    if (!session) {
-      prevSecRef.current = null;
-      prevLevelRef.current = null;
-      return;
-    }
+    prevSecRef.current = sec;
+  }, [sec]);
+
+  // prev level 추적도 별도
+  useEffect(() => {
+    prevLevelRef.current = session?.currentLevel ?? null;
+  }, [session?.currentLevel]);
+
+  // 사운드 트리거 — 사양: 10초부터 매초 비프 (10,9,...,2), 1초 final, 0초 final.
+  useEffect(() => {
+    if (!soundOn) return;
+    if (!session || session.status !== 'running') return;
+
     const prevSec = prevSecRef.current;
+    if (prevSec == null) return;
+
+    if (prevSec !== sec) {
+      if (sec === 0) {
+        playFinalBeep();
+      } else if (sec === 1) {
+        playFinalBeep();
+      } else if (sec >= 2 && sec <= 10) {
+        playCountdownBeep();
+      }
+    }
+  }, [sec, soundOn, session]);
+
+  // 블라인드업 — 레벨이 + 방향으로 변경된 순간 1회. 초기 mount 시엔 prevLevel이 null이라 발동 X.
+  useEffect(() => {
+    if (!soundOn) return;
+    if (!session || session.status !== 'running') return;
     const prevLevel = prevLevelRef.current;
     const currLevel = session.currentLevel;
-    const running = session.status === 'running';
-
-    if (soundOn && running) {
-      // 레벨 전환 감지 — 블라인드업!
-      if (prevLevel != null && currLevel > prevLevel) {
-        playBlindUp();
-      }
-      // 카운트다운 비프 — sec이 새로운 값으로 줄어들 때 트리거
-      if (prevSec != null && prevSec !== sec) {
-        if (sec === 1) {
-          playFinalBeep();
-        } else if (sec >= 2 && sec <= 5) {
-          playCountdownBeep();
-        }
-      }
+    if (prevLevel != null && currLevel > prevLevel) {
+      playBlindUp();
     }
-
-    prevSecRef.current = sec;
-    prevLevelRef.current = currLevel;
-  }, [sec, soundOn, session]);
+  }, [session?.currentLevel, soundOn, session]);
 
   if (session === undefined) {
     return (

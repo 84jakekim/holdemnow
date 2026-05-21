@@ -69,47 +69,92 @@ export default function DisplayPage({
   // 절대 시각(levelEndsAt) 기반 카운트다운
   const sec = useLiveCountdown(session ?? null);
 
-  // 사용자 첫 터치(또는 클릭) 시 오디오 활성화
+  // ─── 사운드 활성화 (autoplay 정책 우회) ─────────────────────────
+  // TV는 보통 켜놓고 두지만 첫 진입 시 한 번은 터치/클릭 필요.
+  // localStorage에 이전 unlock 기록 있으면 오버레이 즉시 통과 시도.
+  const [audioReady, setAudioReady] = useState<boolean>(false);
   useEffect(() => {
-    const unlock = () => unlockAudio();
-    window.addEventListener('click', unlock, { once: true });
-    window.addEventListener('touchstart', unlock, { once: true });
+    let unlockedBefore = false;
+    try {
+      unlockedBefore = localStorage.getItem('holdemnow:tvAudioUnlocked') === '1';
+    } catch {}
+
+    if (unlockedBefore) {
+      unlockAudio();
+      setAudioReady(true);
+    }
+
+    const tryUnlock = () => {
+      unlockAudio();
+      setAudioReady(true);
+      try {
+        localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
+      } catch {}
+    };
+    window.addEventListener('click', tryUnlock, { once: true });
+    window.addEventListener('touchstart', tryUnlock, { once: true });
+    window.addEventListener('keydown', tryUnlock, { once: true });
     return () => {
-      window.removeEventListener('click', unlock);
-      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('click', tryUnlock);
+      window.removeEventListener('touchstart', tryUnlock);
+      window.removeEventListener('keydown', tryUnlock);
     };
   }, []);
 
-  // 사운드 트리거 — prev sec를 추적해 정확한 임계값에서만 1번 울리도록
+  // 매장 설정 보강: 명시적 false가 아니면 기본 true. 사장님이 설정 UI를 모를 수도 있으므로
+  // TV에서는 카운트다운/블라인드업 사운드가 기본 작동해야 함. soundWarn60만 기본 false.
+  const soundWarn60Effective = display.soundWarn60 === true;
+  const soundWarn30Effective = display.soundWarn30 !== false;
+  const soundLevelEndEffective = display.soundLevelEnd !== false;
+  const soundBlindUpEffective = display.soundBlindUp !== false;
+
+  // sec 변화 추적 ref — 사운드 useEffect와 분리해서 항상 최신값 유지
   const prevSecRef = useRef<number>(sec);
   const prevLevelRef = useRef<number | undefined>(session?.currentLevel);
+
+  // 사운드 트리거 — 사장님 사양: 10초부터 매초 비프 (10,9,...,2), 1초/0초 final beep.
   useEffect(() => {
     const prev = prevSecRef.current;
-    // 임계값 통과(prev > t && sec <= t)에서만 1회 울림
-    if (session?.status === 'running') {
-      if (display.soundWarn60 && prev > 60 && sec <= 60) playCountdownBeep();
-      if (display.soundWarn30 && prev > 30 && sec <= 30) playCountdownBeep();
-      // 마지막 5초 카운트다운 — 30s 옵션과 묶어 동작
-      if (display.soundWarn30 && prev > 5 && sec <= 5 && sec > 0) playCountdownBeep();
-      if (display.soundLevelEnd && prev > 0 && sec <= 0) playFinalBeep();
+    if (session?.status === 'running' && audioReady) {
+      // 60초 — 옵션이 명시적으로 켜졌을 때만 1회
+      if (soundWarn60Effective && prev > 60 && sec <= 60) playCountdownBeep();
+      // 30초 1회 (옵션)
+      if (soundWarn30Effective && prev > 30 && sec <= 30) playCountdownBeep();
+      // 10초부터 매초 카운트다운 비프 (sec: 10,9,8,...,2)
+      if (soundWarn30Effective && prev !== sec && sec >= 2 && sec <= 10) {
+        playCountdownBeep();
+      }
+      // 1초 final beep
+      if (soundLevelEndEffective && prev !== sec && sec === 1) playFinalBeep();
+      // 0초 도달 — 레벨 끝 final beep
+      if (soundLevelEndEffective && prev > 0 && sec <= 0) playFinalBeep();
     }
     prevSecRef.current = sec;
-  }, [sec, session?.status, display.soundWarn60, display.soundWarn30, display.soundLevelEnd]);
+  }, [
+    sec,
+    session?.status,
+    audioReady,
+    soundWarn60Effective,
+    soundWarn30Effective,
+    soundLevelEndEffective,
+  ]);
 
-  // 레벨 전환 시 블라인드업 차임
+  // 레벨 전환 시 블라인드업 차임 — 레벨이 + 방향으로 변경됐을 때만
   useEffect(() => {
     const prevLv = prevLevelRef.current;
+    const currLv = session?.currentLevel;
     if (
-      display.soundLevelEnd &&
+      soundBlindUpEffective &&
+      audioReady &&
       session?.status === 'running' &&
       prevLv != null &&
-      session.currentLevel !== prevLv &&
-      session.currentLevel > prevLv
+      currLv != null &&
+      currLv > prevLv
     ) {
       playBlindUp();
     }
-    prevLevelRef.current = session?.currentLevel;
-  }, [session?.currentLevel, session?.status, display.soundLevelEnd]);
+    prevLevelRef.current = currLv;
+  }, [session?.currentLevel, session?.status, audioReady, soundBlindUpEffective]);
 
   // F11 안내 (한 번만)
   const [showHint, setShowHint] = useState(true);
@@ -482,6 +527,35 @@ export default function DisplayPage({
             ✕
           </button>
         </div>
+      )}
+
+      {/* 사운드 활성화 오버레이 — 첫 진입 + unlock 안 된 상태 */}
+      {!audioReady && (
+        <button
+          type="button"
+          onClick={() => {
+            unlockAudio();
+            setAudioReady(true);
+            try {
+              localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
+            } catch {}
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          aria-label="사운드 활성화"
+        >
+          <div className="text-center text-white p-10 rounded-3xl bg-gray-900/95 border-2 border-amber-400 shadow-2xl max-w-md mx-6">
+            <div className="text-7xl mb-5">🔊</div>
+            <div className="text-2xl font-extrabold mb-3">사운드 활성화</div>
+            <div className="text-sm text-gray-300 mb-7 leading-relaxed">
+              화면을 터치하여 카운트다운·블라인드업
+              <br />
+              사운드를 켭니다
+            </div>
+            <div className="text-amber-400 text-base font-bold animate-pulse">
+              화면 아무 곳이나 터치
+            </div>
+          </div>
+        </button>
       )}
     </div>
   );

@@ -56,12 +56,14 @@ export interface TimerDisplaySettings {
   /** 상금 텍스트 오버라이드 — 보장상금 등 자유롭게 (비우면 prizePool 자동 표기) */
   prizeOverride: string;
 
-  /** 60초 경고 비프 사운드 */
+  /** 60초 경고 비프 사운드 (기본 false — 사장님이 명시적으로 켜야 작동) */
   soundWarn60: boolean;
-  /** 30초 경고 비프 사운드 */
+  /** 30초 경고 비프 사운드 (기본 true) — 10초부터 매초 카운트다운 비프도 함께 발동 */
   soundWarn30: boolean;
-  /** 레벨 종료(0초) 차임 사운드 */
+  /** 레벨 종료(0초/1초) 차임 사운드 (기본 true) */
   soundLevelEnd: boolean;
+  /** 블라인드업 알림 사운드 (기본 true) */
+  soundBlindUp: boolean;
 
   /** 매장 로고 URL (좌상단 작은 배지에 표시) */
   storeLogoUrl: string;
@@ -84,9 +86,10 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
   sponsorText: '',
   prizeOverride: '',
 
-  soundWarn60: true,
+  soundWarn60: false,
   soundWarn30: true,
   soundLevelEnd: true,
+  soundBlindUp: true,
 
   storeLogoUrl: '',
 };

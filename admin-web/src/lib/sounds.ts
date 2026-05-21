@@ -4,10 +4,14 @@
  * LIVE 카운트다운·블라인드업 사운드 헬퍼.
  *
  * 외부 오디오 파일 의존 없이 Web Audio API로 즉시 톤 생성.
- * - playCountdownBeep: 5,4,3,2초 짧은 비프 (700Hz · 150ms)
- * - playFinalBeep: 1초 마지막 비프 (900Hz · 250ms · 더 큼)
+ * - playCountdownBeep: 10~2초 짧은 비프 (700Hz · 150ms)
+ * - playFinalBeep: 1초/0초 마지막 비프 (900Hz · 250ms · 더 큼)
  * - playBlindUp: 레벨 전환 알림 — C5→E5→G5 화려한 상승 톤
  * - unlockAudio: iOS Safari 첫 터치 전 AudioContext suspended 해제용
+ *
+ * iOS Safari는 백그라운드 → 포그라운드 복귀 시 AudioContext가 다시 suspended 되는
+ * 경우가 있어, 매 재생 직전에 state 검사 + resume 비동기 트리거 + 이번 호출 skip
+ * 패턴을 사용. 다음 호출부터 정상 재생됨.
  */
 
 let audioCtx: AudioContext | null = null;
@@ -27,11 +31,20 @@ function getCtx(): AudioContext | null {
   }
 }
 
-/** 짧은 비프 — 카운트다운 (5,4,3,2초). 700Hz 150ms. */
+/** ctx가 suspended이면 비동기로 resume 시도하고 true 반환 (이번 재생은 skip 권장). */
+function ensureRunningOrResume(ctx: AudioContext): boolean {
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+    return false;
+  }
+  return ctx.state === 'running';
+}
+
+/** 짧은 비프 — 카운트다운 (10~2초). 700Hz 150ms. */
 export function playCountdownBeep(): void {
   const ctx = getCtx();
   if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (!ensureRunningOrResume(ctx)) return;
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -46,11 +59,11 @@ export function playCountdownBeep(): void {
   osc.stop(ctx.currentTime + 0.16);
 }
 
-/** 1초 카운트다운 마지막 비프 — 더 높고 길게. 900Hz 250ms. */
+/** 1초/0초 마지막 비프 — 더 높고 길게. 900Hz 250ms. */
 export function playFinalBeep(): void {
   const ctx = getCtx();
   if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (!ensureRunningOrResume(ctx)) return;
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -69,7 +82,7 @@ export function playFinalBeep(): void {
 export function playBlindUp(): void {
   const ctx = getCtx();
   if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (!ensureRunningOrResume(ctx)) return;
 
   const now = ctx.currentTime;
   playNote(ctx, 523, now, 0.18); // C5
@@ -94,6 +107,7 @@ function playNote(ctx: AudioContext, freq: number, startAt: number, duration: nu
 /**
  * 모바일 Safari/iOS는 사용자 첫 터치 이전엔 AudioContext suspended.
  * 페이지 mount 시 한 번 호출하면 ready 상태로 (단 실제 깨어남은 첫 user gesture 시).
+ * 사용자 제스처 핸들러 내부에서도 호출해서 확실하게 깨움.
  */
 export function unlockAudio(): void {
   const ctx = getCtx();
