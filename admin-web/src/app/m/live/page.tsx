@@ -12,6 +12,7 @@ import {
   useLiveCountdown,
   computeFinishingGraceSec,
 } from '@/lib/live';
+import { posterStyleFor, fmtBuyInTicketsMobile } from '@/lib/templates';
 import { bumpStoreMetric } from '@/lib/analytics';
 import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
 
@@ -213,6 +214,8 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
   const isLateRegOpen = !session.lateRegClosed && lateMin > 0;
   const graceSec = computeFinishingGraceSec(session);
   const isFinishing = graceSec != null && graceSec > 0;
+  const poster = posterStyleFor(session.posterStyle || 'poster-dark');
+  const buyInLabel = fmtBuyInTicketsMobile(session.buyIn ?? 0);
 
   const nextBlind = (() => {
     const structure = (session.blindStructureLocked && session.blindStructureLocked.length > 0)
@@ -233,7 +236,6 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         : TOSS.textTitle;
   const timerPulse = isFinishing || lowTime;
 
-  // 상태 라벨 — LIVE 우측에 미세하게 (라이브스코어 매치 상태 표기 톤)
   const statusChip = isFinishing
     ? { label: '곧 종료', bg: TOSS.redSoft, color: TOSS.red, pulse: true }
     : isPaused
@@ -250,77 +252,97 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         boxShadow: '0 1px 2px rgba(25,31,40,0.04), 0 6px 16px rgba(25,31,40,0.05)',
       }}
     >
-      {/* 상단행 — LIVE 도트 + 상태 + 참가가능/마감 칩
-       *   라이브스코어 헤더 톤: 좌측은 상태 / 우측은 액션 신호 */}
-      <div className="px-4 pt-3.5 pb-1 flex items-center gap-1.5">
+      {/* 색상 띠 — 토너 포스터 컬러를 시각 ID로 사용 (라이브스코어 팀 컬러 톤) */}
+      <div
+        aria-hidden
+        style={{
+          height: 4,
+          background: poster.bg,
+        }}
+      />
+
+      {/* 상단행 — 펍 이름(최상단·좌) · LIVE 도트 + 참가가능/마감 칩(우상단) */}
+      <div className="px-4 pt-3 pb-1 flex items-center gap-2">
         <span
-          className="inline-flex items-center gap-1 text-[10.5px] font-bold tracking-wider px-1.5 py-[2px] rounded-md"
+          className="text-[16px] font-extrabold truncate flex-1 min-w-0"
+          style={{ color: TOSS.textTitle, letterSpacing: '-0.025em' }}
+        >
+          {session.storeName}
+        </span>
+        <span
+          className="inline-flex items-center gap-1 text-[10.5px] font-bold tracking-wider px-1.5 py-[2px] rounded-md flex-shrink-0"
           style={{ background: TOSS.redSoft, color: TOSS.red }}
         >
           <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: TOSS.red }} />
           LIVE
         </span>
+        <ParticipationBadge open={isLateRegOpen} />
+      </div>
+
+      {/* 토너명 + 티켓(buy-in) + 상태칩 */}
+      <div className="px-4 pb-2.5 flex items-center gap-1.5 min-w-0">
+        <span
+          className="text-[12.5px] font-medium truncate"
+          style={{ color: TOSS.textBody, letterSpacing: '-0.01em' }}
+        >
+          {session.tournamentName}
+        </span>
+        {buyInLabel && (
+          <>
+            <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
+            <span
+              className="inline-flex items-center gap-0.5 text-[11px] font-bold flex-shrink-0"
+              style={{ color: TOSS.textTitle }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: poster.bg as string }}>
+                <path d="M3 7v6a2 2 0 002 2h14a2 2 0 002-2V7" />
+                <path d="M3 7l9 6 9-6" />
+                <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2" />
+              </svg>
+              <span className="tabular-nums">{buyInLabel}</span>
+            </span>
+          </>
+        )}
         {statusChip && (
           <span
-            className={`inline-flex items-center text-[10px] font-bold px-1.5 py-[2px] rounded-md ${statusChip.pulse ? 'animate-pulse' : ''}`}
+            className={`ml-auto inline-flex items-center text-[10px] font-bold px-1.5 py-[2px] rounded-md flex-shrink-0 ${statusChip.pulse ? 'animate-pulse' : ''}`}
             style={{ background: statusChip.bg, color: statusChip.color }}
           >
             {statusChip.label}
           </span>
         )}
-        <span className="ml-auto">
-          <ParticipationBadge open={isLateRegOpen} />
-        </span>
       </div>
 
-      {/* 메인행 — 라이브스코어 톤: 좌측 팀(매장+토너+레벨) · 우측 큰 스코어(타이머) */}
-      <div className="px-4 pt-1 pb-3.5 flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          {/* 매장명 — 큰 타이틀 */}
-          <div
-            className="text-[16px] font-extrabold truncate"
-            style={{ color: TOSS.textTitle, letterSpacing: '-0.025em' }}
+      {/* 메인행 — 좌: Lv·블라인드·NEXT  /  우: hero 타이머 */}
+      <div className="px-4 pb-3.5 flex items-end gap-3">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+          <span
+            className="text-[11px] font-bold px-1.5 py-[2px] rounded-md tabular-nums"
+            style={{ background: TOSS.gray50, color: TOSS.textTitle }}
           >
-            {session.storeName}
-          </div>
-          {/* 토너명 */}
-          <div
-            className="text-[12.5px] font-medium truncate mt-0.5"
-            style={{ color: TOSS.textBody, letterSpacing: '-0.01em' }}
-          >
-            {session.tournamentName}
-          </div>
-          {/* Lv · 블라인드 · NEXT (한 줄) */}
-          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-            <span
-              className="text-[11px] font-bold px-1.5 py-[2px] rounded-md tabular-nums"
-              style={{ background: TOSS.gray50, color: TOSS.textTitle }}
-            >
-              Lv {session.currentLevel}
-            </span>
-            <span className="text-[11.5px] tabular-nums font-medium" style={{ color: TOSS.textBody }}>
-              {session.smallBlind}/{session.bigBlind}
-            </span>
-            {nextBlind && !isFinishing && (
-              <>
-                <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
-                <span
-                  className="text-[10px] font-bold tracking-wider"
-                  style={{ color: nextBlind.isBreak ? TOSS.yellow : TOSS.textHint }}
-                >
-                  NEXT
-                </span>
-                <span className="text-[11px] tabular-nums font-bold" style={{ color: TOSS.textBody }}>
-                  {nextBlind.isBreak
-                    ? `BREAK ${Math.round(nextBlind.durationSec / 60)}분`
-                    : `${nextBlind.sb}/${nextBlind.bb}`}
-                </span>
-              </>
-            )}
-          </div>
+            Lv {session.currentLevel}
+          </span>
+          <span className="text-[11.5px] tabular-nums font-medium" style={{ color: TOSS.textBody }}>
+            {session.smallBlind}/{session.bigBlind}
+          </span>
+          {nextBlind && !isFinishing && (
+            <>
+              <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
+              <span
+                className="text-[10px] font-bold tracking-wider"
+                style={{ color: nextBlind.isBreak ? TOSS.yellow : TOSS.textHint }}
+              >
+                NEXT
+              </span>
+              <span className="text-[11px] tabular-nums font-bold" style={{ color: TOSS.textBody }}>
+                {nextBlind.isBreak
+                  ? `BREAK ${Math.round(nextBlind.durationSec / 60)}분`
+                  : `${nextBlind.sb}/${nextBlind.bb}`}
+              </span>
+            </>
+          )}
         </div>
 
-        {/* 우측 — hero 타이머 (스코어보드의 스코어 자리) */}
         <div className="flex-shrink-0 text-right">
           <div
             className={`text-[36px] font-extrabold leading-none tabular-nums ${timerPulse ? 'animate-pulse' : ''}`}
