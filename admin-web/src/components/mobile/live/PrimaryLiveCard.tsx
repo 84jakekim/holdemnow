@@ -149,30 +149,38 @@ function BigCard({
             >
               {statusLabel(session)}
             </span>
-            {/* 우측: 참가가능 / 참가마감 — 사용자가 한눈에 예약 판단 */}
+            {/* 우측: 참가가능 / 참가마감 — 사용자가 한눈에 예약 판단.
+             * 시인성 강화: 가능=네온 그린 + 펄스 도트, 마감=짙은 슬레이트 + 자물쇠. */}
             <span className="ml-auto" />
             {isLateRegOpen ? (
               <span
-                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1 text-[11px] font-extrabold pl-1.5 pr-2 py-0.5 rounded-full"
                 style={{
-                  background: 'rgba(74,222,128,0.95)',
-                  color: '#0A1410',
-                  boxShadow: '0 1px 6px rgba(0,0,0,0.35)',
+                  background: '#10B981',
+                  color: '#06281C',
+                  boxShadow: '0 0 0 1.5px rgba(16,185,129,0.45), 0 2px 10px rgba(16,185,129,0.55)',
                 }}
                 aria-label="참가 가능"
               >
+                <span
+                  className="w-1.5 h-1.5 rounded-full pulse-live flex-shrink-0"
+                  style={{ background: '#06281C' }}
+                  aria-hidden="true"
+                />
                 참가 가능
               </span>
             ) : (
               <span
-                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full"
                 style={{
-                  background: 'rgba(255,255,255,0.18)',
-                  color: 'rgba(255,255,255,0.78)',
-                  boxShadow: '0 1px 6px rgba(0,0,0,0.35)',
+                  background: 'rgba(15,23,42,0.78)',
+                  color: 'rgba(255,255,255,0.92)',
+                  border: '1px solid rgba(255,255,255,0.20)',
+                  boxShadow: '0 1px 6px rgba(0,0,0,0.5)',
                 }}
                 aria-label="참가 마감"
               >
+                <span aria-hidden="true">🔒</span>
                 참가 마감
               </span>
             )}
