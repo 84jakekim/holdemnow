@@ -282,28 +282,19 @@ html, body {
   border-top: 1px solid var(--border);
 }
 
-/* ── 모바일 탭바 — Solid White Pill + Pink Active Pill (시인성 최우선) ─
- * 사장님 피드백 v3: 핑크 alpha 0.28은 시인성 너무 낮음 → 완전 솔리드 흰색으로 전환.
- * 컨테이너는 흰 알약(또렷한 그림자) + 활성 탭만 핑크 풀필 박스로 강조.
- * 토스·당근 패턴 — 익숙하고 안정적이며 콘트라스트 최대.
+/* ── 모바일 탭바 — 표준 하단 고정형 (배민·당근·토스 톤) v4 ─
+ * 플로팅 알약 → 화면 하단에 완전 붙는 일반 앱 표준 탭바.
+ * 솔리드 흰 배경 + 상단 1px 옅은 경계선 + 위쪽 미세 그림자.
+ * 활성 표현은 컨테이너 아닌 탭 내부에서 (라인 + 색만).
  */
 .tabbar-glass {
-  background: #FFFFFF !important;
-  background-color: #FFFFFF !important;
-  border: 1.5px solid rgba(0, 0, 0, 0.06);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.12),
-    0 4px 12px rgba(0, 0, 0, 0.06),
-    0 1px 3px rgba(0, 0, 0, 0.04);
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.04);
 }
 html[data-theme="dark"] .tabbar-glass {
-  background: #1A1F2A !important;
-  background-color: #1A1F2A !important;
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.50),
-    0 4px 12px rgba(0, 0, 0, 0.35),
-    0 1px 3px rgba(0, 0, 0, 0.30);
+  /* 다크 토큰은 자동 분기. 그림자만 미세하게 강화 */
+  box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.20);
 }
 
 /* ── Shimmer 스켈레톤 (라이트) ─────────────────────────── */
