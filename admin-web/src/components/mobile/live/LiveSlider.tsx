@@ -16,7 +16,7 @@
 
 import Link from 'next/link';
 import type { LiveSession } from '@/lib/live';
-import { useLiveCountdown, fmtTime } from '@/lib/live';
+import { useLiveCountdown, fmtTime, computeLateRegMinutes, computeRemainingSec } from '@/lib/live';
 import { fmtBuyInTicketsMobile } from '@/lib/templates';
 
 interface Props {
@@ -49,6 +49,11 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
   const sec = useLiveCountdown(session);
   const isRunning = session.status === 'running';
   const buyIn = buyInShort(session);
+  const lateRegMin = computeLateRegMinutes(session, computeRemainingSec(session));
+  const isLateRegOpen =
+    !session.lateRegClosed &&
+    session.currentLevel <= session.lateRegEndLevel &&
+    lateRegMin > 0;
 
   return (
     <Link
@@ -57,7 +62,8 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
       style={{
         /* 한 화면 3개 + peek: (뷰포트 - 좌패딩16 - 우여백16 - gap12×2) / 3.3 */
         width: 'calc((100vw - 32px - 24px) / 3.3)',
-        minHeight: 120,
+        /* 고정 높이 — 컨텐츠 양과 무관하게 모든 카드가 같은 높이 */
+        height: 150,
         background: 'var(--surface-1)',
         border: '1.5px solid rgba(255,255,255,0.08)',
         boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
@@ -96,8 +102,8 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
       {/* 콘텐츠 — 하단 정렬 (큰 카드와 동일) */}
       <div className="relative z-10 flex flex-col h-full px-2 pt-2 pb-2 gap-0 justify-end">
 
-        {/* LIVE 배지 */}
-        <div className="mb-1">
+        {/* LIVE 배지 + (우측) 가능/마감 뱃지 — 같은 라인에 좌·우 정렬 */}
+        <div className="mb-1 flex items-center gap-1">
           <span
             className="inline-flex items-center gap-0.5 text-[8px] font-extrabold px-1 py-0.5 rounded-full"
             style={{ background: 'rgba(220,38,38,0.9)', color: '#fff' }}
@@ -109,6 +115,24 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
             />
             LIVE
           </span>
+          <span className="ml-auto" />
+          {isLateRegOpen ? (
+            <span
+              className="text-[8px] font-extrabold px-1 py-0.5 rounded-full"
+              style={{ background: 'rgba(74,222,128,0.95)', color: '#0A1410' }}
+              aria-label="참가 가능"
+            >
+              가능
+            </span>
+          ) : (
+            <span
+              className="text-[8px] font-extrabold px-1 py-0.5 rounded-full"
+              style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.78)' }}
+              aria-label="참가 마감"
+            >
+              마감
+            </span>
+          )}
         </div>
 
         {/* 매장명 */}
@@ -140,15 +164,26 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
           Lv.{session.currentLevel} · {blindShort(session)}
         </div>
 
-        {/* buy-in */}
-        {buyIn && (
-          <div
-            className="text-[9px] font-semibold leading-none"
-            style={{ color: 'rgba(255,255,255,0.65)' }}
-          >
-            🎫 {buyIn}
-          </div>
-        )}
+        {/* buy-in + (인라인) Late reg 분 — 작은 카드도 한 행에 통합 */}
+        <div
+          className="text-[9px] font-semibold leading-none flex items-center gap-1 min-w-0"
+          style={{ color: 'rgba(255,255,255,0.65)' }}
+        >
+          {buyIn ? (
+            <span className="truncate">🎫 {buyIn}</span>
+          ) : (
+            <span style={{ color: 'rgba(255,255,255,0.45)' }}>무료</span>
+          )}
+          {isLateRegOpen && (
+            <span
+              className="flex-shrink-0"
+              style={{ color: '#4ADE80' }}
+              aria-label={`레이트 레지 ${lateRegMin}분`}
+            >
+              · {lateRegMin}분
+            </span>
+          )}
+        </div>
       </div>
     </Link>
   );

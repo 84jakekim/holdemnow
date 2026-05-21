@@ -89,7 +89,8 @@ function BigCard({
         background: 'var(--surface-1)',
         border: '1.5px solid rgba(255,255,255,0.08)',
         boxShadow: '0 6px 28px rgba(0,0,0,0.22)',
-        minHeight: 220,
+        // 고정 높이 — 컨텐츠 양(레이트 레지 줄 유무 등)에 따라 카드 사이즈가 변하지 않도록 통일
+        height: 280,
       }}
       aria-label={`${session.storeName} LIVE — ${session.tournamentName}`}
     >
@@ -127,9 +128,9 @@ function BigCard({
       {/* 콘텐츠 레이어 — 상단 배지/매장명 + 하단 정렬 정보 */}
       <div className="relative z-10 flex flex-col h-full px-4 pt-3.5 pb-4">
 
-        {/* ── 상단: LIVE 배지 + 매장명 (사진 위에 텍스트 그림자로 가독성) ── */}
+        {/* ── 상단: LIVE 배지 + 참가가능/마감 뱃지 + 매장명 (사진 위에 텍스트 그림자로 가독성) ── */}
         <div className="flex flex-col gap-1 min-w-0">
-          {/* LIVE 배지 + 상태 */}
+          {/* LIVE 배지 + 상태 + (우측) 참가가능/참가마감 뱃지 */}
           <div className="flex items-center gap-2">
             <span
               className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
@@ -148,6 +149,33 @@ function BigCard({
             >
               {statusLabel(session)}
             </span>
+            {/* 우측: 참가가능 / 참가마감 — 사용자가 한눈에 예약 판단 */}
+            <span className="ml-auto" />
+            {isLateRegOpen ? (
+              <span
+                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                style={{
+                  background: 'rgba(74,222,128,0.95)',
+                  color: '#0A1410',
+                  boxShadow: '0 1px 6px rgba(0,0,0,0.35)',
+                }}
+                aria-label="참가 가능"
+              >
+                참가 가능
+              </span>
+            ) : (
+              <span
+                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                style={{
+                  background: 'rgba(255,255,255,0.18)',
+                  color: 'rgba(255,255,255,0.78)',
+                  boxShadow: '0 1px 6px rgba(0,0,0,0.35)',
+                }}
+                aria-label="참가 마감"
+              >
+                참가 마감
+              </span>
+            )}
           </div>
           {/* 매장명 */}
           <div
@@ -210,48 +238,53 @@ function BigCard({
             aria-hidden="true"
           />
 
-          {/* 하단 정보 행 */}
+          {/* 하단 정보 행 — 카드 높이를 일정하게 유지하기 위해 행 개수 고정.
+              · 1행: buy-in (티켓) + 인라인 Late reg 남은 시간 (오픈된 경우만)
+              · 2행: 인원
+              우측 상단 뱃지(참가 가능/마감)가 마감 여부를 시각화하므로
+              하단의 별도 "Late reg 마감" 행은 제거 → 높이 변동 원인 차단. */}
           <div className="flex flex-col gap-1.5">
-            {/* buy-in */}
-            {buyIn && (
-              <div className="flex items-center gap-1.5">
-                <span style={{ fontSize: 13 }} aria-hidden="true">🎫</span>
+            {/* buy-in + (인라인) Late reg 시간 */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              {buyIn ? (
+                <>
+                  <span style={{ fontSize: 13 }} aria-hidden="true">🎫</span>
+                  <span
+                    className="text-[14px] font-semibold"
+                    style={{ color: 'rgba(255,255,255,0.88)' }}
+                    aria-label={`바이인 ${buyIn}`}
+                  >
+                    {buyIn} buy-in
+                  </span>
+                </>
+              ) : (
                 <span
                   className="text-[14px] font-semibold"
-                  style={{ color: 'rgba(255,255,255,0.88)' }}
-                  aria-label={`바이인 ${buyIn}`}
+                  style={{ color: 'rgba(255,255,255,0.55)' }}
                 >
-                  {buyIn} buy-in
+                  무료
                 </span>
-                {/* buyIn은 이미 "5 Ticket" 형태 (1티켓=10,000원) */}
-              </div>
-            )}
-
-            {/* Late reg */}
-            {isLateRegOpen ? (
-              <div className="flex items-center gap-1.5">
-                <span style={{ fontSize: 13 }} aria-hidden="true">⏰</span>
-                <span
-                  className="text-[13px] font-semibold"
-                  style={{ color: '#4ADE80' }}
-                  aria-label={`레이트 레지 ${lateRegMin}분 남음`}
-                >
-                  Late reg {lateRegMin}분 남음
-                </span>
-              </div>
-            ) : (
-              session.lateRegClosed && (
-                <div className="flex items-center gap-1.5">
-                  <span style={{ fontSize: 13 }} aria-hidden="true">⏰</span>
+              )}
+              {isLateRegOpen && (
+                <>
+                  <span
+                    style={{ color: 'rgba(255,255,255,0.35)' }}
+                    aria-hidden="true"
+                    className="text-[13px]"
+                  >
+                    ·
+                  </span>
+                  <span style={{ fontSize: 12 }} aria-hidden="true">⏰</span>
                   <span
                     className="text-[13px] font-semibold"
-                    style={{ color: 'rgba(255,255,255,0.42)' }}
+                    style={{ color: '#4ADE80' }}
+                    aria-label={`레이트 레지 ${lateRegMin}분 남음`}
                   >
-                    Late reg 마감
+                    등록 {lateRegMin}분
                   </span>
-                </div>
-              )
-            )}
+                </>
+              )}
+            </div>
 
             {/* 인원 */}
             {typeof session.playersRemaining === 'number' && (
