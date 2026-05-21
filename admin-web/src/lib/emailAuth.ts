@@ -141,12 +141,19 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
   const combinedAddress = [payload.roadAddress.trim(), payload.detailAddress.trim()]
     .filter(Boolean)
     .join(' ');
+  // regionCode 자동 산출 — `where regionCode in […]` 필터 + 광고 슬롯 분배용.
+  // 도로명 주소 우선, 없으면 지번 주소, 그래도 없으면 합본.
+  const { regionCodeFromAddress } = await import('./geo');
+  const regionCode = regionCodeFromAddress(
+    payload.roadAddress.trim() || payload.jibunAddress.trim() || combinedAddress,
+  );
 
   // 4. stores/{storeId} 문서 생성 (photoUrls 첫번째에 간판 사진 URL 포함)
   await setDoc(newStoreRef, stripUndefined({
     ownerUid: uid,
     name: payload.storeName.trim(),
     address: combinedAddress,           // 기존 호환 필드
+    regionCode,                          // 광역 단위 한글 키 ("부산"/"경남" 등) — Phase B
     roadAddress: payload.roadAddress.trim(),
     detailAddress: payload.detailAddress.trim(),
     jibunAddress: payload.jibunAddress.trim(),

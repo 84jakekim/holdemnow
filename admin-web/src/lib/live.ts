@@ -6,6 +6,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   Timestamp,
@@ -405,6 +406,20 @@ export async function startLiveSession(
   }).catch(() => {
     // 권한 없음 등 — popularity 신호만 누락
   });
+
+  // 매장 광역 코드 스냅샷 — liveSessions에 storeRegion 필드로 부착 (인덱스 활용).
+  // 실패해도 LIVE 시작 자체는 진행 (storeRegion 없으면 region 필터 미적용).
+  let storeRegion: string | undefined = undefined;
+  try {
+    const sSnap = await getDoc(doc(db, 'stores', storeId));
+    if (sSnap.exists()) {
+      const sData = sSnap.data() as { regionCode?: string };
+      if (sData.regionCode) storeRegion = sData.regionCode;
+    }
+  } catch {
+    // ignore
+  }
+
   const first = template.blindStructure[0];
 
   // 상금풀 계산 — Phase 5 단일 모드: payoutStructure 항상 auto-percent (수동 입력 제거됨).
@@ -443,6 +458,7 @@ export async function startLiveSession(
   };
   docData.payoutStructure = ps; // 정책 스냅샷 (분배 방식·ITM·custom 비율 등 전부 포함) — Phase 5 항상 부착
   if (template.prizeDisplayUnit) docData.prizeDisplayUnit = template.prizeDisplayUnit; // Phase 4 표시 단위 스냅샷
+  if (storeRegion) docData.storeRegion = storeRegion; // Phase B 광역 키 — region 인덱스 활용
 
   const ref = await addDoc(liveSessionsCol(), stripUndefined(docData));
   return ref.id;

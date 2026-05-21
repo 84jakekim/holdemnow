@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/hooks';
 import DemoStoresCard from '@/components/admin/DemoStoresCard';
 import DemoStoresBulkCard from '@/components/admin/DemoStoresBulkCard';
+import BackfillRegionCodeCard from '@/components/admin/BackfillRegionCodeCard';
 
 export default function PlatformDemoPage() {
   const authState = useAuth();
@@ -15,6 +16,7 @@ export default function PlatformDemoPage() {
         <p className="text-sm text-gray-500 mt-1">카톡방 사장님 가입 전 임시 매장·데이터</p>
       </div>
 
+      <BackfillRegionCodeCard />
       <DemoStoresCard ownerUid={authState.user.uid} />
       <DemoStoresBulkCard ownerUid={authState.user.uid} />
 

@@ -9,6 +9,7 @@ import {
 } from 'firebase/storage';
 import { db, storage } from './firebase';
 import { stripUndefined } from './firestoreUtil';
+import { regionCodeFromAddress } from './geo';
 
 export const FACILITY_OPTIONS = [
   '주차', '발렛', '식사', '24시간', '흡연실', '룸', '여성전용시간', 'VIP룸',
@@ -29,8 +30,13 @@ export async function updateStoreInfo(
     photoUrls?: string[];
   },
 ) {
+  // 주소 변경 시 regionCode 자동 동기화 — `where regionCode in […]` 필터 일관성.
+  const patch: Record<string, unknown> = { ...updates };
+  if (typeof updates.address === 'string' && updates.address.length > 0) {
+    patch.regionCode = regionCodeFromAddress(updates.address);
+  }
   await updateDoc(doc(db, 'stores', storeId), stripUndefined({
-    ...updates,
+    ...patch,
     updatedAt: serverTimestamp(),
   }));
 }
