@@ -16,6 +16,8 @@ import {
   updateDealerProfile,
   uploadDealerImage,
   hasBannedKeyword,
+  setDealerProfileStatus,
+  deleteDealerProfile,
 } from '@/lib/community';
 import { useAuth } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
@@ -104,6 +106,7 @@ export default function MyDealerProfilePage() {
   const [form, setForm] = useState<DealerForm>(defaultForm());
   const [saving, setSaving] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* ── 기존 프로필 로드 ── */
@@ -575,6 +578,41 @@ export default function MyDealerProfilePage() {
             </label>
           )}
 
+          {/* 게시 상태 관리 — 기등록 프로필이 있을 때만 노출 */}
+          {existing && (
+            <ProfileLifecycleCard
+              status={existing.status}
+              busy={lifecycleBusy}
+              onToggleStatus={async () => {
+                const next = existing.status === 'active' ? 'closed' : 'active';
+                const confirmMsg =
+                  next === 'closed'
+                    ? '프로필을 내릴까요? 매장 대표 어드민에 더이상 노출되지 않습니다. 언제든 다시 게시할 수 있어요.'
+                    : '프로필을 다시 게시할까요?';
+                if (!window.confirm(confirmMsg)) return;
+                setLifecycleBusy(true);
+                try {
+                  await setDealerProfileStatus(existing.id, next);
+                } catch (e) {
+                  alert(`상태 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
+                } finally {
+                  setLifecycleBusy(false);
+                }
+              }}
+              onDelete={async () => {
+                if (!window.confirm('프로필을 완전히 삭제할까요? 되돌릴 수 없습니다.')) return;
+                setLifecycleBusy(true);
+                try {
+                  await deleteDealerProfile(existing.id);
+                  router.push('/m/community');
+                } catch (e) {
+                  alert(`삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
+                  setLifecycleBusy(false);
+                }
+              }}
+            />
+          )}
+
         </div>
       </div>
 
@@ -617,6 +655,87 @@ function FormField({
         {required && <span className="ml-1 text-[#FF1F8F]">*</span>}
       </span>
       {children}
+    </div>
+  );
+}
+
+/**
+ * 게시 상태 관리 카드 — 기등록 프로필이 있을 때 폼 맨 아래 노출.
+ * - 프로필 내리기 / 다시 게시 토글 (status active ↔ closed)
+ * - 프로필 완전 삭제
+ *
+ * "취직 후 글을 내린다" 시나리오: 내리기 → 매장 어드민 active 목록에서 사라짐.
+ * 데이터는 보존되어 나중에 재게시 가능.
+ */
+function ProfileLifecycleCard({
+  status,
+  busy,
+  onToggleStatus,
+  onDelete,
+}: {
+  status: 'active' | 'closed' | 'expired';
+  busy: boolean;
+  onToggleStatus: () => void;
+  onDelete: () => void;
+}) {
+  const isHidden = status !== 'active';
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{
+        background: 'var(--surface-2)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      <div className="flex items-start gap-2 mb-3">
+        <div className="text-[13px] font-extrabold flex-1" style={{ color: 'var(--text-1)' }}>
+          📌 게시 상태
+        </div>
+        <span
+          className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-[3px] rounded-full"
+          style={{
+            background: isHidden ? 'rgba(139,149,161,0.18)' : 'rgba(34,214,126,0.16)',
+            color: isHidden ? 'var(--text-3)' : '#0E9558',
+          }}
+        >
+          <span
+            className="w-1 h-1 rounded-full"
+            style={{ background: isHidden ? 'var(--text-3)' : '#22D67E' }}
+          />
+          {isHidden ? '내림' : '게시 중'}
+        </span>
+      </div>
+      <div className="text-[11.5px] leading-relaxed mb-3" style={{ color: 'var(--text-3)' }}>
+        {isHidden
+          ? '현재 매장 대표에게 노출되지 않습니다. 언제든 다시 게시할 수 있어요.'
+          : '취직 등으로 더 이상 연락받지 않으려면 프로필을 내릴 수 있어요. 데이터는 보존됩니다.'}
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onToggleStatus}
+          disabled={busy}
+          className="flex-1 rounded-xl py-2.5 text-[12.5px] font-extrabold transition disabled:opacity-40"
+          style={{
+            background: isHidden ? '#FF1F8F' : 'var(--surface-1)',
+            color: isHidden ? '#fff' : 'var(--text-1)',
+            border: isHidden ? 'none' : '1px solid var(--border)',
+          }}
+        >
+          {isHidden ? '다시 게시' : '프로필 내리기'}
+        </button>
+        <button
+          onClick={onDelete}
+          disabled={busy}
+          className="rounded-xl py-2.5 px-4 text-[12.5px] font-extrabold transition disabled:opacity-40"
+          style={{
+            background: 'rgba(240,68,82,0.10)',
+            color: '#D03340',
+            border: '1px solid rgba(240,68,82,0.25)',
+          }}
+        >
+          삭제
+        </button>
+      </div>
     </div>
   );
 }

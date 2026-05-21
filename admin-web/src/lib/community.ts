@@ -606,6 +606,29 @@ export async function updateDealerProfile(itemId: string, updates: UpdateDealerP
 }
 
 /**
+ * 본인 딜러 프로필 게시 상태 토글.
+ * - 'closed': 취직 완료 등으로 글 내림 (매장 어드민 active 목록에서 숨겨짐)
+ * - 'active': 다시 게시
+ *
+ * 데이터는 보존하므로 나중에 다시 활성화 가능.
+ * Firestore rules의 update 권한(작성자 본인)으로 차단됨.
+ */
+export async function setDealerProfileStatus(
+  itemId: string,
+  status: CommunityItemStatus,
+): Promise<void> {
+  await updateDoc(doc(db, COMMUNITY, itemId), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** 본인 딜러 프로필 완전 삭제 — 되돌릴 수 없음. */
+export async function deleteDealerProfile(itemId: string): Promise<void> {
+  await deleteDoc(doc(db, COMMUNITY, itemId));
+}
+
+/**
  * 매장 owner 전용 — 전체 딜러 프로필 실시간 구독.
  * 인덱스: type='dealerProfile' + status='active' + createdAt desc (이미 deploy됨)
  */
