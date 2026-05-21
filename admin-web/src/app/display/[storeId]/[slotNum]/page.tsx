@@ -401,12 +401,25 @@ export default function DisplayPage({
             </div>
           )}
 
-          {/* 하단 stats — PRIZE POOL 제거 (법적 리스크: 현금 상금 노출 금지) */}
-          <div className="mt-10 grid grid-cols-2 gap-12 max-w-3xl">
+          {/* 하단 stats — 매장 TV 운영 화면. PRIZE POOL은 매장 내 노출 전용
+              (사용자 모바일 앱 /m/* 에는 어떤 상금 필드도 렌더링하지 않음). */}
+          <div className="mt-10 grid grid-cols-3 gap-10 max-w-5xl">
             <Stat
               label="PLAYERS"
               value={`${session.playersRemaining}/${session.totalPlayers}`}
               sub={`${session.tablesRemaining}테이블`}
+              color={display.textColor}
+            />
+            <Stat
+              label="PRIZE POOL"
+              value={
+                display.prizeOverride && display.prizeOverride.trim().length > 0
+                  ? display.prizeOverride
+                  : session.prizePool > 0
+                  ? `₩${session.prizePool.toLocaleString()}`
+                  : '—'
+              }
+              sub=""
               color={display.textColor}
             />
             <Stat

@@ -364,9 +364,8 @@ function TemplateEditor({
     try {
       await onSave({
         ...form,
-        // 게런티/상금풀 강제 0 — 법적 리스크 (현금 상금 표기 금지)
-        guarantee: 0,
-        prizePool: 0,
+        // 게런티/상금풀은 form 값 그대로 저장 — 매장 어드민/매장 TV 디스플레이에서만 노출됨.
+        // 사용자 모바일 앱(/m/*)은 prizePool/guarantee 필드 자체를 화면에 표기하지 않으므로 분리 안전.
         blindStructure: form.blindStructure.map((b, i) => {
           if (b.isBreak) {
             return {
@@ -442,8 +441,46 @@ function TemplateEditor({
           </Field>
         </div>
 
-        {/* 게런티/상금풀 입력 제거 — 법적 리스크 (현금 상금 표기 금지).
-            저장 시 guarantee/prizePool은 항상 0으로 처리됨. */}
+        {/* 게런티(T) — 사용자 모바일 앱에는 노출 안 됨. 매장 어드민/매장 TV 디스플레이 운영용. */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="게런티 (T · 1T=1만원)">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className="form-input font-mono pr-7"
+                value={wonToTickets(form.guarantee)}
+                onChange={(e) => update('guarantee', ticketsToWon(parseInt(e.target.value) || 0))}
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
+                T
+              </span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1 font-mono">
+              ≈ ₩{form.guarantee.toLocaleString()} · 매장 내 TV 타이머 전용
+            </div>
+          </Field>
+          <Field label="상금풀 (T · 1T=1만원)">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className="form-input font-mono pr-7"
+                value={wonToTickets(form.prizePool)}
+                onChange={(e) => update('prizePool', ticketsToWon(parseInt(e.target.value) || 0))}
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
+                T
+              </span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1 font-mono">
+              ≈ ₩{form.prizePool.toLocaleString()} · 매장 TV에서 PRIZE POOL로 표시
+            </div>
+          </Field>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="바이인 (T · 1T=1만원)">
             <div className="relative">

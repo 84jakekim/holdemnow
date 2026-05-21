@@ -392,8 +392,9 @@ export async function startLiveSession(
     ante: first.ante,
     playersRemaining: template.totalPlayers,
     tablesRemaining: Math.max(1, Math.ceil(template.totalPlayers / 8)),
-    // 상금풀 항상 0 — 사용자 앱 어디에도 표기되지 않음 (법적 리스크)
-    prizePool: 0,
+    // 상금풀 = 템플릿 prizePool 그대로. 매장 어드민/매장 TV 디스플레이에서만 표시되며
+    // 사용자 모바일 앱(/m/*)에는 어떤 상금 필드도 렌더링하지 않음 (UI 레이어에서 분리).
+    prizePool: template.prizePool || 0,
     lateRegClosed: false,
     viewerCount: 0,
     createdAt: serverTimestamp(),

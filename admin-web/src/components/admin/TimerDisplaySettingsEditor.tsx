@@ -246,8 +246,17 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
             placeholder="예: 다음 레벨 후 10분 휴식 · 18:30 디너 제공"
             className="form-input"
           />
-          {/* 상금 오버라이드 입력 제거 — 법적 리스크 (현금 상금 표기 금지).
-              저장된 값이 있어도 디스플레이에서 사용 안 함. */}
+          <div className="mt-3" />
+          <FieldLabel
+            label="상금 표기 오버라이드 (매장 TV 전용)"
+            hint="비우면 세션 prizePool 자동 표기. 사용자 앱에는 노출되지 않음."
+          />
+          <input
+            value={settings.prizeOverride}
+            onChange={(e) => update('prizeOverride', e.target.value)}
+            placeholder="예: GTD 300만 · 우승 100만"
+            className="form-input"
+          />
           <div className="mt-3" />
           <FieldLabel label="스폰서 / 후원 줄" />
           <input
