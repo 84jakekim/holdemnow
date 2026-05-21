@@ -133,6 +133,75 @@ function normalizeForMatch(s: string): string {
   return s.toLowerCase().replace(/[\s\W_]/g, '');
 }
 
+// ─────────────────────────────────────────────────────────────
+// 매장 데일리 글 전용 — 외부 링크 whitelist + 이모지 캡
+// (Sprint 1 Phase E, 2026-05-21)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 매장 글에 허용되는 외부 도메인. 본문에 다른 URL이 있으면 거절.
+ * - 카카오톡 오픈채팅: open.kakao.com (카톡방 안내가 핵심 운영 동선)
+ * - 카카오 플러스친구: pf.kakao.com
+ * - 전화 링크: tel: (방문 예약 유도)
+ */
+export const ALLOWED_LINK_HOSTS = ['open.kakao.com', 'pf.kakao.com'];
+const URL_RE = /\b(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+
+export interface LinkCheckResult {
+  ok: boolean;
+  blockedHost?: string;
+  message?: string;
+}
+
+/** 본문에 포함된 외부 링크가 모두 whitelist에 있는지 검사. tel: 은 우회 허용. */
+export function checkLinkWhitelist(text: string): LinkCheckResult {
+  if (!text) return { ok: true };
+  const matches = text.match(URL_RE);
+  if (!matches || matches.length === 0) return { ok: true };
+  for (const raw of matches) {
+    const url = raw.startsWith('http') ? raw : `https://${raw}`;
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+      const allowed = ALLOWED_LINK_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+      if (!allowed) {
+        return {
+          ok: false,
+          blockedHost: host,
+          message: '카카오 오픈채팅·플러스친구 외 외부 링크는 첨부할 수 없어요',
+        };
+      }
+    } catch {
+      return { ok: false, message: '본문에 올바르지 않은 링크가 포함됐어요' };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * 이모지 캡 — 5개 초과면 앞 5개만 유지.
+ * Unicode emoji 범위(흔한 surrogate pair 포함) 기준.
+ *
+ * 정책: 사용자 작성을 막지 않고 자동 잘라내기 (UX 마찰 최소화).
+ */
+const EMOJI_RE = /(?:\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*)/gu;
+export const MAX_EMOJIS = 5;
+
+export function capEmojis(text: string, max: number = MAX_EMOJIS): string {
+  if (!text) return text;
+  let count = 0;
+  return text.replace(EMOJI_RE, (m) => {
+    count += 1;
+    return count <= max ? m : '';
+  });
+}
+
+/** 본문에 포함된 이모지 개수 (가이드용). */
+export function countEmojis(text: string): number {
+  if (!text) return 0;
+  const m = text.match(EMOJI_RE);
+  return m ? m.length : 0;
+}
+
 /** normalize 후 빈 문자열이 되는 항목은 제외(예: 'ㅗ ㅗ' 같은 케이스 보호) */
 const BANNED_WORDS_NORMALIZED: readonly string[] = BANNED_WORDS_RAW
   .map((w) => ({ raw: w, norm: normalizeForMatch(w) }))

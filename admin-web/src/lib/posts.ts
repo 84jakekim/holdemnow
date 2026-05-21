@@ -25,6 +25,7 @@ import {
 } from 'firebase/storage';
 import { db, storage } from './firebase';
 import { stripUndefined } from './firestoreUtil';
+import { moderateText, checkLinkWhitelist, capEmojis } from './moderation';
 
 /**
  * 매장 데일리 홍보 ("오늘의 소식") + 본사 pinned 공지.
@@ -35,7 +36,22 @@ import { stripUndefined } from './firestoreUtil';
  * - 자유 이벤트 태그
  * - 본사 pinned 글은 top-level `pinnedPosts` 컬렉션 (홈 최상단 고정)
  * - authorType 필드로 추후 SNS 'user' 게시글과 호환
+ *
+ * 콘텐츠 가드 (Sprint 1 Phase E, 2026-05-21):
+ * - moderateText: 욕설·도박·환금 키워드 자동 거부 (lib/moderation 사전 ~250개)
+ * - checkLinkWhitelist: open.kakao.com / pf.kakao.com 외 URL 거절
+ * - 1일 1글 클라이언트 가드: createdAt + 24h 이내 본인 글 존재 시 차단
+ * - 이모지 5개 캡: 자동 자르기 (UX 마찰 최소화)
+ * - 신고 누적 3건 → autoHideOnReports Cloud Function이 status='hidden' 처리
  */
+export class PostGuardError extends Error {
+  constructor(public readonly code: 'banned' | 'link' | 'rate_limit' | 'empty' | 'length', message: string) {
+    super(message);
+    this.name = 'PostGuardError';
+  }
+}
+
+const POST_MAX_LENGTH = 500;
 
 const POST_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_POST_IMAGES = 4;
@@ -158,6 +174,19 @@ export async function loadActivePostsAll(maxAgeMs = POST_TTL_MS): Promise<StoreP
   }));
 }
 
+/** 매장이 24h 이내 작성한 글이 이미 있는지 (1일 1글 클라이언트 가드). */
+export async function hasRecentPostByStore(storeId: string, authorUid: string): Promise<boolean> {
+  const since = Timestamp.fromMillis(Date.now() - POST_TTL_MS);
+  const q = query(
+    postsCol(storeId),
+    where('authorUid', '==', authorUid),
+    where('createdAt', '>=', since),
+    limit(1),
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
 export async function createStorePost(input: {
   storeId: string;
   storeName?: string;
@@ -168,10 +197,45 @@ export async function createStorePost(input: {
   ctaLabel?: string;
   authorUid: string;
 }): Promise<string> {
+  // ── Phase E 가드 ──────────────────────────────────────────
+  const trimmed = (input.body ?? '').trim();
+  if (!trimmed) {
+    throw new PostGuardError('empty', '내용을 입력해주세요');
+  }
+  // 1) 욕설·도박·환금 키워드 + 길이 + 도배
+  const mod = moderateText(trimmed, { maxLength: POST_MAX_LENGTH });
+  if (!mod.ok) {
+    throw new PostGuardError(
+      mod.reason === 'banned_word' ? 'banned' : 'length',
+      mod.message ?? '작성할 수 없는 내용이에요',
+    );
+  }
+  // 2) 외부 링크 whitelist
+  const linkCheck = checkLinkWhitelist(trimmed);
+  if (!linkCheck.ok) {
+    throw new PostGuardError('link', linkCheck.message ?? '외부 링크가 허용되지 않아요');
+  }
+  // 3) ctaUrl 도 whitelist 적용
+  if (input.ctaUrl) {
+    const ctaCheck = checkLinkWhitelist(input.ctaUrl);
+    if (!ctaCheck.ok) {
+      throw new PostGuardError('link', '카카오 오픈채팅·플러스친구 외 링크는 첨부할 수 없어요');
+    }
+  }
+  // 4) 1일 1글 가드 (24h 이내 본인 글 존재 시 차단)
+  if (await hasRecentPostByStore(input.storeId, input.authorUid)) {
+    throw new PostGuardError(
+      'rate_limit',
+      '오늘의 소식은 하루에 한 번만 작성할 수 있어요. 기존 글을 수정해주세요.',
+    );
+  }
+  // 5) 이모지 5개 캡 — 자동 자르기 (UX 마찰 최소화)
+  const cappedBody = capEmojis(trimmed);
+
   const ref = await addDoc(postsCol(input.storeId), stripUndefined({
     storeId: input.storeId,
     storeName: input.storeName ?? '',
-    body: input.body,
+    body: cappedBody,
     imageUrls: input.imageUrls ?? [],
     eventTags: input.eventTags ?? [],
     ctaUrl: input.ctaUrl ?? '',
