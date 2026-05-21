@@ -19,7 +19,12 @@ import {
   buildBackgroundCss,
 } from '@/lib/timerDisplay';
 import { playCountdownBeep, playFinalBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
-import { computeAutoITM, computePayoutsFromStructure } from '@/lib/templates';
+import {
+  computeAutoITM,
+  computePayoutsFromStructure,
+  computePayoutAmounts,
+  fmtPrizeDisplay,
+} from '@/lib/templates';
 
 interface StoreData {
   name: string;
@@ -853,7 +858,12 @@ function PrizeDistributionPanel({
   const payouts = session.payoutStructure
     ? computePayoutsFromStructure(session.payoutStructure, session.totalPlayers)
     : computeAutoITM(session.totalPlayers);
+  // Phase 4: 만원 단위 내림 + 1등 잔여 추가로 합계=prizePool 보장
+  const amountsAll = computePayoutAmounts(session.prizePool, payouts);
   const rows = payouts.slice(0, 8); // 8등까지만 노출 (그 이상은 화면 공간 부족)
+  // Phase 4: 세션 스냅샷의 표시 단위 사용 (없으면 'ticket')
+  const unit = session.prizeDisplayUnit ?? 'ticket';
+  const prizePoolLabel = fmtPrizeDisplay(session.prizePool, unit) || '—';
   return (
     <div
       className="fixed top-1/2 -translate-y-1/2 z-10 rounded-2xl backdrop-blur-sm border-2"
@@ -876,12 +886,12 @@ function PrizeDistributionPanel({
           className="font-mono text-lg font-extrabold text-center mt-1"
           style={{ color: display.blindsColor }}
         >
-          ₩{session.prizePool.toLocaleString()}
+          {prizePoolLabel}
         </div>
       </div>
       <div className="p-2">
-        {rows.map((p) => {
-          const won = Math.round(session.prizePool * p.ratio);
+        {rows.map((p, idx) => {
+          const won = amountsAll[idx]?.amount ?? 0;
           return (
             <div
               key={p.rank}
@@ -892,7 +902,7 @@ function PrizeDistributionPanel({
                 {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `${p.rank}등`}
               </div>
               <div className="font-mono text-[12px] font-bold">
-                ₩{won.toLocaleString()}
+                {fmtPrizeDisplay(won, unit) || '—'}
               </div>
             </div>
           );

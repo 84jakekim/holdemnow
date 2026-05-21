@@ -20,7 +20,7 @@ import {
   computeReadyExpirySec,
   FINISHING_GRACE_SEC,
 } from '@/lib/live';
-import { subscribeTemplates, type TournamentTemplate } from '@/lib/templates';
+import { subscribeTemplates, fmtPrizeDisplay, type TournamentTemplate } from '@/lib/templates';
 
 /**
  * 본사 모니터링 — 전국 모든 매장의 LIVE 세션을 지역별로 모아서 표시.
@@ -613,7 +613,7 @@ function StartLiveModal({
                       <div className="text-[11px] text-gray-600 grid grid-cols-3 gap-2">
                         <div>
                           <div className="text-[9px] font-bold text-gray-400">바이인</div>
-                          <div className="font-mono font-bold">₩{t.buyIn.toLocaleString()}</div>
+                          <div className="font-mono font-bold">{fmtPrizeDisplay(t.buyIn, t.prizeDisplayUnit ?? 'ticket') || '—'}</div>
                         </div>
                         <div>
                           <div className="text-[9px] font-bold text-gray-400">총인원</div>

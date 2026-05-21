@@ -31,6 +31,21 @@ export type TournamentType =
   | 'satellite'
   | 'cash';
 
+/** 앤티 적용 방식 — Phase 4 (2026-05-21).
+ *  사용자 요구: "엔티적용시 SB 금액 / BB 금액 / 직접입력 중 선택".
+ *  - 'sb': 각 레벨의 ante = sb (자동, 입력 비활성)
+ *  - 'bb': 각 레벨의 ante = bb (자동, 입력 비활성)
+ *  - 'manual': 각 레벨마다 직접 입력 (기존 방식, BB의 1/10 추천값 자동 채움)
+ *  디폴트: 'manual' (기존 템플릿 호환). */
+export type AnteMode = 'sb' | 'bb' | 'manual';
+
+/** 상금 표시 단위 — Phase 4 (2026-05-21).
+ *  사용자 요구: "금액으로 표시할것인지 티켓으로 표시할것인지 선택".
+ *  - 'amount': "27만원" 형식 (₩ 기호 사용 안 함)
+ *  - 'ticket': "27T" 형식 (1T = 10,000원 기준)
+ *  디폴트: 'ticket' (입력 단위와 일관). */
+export type PrizeDisplayUnit = 'amount' | 'ticket';
+
 export interface TournamentTemplate {
   id: string;
   name: string;
@@ -45,6 +60,9 @@ export interface TournamentTemplate {
   blindStructure: BlindLevel[];
   /** 앤티 사용 여부 토글. OFF면 저장 시 모든 레벨 ante=0. */
   anteEnabled?: boolean;
+  /** 앤티 적용 방식 — sb/bb/manual. 디폴트 'manual'.
+   *  anteEnabled=true일 때만 의미 있음. 'sb'/'bb'면 저장 시점에 각 레벨 ante = sb 또는 bb로 강제. */
+  anteMode?: AnteMode;
   /** 사장님이 자주 쓰는 템플릿 ★ 표시 — TournamentControlCenter 좌측 사이드의 빠른 선택용 */
   favorite?: boolean;
   /** 마지막으로 LIVE 시작에 사용된 시각 — recent 정렬에 사용 (Timestamp.toMillis 호환 number) */
@@ -57,6 +75,9 @@ export interface TournamentTemplate {
    *  사용자 요구: "탑 헤비 / 스탠다드 / 균등 + 시상등수 + 참가비 자동 계산".
    *  설정되지 않으면 기존 prizePool 수동 입력 + computeAutoITM fallback. */
   payoutStructure?: PayoutStructure;
+  /** 상금 표시 단위 — Phase 4 (2026-05-21). 매장 TV·어드민 분배표/프라이즈풀 표기에 사용.
+   *  사용자 모바일 앱(/m/*)은 어떤 상금 정보도 표시하지 않으므로 영향 없음. 디폴트 'ticket'. */
+  prizeDisplayUnit?: PrizeDisplayUnit;
 }
 
 /** 상금 분배표 정의. */
@@ -167,6 +188,11 @@ export function computePayoutsFromStructure(
 /**
  * 참가비 기반 prizePool 자동 계산 — payoutStructure.mode='auto-percent'일 때.
  * 예: buyIn 10,000 × 30명 × 90% = 270,000원 (10% 매장 rake)
+ *
+ * Phase 4 (2026-05-21): 만원 단위 내림 강제.
+ *  사용자 정책: "프라이즈풀의 계산은 만원단위로 끊어야한다."
+ *  buyIn이 1만원 단위가 아닐 수 있으므로 (예: 50,000 × 23 × 90% = 1,035,000 → 103만원),
+ *  최종 결과를 floor(/10000)*10000로 잘라 만원 단위 보장.
  */
 export function computeAutoPrizePool(
   buyIn: number,
@@ -176,7 +202,9 @@ export function computeAutoPrizePool(
   const bi = Math.max(0, Math.floor(buyIn || 0));
   const n = Math.max(0, Math.floor(totalPlayers || 0));
   const pct = Math.min(100, Math.max(0, payoutPercent || 0));
-  return Math.floor((bi * n * pct) / 100);
+  const raw = Math.floor((bi * n * pct) / 100);
+  // 만원 단위 내림 — 천/백/십/원 단위 절단
+  return Math.floor(raw / 10000) * 10000;
 }
 
 /** payoutStructure 기본값 — 새 템플릿 생성 시 자동 부착. */
@@ -224,6 +252,82 @@ export function computeAutoITM(totalPlayers: number): Array<{ rank: number; rati
 /** 1티켓 = 10,000원 (사용자 정의, 부산·경남 표준). UI에서만 T 단위 노출, 저장은 원 단위 유지. */
 export const TICKET_WON = 10000;
 
+/** 상금 분배표 만원 단위 강제 — Phase 4 (2026-05-21).
+ *  사용자 정책: "프라이즈풀의 계산은 만원단위로 끊어야한다. 천/백/십/원 단위는 허용되지 않는다."
+ *
+ *  알고리즘 (PM 결정):
+ *   1. 각 등수: floor(prizePool × ratio / 10000) × 10000  — 만원 단위 내림
+ *   2. 잔여 = prizePool - sum(각 등수 내림값)  — 0 ~ (등수 수 × 9999)원 범위
+ *   3. 잔여를 1등에 모두 추가 (만원 단위 유지: 잔여도 만원 단위로 떨어짐.
+ *      prizePool 자체가 만원 단위가 아니면 1원 단위 오차 발생할 수 있으나
+ *      computeAutoPrizePool/매장 어드민 입력 모두 만원 단위 강제이므로 사실상 0)
+ *
+ *  '내림' 선택 이유: 총합이 prizePool을 초과하면 매장이 자기 돈 보태야 함 → 안전한 내림.
+ *  1등 잔여 추가: 1등 흥행 강화 + 합계 = 정확히 prizePool 보장.
+ *
+ *  @returns 등수별 만원 단위 금액 (원). 합계 = prizePool (만원 단위일 때).
+ */
+export function computePayoutAmounts(
+  prizePool: number,
+  payouts: Array<{ rank: number; ratio: number }>,
+): Array<{ rank: number; amount: number }> {
+  if (prizePool <= 0 || payouts.length === 0) {
+    return payouts.map((p) => ({ rank: p.rank, amount: 0 }));
+  }
+  const UNIT = 10000;
+  // 1단계: 각 등수 만원 단위 내림
+  const floored = payouts.map((p) => ({
+    rank: p.rank,
+    amount: Math.floor((prizePool * p.ratio) / UNIT) * UNIT,
+  }));
+  // 2단계: 잔여 = prizePool - sum(내림값). 만원 단위 prizePool이면 잔여도 만원 단위.
+  const used = floored.reduce((s, x) => s + x.amount, 0);
+  const remainder = Math.max(0, prizePool - used);
+  // 3단계: 잔여를 1등에 추가
+  if (remainder > 0 && floored.length > 0) {
+    floored[0] = { ...floored[0], amount: floored[0].amount + remainder };
+  }
+  return floored;
+}
+
+/** 금액(원)을 사용자 정책에 따라 표시.
+ *  Phase 4 (2026-05-21) — ₩ 기호 완전 제거. 단위 사용자 선택.
+ *  - 'amount': "27만원" (만원 단위). 만원 미만은 "1만원 미만" 보호.
+ *  - 'ticket': "27T" (1T = 10,000원). 정확히 정수가 아니면 소수점 1자리.
+ *  amount=0/null이면 빈 문자열. */
+export function fmtPrizeDisplay(won: number, unit: PrizeDisplayUnit): string {
+  if (!won || won <= 0) return '';
+  if (unit === 'ticket') {
+    const exact = won / TICKET_WON;
+    if (Number.isInteger(exact)) return `${exact}T`;
+    return `${exact.toFixed(1)}T`;
+  }
+  // 'amount' — 만원 단위 표기
+  const man = Math.round(won / 10000);
+  if (man <= 0) return '1만원 미만';
+  return `${man.toLocaleString()}만원`;
+}
+
+/** 표시 단위 라벨 (UI 선택용). */
+export const PRIZE_DISPLAY_UNIT_LABELS: Record<PrizeDisplayUnit, string> = {
+  amount: '금액 (만원)',
+  ticket: '티켓 (T)',
+};
+
+/** 앤티 모드 라벨 (UI 선택용). */
+export const ANTE_MODE_LABELS: Record<AnteMode, string> = {
+  sb: 'SB와 동일',
+  bb: 'BB와 동일',
+  manual: '직접 입력',
+};
+
+/** 앤티 모드 기반 자동 ante 산출. anteMode에 따라 sb/bb 매핑. manual은 입력값 그대로. */
+export function resolveAnte(level: BlindLevel, mode: AnteMode): number {
+  if (mode === 'sb') return Math.max(0, level.sb || 0);
+  if (mode === 'bb') return Math.max(0, level.bb || 0);
+  return Math.max(0, level.ante || 0);
+}
+
 /** 원 → 티켓 (정수 표시. 1만원 단위 가정). */
 export function wonToTickets(won: number): number {
   return Math.round((won || 0) / TICKET_WON);
@@ -234,10 +338,12 @@ export function ticketsToWon(tickets: number): number {
   return Math.max(0, Math.floor(tickets || 0)) * TICKET_WON;
 }
 
-/** 표시용 — "3T (₩30,000)" 같은 라벨 (어드민 템플릿 편집 화면 전용). */
+/** 표시용 — "3T (3만원)" 같은 라벨 (어드민 템플릿 편집 화면 전용).
+ *  Phase 4 (2026-05-21): ₩ 기호 제거 — 사용자 정책 "한화 w 표시는 없애야". */
 export function fmtBuyIn(won: number): string {
   const t = wonToTickets(won);
-  return `${t}T (₩${(won || 0).toLocaleString()})`;
+  const man = Math.round((won || 0) / 10000);
+  return `${t}T (${man.toLocaleString()}만원)`;
 }
 
 /**

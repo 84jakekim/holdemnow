@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { db } from './firebase';
-import type { BlindLevel, PayoutStructure, TournamentTemplate } from './templates';
+import type { BlindLevel, PayoutStructure, PrizeDisplayUnit, TournamentTemplate } from './templates';
 import { computeAutoPrizePool } from './templates';
 
 /**
@@ -81,6 +81,10 @@ export interface LiveSession {
    *  사장이 도중에 템플릿 분배 정책을 바꿔도 진행 중 세션엔 영향 없음.
    *  매장 TV 분배표(PrizeDistributionPanel)가 우선 사용. 없으면 computeAutoITM fallback. */
   payoutStructure?: PayoutStructure;
+  /** 시작 시점에 고정된 상금 표시 단위 스냅샷 — Phase 4 (2026-05-21).
+   *  사장이 도중에 템플릿 표시 단위를 바꿔도 진행 중 세션엔 영향 없음.
+   *  매장 TV·LivePanel·TournamentControlCenter 표기에 사용. 없으면 'ticket' fallback. */
+  prizeDisplayUnit?: PrizeDisplayUnit;
 }
 
 /** 마지막 레벨 종료 후 자동 정리까지의 그레이스(초). */
@@ -440,6 +444,7 @@ export async function startLiveSession(
     updatedAt: serverTimestamp(),
   };
   if (ps) docData.payoutStructure = ps; // 정책 스냅샷 (분배 방식·ITM·custom 비율 등 전부 포함)
+  if (template.prizeDisplayUnit) docData.prizeDisplayUnit = template.prizeDisplayUnit; // Phase 4 표시 단위 스냅샷
 
   const ref = await addDoc(liveSessionsCol(), docData);
   return ref.id;

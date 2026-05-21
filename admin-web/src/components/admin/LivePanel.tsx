@@ -26,6 +26,7 @@ import {
   subscribeTemplates,
   posterStyleFor,
   fmtBuyIn,
+  fmtPrizeDisplay,
 } from '@/lib/templates';
 
 interface Props {
@@ -449,7 +450,10 @@ function SessionControls({ session }: { session: LiveSession }) {
       {/* 정보 박스 */}
       <div className="grid grid-cols-2 gap-2">
         <InfoBox label="잔여 인원" value={`${session.playersRemaining}/${session.totalPlayers}명`} />
-        <InfoBox label="상금 풀" value={`₩${(session.prizePool / 10000).toFixed(0)}만`} />
+        <InfoBox
+          label="상금 풀"
+          value={fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket') || '—'}
+        />
         {(() => {
           const isClosed =
             session.lateRegClosed || session.currentLevel > session.lateRegEndLevel;

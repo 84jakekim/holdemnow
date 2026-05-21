@@ -6,6 +6,8 @@ import {
   type TournamentType,
   type BlindLevel,
   type PayoutStructure,
+  type AnteMode,
+  type PrizeDisplayUnit,
   subscribeTemplates,
   createTemplate,
   updateTemplate,
@@ -16,6 +18,8 @@ import {
   DEFAULT_BREAK_DURATION_SEC,
   DEFAULT_PAYOUT_STRUCTURE,
   DISTRIBUTION_LABELS,
+  ANTE_MODE_LABELS,
+  PRIZE_DISPLAY_UNIT_LABELS,
   BLIND_STEP,
   POSTER_STYLES,
   posterStyleFor,
@@ -24,7 +28,10 @@ import {
   wonToTickets,
   ticketsToWon,
   fmtBuyIn,
+  fmtPrizeDisplay,
+  resolveAnte,
   computePayoutsFromStructure,
+  computePayoutAmounts,
   computeAutoPrizePool,
 } from '@/lib/templates';
 
@@ -223,6 +230,10 @@ function TemplateEditor({
   // 기존 데이터에 anteEnabled 없으면 ante>0이 하나라도 있는지로 추론
   const initialAnteEnabled =
     initial?.anteEnabled ?? (initial ? initial.blindStructure.some((b) => (b.ante || 0) > 0) : false);
+  // 기존 데이터에 anteMode 없으면 'manual' (기존 호환 — ante 값이 직접 박혀있던 케이스)
+  const initialAnteMode: AnteMode = initial?.anteMode ?? 'manual';
+  // 기존 데이터에 prizeDisplayUnit 없으면 'ticket' (입력 단위와 일관, 디폴트)
+  const initialPrizeUnit: PrizeDisplayUnit = initial?.prizeDisplayUnit ?? 'ticket';
 
   const [form, setForm] = useState<Omit<TournamentTemplate, 'id'>>(
     initial
@@ -238,8 +249,10 @@ function TemplateEditor({
           posterStyle: initial.posterStyle,
           blindStructure: initial.blindStructure,
           anteEnabled: initialAnteEnabled,
+          anteMode: initialAnteMode,
           // 기존 템플릿에 payoutStructure 없으면 기본값 부착 (UI에서 즉시 편집 가능)
           payoutStructure: initial.payoutStructure ?? { ...DEFAULT_PAYOUT_STRUCTURE },
+          prizeDisplayUnit: initialPrizeUnit,
         }
       : {
           name: '',
@@ -253,7 +266,9 @@ function TemplateEditor({
           posterStyle: 'poster-dark',
           blindStructure: DEFAULT_BLIND_STRUCTURE.map((b) => ({ ...b })),
           anteEnabled: false,
+          anteMode: 'manual',
           payoutStructure: { ...DEFAULT_PAYOUT_STRUCTURE },
+          prizeDisplayUnit: 'ticket',
         },
   );
   const [saving, setSaving] = useState(false);
@@ -372,7 +387,8 @@ function TemplateEditor({
     try {
       // payoutStructure.mode='auto-percent'면 prizePool도 자동 계산값으로 저장
       // (매장 TV/LivePanel은 session.prizePool을 직접 읽으므로 사전 계산해서 박아둠).
-      const finalPrizePool =
+      // 수동 모드도 만원 단위로 강제 (Phase 4 — 사용자 정책).
+      const rawPrize =
         form.payoutStructure?.mode === 'auto-percent'
           ? computeAutoPrizePool(
               form.buyIn,
@@ -380,9 +396,12 @@ function TemplateEditor({
               form.payoutStructure?.payoutPercent ?? 90,
             )
           : form.prizePool;
+      const finalPrizePool = Math.floor((rawPrize || 0) / 10000) * 10000; // 만원 단위 강제 내림
+      const anteMode: AnteMode = form.anteMode ?? 'manual';
       await onSave({
         ...form,
         prizePool: finalPrizePool,
+        anteMode,
         // 게런티/상금풀은 form 값 그대로 저장 — 매장 어드민/매장 TV 디스플레이에서만 노출됨.
         // 사용자 모바일 앱(/m/*)은 prizePool/guarantee 필드 자체를 화면에 표기하지 않으므로 분리 안전.
         blindStructure: form.blindStructure.map((b, i) => {
@@ -396,13 +415,20 @@ function TemplateEditor({
               isBreak: true,
             };
           }
+          const sb = snap100(b.sb);
+          const bb = snap100(b.bb || sb * 2);
+          // Phase 4: anteMode='sb'/'bb'면 ante를 sb/bb로 강제. 'manual'이면 입력값 그대로 (100 단위 정규화).
+          let ante = 0;
+          if (form.anteEnabled) {
+            if (anteMode === 'sb') ante = sb;
+            else if (anteMode === 'bb') ante = bb;
+            else ante = Math.max(0, Math.round((b.ante || 0) / BLIND_STEP) * BLIND_STEP);
+          }
           return {
             level: i + 1,
-            sb: snap100(b.sb),
-            bb: snap100(b.bb || b.sb * 2),
-            ante: form.anteEnabled
-              ? Math.max(0, Math.round((b.ante || 0) / BLIND_STEP) * BLIND_STEP)
-              : 0,
+            sb,
+            bb,
+            ante,
             durationSec: Math.max(60, b.durationSec || DEFAULT_LEVEL_DURATION_SEC),
           };
         }),
@@ -477,7 +503,7 @@ function TemplateEditor({
               </span>
             </div>
             <div className="text-[10px] text-gray-400 mt-1 font-mono">
-              ≈ ₩{form.guarantee.toLocaleString()} · 매장 내 TV 타이머 전용
+              ≈ {fmtPrizeDisplay(form.guarantee, form.prizeDisplayUnit ?? 'ticket') || '—'} · 매장 내 TV 타이머 전용
             </div>
           </Field>
           <Field label="상금풀 (T · 1T=1만원)">
@@ -507,9 +533,9 @@ function TemplateEditor({
             </div>
             <div className="text-[10px] text-gray-400 mt-1 font-mono">
               {form.payoutStructure?.mode === 'auto-percent' ? (
-                <>🔄 자동 계산 — 아래 분배 정책에서 시상 비율 조정</>
+                <>🔄 자동 계산 — 아래 분배 정책에서 시상 비율 조정 (만원 단위 자동)</>
               ) : (
-                <>≈ ₩{form.prizePool.toLocaleString()} · 매장 TV에서 PRIZE POOL로 표시</>
+                <>≈ {fmtPrizeDisplay(form.prizePool, form.prizeDisplayUnit ?? 'ticket') || '—'} · 매장 TV에서 PRIZE POOL로 표시 (만원 단위)</>
               )}
             </div>
           </Field>
@@ -531,7 +557,7 @@ function TemplateEditor({
               </span>
             </div>
             <div className="text-[10px] text-gray-400 mt-1 font-mono">
-              ≈ ₩{form.buyIn.toLocaleString()}
+              ≈ {fmtPrizeDisplay(form.buyIn, form.prizeDisplayUnit ?? 'ticket') || '—'}
             </div>
           </Field>
           <Field label="인원">
@@ -565,30 +591,93 @@ function TemplateEditor({
           </Field>
         </div>
 
-        {/* 앤티 on/off 토글 */}
-        <div className="bg-white border-[1.5px] border-gray-200 rounded-xl px-3.5 py-3 flex items-center justify-between">
-          <div>
-            <div className="text-xs font-extrabold text-gray-900">앤티 사용 여부</div>
-            <div className="text-[11px] text-gray-500 mt-0.5">
-              {form.anteEnabled
-                ? '각 레벨 ante 입력 활성. 기본값은 BB의 1/10(100 단위 반올림).'
-                : '모든 레벨 ante = 0. 입력란 숨김.'}
+        {/* 앤티 on/off 토글 + 앤티 적용 방식 (Phase 4 — 2026-05-21) */}
+        <div className="bg-white border-[1.5px] border-gray-200 rounded-xl px-3.5 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-extrabold text-gray-900">앤티 사용 여부</div>
+              <div className="text-[11px] text-gray-500 mt-0.5">
+                {form.anteEnabled
+                  ? '아래에서 앤티 적용 방식 선택 (SB / BB / 직접 입력)'
+                  : '모든 레벨 ante = 0. 입력란 숨김.'}
+              </div>
             </div>
-          </div>
-          <button
-            type="button"
-            onClick={toggleAnte}
-            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-              form.anteEnabled ? 'bg-gray-900' : 'bg-gray-300'
-            }`}
-            aria-pressed={form.anteEnabled}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                form.anteEnabled ? 'translate-x-5' : 'translate-x-0'
+            <button
+              type="button"
+              onClick={toggleAnte}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                form.anteEnabled ? 'bg-gray-900' : 'bg-gray-300'
               }`}
-            />
-          </button>
+              aria-pressed={form.anteEnabled}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  form.anteEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          {form.anteEnabled && (
+            <div>
+              <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">
+                앤티 적용 방식
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {(['sb', 'bb', 'manual'] as const).map((m) => {
+                  const active = (form.anteMode ?? 'manual') === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => update('anteMode', m)}
+                      className="py-2 rounded text-[11px] font-bold border-[1.5px] transition leading-tight"
+                      style={{
+                        background: active ? '#111' : '#fff',
+                        color: active ? '#fff' : '#111',
+                        borderColor: active ? '#111' : '#eaeaea',
+                      }}
+                    >
+                      {ANTE_MODE_LABELS[m]}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] text-gray-400 mt-1.5">
+                {(form.anteMode ?? 'manual') === 'sb' && '💡 각 레벨 앤티 = 해당 레벨 SB (자동 적용, 아래 표 read-only).'}
+                {form.anteMode === 'bb' && '💡 각 레벨 앤티 = 해당 레벨 BB (자동 적용, 아래 표 read-only).'}
+                {(form.anteMode ?? 'manual') === 'manual' && '💡 각 레벨마다 앤티를 직접 입력. 빈 값은 BB의 1/10 추천값.'}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 상금 표시 단위 — Phase 4 (2026-05-21).
+            매장 어드민/매장 TV 분배표·프라이즈풀 표기에 사용. 사용자 앱 X. */}
+        <div className="bg-white border-[1.5px] border-gray-200 rounded-xl px-3.5 py-3">
+          <div className="text-xs font-extrabold text-gray-900 mb-0.5">💴 상금 표시 단위</div>
+          <div className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+            매장 TV·어드민 분배표 표기 방식. 사용자 앱에는 어떤 상금 정보도 표시 안 됨.
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            {(['amount', 'ticket'] as const).map((u) => {
+              const active = (form.prizeDisplayUnit ?? 'ticket') === u;
+              return (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => update('prizeDisplayUnit', u)}
+                  className="py-2 rounded text-[11px] font-bold border-[1.5px] transition"
+                  style={{
+                    background: active ? '#111' : '#fff',
+                    color: active ? '#fff' : '#111',
+                    borderColor: active ? '#111' : '#eaeaea',
+                  }}
+                >
+                  {PRIZE_DISPLAY_UNIT_LABELS[u]}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ─── 상금 분배 정책 (Phase 3 — 2026-05-21) ──────────────────
@@ -597,6 +686,7 @@ function TemplateEditor({
           structure={form.payoutStructure ?? DEFAULT_PAYOUT_STRUCTURE}
           buyIn={form.buyIn}
           totalPlayers={form.totalPlayers}
+          displayUnit={form.prizeDisplayUnit ?? 'ticket'}
           onChange={(next) => update('payoutStructure', next)}
         />
 
@@ -714,16 +804,30 @@ function TemplateEditor({
                           updateBlind(idx, 'bb', parseInt(e.target.value) || BLIND_STEP * 2)
                         }
                       />
-                      {form.anteEnabled && (
-                        <input
-                          type="number"
-                          min={0}
-                          step={BLIND_STEP}
-                          className="form-input text-xs font-mono"
-                          value={b.ante || 0}
-                          onChange={(e) => updateBlind(idx, 'ante', parseInt(e.target.value) || 0)}
-                        />
-                      )}
+                      {form.anteEnabled && (() => {
+                        const mode = form.anteMode ?? 'manual';
+                        const auto = mode === 'sb' ? b.sb : mode === 'bb' ? b.bb : null;
+                        if (auto !== null) {
+                          return (
+                            <div
+                              className="form-input text-xs font-mono bg-gray-50 text-gray-600 flex items-center"
+                              title={`자동: ${mode.toUpperCase()}와 동일`}
+                            >
+                              {auto.toLocaleString()}
+                            </div>
+                          );
+                        }
+                        return (
+                          <input
+                            type="number"
+                            min={0}
+                            step={BLIND_STEP}
+                            className="form-input text-xs font-mono"
+                            value={b.ante || 0}
+                            onChange={(e) => updateBlind(idx, 'ante', parseInt(e.target.value) || 0)}
+                          />
+                        );
+                      })()}
                     </>
                   )}
                   <input
@@ -753,7 +857,10 @@ function TemplateEditor({
             const baseSb = lastPlay.sb;
             const nextSb = snap100(baseSb + BLIND_STEP);
             const nextBb = nextSb * 2;
-            const nextAnte = form.anteEnabled ? suggestAnte(nextBb) : 0;
+            const mode = form.anteMode ?? 'manual';
+            const nextAnte = form.anteEnabled
+              ? (mode === 'sb' ? nextSb : mode === 'bb' ? nextBb : suggestAnte(nextBb))
+              : 0;
             const playCount = form.blindStructure.filter((b) => !b.isBreak).length;
             return (
               <div className="mt-2 bg-gray-900 text-white rounded-lg px-3 py-2 flex items-center justify-between gap-2">
@@ -849,11 +956,13 @@ function PayoutStructureEditor({
   structure,
   buyIn,
   totalPlayers,
+  displayUnit,
   onChange,
 }: {
   structure: PayoutStructure;
   buyIn: number;
   totalPlayers: number;
+  displayUnit: PrizeDisplayUnit;
   onChange: (next: PayoutStructure) => void;
 }) {
   const update = <K extends keyof PayoutStructure>(k: K, v: PayoutStructure[K]) => {
@@ -957,9 +1066,9 @@ function PayoutStructureEditor({
               </div>
             </Field>
             <div className="bg-gray-900 text-white rounded-lg px-3 py-2 text-right">
-              <div className="text-[9px] font-bold tracking-widest text-gray-400">자동 계산</div>
+              <div className="text-[9px] font-bold tracking-widest text-gray-400">자동 계산 (만원 단위)</div>
               <div className="font-mono text-sm font-extrabold">
-                ₩{computedPrize.toLocaleString()}
+                {fmtPrizeDisplay(computedPrize, displayUnit) || '—'}
               </div>
               <div className="text-[9px] text-gray-400 font-mono">
                 {wonToTickets(buyIn)}T × {totalPlayers}명 × {structure.payoutPercent ?? 90}%
@@ -1051,48 +1160,52 @@ function PayoutStructureEditor({
           <div className="grid grid-cols-[40px_1fr_1fr] text-[10px] font-bold text-gray-500 tracking-wider px-2 py-1.5 border-b border-gray-200 bg-white">
             <div>등수</div>
             <div>비율</div>
-            <div className="text-right">금액 (자동)</div>
+            <div className="text-right">금액 (만원 단위)</div>
           </div>
           <div className="max-h-60 overflow-y-auto">
-            {payouts.map((p, idx) => {
-              const ratioPct = p.ratio * 100;
-              const won = Math.round(displayPrize * p.ratio);
-              return (
-                <div
-                  key={p.rank}
-                  className="grid grid-cols-[40px_1fr_1fr] items-center px-2 py-1 text-[11px] border-b border-gray-100 last:border-b-0"
-                >
-                  <div className="font-mono font-extrabold text-gray-900">
-                    {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `${p.rank}`}
-                  </div>
-                  {structure.distribution === 'custom' ? (
-                    <div className="relative max-w-[100px]">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        className="form-input font-mono text-xs pr-6"
-                        value={
-                          structure.customPercents?.[idx] != null
-                            ? structure.customPercents[idx]
-                            : Math.round(ratioPct * 10) / 10
-                        }
-                        onChange={(e) => updateCustomPercent(idx, parseFloat(e.target.value) || 0)}
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 pointer-events-none">
-                        %
-                      </span>
+            {(() => {
+              // Phase 4: 만원 단위 내림 + 잔여 1등 추가 — 합계 = displayPrize 보장
+              const amounts = computePayoutAmounts(displayPrize, payouts);
+              return payouts.map((p, idx) => {
+                const ratioPct = p.ratio * 100;
+                const won = amounts[idx]?.amount ?? 0;
+                return (
+                  <div
+                    key={p.rank}
+                    className="grid grid-cols-[40px_1fr_1fr] items-center px-2 py-1 text-[11px] border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="font-mono font-extrabold text-gray-900">
+                      {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `${p.rank}`}
                     </div>
-                  ) : (
-                    <div className="font-mono text-gray-700">{ratioPct.toFixed(1)}%</div>
-                  )}
-                  <div className="text-right font-mono text-gray-900 font-bold">
-                    {displayPrize > 0 ? `₩${won.toLocaleString()}` : '—'}
+                    {structure.distribution === 'custom' ? (
+                      <div className="relative max-w-[100px]">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          className="form-input font-mono text-xs pr-6"
+                          value={
+                            structure.customPercents?.[idx] != null
+                              ? structure.customPercents[idx]
+                              : Math.round(ratioPct * 10) / 10
+                          }
+                          onChange={(e) => updateCustomPercent(idx, parseFloat(e.target.value) || 0)}
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 pointer-events-none">
+                          %
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="font-mono text-gray-700">{ratioPct.toFixed(1)}%</div>
+                    )}
+                    <div className="text-right font-mono text-gray-900 font-bold">
+                      {displayPrize > 0 ? (fmtPrizeDisplay(won, displayUnit) || '—') : '—'}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
         </div>
         {structure.mode === 'manual' && (
