@@ -276,6 +276,14 @@
         { "fieldPath": "storeId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "moderationKeywords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "word", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
