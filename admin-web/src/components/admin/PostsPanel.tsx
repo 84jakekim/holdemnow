@@ -11,7 +11,7 @@ import {
   deletePostImageByUrl,
   MAX_POST_IMAGES,
 } from '@/lib/posts';
-import { useAuth } from '@/lib/hooks';
+import { useAuth, useStoreDoc } from '@/lib/hooks';
 
 interface Props {
   storeId: string;
@@ -24,6 +24,7 @@ interface Props {
  */
 export default function PostsPanel({ storeId, storeName }: Props) {
   const authState = useAuth();
+  const store = useStoreDoc(storeId);
   const [posts, setPosts] = useState<StorePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,53 @@ export default function PostsPanel({ storeId, storeName }: Props) {
   const now = Date.now();
   const activeCount = posts.filter((p) => p.status === 'published' && (p.expiresAt?.toMillis() ?? 0) > now).length;
 
+  // 매장 상태 진단 — Firestore rules가 글 작성을 허용하는 조건과 동일하게 계산
+  const storeStatus = store?.status ?? 'active'; // status 필드 없는 레거시는 'active'로 간주
+  const storeOwnerUid = store?.ownerUid;
+  // StoreDoc 타입엔 isDemo 없지만 Firestore 문서엔 존재할 수 있음 — 런타임에서 접근
+  const isDemo = (store as unknown as { isDemo?: boolean } | null | undefined)?.isDemo === true;
+  const myUid = authState.user.uid;
+  const isOwner = storeOwnerUid != null && storeOwnerUid === myUid;
+  // rules 통과 조건: (active || isDemo) && (isStoreOwner || isStoreMember)
+  // 본 페이지는 이미 owner/platform_admin 검증을 통과한 상태에서 진입함
+  const canWrite = isDemo || storeStatus === 'active';
+
+  // 상태별 안내 메시지
+  const statusBanner = (() => {
+    if (!store) return null;
+    if (canWrite) return null;
+    if (storeStatus === 'pending') {
+      return {
+        tone: 'amber' as const,
+        icon: '🕐',
+        title: '매장 승인 대기 중',
+        msg: '본사 승인 완료 후 글 작성이 가능합니다. 지금은 화면을 미리 둘러볼 수 있어요.',
+      };
+    }
+    if (storeStatus === 'paused') {
+      return {
+        tone: 'red' as const,
+        icon: '⛔',
+        title: '매장이 일시 정지되었습니다',
+        msg: '본사에 문의해 정지 사유 확인 후 활성화 요청을 진행해주세요.',
+      };
+    }
+    if (storeStatus === 'closed') {
+      return {
+        tone: 'red' as const,
+        icon: '🚫',
+        title: '폐업/종료된 매장입니다',
+        msg: '글 작성이 차단되어 있습니다.',
+      };
+    }
+    return {
+      tone: 'red' as const,
+      icon: '⚠️',
+      title: `알 수 없는 매장 상태 (${storeStatus})`,
+      msg: '본사에 문의해주세요.',
+    };
+  })();
+
   return (
     <div>
       <div className="mb-6 flex items-start justify-between">
@@ -57,11 +105,47 @@ export default function PostsPanel({ storeId, storeName }: Props) {
         </div>
         <button
           onClick={() => setEditing('new')}
-          className="bg-black text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:opacity-80"
+          disabled={!canWrite}
+          title={!canWrite ? '매장 활성 상태에서만 글을 작성할 수 있습니다' : undefined}
+          className="bg-black text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           + 새 소식
         </button>
       </div>
+
+      {statusBanner && (
+        <div
+          className={`mb-4 rounded-xl p-4 flex items-start gap-3 ${
+            statusBanner.tone === 'amber'
+              ? 'bg-amber-50 border border-amber-200'
+              : 'bg-red-50 border border-red-200'
+          }`}
+        >
+          <div className="text-xl flex-shrink-0">{statusBanner.icon}</div>
+          <div>
+            <div className={`font-bold text-sm ${statusBanner.tone === 'amber' ? 'text-amber-800' : 'text-red-700'}`}>
+              {statusBanner.title}
+            </div>
+            <div className={`text-xs mt-1 leading-relaxed ${statusBanner.tone === 'amber' ? 'text-amber-700' : 'text-red-600'}`}>
+              {statusBanner.msg}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 진단 정보 — 사장님이 즉시 원인 파악 가능 */}
+      <details className="mb-4 text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <summary className="cursor-pointer select-none font-bold text-gray-700">🔍 매장 상태 진단</summary>
+        <div className="mt-2 font-mono space-y-0.5">
+          <div>매장 ID: {storeId}</div>
+          <div>매장 status: {store === undefined ? 'loading…' : (store?.status ?? '(필드 없음 → active로 간주)')}</div>
+          <div>isDemo: {String(isDemo)}</div>
+          <div>매장 ownerUid: {storeOwnerUid ?? '(없음 — 본사 승인 필요)'}</div>
+          <div>내 uid: {myUid}</div>
+          <div>owner 일치: {isOwner ? '✓' : '✗'}</div>
+          <div>글 작성 가능: {canWrite ? '✓' : '✗ — 본사 승인 또는 isDemo=true 필요'}</div>
+        </div>
+      </details>
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">{error}</div>

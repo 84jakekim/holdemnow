@@ -43,7 +43,9 @@ const MENUS = [
 
 // pending 매장에서 차단되는 외부 노출 메뉴 — 본사 승인 후에만 활성
 // tournament는 LIVE+템플릿+디스플레이 통합 메뉴이므로 함께 차단
-const PENDING_DISABLED_MENUS = new Set(['tournament', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'ads']);
+// 'posts'(오늘의 소식)는 패널 내부에서 status별 안내 + 작성 버튼 disable로 처리
+// → 메뉴 자체는 열어둬서 사장이 미리 UI를 둘러보고 승인 후 즉시 사용 가능하게.
+const PENDING_DISABLED_MENUS = new Set(['tournament', 'jobs', 'dealers', 'used', 'tournaments', 'ads']);
 
 function AdminPageInner({ storeId }: { storeId: string }) {
   const router = useRouter();
