@@ -252,34 +252,23 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         boxShadow: '0 1px 2px rgba(25,31,40,0.04), 0 6px 16px rgba(25,31,40,0.05)',
       }}
     >
-      {/* 색상 띠 — 토너 포스터 컬러를 시각 ID로 사용 (라이브스코어 팀 컬러 톤) */}
+      {/* 카드 전체 좌측 4px 수직 액센트 바 — 상단/헤더 BG의 이중 띠 이질감 제거.
+       * 카드 전체 높이를 가로지르는 단일 컬러 ID. (이전 상단 4px 색띠는 제거) */}
       <div
         aria-hidden
-        style={{
-          height: 4,
-          background: poster.bg,
-        }}
+        className="absolute left-0 top-0 bottom-0"
+        style={{ width: 4, background: poster.bg, zIndex: 1 }}
       />
 
-      {/* 헤더 블록 — 펍명·토너명 두 행을 컬러 배경으로 강조.
-       * 흰색 88% 오버레이 위에 poster.bg를 깔아 어떤 색·그라데이션이든 옅게 보이게.
-       * 좌측 4px 수직 액센트 바로 시각 진입점을 한 번 더 강화. */}
+      {/* 헤더 블록 — 펍명·토너명 두 행을 컬러 배경으로 강조 */}
       <div
-        className="relative"
         style={{
-          background: `linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.92)), ${poster.bg}`,
+          background: `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.95)), ${poster.bg}`,
           borderBottom: `1px solid ${TOSS.divider}`,
         }}
       >
-        {/* 좌측 4px 수직 액센트 */}
-        <div
-          aria-hidden
-          className="absolute left-0 top-0 bottom-0"
-          style={{ width: 4, background: poster.bg }}
-        />
-
         {/* 1행 — 펍 이름(좌·최상단) · LIVE + 참가가능/마감 (우상단) */}
-        <div className="pl-5 pr-4 pt-3 pb-1 flex items-center gap-2">
+        <div className="pl-5 pr-4 pt-3.5 pb-1 flex items-center gap-2">
           <span
             className="text-[16px] font-extrabold truncate flex-1 min-w-0"
             style={{ color: TOSS.textTitle, letterSpacing: '-0.025em' }}
@@ -297,7 +286,7 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         </div>
 
         {/* 2행 — 토너명 · 티켓 · 상태칩 */}
-        <div className="pl-5 pr-4 pb-2.5 flex items-center gap-1.5 min-w-0">
+        <div className="pl-5 pr-4 pb-3 flex items-center gap-1.5 min-w-0">
           <span
             className="text-[12.5px] font-semibold truncate"
             style={{ color: TOSS.textBody, letterSpacing: '-0.01em' }}
@@ -331,53 +320,70 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         </div>
       </div>
 
-      {/* 메인행 — 좌: Lv·블라인드·NEXT  /  우: hero 타이머 */}
-      <div className="px-4 pb-3.5 flex items-end gap-3">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
-          <span
-            className="text-[11px] font-bold px-1.5 py-[2px] rounded-md tabular-nums"
-            style={{ background: TOSS.gray50, color: TOSS.textTitle }}
+      {/* 메인행 — TV 풀스크린 타이머의 미니어처.
+       * 좌: 큰 Lv 라벨 + 블라인드 굵게 / 우: hero 타이머 + NEXT 칩 */}
+      <div className="pl-5 pr-4 pt-3.5 pb-3.5 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          {/* Lv N — TV 라벨 톤 */}
+          <div className="flex items-baseline gap-1.5">
+            <span
+              className="text-[10px] font-bold tracking-[0.15em]"
+              style={{ color: TOSS.textHint }}
+            >
+              LEVEL
+            </span>
+            <span
+              className="text-[22px] font-extrabold leading-none tabular-nums"
+              style={{ color: TOSS.textTitle, letterSpacing: '-0.03em' }}
+            >
+              {session.currentLevel}
+            </span>
+          </div>
+          {/* 블라인드 — 강조 */}
+          <div
+            className="mt-1 text-[18px] font-extrabold tabular-nums leading-none"
+            style={{ color: TOSS.textTitle, letterSpacing: '-0.02em' }}
           >
-            Lv {session.currentLevel}
-          </span>
-          <span className="text-[11.5px] tabular-nums font-medium" style={{ color: TOSS.textBody }}>
             {session.smallBlind}/{session.bigBlind}
-          </span>
+          </div>
+          <div
+            className="text-[10px] font-bold tracking-[0.12em] mt-1"
+            style={{ color: TOSS.textHint }}
+          >
+            BLINDS
+          </div>
+        </div>
+
+        {/* 우측 — hero 타이머 (TV 풀스크린의 축소판) + NEXT 칩 */}
+        <div className="flex-shrink-0 text-right flex flex-col items-end">
+          <div
+            className={`text-[40px] font-extrabold leading-none tabular-nums ${timerPulse ? 'animate-pulse' : ''}`}
+            style={{
+              color: timerColor,
+              letterSpacing: '-0.045em',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {isFinishing && graceSec != null ? fmtTime(graceSec) : fmtTime(sec)}
+          </div>
           {nextBlind && !isFinishing && (
-            <>
-              <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
+            <span
+              className="mt-2 inline-flex items-baseline gap-1 px-2 py-[3px] rounded-md"
+              style={{ background: nextBlind.isBreak ? 'rgba(255,179,26,0.12)' : TOSS.gray50 }}
+            >
               <span
-                className="text-[10px] font-bold tracking-wider"
+                className="text-[9.5px] font-bold tracking-wider"
                 style={{ color: nextBlind.isBreak ? TOSS.yellow : TOSS.textHint }}
               >
                 NEXT
               </span>
               <span className="text-[11px] tabular-nums font-bold" style={{ color: TOSS.textBody }}>
                 {nextBlind.isBreak
-                  ? `BREAK ${Math.round(nextBlind.durationSec / 60)}분`
+                  ? `${Math.round(nextBlind.durationSec / 60)}분`
                   : `${nextBlind.sb}/${nextBlind.bb}`}
               </span>
-            </>
+            </span>
           )}
-        </div>
-
-        <div className="flex-shrink-0 text-right">
-          <div
-            className={`text-[36px] font-extrabold leading-none tabular-nums ${timerPulse ? 'animate-pulse' : ''}`}
-            style={{
-              color: timerColor,
-              letterSpacing: '-0.04em',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {isFinishing && graceSec != null ? fmtTime(graceSec) : fmtTime(sec)}
-          </div>
-          <div
-            className="text-[10px] font-bold tracking-wider mt-1"
-            style={{ color: TOSS.textHint }}
-          >
-            {isFinishing ? 'GRACE' : isPaused ? 'PAUSED' : 'REMAINING'}
-          </div>
         </div>
       </div>
 
