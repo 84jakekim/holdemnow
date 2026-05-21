@@ -20,6 +20,8 @@ import {
   type StorePost,
   type PinnedPost,
 } from '@/lib/posts';
+import { resolveCardVisual } from '@/lib/postCardStyle';
+import { formatRelativeKo } from '@/lib/relativeTime';
 import { RatingChip } from '@/components/mobile/RatingChip';
 import StoreFindModeToggle from '@/components/mobile/find/StoreFindModeToggle';
 import PrimaryLiveCard from '@/components/mobile/live/PrimaryLiveCard';
@@ -1152,6 +1154,10 @@ function PinnedBanner({ post }: { post: PinnedPost }) {
 function StorePostMiniCard({ post }: { post: StorePost }) {
   const photo = post.imageUrls[0];
   const summary = post.body.split('\n').slice(0, 4).join('\n');
+  // Phase F: headline 우선, 없으면 body 첫 줄
+  const headline = (post.headline ?? '').trim() || (post.body || '').split('\n')[0]?.trim() || '';
+  const { style, emoji } = resolveCardVisual(post);
+  const relative = formatRelativeKo(post.createdAt);
   return (
     <Link
       href={`/m/post/${post.storeId}/${post.id}`}
@@ -1171,6 +1177,11 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
               +{post.imageUrls.length - 1}
             </span>
           )}
+          {relative && (
+            <span className="absolute top-2 left-2 text-[10px] font-semibold rounded-full px-1.5 py-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>
+              {relative}
+            </span>
+          )}
           {/* 매장명 — 하단 그라데이션 위에 작게 */}
           {post.storeName && (
             <>
@@ -1182,10 +1193,33 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
           )}
         </div>
       ) : (
-        /* 사진 없는 경우 — 세로 비율 텍스트 카드 */
-        <div className="px-3 py-3" style={{ aspectRatio: '2/3', background: 'var(--surface-2)' }}>
-          <div className="text-[11px] font-extrabold mb-1 truncate" style={{ color: 'var(--brand)' }}>{post.storeName ?? '매장'}</div>
-          <div className="text-[10px] leading-relaxed whitespace-pre-wrap line-clamp-[10]" style={{ color: 'var(--text-2)' }}>{summary}</div>
+        /* 사진 없는 경우 — 색상 톤 + 헤드라인 강조 텍스트 카드 (Phase F) */
+        <div
+          className="px-3 py-3 flex flex-col"
+          style={{ aspectRatio: '2/3', background: style.surface, border: `1px solid ${style.border}` }}
+        >
+          <div className="flex items-center gap-1.5 mb-1.5">
+            {emoji && (
+              <div
+                className="flex items-center justify-center rounded"
+                style={{ width: 22, height: 22, background: style.accent, fontSize: 13 }}
+              >
+                <span>{emoji}</span>
+              </div>
+            )}
+            <div className="text-[11px] font-extrabold truncate flex-1" style={{ color: style.textSecondary }}>
+              {post.storeName ?? '매장'}
+            </div>
+          </div>
+          {headline && (
+            <div className="text-[12px] font-extrabold leading-snug line-clamp-3 mb-1.5" style={{ color: style.textPrimary }}>
+              {headline}
+            </div>
+          )}
+          <div className="text-[10px] leading-relaxed whitespace-pre-wrap line-clamp-[7] flex-1" style={{ color: style.textSecondary }}>{summary}</div>
+          {relative && (
+            <div className="text-[9px] font-medium mt-1" style={{ color: style.textSecondary, opacity: 0.8 }}>{relative}</div>
+          )}
         </div>
       )}
     </Link>
