@@ -25,9 +25,11 @@ export { getUserAuthInfo } from './admin/getUserAuthInfo';
 // ===== YouTube — 채널 페이지 메타 추출 (API key 불필요, og:meta 파싱) =====
 export { getYoutubeChannelMeta } from './youtube/getYoutubeChannelMeta';
 
-// ===== YouTube — 인기 영상 자동 큐레이션 (매일 04:00 KST, YOUTUBE_API_KEY secret 필요) =====
-// curateHotVideos: 스케줄 정상 트리거 / triggerCurateHotVideos: 관리자 수동 트리거 (v0.5에서 어드민 callable 정식화)
+// ===== YouTube — 인기 영상 자동 큐레이션 (매시간 KST, config.scheduleHourKst 일치 시만 실행) =====
+// curateHotVideos: 매시 정각 스케줄 / triggerCurateHotVideos: 관리자 수동 트리거 (secret query)
 export { curateHotVideos, triggerCurateHotVideos } from './youtube/curateHotVideos';
+// 본사 어드민 즉시 실행 Callable (platform_admin only, /platform/videos 페이지 "지금 실행" 버튼)
+export { triggerYoutubeCurationNow } from './youtube/triggerYoutubeCurationNow';
 
 // ===== Notifications (FCM) =====
 export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';

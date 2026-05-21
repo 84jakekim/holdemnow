@@ -2,16 +2,25 @@
  * curateHotVideos — 인기 유튜브 영상 자동 큐레이션
  *
  * 트리거:
- *  - onSchedule: 매일 새벽 4시 KST (정상 일정)
+ *  - onSchedule: 매시 정각 KST (config.scheduleHourKst 와 일치할 때만 실제 큐레이션 실행)
  *  - onRequest:  수동 트리거 (관리자 즉시 실행용, secret query param 인증)
+ *  - onCall:     triggerYoutubeCurationNow.ts (platform_admin 어드민 버튼)
  *
  * 흐름:
+ *   0. platformConfig/youtubeCuration doc 읽기 (없으면 default)
  *   1. hotYoutubers 컬렉션에서 isActive=true && channelId!='' 채널 목록 수집
  *   2. 각 채널 RSS feed 파싱 → 최근 15개 videoId 추출
- *   3. YouTube Data API videos.list (50개 batch) 로 메타/통계 보강
- *   4. 90일 이내 영상만 필터 → score = viewCount / daysSincePublished 계산
- *   5. hotYoutubeVideos upsert (manual doc 보호)
- *   6. 만료 auto doc 일괄 삭제
+ *   3. YouTube Data API videos.list (50개 batch) 로 메타/통계/duration 보강
+ *   4. config 기반 필터:
+ *        - maxAgeDays 이내
+ *        - 쇼츠 제외 (excludeShorts && duration <= 60s 또는 #shorts/#쇼츠)
+ *        - 최소 길이 minDurationSec
+ *        - includeKeywords 중 1개 이상 포함
+ *        - excludeKeywords 중 1개라도 있으면 제외
+ *   5. score = viewCount / daysSincePublished 계산
+ *   6. score 내림차순 정렬 → 상위 maxResults 만 hotYoutubeVideos upsert (manual doc 보호)
+ *   7. 만료 auto doc 일괄 삭제
+ *   8. platformConfig/youtubeCuration.lastRunAt, lastRunResult 기록
  */
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -22,8 +31,8 @@ import axios from 'axios';
 import { XMLParser } from 'fast-xml-parser';
 import { logger } from 'firebase-functions/v2';
 
-const YOUTUBE_API_KEY = defineSecret('YOUTUBE_API_KEY');
-// onRequest 수동 트리거용 단순 secret — v0.5 에서 어드민 callable로 정식화 예정
+export const YOUTUBE_API_KEY = defineSecret('YOUTUBE_API_KEY');
+// onRequest 수동 트리거용 단순 secret — onCall(triggerYoutubeCurationNow) 외 백업 경로.
 const TRIGGER_SECRET = 'holdemnow-trigger-2026';
 
 const db = () => admin.firestore();
@@ -42,6 +51,7 @@ interface VideoApiItem {
   id: string;
   snippet: {
     title: string;
+    description?: string;
     channelId: string;
     channelTitle: string;
     publishedAt: string;
@@ -53,6 +63,17 @@ interface VideoApiItem {
   statistics: {
     viewCount?: string;
   };
+  contentDetails: {
+    duration: string; // ISO 8601 (예: PT15M33S)
+  };
+}
+
+export interface CurationFilterStats {
+  shortsExcluded: number;
+  keywordExcluded: number;
+  ageExcluded: number;
+  minDurationExcluded: number;
+  maxResultsCut: number;
 }
 
 export interface CurationResult {
@@ -62,10 +83,98 @@ export interface CurationResult {
   upserted: number;
   expiredDeleted: number;
   durationMs: number;
+  filtered: CurationFilterStats;
+  skippedBySchedule?: boolean;
   message?: string;
 }
 
+interface YoutubeCurationConfig {
+  includeKeywords: string[];
+  excludeKeywords: string[];
+  maxResults: number;
+  scheduleHourKst: number;
+  excludeShorts: boolean;
+  minDurationSec: number;
+  maxAgeDays: number;
+}
+
+const DEFAULT_CONFIG: YoutubeCurationConfig = {
+  includeKeywords: [
+    '홀덤', '포커', 'poker', 'holdem', "hold'em",
+    '토너먼트', 'tournament',
+    'NL', 'NLH', '노리밋',
+    'GTD', '게런티',
+    '플롭', 'flop', '리버', 'river', '턴', 'turn',
+    '올인', 'all-in',
+    '블라인드', 'blind',
+    'WSOP', 'WPT', 'EPT', 'APT', 'KPT',
+    '베가스', '라스베가스', '마카오',
+  ],
+  excludeKeywords: [],
+  maxResults: 20,
+  scheduleHourKst: 4,
+  excludeShorts: true,
+  minDurationSec: 61,
+  maxAgeDays: 90,
+};
+
 // ─── 헬퍼 ─────────────────────────────────────────────────────
+
+/**
+ * platformConfig/youtubeCuration doc fetch.
+ * 없거나 일부 필드가 비면 DEFAULT_CONFIG 값으로 보충.
+ */
+async function loadCurationConfig(): Promise<YoutubeCurationConfig> {
+  try {
+    const snap = await db().collection('platformConfig').doc('youtubeCuration').get();
+    if (!snap.exists) return { ...DEFAULT_CONFIG };
+    const data = snap.data() ?? {};
+    return {
+      includeKeywords: Array.isArray(data.includeKeywords)
+        ? (data.includeKeywords as string[])
+        : DEFAULT_CONFIG.includeKeywords,
+      excludeKeywords: Array.isArray(data.excludeKeywords)
+        ? (data.excludeKeywords as string[])
+        : DEFAULT_CONFIG.excludeKeywords,
+      maxResults: clampInt(data.maxResults, 5, 50, DEFAULT_CONFIG.maxResults),
+      scheduleHourKst: clampInt(data.scheduleHourKst, 0, 23, DEFAULT_CONFIG.scheduleHourKst),
+      excludeShorts:
+        typeof data.excludeShorts === 'boolean' ? data.excludeShorts : DEFAULT_CONFIG.excludeShorts,
+      minDurationSec: clampInt(data.minDurationSec, 0, 7200, DEFAULT_CONFIG.minDurationSec),
+      maxAgeDays: clampInt(data.maxAgeDays, 1, 365, DEFAULT_CONFIG.maxAgeDays),
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`curation config 읽기 실패 — default 사용: ${msg}`);
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof v === 'number' ? Math.floor(v) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+/** ISO 8601 duration ("PT1H2M3S") → 초 */
+function parseISO8601DurationToSeconds(iso: string | undefined): number {
+  if (!iso) return 0;
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(iso);
+  if (!m) return 0;
+  return (
+    parseInt(m[1] ?? '0', 10) * 3600 +
+    parseInt(m[2] ?? '0', 10) * 60 +
+    parseInt(m[3] ?? '0', 10)
+  );
+}
+
+/** 현재 시각의 KST 시간(0~23) */
+function currentKstHour(): number {
+  // UTC + 9
+  const nowUtcMs = Date.now();
+  const kstMs = nowUtcMs + 9 * 3600 * 1000;
+  return new Date(kstMs).getUTCHours();
+}
 
 /** RSS feed에서 videoId 목록 추출 (최근 15개) */
 async function fetchVideoIdsFromRss(channelId: string): Promise<string[]> {
@@ -101,7 +210,7 @@ async function fetchVideoIdsFromRss(channelId: string): Promise<string[]> {
   }
 }
 
-/** YouTube Data API videos.list — 50개 단위 batch */
+/** YouTube Data API videos.list — 50개 단위 batch (snippet,statistics,contentDetails) */
 async function fetchVideoDetails(
   videoIds: string[],
   apiKey: string,
@@ -113,7 +222,7 @@ async function fetchVideoDetails(
       const url = 'https://www.googleapis.com/youtube/v3/videos';
       const res = await axios.get<{ items: VideoApiItem[] }>(url, {
         params: {
-          part: 'snippet,statistics',
+          part: 'snippet,statistics,contentDetails',
           id: batch.join(','),
           key: apiKey,
         },
@@ -130,17 +239,12 @@ async function fetchVideoDetails(
 
 /**
  * channelUrl에서 channelId(UC...) 자동 추출 + hotYoutubers doc 업데이트.
- * - youtube.com/channel/UCxxxx → 직접 추출
- * - youtube.com/@handle, /c/customName, /user/oldUsername → HTML fetch + og:meta 또는 html 정규식
  */
 async function backfillChannelId(
   docId: string,
   channelUrl: string,
 ): Promise<string | null> {
   try {
-    // 항상 HTML fetch — URL의 /channel/UC... 는 일부 채널에서 externalId(표시용)이며
-    // RSS feed가 받는 internal channelId와 다를 수 있어 신뢰 불가.
-    // 진짜 channelId는 페이지 HTML의 "channelId":"UC..." 키에 있음.
     const res = await axios.get<string>(channelUrl, {
       timeout: 8000,
       responseType: 'text',
@@ -151,7 +255,6 @@ async function backfillChannelId(
       },
     });
     const html = typeof res.data === 'string' ? res.data : String(res.data);
-    // 우선순위: HTML "channelId" (RSS 작동 ID) > meta itemprop > URL 직접 추출 (fallback)
     const m =
       html.match(/"channelId":"(UC[\w-]+)"/) ??
       html.match(/<meta itemprop="channelId" content="(UC[\w-]+)"/) ??
@@ -159,7 +262,6 @@ async function backfillChannelId(
     let cid = m?.[1];
 
     if (!cid) {
-      // 최후 fallback: URL /channel/UC...
       const directMatch = channelUrl.match(/\/channel\/(UC[\w-]+)/);
       cid = directMatch?.[1];
     }
@@ -187,43 +289,83 @@ function calcScore(viewCount: number, publishedAtMs: number): number {
   return viewCount / daysSince;
 }
 
-// ─── 메인 로직 (onSchedule + onRequest 공용) ───────────────────────
+/** lastRunAt + lastRunResult 기록 (best-effort) */
+async function writeLastRun(result: CurationResult): Promise<void> {
+  try {
+    await db().collection('platformConfig').doc('youtubeCuration').set(
+      {
+        lastRunAt: FieldValue.serverTimestamp(),
+        lastRunResult: {
+          upserted: result.upserted,
+          expiredDeleted: result.expiredDeleted,
+          durationMs: result.durationMs,
+          channelsActive: result.channelsActive,
+          videoIdsCollected: result.videoIdsCollected,
+          apiResponses: result.apiResponses,
+          filtered: {
+            shortsExcluded: result.filtered.shortsExcluded,
+            keywordExcluded: result.filtered.keywordExcluded,
+            maxResultsCut: result.filtered.maxResultsCut,
+          },
+          message: result.message ?? null,
+        },
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`lastRunResult 기록 실패: ${msg}`);
+  }
+}
 
-async function runCuration(apiKey: string): Promise<CurationResult> {
+// ─── 메인 로직 (onSchedule + onRequest + onCall 공용) ───────────────
+
+export async function runCuration(apiKey: string): Promise<CurationResult> {
   const startedAt = Date.now();
   const firestore = db();
-  const cutoffMs = Date.now() - 90 * 86_400_000;
-  const cutoffTs = Timestamp.fromMillis(cutoffMs);
+  const config = await loadCurationConfig();
+  const cutoffMs = Date.now() - config.maxAgeDays * 86_400_000;
 
-  // 1. 활성 유튜버 channelId 수집 — 빈 doc은 channelUrl로 자동 backfill
+  const filtered: CurationFilterStats = {
+    shortsExcluded: 0,
+    keywordExcluded: 0,
+    ageExcluded: 0,
+    minDurationExcluded: 0,
+    maxResultsCut: 0,
+  };
+
+  // 1. 활성 유튜버 channelId 수집
   const youtubersSnap = await firestore
     .collection('hotYoutubers')
     .where('isActive', '==', true)
     .get();
 
   const channelIds: string[] = [];
-  for (const doc of youtubersSnap.docs) {
-    const data = doc.data() as YoutuberDoc;
+  for (const docSnap of youtubersSnap.docs) {
+    const data = docSnap.data() as YoutuberDoc;
     let cid = data.channelId?.trim() ?? '';
-
-    // channelId 비어있거나 RSS가 실패하는 잘못된 ID 가능성 →
-    // channelUrl 있으면 항상 HTML 재추출 (진짜 channelId 확보)
     if (data.channelUrl) {
-      const filled = await backfillChannelId(doc.id, data.channelUrl);
-      if (filled) cid = filled;
+      const filledId = await backfillChannelId(docSnap.id, data.channelUrl);
+      if (filledId) cid = filledId;
     }
     if (cid.startsWith('UC')) channelIds.push(cid);
   }
 
   if (channelIds.length === 0) {
-    logger.info('활성 채널 없음 — 큐레이션 종료');
-    return {
-      channelsActive: 0, videoIdsCollected: 0, apiResponses: 0,
-      upserted: 0, expiredDeleted: 0, durationMs: Date.now() - startedAt,
-      message: '활성 채널(UC...로 시작하는 channelId 등록)이 없습니다. channelUrl도 비어있거나 og:meta 추출 실패.',
+    const result: CurationResult = {
+      channelsActive: 0,
+      videoIdsCollected: 0,
+      apiResponses: 0,
+      upserted: 0,
+      expiredDeleted: 0,
+      durationMs: Date.now() - startedAt,
+      filtered,
+      message: '활성 채널이 없습니다.',
     };
+    await writeLastRun(result);
+    return result;
   }
-  logger.info(`활성 채널 ${channelIds.length}개 발견 (backfill 포함)`);
+  logger.info(`활성 채널 ${channelIds.length}개 발견`);
 
   // 2. RSS → videoId 수집
   const allVideoIds: string[] = [];
@@ -237,18 +379,96 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
   logger.info(`RSS 수집 videoId ${uniqueVideoIds.length}개 (중복 제거)`);
 
   if (uniqueVideoIds.length === 0) {
-    return {
-      channelsActive: channelIds.length, videoIdsCollected: 0, apiResponses: 0,
-      upserted: 0, expiredDeleted: 0, durationMs: Date.now() - startedAt,
+    const result: CurationResult = {
+      channelsActive: channelIds.length,
+      videoIdsCollected: 0,
+      apiResponses: 0,
+      upserted: 0,
+      expiredDeleted: 0,
+      durationMs: Date.now() - startedAt,
+      filtered,
       message: 'RSS feed에서 영상이 발견되지 않았습니다.',
     };
+    await writeLastRun(result);
+    return result;
   }
 
   // 3. YouTube API videos.list
   const items = await fetchVideoDetails(uniqueVideoIds, apiKey);
   logger.info(`API 응답 ${items.length}개`);
 
-  // 4. 90일 이내 필터 + 점수 계산 + upsert (manual 보호)
+  // 4. 필터링 + 점수 계산
+  interface ScoredVideo {
+    item: VideoApiItem;
+    publishedMs: number;
+    score: number;
+    durationSec: number;
+  }
+  const scored: ScoredVideo[] = [];
+
+  const includeLower = config.includeKeywords.map((k) => k.toLowerCase());
+  const excludeLower = config.excludeKeywords.map((k) => k.toLowerCase());
+
+  for (const item of items) {
+    const publishedMs = new Date(item.snippet.publishedAt).getTime();
+    if (isNaN(publishedMs) || publishedMs < cutoffMs) {
+      filtered.ageExcluded++;
+      continue;
+    }
+
+    const durationSec = parseISO8601DurationToSeconds(item.contentDetails?.duration);
+    const title = item.snippet.title ?? '';
+    const titleLower = title.toLowerCase();
+
+    // 쇼츠 필터
+    if (config.excludeShorts) {
+      if (durationSec > 0 && durationSec <= 60) {
+        filtered.shortsExcluded++;
+        continue;
+      }
+      if (titleLower.includes('#shorts') || titleLower.includes('#쇼츠')) {
+        filtered.shortsExcluded++;
+        continue;
+      }
+    }
+
+    // 최소 길이
+    if (durationSec > 0 && durationSec < config.minDurationSec) {
+      filtered.minDurationExcluded++;
+      continue;
+    }
+
+    // 키워드 필터
+    const desc = item.snippet.description ?? '';
+    const textLower = `${title}\n${desc}`.toLowerCase();
+
+    if (includeLower.length > 0) {
+      const hasInclude = includeLower.some((kw) => textLower.includes(kw));
+      if (!hasInclude) {
+        filtered.keywordExcluded++;
+        continue;
+      }
+    }
+    if (excludeLower.length > 0) {
+      const hasExclude = excludeLower.some((kw) => textLower.includes(kw));
+      if (hasExclude) {
+        filtered.keywordExcluded++;
+        continue;
+      }
+    }
+
+    const viewCount = parseInt(item.statistics.viewCount ?? '0', 10);
+    const score = calcScore(viewCount, publishedMs);
+    scored.push({ item, publishedMs, score, durationSec });
+  }
+
+  // 5. 점수 내림차순 + maxResults 컷
+  scored.sort((a, b) => b.score - a.score);
+  const beforeCut = scored.length;
+  const top = scored.slice(0, config.maxResults);
+  filtered.maxResultsCut = Math.max(0, beforeCut - top.length);
+
+  // 6. upsert (manual 보호)
   let upsertedCount = 0;
   const videosCol = firestore.collection('hotYoutubeVideos');
   const BATCH_SIZE = 400;
@@ -263,12 +483,12 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
     }
   };
 
-  for (const item of items) {
-    const publishedMs = new Date(item.snippet.publishedAt).getTime();
-    if (isNaN(publishedMs) || publishedMs < cutoffMs) continue;
+  // 상위 항목들의 docId를 모아두고, 큐레이션에서 빠진 auto 항목은 삭제 후보로
+  const keepIds = new Set<string>();
 
+  for (const sv of top) {
+    const item = sv.item;
     const viewCount = parseInt(item.statistics.viewCount ?? '0', 10);
-    const score = calcScore(viewCount, publishedMs);
     const channelId = item.snippet.channelId;
     const thumbnailUrl =
       item.snippet.thumbnails.high?.url ??
@@ -281,6 +501,7 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
       const data = existing.data() as { source?: string };
       if (data.source !== 'auto') continue; // manual 보호
     }
+    keepIds.add(item.id);
 
     const isNew = !existing.exists;
     const payload: Record<string, unknown> = {
@@ -290,9 +511,10 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
       channelName: item.snippet.channelTitle,
       channelUrl: `https://www.youtube.com/channel/${channelId}`,
       thumbnailUrl,
-      publishedAt: Timestamp.fromMillis(publishedMs),
+      publishedAt: Timestamp.fromMillis(sv.publishedMs),
       viewCount,
-      score,
+      score: sv.score,
+      durationSec: sv.durationSec,
       source: 'auto',
       isActive: true,
       order: 0,
@@ -308,18 +530,21 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
   }
   await flushBatch();
 
-  // 5. 만료 auto doc 삭제 — single where + 클라이언트 필터 (composite index 회피)
+  // 7. 만료 또는 컷오프된 auto doc 삭제
   const autoSnap = await videosCol.where('source', '==', 'auto').get();
-  const expiredDocs = autoSnap.docs.filter((d) => {
-    const ts = d.data().publishedAt as admin.firestore.Timestamp | undefined;
-    return ts && ts.toMillis() < cutoffMs;
+  const toDelete = autoSnap.docs.filter((d) => {
+    const data = d.data() as { publishedAt?: admin.firestore.Timestamp };
+    const ts = data.publishedAt;
+    // 만료 (maxAgeDays 초과) OR 이번 큐레이션에서 keep되지 않은 doc
+    if (!ts) return !keepIds.has(d.id);
+    return ts.toMillis() < cutoffMs || !keepIds.has(d.id);
   });
 
   let deletedCount = 0;
-  if (expiredDocs.length > 0) {
+  if (toDelete.length > 0) {
     let delBatch = firestore.batch();
     let delCount = 0;
-    for (const d of expiredDocs) {
+    for (const d of toDelete) {
       delBatch.delete(d.ref);
       delCount++;
       deletedCount++;
@@ -332,28 +557,40 @@ async function runCuration(apiKey: string): Promise<CurationResult> {
     if (delCount > 0) await delBatch.commit();
   }
 
-  logger.info(`큐레이션 완료 — upsert ${upsertedCount}개, 만료 삭제 ${deletedCount}개`);
+  logger.info(
+    `큐레이션 완료 — upsert ${upsertedCount}개, 삭제 ${deletedCount}개, ` +
+      `필터(쇼츠 ${filtered.shortsExcluded}, 키워드 ${filtered.keywordExcluded}, ` +
+      `나이 ${filtered.ageExcluded}, 길이 ${filtered.minDurationExcluded}, ` +
+      `컷 ${filtered.maxResultsCut})`,
+  );
 
-  return {
+  const result: CurationResult = {
     channelsActive: channelIds.length,
     videoIdsCollected: uniqueVideoIds.length,
     apiResponses: items.length,
     upserted: upsertedCount,
     expiredDeleted: deletedCount,
     durationMs: Date.now() - startedAt,
+    filtered,
   };
+  await writeLastRun(result);
+  return result;
 }
 
 // ─── Cloud Functions ────────────────────────────────────────────
 
+/**
+ * 매시간 정각에 실행 — config.scheduleHourKst와 현재 KST 시각이 일치할 때만 큐레이션.
+ * 어드민에서 시각 바꿔도 함수 재배포 불필요.
+ */
 export const curateHotVideos = onSchedule(
   {
-    schedule: '0 4 * * *',
+    schedule: 'every 1 hours',
     timeZone: 'Asia/Seoul',
     region: 'asia-northeast3',
     secrets: [YOUTUBE_API_KEY],
     memory: '256MiB',
-    timeoutSeconds: 300,
+    timeoutSeconds: 540,
   },
   async () => {
     const apiKey = YOUTUBE_API_KEY.value();
@@ -361,21 +598,29 @@ export const curateHotVideos = onSchedule(
       logger.error('YOUTUBE_API_KEY secret 미설정 — 큐레이션 중단');
       return;
     }
+
+    const config = await loadCurationConfig();
+    const nowHour = currentKstHour();
+    if (nowHour !== config.scheduleHourKst) {
+      logger.info(
+        `스케줄 시각 아님 — 현재 KST ${nowHour}시, 설정 ${config.scheduleHourKst}시 (건너뜀)`,
+      );
+      return;
+    }
     await runCuration(apiKey);
   },
 );
 
 /**
- * 수동 트리거 (관리자용)
- * URL: https://asia-northeast3-holdemnow-prod.cloudfunctions.net/triggerCurateHotVideos?key=holdemnow-trigger-2026
- * v0.5에서 어드민 callable 버튼으로 정식화 예정
+ * 수동 트리거 (관리자용, secret query param 인증).
+ * 어드민 UI는 triggerYoutubeCurationNow Callable 사용 권장.
  */
 export const triggerCurateHotVideos = onRequest(
   {
     region: 'asia-northeast3',
     secrets: [YOUTUBE_API_KEY],
     memory: '256MiB',
-    timeoutSeconds: 300,
+    timeoutSeconds: 540,
     cors: true,
   },
   async (req, res) => {
