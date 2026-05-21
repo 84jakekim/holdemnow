@@ -60,10 +60,23 @@ export function ticketsToWon(tickets: number): number {
   return Math.max(0, Math.floor(tickets || 0)) * TICKET_WON;
 }
 
-/** 표시용 — "3T (₩30,000)" 같은 라벨. */
+/** 표시용 — "3T (₩30,000)" 같은 라벨 (어드민 템플릿 편집 화면 전용). */
 export function fmtBuyIn(won: number): string {
   const t = wonToTickets(won);
   return `${t}T (₩${(won || 0).toLocaleString()})`;
+}
+
+/**
+ * 사용자 앱(모바일) 전용 — "5 Ticket" 형태로 표기.
+ * 1만원 단위가 아닌 값은 소수점 1자리 (예: 25,000원 → "2.5 Ticket").
+ * 0원 이하는 빈 문자열.
+ */
+export function fmtBuyInTicketsMobile(won: number): string {
+  if (!won || won <= 0) return '';
+  const exact = won / TICKET_WON;
+  // 정확히 정수면 정수 표시, 아니면 소수점 1자리
+  const label = Number.isInteger(exact) ? String(exact) : exact.toFixed(1);
+  return `${label} Ticket`;
 }
 
 export function templatesCollection(storeId: string) {

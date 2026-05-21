@@ -17,6 +17,7 @@
 import Link from 'next/link';
 import type { LiveSession } from '@/lib/live';
 import { useLiveCountdown, fmtTime } from '@/lib/live';
+import { fmtBuyInTicketsMobile } from '@/lib/templates';
 
 interface Props {
   sessions: LiveSession[];
@@ -35,11 +36,9 @@ function blindShort(s: LiveSession): string {
   return `${sb}/${bb}`;
 }
 
+/** 작은 카드 — 티켓 단위 ("5 Ticket"). 1티켓=10,000원. */
 function buyInShort(s: LiveSession): string {
-  const b = s.buyIn;
-  if (!b || b <= 0) return '';
-  if (b >= 10000) return `${Math.floor(b / 10000)}만원`;
-  return b.toLocaleString() + '원';
+  return fmtBuyInTicketsMobile(s.buyIn ?? 0);
 }
 
 /* ──────────────────────────────────────────────

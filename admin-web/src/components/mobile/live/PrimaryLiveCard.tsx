@@ -21,6 +21,7 @@ import {
   computeRemainingSec,
   fmtTime,
 } from '@/lib/live';
+import { fmtBuyInTicketsMobile } from '@/lib/templates';
 
 interface Props {
   sessions: LiveSession[];
@@ -58,11 +59,9 @@ function blindLabel(s: LiveSession): string {
   return `${sb}/${bb}`;
 }
 
-/** buy-in 포맷 */
+/** buy-in 포맷 — 사용자 앱은 티켓 단위 ("5 Ticket"). 1티켓=10,000원. */
 function buyInLabel(s: LiveSession): string {
-  const b = s.buyIn;
-  if (!b || b <= 0) return '';
-  return b.toLocaleString() + '원';
+  return fmtBuyInTicketsMobile(s.buyIn ?? 0);
 }
 
 /* ──────────────────────────────────────────────
@@ -224,6 +223,7 @@ function BigCard({
                 >
                   {buyIn} buy-in
                 </span>
+                {/* buyIn은 이미 "5 Ticket" 형태 (1티켓=10,000원) */}
               </div>
             )}
 

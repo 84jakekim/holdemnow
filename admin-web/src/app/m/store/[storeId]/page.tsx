@@ -12,7 +12,7 @@ import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import PendingStoreNotice from '@/components/mobile/PendingStoreNotice';
 import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveTimelineTick, computeReadyExpirySec, computeFinishingGraceSec } from '@/lib/live';
 import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tournaments';
-import { posterStyleFor } from '@/lib/templates';
+import { posterStyleFor, fmtBuyInTicketsMobile } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
@@ -1194,7 +1194,10 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
             {session.tournamentName}
           </div>
           <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-            바이인 ₩{(session.buyIn || 0).toLocaleString()}
+            {(() => {
+              const t = fmtBuyInTicketsMobile(session.buyIn || 0);
+              return t ? `바이인 ${t}` : '바이인 –';
+            })()}
             {' · '}Lv {liveLevel}
             {' / '}{structureForNext?.length ?? '–'}
           </div>
