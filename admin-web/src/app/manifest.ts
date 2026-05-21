@@ -20,7 +20,22 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: 'ko',
     categories: ['entertainment', 'lifestyle', 'social'],
     icons: [
-      // Pink Rabbit 메인 로고 (PNG) — 안드로이드/iOS 홈 아이콘
+      // OS 스플래시 — 정사각형 워드마크 SVG (안드로이드 Chrome이 PWA 첫 실행 시
+      // background_color 위에 가장 큰 icon을 정중앙 배치. logo.png는 가로형이라
+      // 늘어져 보였으므로 정사각형 워드마크를 우선 노출).
+      {
+        src: '/splash-icon.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+        purpose: 'any',
+      },
+      {
+        src: '/splash-icon.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+        purpose: 'maskable',
+      },
+      // 홈 화면 앱 아이콘 — Pink Rabbit 토끼 PNG
       {
         src: '/logo.png',
         sizes: '512x512',
@@ -38,13 +53,6 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
-      },
-      // maskable — Android 어댑티브 아이콘
-      {
-        src: '/icon-maskable-512.png',
-        sizes: '512x512',
-        type: 'image/png',
-        purpose: 'maskable',
       },
     ],
     shortcuts: [

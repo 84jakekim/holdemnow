@@ -153,10 +153,16 @@ export default function MobileHome() {
       <header className="sticky top-0 z-30 header-minimal">
         <div className="px-4 h-14 flex items-center justify-between gap-3">
 
-          {/* 좌: 워드마크 */}
-          <Link href="/m" aria-label="HoldemNow 홈" className="flex-shrink-0 transition active:opacity-60">
+          {/* 좌: Pink Rabbit 로고 */}
+          <Link href="/m" aria-label="Pink Rabbit 홈" className="flex-shrink-0 transition active:opacity-60">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/top_right_logo.svg" alt="HoldemNow" width={36} height={36} style={{ display: 'block' }} />
+            <img
+              src="/logo.png"
+              alt="Pink Rabbit"
+              width={40}
+              height={40}
+              style={{ display: 'block', width: 40, height: 40, objectFit: 'contain' }}
+            />
           </Link>
 
           {/* 중앙: 환영 + 위치 */}
@@ -317,7 +323,7 @@ export default function MobileHome() {
         className="px-4 py-6 text-center text-[11px]"
         style={{ borderTop: '1px solid var(--border)', color: 'var(--text-3)' }}
       >
-        HoldemNow BETA · 부산/경남 홀덤펍 디스커버리
+        Pink Rabbit BETA · 내 주변 홀덤펍 디스커버리
       </div>
     </div>
   );

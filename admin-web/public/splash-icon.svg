@@ -1,0 +1,54 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#1A0F14"/>
+      <stop offset="100%" stop-color="#08080B"/>
+    </radialGradient>
+    <linearGradient id="pinkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6BAA"/>
+      <stop offset="100%" stop-color="#FF1F8F"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 다크 라디얼 배경 (정사각형 — OS 스플래시 슬롯 그대로 채움) -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- 상단 미세 토끼 귀 모티프 (장식, 핑크 옅게) -->
+  <g opacity="0.85" filter="url(#glow)">
+    <!-- 좌측 귀 -->
+    <path d="M218 138 Q210 92 226 64 Q244 88 240 138 Z" fill="url(#pinkGrad)"/>
+    <!-- 우측 귀 -->
+    <path d="M272 138 Q286 92 296 64 Q306 92 294 138 Z" fill="url(#pinkGrad)"/>
+  </g>
+
+  <!-- 워드마크 — 2줄: PINK / RABBIT -->
+  <g font-family="Helvetica, Arial, sans-serif" font-weight="900" text-anchor="middle" letter-spacing="6">
+    <text x="256" y="262" font-size="84" fill="url(#pinkGrad)" filter="url(#glow)">PINK</text>
+    <text x="256" y="350" font-size="84" fill="url(#pinkGrad)" filter="url(#glow)">RABBIT</text>
+  </g>
+
+  <!-- 하단 서브 태그라인 -->
+  <text
+    x="256" y="408"
+    font-family="Helvetica, Arial, sans-serif"
+    font-size="20"
+    font-weight="600"
+    fill="rgba(255,255,255,0.55)"
+    text-anchor="middle"
+    letter-spacing="2"
+  >HOLDEMPUB DISCOVERY</text>
+
+  <!-- 하단 미세 핑크 도트 라인 -->
+  <g transform="translate(232,440)">
+    <circle cx="0"  cy="0" r="4" fill="#FF1F8F" opacity="0.9"/>
+    <circle cx="24" cy="0" r="4" fill="#FF1F8F" opacity="0.55"/>
+    <circle cx="48" cy="0" r="4" fill="#FF1F8F" opacity="0.30"/>
+  </g>
+</svg>
