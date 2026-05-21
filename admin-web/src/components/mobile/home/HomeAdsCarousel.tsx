@@ -99,13 +99,12 @@ export default function HomeAdsCarousel({ position }: Props) {
 
   const isTop = position === 'top';
 
+  // 모든 광고 카드 클릭은 상세 페이지(/m/ad/[id])로 진입.
+  // 상세에서 포스터를 크게 보거나 CTA(linkUrl)를 누르면 외부/내부 이동.
+  // — 광고주 입장에선 상세 진입수가 funnel 지표가 되고, 사용자는 포스터를 크게 볼 수 있음.
   const handleAdClick = (ad: HomeAd) => {
-    if (!ad.linkUrl) return;
-    if (ad.linkType === 'external') {
-      window.open(ad.linkUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      window.location.href = ad.linkUrl;
-    }
+    if (!ad.id) return;
+    window.location.href = `/m/ad/${ad.id}`;
   };
 
   // 두 광고(상단/하단) 동일한 카드 스타일 — 좌측 끝선·radius·비율·테두리 통일.
@@ -129,7 +128,6 @@ export default function HomeAdsCarousel({ position }: Props) {
           <button
             key={ad.id ?? i}
             onClick={() => handleAdClick(ad)}
-            disabled={!ad.linkUrl}
             className="flex-shrink-0 w-full block transition active:opacity-90 text-left"
             style={{ scrollSnapAlign: 'start' }}
             aria-label={ad.title ?? '광고 보기'}
