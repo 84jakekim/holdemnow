@@ -17,6 +17,7 @@ import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { loginWithEmail } from '@/lib/emailAuth';
+import { usernameToAdminEmail, validateAdminUsername } from '@/lib/platformAdmin';
 
 export default function PlatformLoginPage() {
   return (
@@ -72,17 +73,28 @@ function PlatformLoginInner() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password) return;
+    const raw = email.trim();
+    if (!raw || !password) return;
     setLoggingIn(true);
     setLoginError(null);
     setWrongAccountInfo(null);
     try {
-      await loginWithEmail(email, password);
-      // 라우팅·권한 검증은 useEffect가 처리
+      // 입력이 이메일 형식이면 그대로, 아니면 본사 어드민 아이디로 간주해 합성 이메일로 변환.
+      let loginEmail = raw;
+      if (!raw.includes('@')) {
+        const v = validateAdminUsername(raw);
+        if (!v.ok) {
+          setLoginError(v.error);
+          setLoggingIn(false);
+          return;
+        }
+        loginEmail = usernameToAdminEmail(v.value);
+      }
+      await loginWithEmail(loginEmail, password);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('invalid-credential') || msg.includes('wrong-password') || msg.includes('user-not-found')) {
-        setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        setLoginError('아이디(이메일) 또는 비밀번호가 올바르지 않습니다.');
       } else if (msg.includes('too-many-requests')) {
         setLoginError('로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.');
       } else {
@@ -198,16 +210,19 @@ function PlatformLoginInner() {
               </div>
               <form onSubmit={handleEmailLogin} className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-gray-300 block mb-1.5">본사 관리자 이메일</label>
+                  <label className="text-xs font-bold text-gray-300 block mb-1.5">본사 관리자 아이디 (또는 이메일)</label>
                 <input
-                  type="email"
+                  type="text"
                   className="platform-input"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@holdemnow.com"
-                  autoComplete="email"
+                  placeholder="admin01 또는 admin@example.com"
+                  autoComplete="username"
                   required
                 />
+                <div className="text-[10.5px] text-gray-500 mt-1">
+                  아이디만 입력하면 자동으로 본사 어드민 계정을 인식합니다.
+                </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-300 block mb-1.5">비밀번호</label>

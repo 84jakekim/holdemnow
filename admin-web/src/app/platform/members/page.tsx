@@ -19,6 +19,21 @@ import { db } from '@/lib/firebase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import MembersTabExportButton from '@/components/platform/MembersTabExportButton';
+import {
+  createPlatformAdmin,
+  validateAdminUsername,
+  validateAdminPassword,
+} from '@/lib/platformAdmin';
+import { FirebaseOptions } from 'firebase/app';
+
+const FIREBASE_CONFIG_FOR_AUX: FirebaseOptions = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
 // =====================================================================
 // 타입
@@ -95,6 +110,7 @@ function MembersPageInner() {
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminSearch, setAdminSearch] = useState('');
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
 
   const [storeFilter, setStoreFilter] = useState<'all' | 'pending' | 'active' | 'rejected' | 'suspended'>('pending');
   const [orgFilter, setOrgFilter] = useState<'all' | 'pending' | 'active' | 'rejected'>('pending');
@@ -301,9 +317,16 @@ function MembersPageInner() {
               className="form-input max-w-xs"
               value={adminSearch}
               onChange={(e) => setAdminSearch(e.target.value)}
-              placeholder="이메일 또는 이름 검색"
+              placeholder="아이디 또는 이름 검색"
             />
             <span className="text-xs text-gray-500">{filteredAdmins.length}명</span>
+            <button
+              onClick={() => setAdminModalOpen(true)}
+              className="ml-auto inline-flex items-center gap-1 px-3 h-9 rounded-lg text-[12px] font-extrabold text-white"
+              style={{ background: 'linear-gradient(135deg, #FF1F8F 0%, #B91072 100%)' }}
+            >
+              + 본사 어드민 추가
+            </button>
           </div>
 
           {filteredAdmins.length === 0 ? (
@@ -644,6 +667,183 @@ function MembersPageInner() {
         }
         .form-input:focus { border-color: #111; }
       `}</style>
+
+      {adminModalOpen && (
+        <CreatePlatformAdminModal
+          onClose={() => setAdminModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * 본사 어드민 추가 모달 — 아이디/비밀번호/표시 이름 입력 폼.
+ * Firebase Auth에는 합성 이메일(`{id}@admin.pinkrabbit.local`)로 등록.
+ * ─────────────────────────────────────────────────────────────*/
+function CreatePlatformAdminModal({ onClose }: { onClose: () => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [memo, setMemo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<{ username: string } | null>(null);
+
+  const handleSubmit = async () => {
+    setError(null);
+    const u = validateAdminUsername(username);
+    if (!u.ok) { setError(u.error); return; }
+    const p = validateAdminPassword(password);
+    if (!p.ok) { setError(p.error); return; }
+    if (password !== passwordConfirm) {
+      setError('비밀번호 확인이 일치하지 않습니다');
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await createPlatformAdmin({
+        username,
+        password,
+        displayName: displayName || undefined,
+        memo: memo || undefined,
+        firebaseConfig: FIREBASE_CONFIG_FOR_AUX,
+      });
+      setDone({ username: result.username });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Firebase Auth 흔한 에러를 친절한 한글로 변환
+      const friendly = /email-already-in-use/.test(msg)
+        ? '이미 같은 아이디로 등록된 어드민이 있습니다'
+        : /weak-password/.test(msg)
+          ? '비밀번호 정책에 맞지 않습니다 (8자 이상 권장)'
+          : msg;
+      setError(friendly);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.55)' }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto"
+      >
+        <div className="px-6 py-4 border-b border-gray-100">
+          <div className="text-lg font-extrabold text-gray-900">+ 본사 어드민 추가</div>
+          <div className="text-[11px] text-gray-500 mt-1">
+            아이디·비밀번호로 로그인하는 본사 관리자 계정을 만듭니다.
+          </div>
+        </div>
+
+        {done ? (
+          <div className="p-6">
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm">
+              <div className="font-bold text-emerald-800 mb-1">✅ 본사 어드민 계정 생성 완료</div>
+              <div className="text-emerald-700 text-[13px]">
+                아이디 <span className="font-mono font-bold">{done.username}</span> 으로 로그인 가능합니다.
+                <br />로그인 페이지에서 동일 아이디·비밀번호로 접속하세요.
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-5 w-full py-3 rounded-xl text-white font-extrabold text-sm"
+              style={{ background: '#111' }}
+            >
+              완료
+            </button>
+          </div>
+        ) : (
+          <div className="p-6 space-y-3.5">
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-1">아이디 *</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="예: admin01"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono"
+                autoComplete="off"
+              />
+              <div className="text-[10.5px] text-gray-400 mt-1">
+                영문 소문자·숫자·_·- 만 사용, 4~24자
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-1">비밀번호 *</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="8자 이상"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-1">비밀번호 확인 *</label>
+              <input
+                type="password"
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-1">표시 이름 (선택)</label>
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="회원 목록·로그에 노출"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-1">메모 (선택)</label>
+              <input
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                placeholder="예: 마케팅 담당, 운영팀 김OO"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm"
+              />
+            </div>
+
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={onClose}
+                disabled={busy}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 disabled:opacity-40"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={busy}
+                className="flex-1 py-3 rounded-xl text-white font-extrabold text-sm disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #FF1F8F 0%, #B91072 100%)' }}
+              >
+                {busy ? '생성 중…' : '계정 생성'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
