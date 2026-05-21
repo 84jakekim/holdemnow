@@ -91,32 +91,10 @@ export default function AuthGate({ children, loadingFallback }: Props) {
     router.replace(dest);
   }, [authState.status, pathname, router]);
 
-  // 2. KYC soft-wall redirect
-  useEffect(() => {
-    if (authState.status !== 'authenticated') return;
-    if (isKycWhitelisted(pathname)) return;
-    // userDoc undefined = 로딩 중 — 대기
-    if (userDoc === undefined) return;
-    // userDoc null = 문서 없음 (첫 생성 중) — 대기
-    if (userDoc === null) return;
-    // kycCompletedAt 있으면 통과
-    if (userDoc.kycCompletedAt) return;
-
-    // 매장·대회사 자체 가입자는 이미 대표자/담당자 정보를 가입 시 필수 입력 → KYC 면제.
-    // 이 분기는 직전 가입 흐름에서 kycCompletedAt 필드를 빠뜨린 기존 doc에 대한 안전망.
-    const src = (userDoc as { signupSource?: string }).signupSource;
-    if (src === 'store-signup' || src === 'organizer-signup') return;
-
-    // KYC 미완료 — returnTo 저장 후 redirect
-    try {
-      if (isSafeNextPath(pathname)) {
-        sessionStorage.setItem('kycReturnTo', pathname);
-      }
-    } catch {
-      // sessionStorage 실패 무시
-    }
-    router.replace('/onboarding/kyc');
-  }, [authState.status, pathname, router, userDoc]);
+  // 2. KYC soft-wall — 비활성화.
+  //    사장님 보고: 앱 진입할 때마다 본인확인이 떠서 불편.
+  //    KYC 페이지(/onboarding/kyc)는 자체적으로 존재하되 AuthGate가 강제하지 않음.
+  //    실명·전화번호 등 본인 확인은 진짜 필요한 액션(예약 신청·매장 가입 등) 시점에만 요구.
 
   if (authState.status === 'loading') {
     return <>{loadingFallback ?? <AppSplash />}</>;
@@ -131,14 +109,6 @@ export default function AuthGate({ children, loadingFallback }: Props) {
     return <>{loadingFallback ?? <AppSplash />}</>;
   }
 
-  // KYC 미완료이고 현재 경로가 KYC 화이트리스트 아닌 경우 스플래시 유지
-  if (
-    userDoc !== null &&
-    !userDoc.kycCompletedAt &&
-    !isKycWhitelisted(pathname)
-  ) {
-    return <>{loadingFallback ?? <AppSplash />}</>;
-  }
-
+  // KYC 강제 게이트 제거 — 사장님 정책: 본인확인은 실제 액션 시점에만 요구.
   return <>{children}</>;
 }
