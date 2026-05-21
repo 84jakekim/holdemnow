@@ -241,17 +241,43 @@ function SessionControls({ session }: { session: LiveSession }) {
   // 마지막 레벨 종료 후 그레이스 만료 시 자동 stopLiveSession 호출.
   // 매장 사장 클라이언트가 권한을 가지고 있어, 이 페이지가 켜져 있는 동안 정리됨.
   // 만료 후 진입 시(remainMs<=0) 즉시 호출.
+  //
+  // SANITY GUARD (2026-05-21 핫픽스):
+  // - cron이 finishingAt을 잘못 박은 경우(12레벨 토너인데 5~7레벨에서 종료) 방어.
+  // - 자동 stopLiveSession 호출 전에 currentLevel이 진짜 마지막 레벨인지 한번 더 확인.
+  // - 마지막 레벨이 아니면 자동 종료를 거부하고 로그만 남김 (사용자가 수동 종료해야 함).
   const finishingMs = session.finishingAt?.toMillis?.();
   useEffect(() => {
     if (!finishingMs) return;
+    const structure =
+      session.blindStructureLocked && session.blindStructureLocked.length > 0
+        ? session.blindStructureLocked
+        : session.blindStructure;
+    const lastLevelNum =
+      structure && structure.length > 0
+        ? structure[structure.length - 1].level
+        : -1;
+    const isReallyLastLevel = session.currentLevel === lastLevelNum && lastLevelNum > 0;
+
+    const safeStop = () => {
+      if (!isReallyLastLevel) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[LivePanel] BLOCKED auto-stop — currentLevel=${session.currentLevel} ` +
+          `lastLevelNum=${lastLevelNum} structure.len=${structure?.length ?? 0}. ` +
+          `cron이 잘못 박은 finishingAt으로 추정. 자동 종료 거부.`
+        );
+        return;
+      }
+      stopLiveSession(session, 0).catch(() => {});
+    };
+
     const remainMs = finishingMs + FINISHING_GRACE_SEC * 1000 - Date.now();
     if (remainMs <= 0) {
-      stopLiveSession(session, 0).catch(() => {});
+      safeStop();
       return;
     }
-    const t = setTimeout(() => {
-      stopLiveSession(session, 0).catch(() => {});
-    }, remainMs);
+    const t = setTimeout(safeStop, remainMs);
     return () => clearTimeout(t);
   }, [finishingMs, session]);
 

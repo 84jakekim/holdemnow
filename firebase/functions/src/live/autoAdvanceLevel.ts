@@ -149,6 +149,33 @@ export const autoAdvanceLevel = onSchedule(
 
       // 마지막 레벨까지 모두 소진 → finishingAt 박음
       if (pos.isFinishing) {
+        // SANITY GUARD: 진짜 마지막 레벨이 맞는지 다층 검증.
+        // 12레벨 토너인데 5~7레벨쯤 자동 종료되는 버그(2026-05-21 사용자 보고)의 핵심 원인 차단.
+        // ① locked structure가 비정상적으로 짧으면 (예: 한쪽만 동기화 누락) skip
+        // ② pos.level이 locked의 마지막 레벨과 일치해야 finishingAt 박음
+        // ③ live 구조(blindStructure)와 lock된 구조의 길이가 같은지도 점검
+        const lockedLen = (data.blindStructureLocked ?? []).length;
+        const liveLen = (data.blindStructure ?? []).length;
+        const effectiveStructure = lockedLen > 0 ? data.blindStructureLocked! : (data.blindStructure ?? []);
+        const lastLevelNum = effectiveStructure.length > 0
+          ? effectiveStructure[effectiveStructure.length - 1].level
+          : -1;
+
+        const isReallyLastLevel = pos.level === lastLevelNum && effectiveStructure.length > 0;
+        const lockMatchesLive = lockedLen === 0 || liveLen === 0 || Math.abs(lockedLen - liveLen) <= 1;
+
+        if (!isReallyLastLevel || !lockMatchesLive) {
+          console.warn(
+            `[autoAdvanceLevel] BLOCKED finishingAt — sanity guard tripped. ` +
+            `session=${doc.id} pos.level=${pos.level} lastLevelNum=${lastLevelNum} ` +
+            `lockedLen=${lockedLen} liveLen=${liveLen} store="${data.storeName ?? '?'}" ` +
+            `tourney="${data.tournamentName ?? '?'}". ` +
+            `세션이 정상 진행 중인데 마지막 레벨로 오판된 케이스로 추정. ` +
+            `타이머 진행은 continueElevated하고 다음 cron tick에서 재평가.`
+          );
+          continue;
+        }
+
         await doc.ref.update({
           finishingAt: admin.firestore.FieldValue.serverTimestamp(),
           currentLevel: pos.level,

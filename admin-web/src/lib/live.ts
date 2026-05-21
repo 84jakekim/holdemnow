@@ -565,9 +565,21 @@ export async function addSecondsToSession(s: LiveSession, currentSecondsLeft: nu
   };
 
   // Deterministic timeline 재정렬 — 시간을 늘리면 elapsed가 줄어야 하므로 totalStartedAt을 +delta초 미래로
+  // SANITY: 새 elapsed가 음수가 되거나 totalStartedAt이 미래로 너무 멀리 가지 않도록 hard cap.
+  // 잘못된 shift가 누적되면 cron이 elapsed를 잘못 계산해 마지막 레벨로 점프 → finishingAt 박힘 → 자동 종료 버그 유발.
   if (s.totalStartedAt) {
     const shiftedMs = s.totalStartedAt.toMillis() + actualDelta * 1000;
-    updates.totalStartedAt = Timestamp.fromMillis(shiftedMs);
+    // shift된 totalStartedAt이 (현재 시각 - 현재 누적 레벨 종료까지의 시간)보다 미래면 의심 — reject
+    const totalPausedMs = s.totalPausedMs ?? 0;
+    const refNowMs = s.status === 'paused' && s.pausedAt ? s.pausedAt.toMillis() : Date.now();
+    const newElapsedMs = refNowMs - shiftedMs - totalPausedMs;
+    if (newElapsedMs < 0) {
+      // 미래로 너무 멀리 shift됨 — 거부하고 단순 levelSecondsLeft만 업데이트
+      // eslint-disable-next-line no-console
+      console.warn(`[addSecondsToSession] BLOCKED timeline shift — newElapsedMs=${newElapsedMs}ms. levelSecondsLeft만 update.`);
+    } else {
+      updates.totalStartedAt = Timestamp.fromMillis(shiftedMs);
+    }
   }
 
   await patchSession(s.id, updates);
@@ -598,9 +610,18 @@ export async function setTimeRemainingInSession(
     levelEndsAt: s.status === 'running' ? deadlineFromNow(clamped) : null,
   };
 
+  // 같은 sanity guard 적용 — addSecondsToSession과 동일 원리
   if (s.totalStartedAt) {
     const shiftedMs = s.totalStartedAt.toMillis() + delta * 1000;
-    updates.totalStartedAt = Timestamp.fromMillis(shiftedMs);
+    const totalPausedMs = s.totalPausedMs ?? 0;
+    const refNowMs = s.status === 'paused' && s.pausedAt ? s.pausedAt.toMillis() : Date.now();
+    const newElapsedMs = refNowMs - shiftedMs - totalPausedMs;
+    if (newElapsedMs < 0) {
+      // eslint-disable-next-line no-console
+      console.warn(`[setTimeRemainingInSession] BLOCKED timeline shift — newElapsedMs=${newElapsedMs}ms.`);
+    } else {
+      updates.totalStartedAt = Timestamp.fromMillis(shiftedMs);
+    }
   }
 
   await patchSession(s.id, updates);
