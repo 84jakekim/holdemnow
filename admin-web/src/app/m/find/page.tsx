@@ -1043,11 +1043,12 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
       href={`/m/store/${post.storeId}`}
       onClick={() => bumpStoreMetric(post.storeId, 'cardClicks')}
       aria-label={`${post.storeName ?? '매장'} 소식 보기`}
-      className="w-[200px] block rounded-2xl overflow-hidden card-hover"
-      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}
+      className="w-[270px] block rounded-2xl overflow-hidden card-hover"
+      style={{ background: 'var(--surface-1)' }}
     >
       {photo ? (
-        <div className="relative w-full" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
+        /* 가로 포스터 표준 3:2 비율 — 영화·여행 포스터의 가로형 표준 */
+        <div className="relative w-full" style={{ aspectRatio: '3/2', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt={post.storeName ?? ''} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
           {post.imageUrls.length > 1 && (
@@ -1058,7 +1059,7 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
         </div>
       ) : (
         /* 사진 없는 경우만 텍스트 본문 노출 (피드 빈 카드 방지) */
-        <div className="px-3 py-3" style={{ minHeight: 150 }}>
+        <div className="px-3 py-3" style={{ minHeight: 150, background: 'var(--surface-2)' }}>
           <div className="text-[12px] font-extrabold mb-1 truncate" style={{ color: 'var(--brand)' }}>{post.storeName ?? '매장'}</div>
           <div className="text-[11px] leading-relaxed whitespace-pre-wrap line-clamp-5" style={{ color: 'var(--text-2)' }}>{summary}</div>
         </div>
