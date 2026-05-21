@@ -27,8 +27,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as fbSignOut,
 } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { doc, getFirestore, serverTimestamp, setDoc } from 'firebase/firestore';
 
 const ADMIN_EMAIL_DOMAIN = 'admin.pinkrabbit.local';
 
@@ -87,18 +86,23 @@ export async function createPlatformAdmin(input: {
 
   const email = usernameToAdminEmail(u.value);
 
-  // 일회용 secondary app — 현재 세션의 auth.currentUser 보호
+  // 일회용 secondary app — 현재 세션의 auth.currentUser 보호.
+  // Firestore도 secondary app 인스턴스를 써야 함:
+  //   본 앱의 db로 setDoc 하면 본 앱 auth(현재 admin)의 uid로 검증되어
+  //   rules의 `uid() == userId` 통과 실패. secondary db는 새로 만든 user
+  //   본인 자격으로 자기 doc을 쓰므로 rules 통과.
   const auxName = `__admin-create-${Date.now()}__`;
   let auxApp: FirebaseApp | null = null;
   try {
     auxApp = initializeApp(input.firebaseConfig, auxName);
     const auxAuth = getAuth(auxApp);
+    const auxDb = getFirestore(auxApp);
 
     const cred = await createUserWithEmailAndPassword(auxAuth, email, input.password);
     const uid = cred.user.uid;
 
-    // users/{uid}에 platform_admin 역할 + 아이디 기록
-    await setDoc(doc(db, 'users', uid), {
+    // 새 user 본인 자격으로 users/{uid} 작성 — rules `uid() == userId` 통과.
+    await setDoc(doc(auxDb, 'users', uid), {
       uid,
       username: u.value,
       loginId: u.value,
