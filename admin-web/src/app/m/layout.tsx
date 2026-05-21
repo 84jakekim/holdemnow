@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import NoticePopup from '@/components/mobile/NoticePopup';
 import InAppToast from '@/components/mobile/InAppToast';
 import ConfirmedReservationBanner from '@/components/mobile/ConfirmedReservationBanner';
 import AuthGate from '@/components/AuthGate';
-import { useAuth, useUserDoc } from '@/lib/hooks';
+import { useAuth } from '@/lib/hooks';
 import { useHeartbeat } from '@/lib/heartbeat';
 
 /* ============================================================
@@ -87,9 +86,7 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
   const uid = authState.status === 'authenticated' ? authState.user.uid : null;
   useHeartbeat(uid);
 
-  const router = useRouter();
   const pathname = usePathname() ?? '';
-  const userDoc = useUserDoc(uid);
 
   // 풀스크린 페이지 — 탭바 숨김 (온보딩 포함)
   const isFullscreen =
@@ -99,17 +96,10 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     pathname.startsWith('/m/campaigns/') ||
     pathname.startsWith('/m/onboarding/');
 
-  // 전화번호 미등록 사용자는 /m/onboarding/phone으로 강제
-  // (users doc 존재 + phone 필드 비어있음 → 강제 게이트)
-  useEffect(() => {
-    if (authState.status !== 'authenticated') return;
-    if (userDoc === undefined) return;     // 로딩 중
-    if (userDoc === null) return;          // 신규 — users doc 아직 생성 전, AuthGate가 처리
-    if (userDoc.phone) return;             // 이미 등록
-    if (pathname.startsWith('/m/onboarding')) return;  // 온보딩 페이지 자체는 통과
-    const next = pathname && pathname.startsWith('/m') ? pathname : '/m';
-    router.replace(`/m/onboarding/phone?next=${encodeURIComponent(next)}`);
-  }, [authState.status, userDoc, pathname, router]);
+  // 전화번호 미등록 강제 게이트 — 비활성화.
+  // 사장님 보고: 앱 내렸다 올릴 때마다 본인 확인처럼 떠서 불편.
+  // 전화번호는 예약 신청 등 실제 필요한 액션 시점에만 요구.
+  // 일반 진입엔 게이트 없음 — 사용자가 자율적으로 /m/my에서 등록.
 
   return (
     <AuthGate>
