@@ -121,7 +121,7 @@ export default function AdDetailPage({
         </div>
       )}
 
-      {/* 제목·소제목 */}
+      {/* 제목·소제목·상세설명 */}
       <div className="px-5 py-5">
         {ad.title && (
           <div className="text-[20px] font-extrabold leading-snug mb-2" style={{ color: 'var(--text-1)' }}>
@@ -130,10 +130,18 @@ export default function AdDetailPage({
         )}
         {ad.subtitle && (
           <div
-            className="text-[14px] leading-relaxed whitespace-pre-wrap"
+            className="text-[14px] leading-relaxed whitespace-pre-wrap mb-3"
             style={{ color: 'var(--text-2)' }}
           >
             {ad.subtitle}
+          </div>
+        )}
+        {ad.description && (
+          <div
+            className="text-[14px] leading-relaxed whitespace-pre-wrap"
+            style={{ color: 'var(--text-2)' }}
+          >
+            {ad.description}
           </div>
         )}
       </div>

@@ -247,6 +247,7 @@ interface AdFormData {
   position: 'top' | 'bottom';
   title: string;
   subtitle: string;
+  description: string;
   linkType: 'external' | 'store' | 'event' | 'internal';
   linkUrl: string;
   startAt: Timestamp | null;
@@ -265,6 +266,7 @@ function AdModal({ ad, saving, onSave, onClose }: {
     position: ad?.position ?? 'top',
     title: ad?.title ?? '',
     subtitle: ad?.subtitle ?? '',
+    description: ad?.description ?? '',
     linkType: ad?.linkType ?? 'external',
     linkUrl: ad?.linkUrl ?? '',
     startAt: ad?.startAt ?? null,
@@ -347,6 +349,21 @@ function AdModal({ ad, saving, onSave, onClose }: {
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1.5">부제 (선택)</label>
               <input value={form.subtitle} onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="부제" />
+            </div>
+          </div>
+
+          {/* 상세 설명 */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">상세 설명 (선택)</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              rows={6}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y leading-relaxed"
+              placeholder={'사용자가 광고를 탭하면 상세 페이지에서 보여집니다.\n행사 일정, 혜택, 참여 방법 등을 자유롭게 작성하세요.'}
+            />
+            <div className="text-[11px] text-gray-400 mt-1">
+              줄바꿈·이모지 그대로 표시. 카톡방 안내문을 붙여넣어도 OK.
             </div>
           </div>
 

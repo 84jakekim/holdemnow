@@ -148,11 +148,15 @@ export default function HomeAdsCarousel({ position }: Props) {
                 loading="lazy"
               />
 
-              {/* 상단: 어두운 오버레이 (텍스트 가독성·임팩트) */}
-              {isTop && (
+              {/* 어두운 오버레이는 title/subtitle이 있을 때만 적용 — 텍스트 가독성용.
+               * 텍스트 없는 포스터(이미지만 노출 광고)는 원본 그대로 보이도록 오버레이 미적용. */}
+              {isTop && (ad.title || ad.subtitle) && (
                 <div
-                  className="absolute inset-0"
-                  style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)' }}
+                  className="absolute inset-x-0 bottom-0 pointer-events-none"
+                  style={{
+                    height: '55%',
+                    background: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%)',
+                  }}
                 />
               )}
 

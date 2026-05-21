@@ -21,6 +21,8 @@ export interface HomeAd {
   imageUrl: string;
   title?: string;
   subtitle?: string;
+  /** 광고 상세 페이지에 전체 노출되는 본문(여러 줄, whitespace-pre-wrap). */
+  description?: string;
   linkType: 'external' | 'store' | 'event' | 'internal';
   linkUrl: string;
   startAt: Timestamp;
