@@ -528,6 +528,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== 피드 설정 변경 이력 (feedConfigHistory) =====
+    // /platform/feed-config 페이지가 meta/feedConfig 저장 시 함께 기록.
+    // - read: platform_admin만 (운영 이력).
+    // - create: platform_admin만 (저장 시점에 actorUid==본인 강제).
+    // - update/delete: 불변.
+    match /feedConfigHistory/{logId} {
+      allow read: if isPlatformAdmin();
+      allow create: if isPlatformAdmin()
+        && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // ===== 본사 감사 로그 (adminAuditLog) =====
     // 본사 관리자 행위(비밀번호 재설정 메일 발송 등) 기록.
     // - read: platform_admin만.

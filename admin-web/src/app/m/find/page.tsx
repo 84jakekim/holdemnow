@@ -960,6 +960,13 @@ function DailyPostsFeed() {
             <span>오늘의 매장 소식</span>
           </div>
         </div>
+        <Link
+          href="/m/posts"
+          className="text-[12px] font-semibold transition active:opacity-60"
+          style={{ color: 'var(--text-3)' }}
+        >
+          전체보기 →
+        </Link>
       </div>
       {pinned.length > 0 && <div className="px-4 mb-3"><PinnedCarousel items={pinned} /></div>}
       {posts.length > 0 && <StorePostsPortraitCarousel posts={posts} />}

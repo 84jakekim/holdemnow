@@ -67,6 +67,7 @@ const MENU_GROUPS: MenuGroup[] = [
       { id: 'reviews', icon: '⭐', label: '리뷰 관리', href: '/platform/reviews' },
       { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
       { id: 'pinned', icon: '📌', label: '홈 고정 공지', href: '/platform/pinned' },
+      { id: 'feed-config', icon: '📍', label: '채팅방 반경', href: '/platform/feed-config' },
       { id: 'marketing', icon: '📣', label: '마케팅 푸시', href: '/platform/marketing' },
     ],
   },

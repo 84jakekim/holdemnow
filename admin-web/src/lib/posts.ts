@@ -256,6 +256,45 @@ export async function loadActivePostsAll(maxAgeMs = POST_TTL_MS): Promise<StoreP
   }));
 }
 
+/**
+ * 채팅방(/m/posts)용 — 전체 매장의 활성 글을 createdAt **오름차순**(말풍선 시간순)으로
+ * 실시간 구독. 거리/위치 필터는 호출자에서 클라이언트 사이드로 처리.
+ *
+ * 정책 (2026-05-22 신설):
+ *  - 채팅방 톤이므로 오래된 글이 위, 최신 글이 아래로. 새 글이 추가될 때마다 자동 추가.
+ *  - 24h 만료 + status='published'만 노출. (인덱스: posts collectionGroup status+createdAt asc)
+ *  - limit 100 — 24h 안에 100건 넘는 트래픽은 v0.1 범위 밖.
+ *  - storeId는 d.ref.parent.parent?.id에서 추출 (collectionGroup 메타).
+ */
+export function subscribeActivePostsAll(
+  onChange: (items: StorePost[]) => void,
+  onError: (e: Error) => void,
+  options: { maxAgeMs?: number; limitCount?: number } = {},
+) {
+  const maxAgeMs = options.maxAgeMs ?? POST_TTL_MS;
+  const limitCount = options.limitCount ?? 100;
+  const since = Timestamp.fromMillis(Date.now() - maxAgeMs);
+  const q = query(
+    collectionGroup(db, 'posts'),
+    where('status', '==', 'published'),
+    where('createdAt', '>=', since),
+    orderBy('createdAt', 'asc'),
+    limit(limitCount),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items: StorePost[] = snap.docs.map((d) => ({
+        id: d.id,
+        storeId: d.ref.parent.parent?.id ?? '',
+        ...(d.data() as Omit<StorePost, 'id' | 'storeId'>),
+      }));
+      onChange(items);
+    },
+    (e) => onError(e as Error),
+  );
+}
+
 /** 매장이 24h 이내 작성한 글이 이미 있는지 (1일 1글 클라이언트 가드). */
 export async function hasRecentPostByStore(storeId: string, authorUid: string): Promise<boolean> {
   const since = Timestamp.fromMillis(Date.now() - POST_TTL_MS);

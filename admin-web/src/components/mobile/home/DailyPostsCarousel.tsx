@@ -131,11 +131,11 @@ export default function DailyPostsCarousel() {
         </h2>
         {posts.length > 0 && (
           <Link
-            href="/m/find#daily-posts"
+            href="/m/posts"
             className="text-[12px] font-semibold transition active:opacity-60"
             style={{ color: 'var(--text-3)' }}
           >
-            전체보기
+            전체보기 →
           </Link>
         )}
       </div>
