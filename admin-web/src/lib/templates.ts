@@ -13,6 +13,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export interface BlindLevel {
   level: number;
@@ -410,27 +411,6 @@ export function subscribeTemplates(
       ),
     (err) => onError(err as Error),
   );
-}
-
-/**
- * Firestore는 undefined 값을 허용하지 않음 (only null or omit).
- * payoutStructure.customPercents 같은 optional 필드가 undefined로 들어오면
- * `addDoc/updateDoc`이 throw → 사장 입장에서 "저장 실패"로 보임.
- * 객체를 재귀적으로 순회해 undefined 필드를 완전히 제거한다.
- */
-function stripUndefined<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((v) => stripUndefined(v)) as unknown as T;
-  }
-  if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (v === undefined) continue;
-      out[k] = stripUndefined(v);
-    }
-    return out as T;
-  }
-  return value;
 }
 
 export async function createTemplate(

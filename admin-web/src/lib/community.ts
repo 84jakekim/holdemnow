@@ -33,6 +33,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export type CommunityItemType = 'jobOffer' | 'dealerProfile' | 'usedListing';
 
@@ -366,7 +367,7 @@ export interface CreateJobInput {
 
 export async function createJob(input: CreateJobInput): Promise<string> {
   const expiresAt = input.expiresAt ?? new Date(Date.now() + JOB_TTL_MS);
-  const ref = await addDoc(collection(db, COMMUNITY), {
+  const ref = await addDoc(collection(db, COMMUNITY), stripUndefined({
     type: 'jobOffer',
     title: input.title,
     body: input.body,
@@ -389,7 +390,7 @@ export async function createJob(input: CreateJobInput): Promise<string> {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     expiresAt: Timestamp.fromDate(expiresAt),
-  });
+  }));
   return ref.id;
 }
 
@@ -409,7 +410,7 @@ export type UpdateJobInput = Partial<{
 export async function updateJob(itemId: string, updates: UpdateJobInput): Promise<void> {
   const patch: Record<string, unknown> = { ...updates, updatedAt: serverTimestamp() };
   if (updates.expiresAt) patch.expiresAt = Timestamp.fromDate(updates.expiresAt);
-  await updateDoc(doc(db, COMMUNITY, itemId), patch);
+  await updateDoc(doc(db, COMMUNITY, itemId), stripUndefined(patch));
 }
 
 export async function deleteJob(itemId: string): Promise<void> {
@@ -568,7 +569,7 @@ export interface CreateDealerProfileInput {
 }
 
 export async function createDealerProfile(input: CreateDealerProfileInput): Promise<string> {
-  const ref = await addDoc(collection(db, COMMUNITY), {
+  const ref = await addDoc(collection(db, COMMUNITY), stripUndefined({
     type: 'dealerProfile',
     title: `${input.displayName} 딜러`,
     body: input.bio,
@@ -591,7 +592,7 @@ export async function createDealerProfile(input: CreateDealerProfileInput): Prom
     authorUid: input.authorUid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }));
   return ref.id;
 }
 
@@ -601,7 +602,7 @@ export async function updateDealerProfile(itemId: string, updates: UpdateDealerP
   const patch: Record<string, unknown> = { ...updates, updatedAt: serverTimestamp() };
   if (updates.bio) patch.body = updates.bio;
   if (updates.displayName) patch.title = `${updates.displayName} 딜러`;
-  await updateDoc(doc(db, COMMUNITY, itemId), patch);
+  await updateDoc(doc(db, COMMUNITY, itemId), stripUndefined(patch));
 }
 
 /**
@@ -768,7 +769,7 @@ export interface CreateUsedListingInput {
 
 export async function createUsedListing(input: CreateUsedListingInput): Promise<string> {
   const expiresAt = new Date(Date.now() + USED_TTL_MS);
-  const ref = await addDoc(collection(db, COMMUNITY), {
+  const ref = await addDoc(collection(db, COMMUNITY), stripUndefined({
     type: 'usedListing',
     title: input.title,
     body: input.body,
@@ -790,7 +791,7 @@ export async function createUsedListing(input: CreateUsedListingInput): Promise<
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     expiresAt: Timestamp.fromDate(expiresAt),
-  });
+  }));
   return ref.id;
 }
 
@@ -810,7 +811,7 @@ export type UpdateUsedListingInput = Partial<{
 
 export async function updateUsedListing(itemId: string, updates: UpdateUsedListingInput): Promise<void> {
   const patch: Record<string, unknown> = { ...updates, updatedAt: serverTimestamp() };
-  await updateDoc(doc(db, COMMUNITY, itemId), patch);
+  await updateDoc(doc(db, COMMUNITY, itemId), stripUndefined(patch));
 }
 
 export async function deleteUsedListing(itemId: string): Promise<void> {

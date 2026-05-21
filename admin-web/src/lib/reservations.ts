@@ -27,6 +27,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export type ReservationStatus =
   | 'pending'
@@ -169,7 +170,7 @@ export async function createReservation(input: {
     confirmedAt: null,
   };
 
-  const ref = await addDoc(reservationsCol(input.storeId), payload);
+  const ref = await addDoc(reservationsCol(input.storeId), stripUndefined(payload));
   return ref.id;
 }
 
@@ -218,7 +219,7 @@ export async function respondToReservation(
     ...(status === 'confirmed' ? { confirmedAt: serverTimestamp() } : {}),
   };
 
-  await updateDoc(doc(reservationsCol(storeId), reservationId), patch);
+  await updateDoc(doc(reservationsCol(storeId), reservationId), stripUndefined(patch));
 }
 
 /**

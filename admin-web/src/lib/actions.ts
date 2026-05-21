@@ -9,6 +9,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 import type { TournamentInstance } from './tournaments';
 
 /** tel: 링크 (전화 걸기) */
@@ -79,11 +80,11 @@ export async function toggleSeriesSubscription(
   if (currentlySubscribed) {
     await deleteDoc(ref);
   } else {
-    await setDoc(ref, {
+    await setDoc(ref, stripUndefined({
       seriesId,
       seriesName,
       createdAt: serverTimestamp(),
-    });
+    }));
   }
 }
 
@@ -120,7 +121,7 @@ export async function toggleTournamentInterest(
   if (currentlyInterested) {
     await deleteDoc(ref);
   } else {
-    await setDoc(ref, {
+    await setDoc(ref, stripUndefined({
       tournamentId: tournament.id,
       storeId: tournament.storeId,
       storeName: tournament.storeName,
@@ -130,6 +131,6 @@ export async function toggleTournamentInterest(
       guarantee: tournament.guarantee,
       startsAt: tournament.startsAt,
       createdAt: serverTimestamp(),
-    });
+    }));
   }
 }

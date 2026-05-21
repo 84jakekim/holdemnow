@@ -24,6 +24,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 /**
  * 매장 데일리 홍보 ("오늘의 소식") + 본사 pinned 공지.
@@ -167,7 +168,7 @@ export async function createStorePost(input: {
   ctaLabel?: string;
   authorUid: string;
 }): Promise<string> {
-  const ref = await addDoc(postsCol(input.storeId), {
+  const ref = await addDoc(postsCol(input.storeId), stripUndefined({
     storeId: input.storeId,
     storeName: input.storeName ?? '',
     body: input.body,
@@ -181,7 +182,7 @@ export async function createStorePost(input: {
     flagCount: 0,
     createdAt: serverTimestamp(),
     expiresAt: expiresFromNow(),
-  });
+  }));
   return ref.id;
 }
 
@@ -190,7 +191,7 @@ export async function updateStorePost(
   postId: string,
   updates: Partial<Omit<StorePost, 'id' | 'storeId' | 'authorType' | 'authorUid' | 'createdAt' | 'expiresAt'>>,
 ): Promise<void> {
-  await updateDoc(doc(postsCol(storeId), postId), updates);
+  await updateDoc(doc(postsCol(storeId), postId), stripUndefined(updates));
 }
 
 export async function deleteStorePost(storeId: string, postId: string): Promise<void> {
@@ -280,7 +281,7 @@ export async function createPinnedPost(input: {
   active?: boolean;
   priority?: number;
 }): Promise<string> {
-  const ref = await addDoc(collection(db, PINNED), {
+  const ref = await addDoc(collection(db, PINNED), stripUndefined({
     title: input.title,
     body: input.body ?? '',
     imageUrls: input.imageUrls ?? [],
@@ -290,7 +291,7 @@ export async function createPinnedPost(input: {
     priority: input.priority ?? 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }));
   return ref.id;
 }
 
@@ -298,10 +299,10 @@ export async function updatePinnedPost(
   id: string,
   updates: Partial<Omit<PinnedPost, 'id' | 'createdAt' | 'updatedAt'>>,
 ): Promise<void> {
-  await updateDoc(doc(db, PINNED, id), {
+  await updateDoc(doc(db, PINNED, id), stripUndefined({
     ...updates,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 export async function deletePinnedPost(id: string): Promise<void> {

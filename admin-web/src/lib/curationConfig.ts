@@ -16,6 +16,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { stripUndefined } from '@/lib/firestoreUtil';
 
 export interface YoutubeCurationLastRunResult {
   upserted: number;
@@ -133,12 +134,7 @@ export async function saveCurationConfig(
   patch: Partial<YoutubeCurationConfig>,
 ): Promise<void> {
   const ref = doc(db, DOC_PATH[0], DOC_PATH[1]);
-  // Timestamp 필드는 그대로 두고, undefined 값 제거
-  const clean: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(patch)) {
-    if (v !== undefined) clean[k] = v;
-  }
-  clean.updatedAt = serverTimestamp();
+  const clean = stripUndefined({ ...patch, updatedAt: serverTimestamp() });
   await setDoc(ref, clean, { merge: true });
 }
 

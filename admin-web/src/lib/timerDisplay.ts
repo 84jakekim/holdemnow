@@ -24,6 +24,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export type BackgroundType = 'solid' | 'gradient' | 'image';
 
@@ -159,12 +160,12 @@ export async function createTimerDisplayPreset(
   name: string,
   baseSettings: TimerDisplaySettings,
 ) {
-  await setDoc(doc(presetsCol(storeId), name.replace(/\s+/g, '-').toLowerCase().slice(0, 40)), {
+  await setDoc(doc(presetsCol(storeId), name.replace(/\s+/g, '-').toLowerCase().slice(0, 40)), stripUndefined({
     name,
     settings: baseSettings,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 /** 프리셋 업데이트. */
@@ -176,11 +177,11 @@ export async function updateTimerDisplayPreset(
 ) {
   await setDoc(
     doc(presetsCol(storeId), presetId),
-    {
+    stripUndefined({
       ...(name !== undefined ? { name } : {}),
       settings,
       updatedAt: serverTimestamp(),
-    },
+    }),
     { merge: true },
   );
 }
@@ -237,7 +238,7 @@ export async function saveTimerDisplay(
 ) {
   await setDoc(
     timerDisplayDoc(storeId),
-    { ...patch, updatedAt: serverTimestamp() },
+    stripUndefined({ ...patch, updatedAt: serverTimestamp() }),
     { merge: true },
   );
 }

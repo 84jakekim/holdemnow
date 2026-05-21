@@ -33,6 +33,7 @@ import {
 } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, db, storage } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 const COLLECTION = 'platformCampaigns';
 
@@ -107,7 +108,7 @@ export async function createCampaign(input: {
 
   const ref = doc(collection(db, COLLECTION));
   const status: CampaignStatus = input.scheduledAt ? 'scheduled' : 'draft';
-  await setDoc(ref, {
+  await setDoc(ref, stripUndefined({
     title: input.title.trim(),
     body: input.body.trim(),
     imageUrl: input.imageUrl ?? null,
@@ -126,7 +127,7 @@ export async function createCampaign(input: {
     errorMessage: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }));
   return ref.id;
 }
 
@@ -154,7 +155,7 @@ export async function updateCampaign(
       ? Timestamp.fromDate(updates.scheduledAt)
       : null;
   }
-  await updateDoc(doc(db, COLLECTION, campaignId), patch);
+  await updateDoc(doc(db, COLLECTION, campaignId), stripUndefined(patch));
 }
 
 /**

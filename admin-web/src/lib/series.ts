@@ -15,6 +15,7 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export type SeriesStatus = 'upcoming' | 'active' | 'completed';
 
@@ -140,8 +141,7 @@ export async function createSeries(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  if (data.organizerId === undefined) delete payload.organizerId; // Firestore: undefined 차단
-  const ref = await addDoc(seriesCol(), payload);
+  const ref = await addDoc(seriesCol(), stripUndefined(payload));
   return ref.id;
 }
 
@@ -149,10 +149,10 @@ export async function updateSeries(
   seriesId: string,
   updates: Partial<Omit<Series, 'id' | 'ownerUid'>>,
 ) {
-  await updateDoc(doc(seriesCol(), seriesId), {
+  await updateDoc(doc(seriesCol(), seriesId), stripUndefined({
     ...updates,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 export async function deleteSeries(seriesId: string) {
@@ -165,7 +165,7 @@ export async function addFinalistsBatch(
 ) {
   // batch write (간단 버전)
   const promises = finalists.map((f) =>
-    addDoc(finalistsCol(seriesId), { ...f, createdAt: serverTimestamp() }),
+    addDoc(finalistsCol(seriesId), stripUndefined({ ...f, createdAt: serverTimestamp() })),
   );
   await Promise.all(promises);
   // 카운터 갱신

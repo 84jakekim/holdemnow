@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
+import { stripUndefined } from '@/lib/firestoreUtil';
 import { useAuth } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import {
@@ -87,7 +88,7 @@ export default function FavoritesPage() {
     if (authState.status !== 'authenticated') return;
     await setDoc(
       doc(db, 'users', authState.user.uid, 'favorites', fav.storeId),
-      { ...fav, notifyOnLive: !fav.notifyOnLive, updatedAt: serverTimestamp() },
+      stripUndefined({ ...fav, notifyOnLive: !fav.notifyOnLive, updatedAt: serverTimestamp() }),
       { merge: true },
     );
   };

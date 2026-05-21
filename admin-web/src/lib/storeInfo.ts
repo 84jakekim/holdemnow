@@ -8,6 +8,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export const FACILITY_OPTIONS = [
   '주차', '발렛', '식사', '24시간', '흡연실', '룸', '여성전용시간', 'VIP룸',
@@ -28,10 +29,10 @@ export async function updateStoreInfo(
     photoUrls?: string[];
   },
 ) {
-  await updateDoc(doc(db, 'stores', storeId), {
+  await updateDoc(doc(db, 'stores', storeId), stripUndefined({
     ...updates,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 /** 매장 사진 1장 업로드 → download URL 반환 */

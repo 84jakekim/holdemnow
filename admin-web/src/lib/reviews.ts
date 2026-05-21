@@ -25,6 +25,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { auth, db, storage } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 /**
  * 매장 방문 리뷰 (stores/{storeId}/reviews/{reviewId} 서브컬렉션).
@@ -165,7 +166,7 @@ export async function createReview(input: {
   }
   const photoUrls = (input.photoUrls ?? []).slice(0, MAX_REVIEW_PHOTOS);
 
-  const ref = await addDoc(reviewsCol(input.storeId), {
+  const ref = await addDoc(reviewsCol(input.storeId), stripUndefined({
     storeId: input.storeId,
     authorUid: input.authorUid,
     authorName: input.authorName ?? '',
@@ -177,7 +178,7 @@ export async function createReview(input: {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     editedAt: null,
-  });
+  }));
   return ref.id;
 }
 
@@ -219,7 +220,7 @@ export async function updateReview(
     patch.visitDate = updates.visitDate ? Timestamp.fromDate(updates.visitDate) : null;
   }
 
-  await updateDoc(doc(reviewsCol(storeId), reviewId), patch);
+  await updateDoc(doc(reviewsCol(storeId), reviewId), stripUndefined(patch));
 }
 
 /** 리뷰 삭제 (본인만) — Storage 사진 같이 정리 */
@@ -423,7 +424,7 @@ export async function reportReview(
   };
   if (detail && detail.trim()) payload.detail = detail.trim().slice(0, 500);
 
-  await setDoc(ref, payload, { merge: false });
+  await setDoc(ref, stripUndefined(payload), { merge: false });
 }
 
 /** 이 사용자가 이 리뷰 이미 신고했나? — 신고 버튼 비활성화용 */

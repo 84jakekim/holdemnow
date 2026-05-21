@@ -9,6 +9,7 @@
 
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export type AuditAction =
   | 'export_members'
@@ -33,14 +34,14 @@ export async function logAdminAction(opts: {
   }
 
   try {
-    await addDoc(collection(db, 'auditLogs'), {
+    await addDoc(collection(db, 'auditLogs'), stripUndefined({
       actor: user.uid,
       actorEmail: user.email ?? '',
       timestamp: serverTimestamp(),
       action: opts.action,
       target: opts.target,
       metadata: opts.metadata ?? {},
-    });
+    }));
   } catch (err) {
     // 감사 로그 실패는 사용자 흐름을 막지 않음 — 콘솔 경고만
     console.error('[auditLog] 기록 실패:', err);

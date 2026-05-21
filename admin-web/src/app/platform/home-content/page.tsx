@@ -17,6 +17,7 @@ import {
   ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
 } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
+import { stripUndefined } from '@/lib/firestoreUtil';
 import { extractYoutubeVideoId, youtubeThumbnailUrl, fetchYoutubeChannelMeta } from '@/lib/youtube';
 import type { HomeAd, HotYoutubeVideo, HotYoutuber } from '@/lib/homeContent';
 
@@ -31,12 +32,12 @@ async function syncHomeContentCounts(): Promise<void> {
     ]);
     await setDoc(
       doc(db, 'meta', 'homeContentCounts'),
-      {
+      stripUndefined({
         adsActive: adsSnap.data().count,
         videosActive: videosSnap.data().count,
         youtubersActive: youtubersSnap.data().count,
         updatedAt: serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
   } catch {
@@ -206,9 +207,9 @@ function AdsTab() {
             setSaving(true);
             try {
               if (editing === 'new') {
-                const docRef = await addDoc(collection(db, 'homeAds'), {
+                const docRef = await addDoc(collection(db, 'homeAds'), stripUndefined({
                   ...data, imageUrl: '', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-                });
+                }));
                 if (file) {
                   const url = await uploadAdImage(docRef.id, file);
                   await updateDoc(docRef, { imageUrl: url });
@@ -219,7 +220,7 @@ function AdsTab() {
                   const url = await uploadAdImage(editing.id, file);
                   updates.imageUrl = url;
                 }
-                await updateDoc(doc(db, 'homeAds', editing.id), updates);
+                await updateDoc(doc(db, 'homeAds', editing.id), stripUndefined(updates));
               }
               syncHomeContentCounts();
               setEditing(null);
@@ -561,20 +562,20 @@ function VideosTab() {
             setSaving(true);
             try {
               if (editing === 'new') {
-                await addDoc(collection(db, 'hotYoutubeVideos'), {
+                await addDoc(collection(db, 'hotYoutubeVideos'), stripUndefined({
                   ...data,
                   source: 'manual',
                   createdAt: serverTimestamp(),
                   updatedAt: serverTimestamp(),
-                });
+                }));
               } else {
                 const wasAuto = editing.source === 'auto';
-                await updateDoc(doc(db, 'hotYoutubeVideos', editing.id), {
+                await updateDoc(doc(db, 'hotYoutubeVideos', editing.id), stripUndefined({
                   ...data,
                   source: 'manual',
                   updatedAt: serverTimestamp(),
                   ...(wasAuto ? { manualConvertedAt: serverTimestamp() } : {}),
-                });
+                }));
               }
               syncHomeContentCounts();
               setEditing(null);
@@ -825,7 +826,7 @@ function YoutubersTab() {
             setSaving(true);
             try {
               if (editing === 'new') {
-                const docRef = await addDoc(collection(db, 'hotYoutubers'), { ...data, avatarUrl: '', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+                const docRef = await addDoc(collection(db, 'hotYoutubers'), stripUndefined({ ...data, avatarUrl: '', createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
                 if (file) {
                   const url = await uploadYoutuberAvatar(docRef.id, file);
                   await updateDoc(docRef, { avatarUrl: url });
@@ -836,7 +837,7 @@ function YoutubersTab() {
                   const url = await uploadYoutuberAvatar(editing.id, file);
                   updates.avatarUrl = url;
                 }
-                await updateDoc(doc(db, 'hotYoutubers', editing.id), updates);
+                await updateDoc(doc(db, 'hotYoutubers', editing.id), stripUndefined(updates));
               }
               syncHomeContentCounts();
               setEditing(null);

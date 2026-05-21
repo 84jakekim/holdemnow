@@ -15,6 +15,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 import type { BlindLevel, TournamentTemplate, TournamentType } from './templates';
 
 export type TournamentInstanceStatus =
@@ -91,27 +92,6 @@ export function subscribeAllTournaments(
     },
     (err) => onError(err as Error),
   );
-}
-
-/**
- * Firestore는 undefined 값을 허용하지 않음 — payoutStructure.customPercents,
- * BlindLevel.isBreak, template.guarantee 등 optional 필드가 undefined로 들어오면
- * addDoc이 throw → 사장 입장에서 "게시 안 됨"으로 보임.
- * 객체를 재귀 순회해 undefined 필드를 완전히 제거 (null은 보존).
- */
-function stripUndefined<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((v) => stripUndefined(v)) as unknown as T;
-  }
-  if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (v === undefined) continue;
-      out[k] = stripUndefined(v);
-    }
-    return out as T;
-  }
-  return value;
 }
 
 export async function createTournament(

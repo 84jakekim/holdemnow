@@ -21,6 +21,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 /**
  * 본사 팝업 공지.
@@ -128,7 +129,7 @@ export async function createNotice(input: {
   endAt?: Date | null;
   size?: NoticeSize;
 }): Promise<string> {
-  const ref = await addDoc(collection(db, NOTICES), {
+  const ref = await addDoc(collection(db, NOTICES), stripUndefined({
     title: input.title,
     body: input.body ?? '',
     imageUrls: input.imageUrls ?? [],
@@ -140,7 +141,7 @@ export async function createNotice(input: {
     size: input.size ?? 'md',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }));
   return ref.id;
 }
 
@@ -148,10 +149,10 @@ export async function updateNotice(
   noticeId: string,
   updates: Partial<Omit<Notice, 'id' | 'createdAt' | 'updatedAt'>>,
 ): Promise<void> {
-  await updateDoc(doc(db, NOTICES, noticeId), {
+  await updateDoc(doc(db, NOTICES, noticeId), stripUndefined({
     ...updates,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 export async function deleteNotice(noticeId: string): Promise<void> {

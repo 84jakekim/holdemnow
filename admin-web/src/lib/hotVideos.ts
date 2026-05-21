@@ -25,6 +25,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { stripUndefined } from '@/lib/firestoreUtil';
 import {
   PRIORITY_FALLBACK,
   type HotYoutubeVideo,
@@ -154,7 +155,7 @@ export async function addManualVideo(
   const ref = doc(db, COL, videoId);
   await setDoc(
     ref,
-    {
+    stripUndefined({
       videoId,
       title,
       channelName,
@@ -170,7 +171,7 @@ export async function addManualVideo(
       addedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    },
+    }),
     { merge: true },
   );
   return videoId;

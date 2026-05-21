@@ -15,6 +15,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 
 export type OrganizerStatus = 'active' | 'paused' | 'pending';
 
@@ -74,7 +75,7 @@ export async function createOrganizer(
   ownerUid: string,
   data: Pick<Organizer, 'name' | 'tagline' | 'contactEmail'>,
 ): Promise<string> {
-  const ref = await addDoc(organizersCol(), {
+  const ref = await addDoc(organizersCol(), stripUndefined({
     ownerUid,
     name: data.name,
     tagline: data.tagline,
@@ -82,7 +83,7 @@ export async function createOrganizer(
     status: 'active' as OrganizerStatus,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }));
   // owner user doc에 organizerId 매핑 + organizer_master role 추가
   const userRef = doc(db, 'users', ownerUid);
   const userSnap = await getDoc(userRef);
@@ -92,12 +93,12 @@ export async function createOrganizer(
     : [...existingRoles, 'organizer_master'];
   await setDoc(
     userRef,
-    {
+    stripUndefined({
       uid: ownerUid,
       organizerId: ref.id,
       roles: newRoles,
       updatedAt: serverTimestamp(),
-    },
+    }),
     { merge: true },
   );
   return ref.id;
@@ -107,10 +108,10 @@ export async function updateOrganizer(
   organizerId: string,
   updates: Partial<Pick<Organizer, 'name' | 'tagline' | 'contactEmail' | 'status'>>,
 ) {
-  await updateDoc(doc(organizersCol(), organizerId), {
+  await updateDoc(doc(organizersCol(), organizerId), stripUndefined({
     ...updates,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 export async function deleteOrganizer(organizerId: string) {

@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { db } from './firebase';
+import { stripUndefined } from './firestoreUtil';
 import type { BlindLevel, PayoutStructure, PrizeDisplayUnit, TournamentTemplate } from './templates';
 import { computeAutoPrizePool, resolvePayoutStructure } from './templates';
 
@@ -443,15 +444,15 @@ export async function startLiveSession(
   docData.payoutStructure = ps; // 정책 스냅샷 (분배 방식·ITM·custom 비율 등 전부 포함) — Phase 5 항상 부착
   if (template.prizeDisplayUnit) docData.prizeDisplayUnit = template.prizeDisplayUnit; // Phase 4 표시 단위 스냅샷
 
-  const ref = await addDoc(liveSessionsCol(), docData);
+  const ref = await addDoc(liveSessionsCol(), stripUndefined(docData));
   return ref.id;
 }
 
 export async function patchSession(sessionId: string, updates: Partial<LiveSession>) {
-  await updateDoc(doc(liveSessionsCol(), sessionId), {
+  await updateDoc(doc(liveSessionsCol(), sessionId), stripUndefined({
     ...updates,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 /**
