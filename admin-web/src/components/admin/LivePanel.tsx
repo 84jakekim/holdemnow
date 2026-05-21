@@ -8,6 +8,7 @@ import {
   togglePauseSession,
   goToLevelInSession,
   addSecondsToSession,
+  setTimeRemainingInSession,
   eliminatePlayerInSession,
   toggleLateRegInSession,
   stopLiveSession,
@@ -102,14 +103,11 @@ export default function LivePanel({ storeId, storeName }: Props) {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🎬 LIVE 운영</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {sessions.length === 0
-              ? '진행 중인 LIVE 없음'
-              : `${sessions.length}개 LIVE 진행 중 · 사용자 액션만 Firestore 저장 (카운트다운은 클라이언트)`}
-          </p>
+      <div className="mb-4 flex items-start justify-between">
+        <div className="text-xs text-gray-500">
+          {sessions.length === 0
+            ? '진행 중인 LIVE 없음'
+            : `${sessions.length}개 LIVE 진행 중 · 카운트다운은 클라이언트, 사용자 액션만 Firestore 저장`}
         </div>
         <button
           onClick={() => setShowNewModal(true)}
@@ -122,7 +120,7 @@ export default function LivePanel({ storeId, storeName }: Props) {
 
       {templates.length === 0 && (
         <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-          💡 먼저 좌측 메뉴 <b>🎲 토너 템플릿</b>에서 토너를 등록해야 LIVE를 시작할 수 있습니다.
+          💡 먼저 상단 <b>🎲 토너 템플릿</b> 탭에서 토너를 등록해야 LIVE를 시작할 수 있습니다.
         </div>
       )}
 
@@ -288,16 +286,15 @@ function SessionControls({ session }: { session: LiveSession }) {
         >
           {isFinishing ? fmtTime(graceSec ?? 0) : fmtTime(seconds)}
         </div>
-        {/* 진행률 바 (running일 때만) */}
-        {isRunning && !isFinishing && currentDur > 0 && (
-          <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all ${
-                lowTime ? 'bg-red-500' : isCurrentBreak ? 'bg-amber-500' : 'bg-gray-900'
-              }`}
-              style={{ width: `${progress * 100}%` }}
-            />
-          </div>
+        {/* 진행률 바 — 드래그로 시간 조절 가능 (running/paused 모두) */}
+        {!isFinishing && currentDur > 0 && (isRunning || isPaused) && (
+          <DraggableProgressBar
+            session={session}
+            currentSeconds={seconds}
+            currentDur={currentDur}
+            progress={progress}
+            color={lowTime ? 'bg-red-500' : isCurrentBreak ? 'bg-amber-500' : 'bg-gray-900'}
+          />
         )}
         {nextBlind && !isFinishing && (
           <div
@@ -609,6 +606,118 @@ function BlindStructureView({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 드래그 가능 진행바 — 2순위 요구.
+ *
+ * UX:
+ * - 손/마우스 다운 → 좌우 드래그 → 새 시간으로 미리보기 (상단에 mm:ss 라벨)
+ * - 손 떼면 setTimeRemainingInSession으로 Firestore에 확정
+ * - 진행률은 currentDur 대비 elapsed (0 = 막 시작, 1 = 종료 직전)
+ * - 드래그 중 정확도: ±5초 grid로 스냅 (덜덜 떨림 방지)
+ */
+function DraggableProgressBar({
+  session,
+  currentSeconds,
+  currentDur,
+  progress,
+  color,
+}: {
+  session: LiveSession;
+  currentSeconds: number;
+  currentDur: number;
+  progress: number;
+  color: string;
+}) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [previewSec, setPreviewSec] = useState<number | null>(null);
+
+  // displayProgress: 드래그 중에는 previewSec 기준, 아니면 실시간 progress
+  const displayProgress = dragging && previewSec != null
+    ? Math.min(1, Math.max(0, (currentDur - previewSec) / currentDur))
+    : progress;
+
+  // pointer 위치 → newSecondsLeft 변환 (5초 단위 스냅)
+  const pointerToSeconds = (clientX: number): number => {
+    const rect = barRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return currentSeconds;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const elapsed = ratio * currentDur;
+    const remaining = Math.max(1, currentDur - elapsed);
+    // 5초 스냅
+    return Math.max(1, Math.min(currentDur, Math.round(remaining / 5) * 5));
+  };
+
+  const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    setDragging(true);
+    setPreviewSec(pointerToSeconds(e.clientX));
+  };
+  const handleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    setPreviewSec(pointerToSeconds(e.clientX));
+  };
+  const handleUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const target = pointerToSeconds(e.clientX);
+    setDragging(false);
+    setPreviewSec(null);
+    setTimeRemainingInSession(session, currentSeconds, target).catch(() => {});
+  };
+  const handleCancel = () => {
+    if (!dragging) return;
+    setDragging(false);
+    setPreviewSec(null);
+  };
+
+  return (
+    <div className="mt-3 select-none">
+      {dragging && previewSec != null && (
+        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5 flex items-center justify-center gap-2">
+          <span>🎯 드래그 중 · 새 시간</span>
+          <span className="font-mono text-sm text-gray-900 font-extrabold">
+            {fmtTime(previewSec)}
+          </span>
+        </div>
+      )}
+      <div
+        ref={barRef}
+        onPointerDown={handleDown}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+        onPointerCancel={handleCancel}
+        className={`relative h-4 bg-gray-100 rounded-full overflow-hidden cursor-ew-resize transition-all ${
+          dragging ? 'ring-2 ring-black/30 h-5' : 'hover:h-5'
+        }`}
+        role="slider"
+        aria-label="현재 레벨 남은 시간 드래그 조절"
+        aria-valuemin={0}
+        aria-valuemax={currentDur}
+        aria-valuenow={dragging && previewSec != null ? previewSec : currentSeconds}
+        style={{ touchAction: 'none' }}
+      >
+        <div
+          className={`h-full ${color} ${dragging ? '' : 'transition-all'}`}
+          style={{ width: `${displayProgress * 100}%` }}
+        />
+        {/* 드래그 핸들 — 진행률 위치 */}
+        <div
+          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white border-2 border-gray-900 shadow-md transition-opacity ${
+            dragging ? 'opacity-100 scale-125' : 'opacity-0'
+          }`}
+          style={{ left: `${displayProgress * 100}%` }}
+        />
+      </div>
+      {!dragging && (
+        <div className="text-[9px] text-gray-400 mt-1 text-center tracking-widest">
+          ⇄ 진행바를 드래그해 시간 조절
+        </div>
+      )}
     </div>
   );
 }

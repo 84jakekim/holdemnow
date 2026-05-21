@@ -7,8 +7,7 @@ import { auth } from '@/lib/firebase';
 import { useAuth, useStoreDoc, useUserDoc, hasRole } from '@/lib/hooks';
 import AuthGate from '@/components/AuthGate';
 import AdminAccessDenied from '@/components/admin/AdminAccessDenied';
-import TemplatesPanel from '@/components/admin/TemplatesPanel';
-import LivePanel from '@/components/admin/LivePanel';
+import LiveOpsPanel from '@/components/admin/LiveOpsPanel';
 import SlotsPanel from '@/components/admin/SlotsPanel';
 import Link from 'next/link';
 import StoreInfoPanel from '@/components/admin/StoreInfoPanel';
@@ -30,14 +29,14 @@ import { changePassword, syncPasswordRecovery, validatePassword } from '@/lib/em
 
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드' },
-  { id: 'live', icon: '🎬', label: 'LIVE 운영' },
+  // LIVE 운영 + 토너 템플릿 통합 — 하나의 페이지에서 상단 sub-tab으로 전환
+  { id: 'liveops', icon: '🎬', label: 'LIVE & 토너' },
   { id: 'posts', icon: '📢', label: '오늘의 소식' },
   { id: 'jobs', icon: '💼', label: '구인' },
   { id: 'dealers', icon: '🃏', label: '딜러 풀' },
   { id: 'used', icon: '🛒', label: '중고거래' },
   { id: 'tournaments', icon: '📅', label: '예정 토너' },
   { id: 'reservations', icon: '📅', label: '예약 관리' },
-  { id: 'templates', icon: '🎲', label: '토너 템플릿' },
   { id: 'store', icon: '🏬', label: '매장 정보' },
   { id: 'slots', icon: '📺', label: '디스플레이' },
   { id: 'ads', icon: '📣', label: '광고' },
@@ -45,7 +44,8 @@ const MENUS = [
 ];
 
 // pending 매장에서 차단되는 외부 노출 메뉴 — 본사 승인 후에만 활성
-const PENDING_DISABLED_MENUS = new Set(['live', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'templates', 'slots', 'ads']);
+// liveops는 LIVE+템플릿 통합 메뉴이므로 함께 차단
+const PENDING_DISABLED_MENUS = new Set(['liveops', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'slots', 'ads']);
 
 function AdminPageInner({ storeId }: { storeId: string }) {
   const router = useRouter();
@@ -258,8 +258,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           )}
 
           {activeMenu === 'dashboard' && <DashboardContent storeId={storeId} storeName={store.name} />}
-          {activeMenu === 'templates' && <TemplatesPanel storeId={storeId} />}
-          {activeMenu === 'live' && <LivePanel storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'liveops' && <LiveOpsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'posts' && <PostsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'jobs' && <JobsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'dealers' && <DealerPoolPanel storeId={storeId} storeName={store.name} />}
@@ -270,7 +269,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           {activeMenu === 'store' && <StoreInfoPanel storeId={storeId} />}
           {activeMenu === 'ads' && <AdsPanel />}
           {activeMenu === 'stats' && <StatsPanel storeId={storeId} />}
-          {!['dashboard', 'templates', 'live', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'reservations', 'slots', 'store', 'ads', 'stats'].includes(activeMenu) && (
+          {!['dashboard', 'liveops', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'reservations', 'slots', 'store', 'ads', 'stats'].includes(activeMenu) && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />
           )}
         </div>
@@ -354,9 +353,9 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
       <div className="p-5" style={cardStyle}>
         <div className="text-sm font-bold mb-3" style={{ color: 'var(--text-1)' }}>🎯 시작 가이드</div>
         <ol className="text-xs space-y-2 list-decimal list-inside leading-relaxed" style={{ color: 'var(--text-2)' }}>
-          <li>좌측 <b>🎲 토너 템플릿</b>에서 매장의 토너 종류를 등록하세요 (블라인드 구조 포함)</li>
+          <li>좌측 <b>🎬 LIVE &amp; 토너</b>에서 <b>토너 템플릿</b> 탭으로 매장의 토너 종류를 등록하세요</li>
           <li><b>📺 디스플레이</b>에서 매장 TV 슬롯을 추가하세요</li>
-          <li><b>🎬 LIVE 운영</b>에서 첫 LIVE를 시작하면 모바일 앱에 즉시 노출됩니다</li>
+          <li><b>🎬 LIVE &amp; 토너</b>의 <b>LIVE 운영</b> 탭에서 첫 LIVE를 시작하면 모바일 앱에 즉시 노출됩니다</li>
           <li><b>🏬 매장 정보</b>에서 사진을 업로드하면 디스커버리 효과 +180% 추정</li>
         </ol>
       </div>

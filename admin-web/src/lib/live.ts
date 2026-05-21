@@ -100,12 +100,18 @@ export function computeReadyExpirySec(s: LiveSession): number | null {
   return Math.floor((endsMs - Date.now()) / 1000);
 }
 
-/** 세션이 만료 상태인지 — 세 가지 케이스 통합:
+/** 세션이 만료 상태인지 — 두 가지 케이스 통합:
  *  ① 그레이스 만료 (finishingAt + 180초)
  *  ② ready 만료 (createdAt + 5분)
- *  ③ 좀비 running (levelEndsAt + 180초) — nextLevelTick 호출자가 부재해
- *    finishingAt도 박히지 않은 채 timer가 끝나버린 경우. 서버 cron이 1분 내 정리하지만
- *    클라이언트도 즉시 가려야 잔상이 없다. */
+ *
+ *  ⚠ 과거에 있던 "levelEndsAt + 180초 = 좀비" 룰은 **제거**됨.
+ *    Deterministic timeline 도입 후 autoAdvanceLevel cron은 같은 currentLevel이면
+ *    doc update를 의도적으로 skip한다. 결과적으로 doc의 levelEndsAt은 "첫 레벨 시작 시점에
+ *    박힌 deadline" 상태로 머무르고, 첫 레벨 종료 + 180초 시점에 정상 진행 중인 세션을
+ *    "좀비"로 오판해 화면에서 가리는 버그가 발생했다.
+ *    좀비 세션 정리는 서버 cron(autoStopFinishedSessions)이 totalStartedAt + structure로
+ *    실제 elapsed를 계산해 처리한다 — 클라이언트는 doc의 status만 신뢰한다.
+ */
 function isSessionExpired(s: LiveSession): boolean {
   if (s.finishingAt) {
     const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
@@ -117,10 +123,6 @@ function isSessionExpired(s: LiveSession): boolean {
       const endsMs = created.toMillis() + READY_EXPIRY_SEC * 1000;
       if (endsMs <= Date.now()) return true;
     }
-  }
-  if (s.status === 'running' && s.levelEndsAt) {
-    const staleMs = s.levelEndsAt.toMillis() + FINISHING_GRACE_SEC * 1000;
-    if (staleMs <= Date.now()) return true;
   }
   return false;
 }
@@ -540,14 +542,18 @@ export async function goToLevelInSession(
  * totalStartedAt을 delta초만큼 미래로(+1분) 또는 과거로(−1분) 이동.
  * (그래야 computeTimelinePosition이 다음 tick에서 같은 currentLevel을
  *  유지하면서 새로운 secondsLeft를 반환한다.)
+ *
+ * Clamp 범위: [1, currentLvlDur]. 0 또는 음수가 되면 자동 다음 레벨 진입 트리거.
+ *  마지막 레벨 끝을 넘기지 않도록 안전 보호 — finishingAt이 잘못 박혀 세션이 사라지는 버그 방지.
  */
 export async function addSecondsToSession(s: LiveSession, currentSecondsLeft: number, delta: number) {
   const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
     ? s.blindStructureLocked
     : s.blindStructure;
   const curLvlDur = structure?.find((l) => l.level === s.currentLevel)?.durationSec || 1200;
-  const maxSec = curLvlDur * 3;
-  const next = Math.max(0, Math.min(maxSec, currentSecondsLeft + delta));
+  // 1초 이상 보장 (0이 되면 즉시 다음 레벨로 advance해야 하는데 그건 별도 흐름) +
+  // 현재 레벨 duration을 초과하지 못하도록 (timeline elapsed 보호)
+  const next = Math.max(1, Math.min(curLvlDur, currentSecondsLeft + delta));
   const actualDelta = next - currentSecondsLeft; // clamp 반영
   if (actualDelta === 0) return;
 
@@ -559,6 +565,39 @@ export async function addSecondsToSession(s: LiveSession, currentSecondsLeft: nu
   // Deterministic timeline 재정렬 — 시간을 늘리면 elapsed가 줄어야 하므로 totalStartedAt을 +delta초 미래로
   if (s.totalStartedAt) {
     const shiftedMs = s.totalStartedAt.toMillis() + actualDelta * 1000;
+    updates.totalStartedAt = Timestamp.fromMillis(shiftedMs);
+  }
+
+  await patchSession(s.id, updates);
+}
+
+/**
+ * 진행바 드래그로 현재 레벨의 남은 시간을 직접 설정 — 2순위 요구.
+ * UX: 사용자가 슬라이더/진행바를 드래그하면 newSecondsLeft를 그대로 setTimeRemaining 호출.
+ *
+ * 구현: addSecondsToSession과 동일 원리. delta = newSec - currentSec 계산 후 timeline shift.
+ * 클램프: [1, currentLvlDur] — 마지막 레벨 끝을 넘기는 실수를 원천 차단.
+ */
+export async function setTimeRemainingInSession(
+  s: LiveSession,
+  currentSecondsLeft: number,
+  newSecondsLeft: number,
+) {
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+  const curLvlDur = structure?.find((l) => l.level === s.currentLevel)?.durationSec || 1200;
+  const clamped = Math.max(1, Math.min(curLvlDur, Math.round(newSecondsLeft)));
+  const delta = clamped - currentSecondsLeft;
+  if (delta === 0) return;
+
+  const updates: Partial<LiveSession> = {
+    levelSecondsLeft: clamped,
+    levelEndsAt: s.status === 'running' ? deadlineFromNow(clamped) : null,
+  };
+
+  if (s.totalStartedAt) {
+    const shiftedMs = s.totalStartedAt.toMillis() + delta * 1000;
     updates.totalStartedAt = Timestamp.fromMillis(shiftedMs);
   }
 

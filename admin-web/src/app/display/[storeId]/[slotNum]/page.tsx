@@ -10,6 +10,7 @@ import {
   fmtTime,
   computeLateRegMinutes,
   useLiveCountdown,
+  setTimeRemainingInSession,
 } from '@/lib/live';
 import {
   type TimerDisplaySettings,
@@ -323,17 +324,16 @@ export default function DisplayPage({
             {fmtTime(sec)}
           </div>
 
-          {/* 진행률 바 (running이면서 break 아닐 때만 강조) */}
-          {isRunning && currentDur > 0 && (
-            <div className="mt-5 h-1.5 w-[60%] max-w-[700px] bg-white/10 rounded-full overflow-hidden">
-              <div
-                className="h-full transition-all"
-                style={{
-                  width: `${progress * 100}%`,
-                  background: lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor,
-                }}
-              />
-            </div>
+          {/* 진행률 바 — 드래그로 시간 조절 (running/paused) */}
+          {(isRunning || paused) && currentDur > 0 && (
+            <DisplayDraggableProgressBar
+              session={session}
+              currentSeconds={sec}
+              currentDur={currentDur}
+              progress={progress}
+              barColor={lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor}
+              textColor={display.textColor}
+            />
           )}
 
           {/* 블라인드 (break 아닐 때만 표시) */}
@@ -489,6 +489,106 @@ export default function DisplayPage({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * TV 디스플레이용 드래그 진행바 — 사장이 매장 TV 옆에서 직접 조작.
+ * LivePanel의 DraggableProgressBar와 동일 로직, 다크 테마 + 큰 hitbox.
+ */
+function DisplayDraggableProgressBar({
+  session,
+  currentSeconds,
+  currentDur,
+  progress,
+  barColor,
+  textColor,
+}: {
+  session: LiveSession;
+  currentSeconds: number;
+  currentDur: number;
+  progress: number;
+  barColor: string;
+  textColor: string;
+}) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [previewSec, setPreviewSec] = useState<number | null>(null);
+
+  const displayProgress = dragging && previewSec != null
+    ? Math.min(1, Math.max(0, (currentDur - previewSec) / currentDur))
+    : progress;
+
+  const pointerToSeconds = (clientX: number): number => {
+    const rect = barRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return currentSeconds;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const elapsed = ratio * currentDur;
+    const remaining = Math.max(1, currentDur - elapsed);
+    return Math.max(1, Math.min(currentDur, Math.round(remaining / 5) * 5));
+  };
+
+  const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    setDragging(true);
+    setPreviewSec(pointerToSeconds(e.clientX));
+  };
+  const handleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    setPreviewSec(pointerToSeconds(e.clientX));
+  };
+  const handleUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const target = pointerToSeconds(e.clientX);
+    setDragging(false);
+    setPreviewSec(null);
+    setTimeRemainingInSession(session, currentSeconds, target).catch(() => {});
+  };
+  const handleCancel = () => {
+    if (!dragging) return;
+    setDragging(false);
+    setPreviewSec(null);
+  };
+
+  return (
+    <div className="mt-5 w-[60%] max-w-[700px] select-none">
+      {dragging && previewSec != null && (
+        <div
+          className="text-xs font-bold tracking-widest mb-2 text-center"
+          style={{ color: textColor, opacity: 0.9 }}
+        >
+          🎯 새 시간: <span className="font-mono">{fmtTime(previewSec)}</span>
+        </div>
+      )}
+      <div
+        ref={barRef}
+        onPointerDown={handleDown}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+        onPointerCancel={handleCancel}
+        className={`relative bg-white/10 rounded-full overflow-hidden cursor-ew-resize transition-all ${
+          dragging ? 'h-3 ring-2 ring-white/30' : 'h-1.5 hover:h-2.5'
+        }`}
+        role="slider"
+        aria-label="현재 레벨 남은 시간 드래그 조절"
+        aria-valuemin={0}
+        aria-valuemax={currentDur}
+        aria-valuenow={dragging && previewSec != null ? previewSec : currentSeconds}
+        style={{ touchAction: 'none' }}
+      >
+        <div
+          className={`h-full ${dragging ? '' : 'transition-all'}`}
+          style={{ width: `${displayProgress * 100}%`, background: barColor }}
+        />
+        <div
+          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-white shadow-lg transition-all ${
+            dragging ? 'w-5 h-5 opacity-100' : 'w-4 h-4 opacity-0'
+          }`}
+          style={{ left: `${displayProgress * 100}%`, border: `2px solid ${barColor}` }}
+        />
+      </div>
     </div>
   );
 }

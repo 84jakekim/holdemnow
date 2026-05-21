@@ -79,9 +79,8 @@ export default function TemplatesPanel({ storeId }: Props) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🎲 토너 템플릿</h1>
-        <p className="text-sm text-gray-500 mt-1">미리 만들어두고 새 LIVE 시작 시 바로 사용</p>
+      <div className="mb-4">
+        <p className="text-xs text-gray-500">미리 만들어두고 새 LIVE 시작 시 바로 사용</p>
       </div>
 
       {error && (
