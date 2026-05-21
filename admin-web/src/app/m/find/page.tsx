@@ -1043,12 +1043,12 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
       href={`/m/store/${post.storeId}`}
       onClick={() => bumpStoreMetric(post.storeId, 'cardClicks')}
       aria-label={`${post.storeName ?? '매장'} 소식 보기`}
-      className="w-[270px] block rounded-2xl overflow-hidden card-hover"
+      className="w-[320px] block rounded-2xl overflow-hidden card-hover"
       style={{ background: 'var(--surface-1)' }}
     >
       {photo ? (
-        /* 가로 포스터 표준 3:2 비율 — 영화·여행 포스터의 가로형 표준 */
-        <div className="relative w-full" style={{ aspectRatio: '3/2', background: 'var(--surface-2)' }}>
+        /* 가로 포스터 표준 21:9 비율 — 시네마 와이드. PinnedBanner와 통일 */
+        <div className="relative w-full" style={{ aspectRatio: '21/9', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt={post.storeName ?? ''} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
           {post.imageUrls.length > 1 && (
