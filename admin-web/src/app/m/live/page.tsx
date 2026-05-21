@@ -173,37 +173,28 @@ export default function LiveFeedListPage() {
 }
 
 /* ============================================================
- * LIVE 카드 — 리스트형 · TOSS DESIGN LANGUAGE
+ * LIVE 카드 — 다크 카드 (사장님 TIMER.PNG 시안 톤)
  *
- * 토스 톤 채택 원칙:
- *   - 그라데이션·네온 글로우·이모지 → 절제 (clean / monochrome / solid)
- *   - 컬러는 의미 있는 곳에만 (LIVE 빨강 · 참가가능 그린 · 그 외 무채색)
- *   - 텍스트 컬러 위계: #191F28(타이틀) / #4E5968(본문) / #8B95A1(보조)
- *   - 카드: border 없음 + 부드러운 soft shadow + rounded 20px
- *   - 숫자: tnum / letter-spacing -0.02em
- *
- * 정보 위계:
- *   1) 상단행: LIVE · 매장명 · (우) 참가가능/참가마감 칩
- *   2) 토너명 (보조)
- *   3) hero 타이머 + Lv/블라인드 + NEXT
- *   4) hairline + 메타 (인원 · 등록 · 지역 · 거리)
+ * 시각 컨셉:
+ *   - 라이트 페이지 위에 다크 카드만 박는 컨셉 (검은 네이비 #161724)
+ *   - 상단 5px 그라데이션 띠 (poster.bg → 투명) — 카드 시각 ID
+ *   - 펍명 흰 굵게 + 우상단에 LIVE/티켓/참가 칩 세로 스택
+ *   - hero 타이머 흰 40px, 좌측에 Lv·블라인드 큰 굵게
  * ========================================================== */
 
-// 토스 컬러 토큰
-const TOSS = {
-  textTitle: '#191F28',
-  textBody: '#4E5968',
-  textHint: '#8B95A1',
-  divider: '#F2F4F6',
-  hairline: 'rgba(25,31,40,0.06)',
-  cardBg: '#FFFFFF',
-  green: '#15B97D',
-  greenSoft: '#E6F9F1',
-  red: '#F04452',
-  redSoft: '#FEECEE',
+// 다크 카드 컬러 토큰
+const DARK = {
+  cardBg: '#161724',
+  divider: 'rgba(255,255,255,0.08)',
+  textTitle: '#FFFFFF',
+  textBody: 'rgba(255,255,255,0.72)',
+  textHint: 'rgba(255,255,255,0.42)',
+  chipBg: 'rgba(255,255,255,0.08)',
+  pink: '#FF1F8F',
+  red: '#FF3B5C',
+  redSoft: 'rgba(255,59,92,0.18)',
+  green: '#22D67E',
   yellow: '#FFB31A',
-  gray50: '#F2F4F6',
-  gray100: '#E5E8EB',
 } as const;
 
 function LiveCard({ session, distance, locality }: { session: LiveSession; distance?: number; locality?: string }) {
@@ -228,18 +219,18 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
   })();
 
   const timerColor = isFinishing
-    ? TOSS.red
+    ? DARK.red
     : isPaused
-      ? TOSS.yellow
+      ? DARK.yellow
       : lowTime
-        ? TOSS.red
-        : TOSS.textTitle;
+        ? DARK.red
+        : DARK.textTitle;
   const timerPulse = isFinishing || lowTime;
 
   const statusChip = isFinishing
-    ? { label: '곧 종료', bg: TOSS.redSoft, color: TOSS.red, pulse: true }
+    ? { label: '곧 종료', bg: DARK.redSoft, color: DARK.red, pulse: true }
     : isPaused
-      ? { label: '일시정지', bg: 'rgba(255,179,26,0.14)', color: TOSS.yellow, pulse: false }
+      ? { label: '일시정지', bg: 'rgba(255,179,26,0.18)', color: DARK.yellow, pulse: false }
       : null;
 
   return (
@@ -248,70 +239,67 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
       onClick={() => bumpStoreMetric(session.storeId, 'liveOpens')}
       className="relative block rounded-2xl overflow-hidden active:scale-[0.985] transition-transform"
       style={{
-        background: TOSS.cardBg,
-        boxShadow: '0 1px 2px rgba(25,31,40,0.04), 0 6px 16px rgba(25,31,40,0.05)',
+        background: DARK.cardBg,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.28), 0 8px 22px rgba(0,0,0,0.22)',
       }}
     >
-      {/* 카드 전체 좌측 4px 수직 액센트 바 — 상단/헤더 BG의 이중 띠 이질감 제거.
-       * 카드 전체 높이를 가로지르는 단일 컬러 ID. (이전 상단 4px 색띠는 제거) */}
+      {/* 상단 그라데이션 띠 — 좌측 진하게 시작해 우측으로 페이드 (사장님 시안) */}
       <div
         aria-hidden
-        className="absolute left-0 top-0 bottom-0"
-        style={{ width: 4, background: poster.bg, zIndex: 1 }}
+        style={{
+          height: 5,
+          background: `linear-gradient(90deg, ${poster.bg} 0%, ${poster.bg} 50%, rgba(255,31,143,0) 100%)`,
+        }}
       />
 
-      {/* 헤더 블록 — 펍명·토너명 두 행을 컬러 배경으로 강조 */}
-      <div
-        style={{
-          background: `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.95)), ${poster.bg}`,
-          borderBottom: `1px solid ${TOSS.divider}`,
-        }}
-      >
-        {/* 1행 — 펍 이름(좌·최상단) · LIVE + 참가가능/마감 (우상단) */}
-        <div className="pl-5 pr-4 pt-3.5 pb-1 flex items-center gap-2">
-          <span
-            className="text-[16px] font-extrabold truncate flex-1 min-w-0"
-            style={{ color: TOSS.textTitle, letterSpacing: '-0.025em' }}
+      {/* 헤더 — 펍명+토너명(좌, 세로) · LIVE + 티켓 + 참가 (우상단, 세로 스택) */}
+      <div className="px-4 pt-3.5 pb-3 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-[16px] font-extrabold truncate"
+            style={{ color: DARK.textTitle, letterSpacing: '-0.025em' }}
           >
             {session.storeName}
-          </span>
-          <span
-            className="inline-flex items-center gap-1 text-[10.5px] font-bold tracking-wider px-1.5 py-[2px] rounded-md flex-shrink-0"
-            style={{ background: TOSS.redSoft, color: TOSS.red }}
-          >
-            <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: TOSS.red }} />
-            LIVE
-          </span>
-          <ParticipationBadge open={isLateRegOpen} />
-        </div>
-
-        {/* 2행 — 토너명 · 티켓 · 상태칩 */}
-        <div className="pl-5 pr-4 pb-3 flex items-center gap-1.5 min-w-0">
-          <span
-            className="text-[12.5px] font-semibold truncate"
-            style={{ color: TOSS.textBody, letterSpacing: '-0.01em' }}
+          </div>
+          <div
+            className="text-[12px] font-semibold truncate mt-1"
+            style={{ color: DARK.textBody, letterSpacing: '-0.01em' }}
           >
             {session.tournamentName}
-          </span>
+          </div>
+        </div>
+
+        <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-extrabold tracking-wider px-1.5 py-[3px] rounded-md"
+              style={{
+                background: DARK.pink,
+                color: '#FFFFFF',
+                boxShadow: '0 0 12px rgba(255,31,143,0.45)',
+              }}
+            >
+              <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: '#FFFFFF' }} />
+              LIVE
+            </span>
+            <ParticipationBadge open={isLateRegOpen} />
+          </div>
           {buyInLabel && (
-            <>
-              <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
-              <span
-                className="inline-flex items-center gap-0.5 text-[11px] font-bold flex-shrink-0"
-                style={{ color: TOSS.textTitle }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: poster.bg as string }}>
-                  <path d="M3 7v6a2 2 0 002 2h14a2 2 0 002-2V7" />
-                  <path d="M3 7l9 6 9-6" />
-                  <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2" />
-                </svg>
-                <span className="tabular-nums">{buyInLabel}</span>
-              </span>
-            </>
+            <span
+              className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-[3px] rounded-md tabular-nums"
+              style={{ background: DARK.chipBg, color: DARK.textBody }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 7v6a2 2 0 002 2h14a2 2 0 002-2V7" />
+                <path d="M3 7l9 6 9-6" />
+                <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2" />
+              </svg>
+              {buyInLabel}
+            </span>
           )}
           {statusChip && (
             <span
-              className={`ml-auto inline-flex items-center text-[10px] font-bold px-1.5 py-[2px] rounded-md flex-shrink-0 ${statusChip.pulse ? 'animate-pulse' : ''}`}
+              className={`inline-flex items-center text-[10px] font-bold px-1.5 py-[2px] rounded-md ${statusChip.pulse ? 'animate-pulse' : ''}`}
               style={{ background: statusChip.bg, color: statusChip.color }}
             >
               {statusChip.label}
@@ -320,42 +308,53 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         </div>
       </div>
 
-      {/* 메인행 — TV 풀스크린 타이머의 미니어처.
-       * 좌: 큰 Lv 라벨 + 블라인드 굵게 / 우: hero 타이머 + NEXT 칩 */}
-      <div className="pl-5 pr-4 pt-3.5 pb-3.5 flex items-start gap-3">
+      {/* 메인 — 좌: Lv·블라인드 / 우: hero 타이머 (TV 풀스크린 축소판) */}
+      <div className="px-4 pb-3.5 flex items-end gap-3">
         <div className="flex-1 min-w-0">
-          {/* Lv N — TV 라벨 톤 */}
           <div className="flex items-baseline gap-1.5">
             <span
-              className="text-[10px] font-bold tracking-[0.15em]"
-              style={{ color: TOSS.textHint }}
+              className="text-[11px] font-bold"
+              style={{ color: DARK.textHint, letterSpacing: '0.02em' }}
             >
-              LEVEL
+              Lv
             </span>
             <span
               className="text-[22px] font-extrabold leading-none tabular-nums"
-              style={{ color: TOSS.textTitle, letterSpacing: '-0.03em' }}
+              style={{ color: DARK.textTitle, letterSpacing: '-0.03em' }}
             >
               {session.currentLevel}
             </span>
+            <span aria-hidden style={{ color: DARK.textHint }}>·</span>
+            <span
+              className="text-[18px] font-extrabold tabular-nums leading-none"
+              style={{ color: DARK.textTitle, letterSpacing: '-0.025em' }}
+            >
+              {session.smallBlind}
+              <span style={{ color: DARK.textHint }}>/</span>
+              {session.bigBlind}
+            </span>
           </div>
-          {/* 블라인드 — 강조 */}
-          <div
-            className="mt-1 text-[18px] font-extrabold tabular-nums leading-none"
-            style={{ color: TOSS.textTitle, letterSpacing: '-0.02em' }}
-          >
-            {session.smallBlind}/{session.bigBlind}
-          </div>
-          <div
-            className="text-[10px] font-bold tracking-[0.12em] mt-1"
-            style={{ color: TOSS.textHint }}
-          >
-            BLINDS
-          </div>
+          {nextBlind && !isFinishing && (
+            <div className="mt-2 inline-flex items-baseline gap-1">
+              <span
+                className="text-[9.5px] font-bold tracking-wider"
+                style={{ color: nextBlind.isBreak ? DARK.yellow : DARK.textHint }}
+              >
+                NEXT
+              </span>
+              <span
+                className="text-[11px] tabular-nums font-bold"
+                style={{ color: DARK.textBody }}
+              >
+                {nextBlind.isBreak
+                  ? `BREAK ${Math.round(nextBlind.durationSec / 60)}분`
+                  : `${nextBlind.sb}/${nextBlind.bb}`}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* 우측 — hero 타이머 (TV 풀스크린의 축소판) + NEXT 칩 */}
-        <div className="flex-shrink-0 text-right flex flex-col items-end">
+        <div className="flex-shrink-0 text-right">
           <div
             className={`text-[40px] font-extrabold leading-none tabular-nums ${timerPulse ? 'animate-pulse' : ''}`}
             style={{
@@ -366,61 +365,43 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
           >
             {isFinishing && graceSec != null ? fmtTime(graceSec) : fmtTime(sec)}
           </div>
-          {nextBlind && !isFinishing && (
-            <span
-              className="mt-2 inline-flex items-baseline gap-1 px-2 py-[3px] rounded-md"
-              style={{ background: nextBlind.isBreak ? 'rgba(255,179,26,0.12)' : TOSS.gray50 }}
-            >
-              <span
-                className="text-[9.5px] font-bold tracking-wider"
-                style={{ color: nextBlind.isBreak ? TOSS.yellow : TOSS.textHint }}
-              >
-                NEXT
-              </span>
-              <span className="text-[11px] tabular-nums font-bold" style={{ color: TOSS.textBody }}>
-                {nextBlind.isBreak
-                  ? `${Math.round(nextBlind.durationSec / 60)}분`
-                  : `${nextBlind.sb}/${nextBlind.bb}`}
-              </span>
-            </span>
-          )}
         </div>
       </div>
 
-      {/* 메타 — hairline + 한 줄. 별도 배경 없음(토스 톤) */}
+      {/* 메타 — hairline + 한 줄 (다크) */}
       <div
         className="px-4 py-2.5 flex items-center gap-2 text-[11.5px]"
-        style={{ borderTop: `1px solid ${TOSS.divider}`, color: TOSS.textBody }}
+        style={{ borderTop: `1px solid ${DARK.divider}`, color: DARK.textBody }}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0" style={{ color: TOSS.textHint }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0" style={{ color: DARK.textHint }}>
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 00-3-3.87" />
           <path d="M16 3.13a4 4 0 010 7.75" />
         </svg>
-        <span className="tabular-nums font-bold" style={{ color: TOSS.textTitle }}>
+        <span className="tabular-nums font-bold" style={{ color: DARK.textTitle }}>
           {session.playersRemaining}
         </span>
-        <span className="tabular-nums" style={{ color: TOSS.textHint }}>
+        <span className="tabular-nums" style={{ color: DARK.textHint }}>
           /{session.totalPlayers}
         </span>
 
-        <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>
+        <span aria-hidden style={{ color: DARK.textHint }}>·</span>
 
         {session.lateRegClosed ? (
-          <span style={{ color: TOSS.textHint }}>등록 마감</span>
+          <span style={{ color: DARK.textHint }}>등록 마감</span>
         ) : (
           <span
             className={lateMin <= 5 ? 'font-bold' : 'font-medium'}
-            style={{ color: lateMin <= 5 ? TOSS.red : TOSS.textBody }}
+            style={{ color: lateMin <= 5 ? DARK.red : DARK.textBody }}
           >
             등록 {lateMin}분
           </span>
         )}
 
-        <span className="ml-auto flex items-center gap-1.5" style={{ color: TOSS.textHint }}>
+        <span className="ml-auto flex items-center gap-1.5" style={{ color: DARK.textHint }}>
           {locality && <span className="truncate max-w-[110px]">{locality}</span>}
-          {locality && distance != null && <span aria-hidden style={{ color: TOSS.gray100 }}>·</span>}
+          {locality && distance != null && <span aria-hidden style={{ color: DARK.textHint }}>·</span>}
           {distance != null && <span className="tabular-nums">{formatDistance(distance)}</span>}
         </span>
       </div>
@@ -428,22 +409,23 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
   );
 }
 
-/** 참가가능 / 참가마감 — 토스 톤 (솔리드 컬러 · subtle · 무채색 대비). */
+/** 참가가능 / 참가마감 — 다크 카드용 톤. */
 function ParticipationBadge({ open }: { open: boolean }) {
   if (open) {
     return (
       <span
-        className="inline-flex items-center gap-1 text-[10.5px] font-bold pl-1.5 pr-2 py-[3px] rounded-full"
+        className="inline-flex items-center gap-1 text-[10px] font-bold pl-1.5 pr-2 py-[3px] rounded-md"
         style={{
-          background: TOSS.green,
-          color: '#FFFFFF',
+          background: DARK.green,
+          color: '#062B19',
           letterSpacing: '-0.01em',
+          boxShadow: '0 0 10px rgba(34,214,126,0.30)',
         }}
         aria-label="참가가능"
       >
         <span
           className="w-1 h-1 rounded-full pulse-live flex-shrink-0"
-          style={{ background: '#FFFFFF' }}
+          style={{ background: '#062B19' }}
           aria-hidden="true"
         />
         참가가능
@@ -452,10 +434,10 @@ function ParticipationBadge({ open }: { open: boolean }) {
   }
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-[3px] rounded-full"
+      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-[3px] rounded-md"
       style={{
-        background: TOSS.gray50,
-        color: TOSS.textHint,
+        background: 'rgba(255,255,255,0.08)',
+        color: 'rgba(255,255,255,0.55)',
         letterSpacing: '-0.01em',
       }}
       aria-label="참가마감"
