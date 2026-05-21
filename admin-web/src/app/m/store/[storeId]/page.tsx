@@ -10,7 +10,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import PendingStoreNotice from '@/components/mobile/PendingStoreNotice';
-import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveCountdown, computeReadyExpirySec } from '@/lib/live';
+import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveTimelineTick, computeReadyExpirySec, computeFinishingGraceSec } from '@/lib/live';
 import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { posterStyleFor } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
@@ -900,85 +900,383 @@ function escapeSvg(s: string): string {
  * ========================================================== */
 function SessionTimerGrid({ sessions }: { sessions: LiveSession[] }) {
   const cols = sessions.length === 1 ? 1 : sessions.length === 2 ? 2 : 3;
+  const gap = cols === 1 ? 'gap-3' : cols === 2 ? 'gap-2.5' : 'gap-2';
   return (
-    <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+    <div className={`grid ${gap}`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
       {sessions.map((s) => <TimerCard key={s.id} session={s} cols={cols} />)}
     </div>
   );
 }
 
+/** 포스터 컬러 박스 — 토너 정체성 시각화 */
+function PosterBadge({ session, size }: { session: LiveSession; size: 'lg' | 'md' }) {
+  const poster = posterStyleFor(session.posterStyle);
+  const firstWord = (session.tournamentName || '').split(' ')[0] || '';
+  const dims = size === 'lg'
+    ? { w: 64, h: 80, fs: 11, radius: 14 }
+    : { w: 44, h: 56, fs: 9, radius: 12 };
+  return (
+    <div
+      className="flex-shrink-0 flex items-center justify-center font-extrabold text-center leading-tight"
+      style={{
+        width: dims.w,
+        height: dims.h,
+        background: poster.bg,
+        color: poster.color,
+        fontSize: dims.fs,
+        borderRadius: dims.radius,
+        padding: 4,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
+      }}
+    >
+      {firstWord.slice(0, 6)}
+    </div>
+  );
+}
+
 function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
-  const sizes = {
-    1: { timer: 48, name: 15, meta: 12, p: '20px' },
-    2: { timer: 32, name: 13, meta: 11, p: '14px' },
-    3: { timer: 22, name: 11, meta: 10, p: '10px' },
-  } as const;
-  const sz = sizes[cols as 1 | 2 | 3];
-  const sec = useLiveCountdown(session);
+  const tick = useLiveTimelineTick(session);
+  const sec = tick?.secondsLeft ?? 0;
+  const liveLevel = tick?.level ?? session.currentLevel;
+  const sb = tick?.sb ?? session.smallBlind;
+  const bb = tick?.bb ?? session.bigBlind;
+  const ante = tick?.ante ?? session.ante;
+
   const paused = session.status === 'paused';
   const ready = session.status === 'ready';
-  const lowTime = sec <= 10 && !paused && !ready;
+  const lowTime = sec <= 10 && !paused && !ready && session.status !== 'completed';
   const lateMin = computeLateRegMinutes(session, sec);
   const readyLeft = ready ? Math.max(0, computeReadyExpirySec(session) ?? 0) : 0;
+  const finishingLeft = computeFinishingGraceSec(session);
+  const finishing = !ready && !paused && finishingLeft !== null && finishingLeft >= 0;
 
+  // 다음 블라인드 — 잠긴 구조 우선
+  const structureForNext = (session.blindStructureLocked && session.blindStructureLocked.length > 0)
+    ? session.blindStructureLocked
+    : session.blindStructure;
+  const currentLevelDef = structureForNext?.find((l) => l.level === liveLevel);
+  const nextBlind = structureForNext?.find((l) => l.level === liveLevel + 1 && !l.isBreak);
+  const levelDurationSec = Math.max(1, currentLevelDef?.durationSec ?? 600);
+
+  // 레벨 진행률 (0~100) — 흐른 비율
+  const levelProgress = ready
+    ? 0
+    : paused
+      ? Math.max(0, Math.min(100, 100 - (sec / levelDurationSec) * 100))
+      : Math.max(0, Math.min(100, 100 - (sec / levelDurationSec) * 100));
+
+  // 잔여 인원 비율 (0~100)
+  const total = Math.max(1, session.totalPlayers || 0);
+  const remaining = Math.max(0, session.playersRemaining || 0);
+  const survivePct = Math.max(0, Math.min(100, (remaining / total) * 100));
+
+  // 상금풀 표기
+  const prize = session.prizePool || 0;
+  const prizeShort = prize >= 100000
+    ? `₩${Math.floor(prize / 10000).toLocaleString()}만`
+    : `₩${prize.toLocaleString()}`;
+
+  // 상태별 컬러 토큰
+  const accent = ready
+    ? '#2563eb'
+    : paused
+      ? 'var(--gold)'
+      : lowTime || finishing
+        ? 'var(--live)'
+        : 'var(--text-1)';
+
+  const tintBg = ready
+    ? 'rgba(59,130,246,0.06)'
+    : paused
+      ? 'rgba(245,158,11,0.06)'
+      : finishing
+        ? 'rgba(229,62,62,0.08)'
+        : lowTime
+          ? 'rgba(229,62,62,0.06)'
+          : 'var(--surface-2)';
+
+  const tintBorder = ready
+    ? 'rgba(59,130,246,0.28)'
+    : paused
+      ? 'rgba(245,158,11,0.24)'
+      : finishing
+        ? 'rgba(229,62,62,0.36)'
+        : lowTime
+          ? 'rgba(229,62,62,0.22)'
+          : 'var(--border)';
+
+  // 진행률 막대 색
+  const barColor = lowTime || finishing
+    ? 'var(--live)'
+    : paused
+      ? 'var(--gold)'
+      : 'var(--brand)';
+
+  const statusBadge = ready ? (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wider"
+      style={{ background: 'rgba(59,130,246,0.12)', color: '#2563eb' }}>
+      <span>READY</span>
+    </span>
+  ) : paused ? (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wider"
+      style={{ background: 'rgba(245,158,11,0.14)', color: 'var(--gold)' }}>
+      <span>PAUSED</span>
+    </span>
+  ) : finishing ? (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wider"
+      style={{ background: 'rgba(229,62,62,0.14)', color: 'var(--live)' }}>
+      <span className="w-1.5 h-1.5 rounded-full pulse-live" style={{ background: 'var(--live)' }} aria-hidden="true" />
+      <span>곧 종료</span>
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wider"
+      style={{ background: 'rgba(229,62,62,0.14)', color: 'var(--live)' }}>
+      <span className="w-1.5 h-1.5 rounded-full pulse-live" style={{ background: 'var(--live)' }} aria-hidden="true" />
+      <span>LIVE</span>
+    </span>
+  );
+
+  // ─────────────────────────────────────────────
+  // 3열 — 컴팩트 카드
+  // ─────────────────────────────────────────────
+  if (cols === 3) {
+    const poster = posterStyleFor(session.posterStyle);
+    return (
+      <Link
+        href={`/m/live/${session.id}`}
+        className="relative block rounded-2xl overflow-hidden transition active:scale-[0.97]"
+        style={{
+          background: tintBg,
+          border: `1px solid ${tintBorder}`,
+          padding: '10px 10px 8px',
+        }}
+      >
+        {/* 좌측 포스터 컬러 라인 (3열엔 라인만) */}
+        <div className="absolute left-0 top-0 bottom-0" style={{ width: 3, background: poster.bg }} aria-hidden="true" />
+        <div className="flex items-center justify-between mb-1 pl-1.5">
+          {statusBadge}
+          <span className="font-mono text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>
+            Lv{liveLevel}
+          </span>
+        </div>
+        <div className="font-bold truncate pl-1.5" style={{ fontSize: 11, color: 'var(--text-1)' }}>
+          {session.tournamentName}
+        </div>
+        <div
+          className={`font-mono font-extrabold leading-none mt-1 pl-1.5 ${lowTime ? 'animate-pulse' : ''}`}
+          style={{ fontSize: 22, letterSpacing: '-0.03em', color: accent }}
+        >
+          {ready ? fmtTime(readyLeft) : fmtTime(sec)}
+        </div>
+        {/* 진행률 막대 */}
+        <div className="mt-1.5 pl-1.5 pr-0.5">
+          <div className="w-full rounded-full overflow-hidden" style={{ height: 3, background: 'var(--surface-3, rgba(0,0,0,0.06))' }}>
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${levelProgress}%`, background: barColor }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+        <div className="mt-1.5 pl-1.5 flex items-center gap-1.5" style={{ fontSize: 10, color: 'var(--text-3)' }}>
+          <span className="font-mono font-semibold" style={{ color: 'var(--text-2)' }}>
+            {sb.toLocaleString()}/{bb.toLocaleString()}
+          </span>
+          <span>·</span>
+          <span>{remaining}/{total}</span>
+        </div>
+      </Link>
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // 2열 — 중간 카드
+  // ─────────────────────────────────────────────
+  if (cols === 2) {
+    return (
+      <Link
+        href={`/m/live/${session.id}`}
+        className="block rounded-2xl overflow-hidden transition active:scale-[0.98]"
+        style={{
+          background: tintBg,
+          border: `1px solid ${tintBorder}`,
+          padding: 12,
+        }}
+      >
+        <div className="flex items-start gap-2.5">
+          <PosterBadge session={session} size="md" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1 mb-1">
+              {statusBadge}
+              <span className="font-mono text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>
+                Lv {liveLevel}
+              </span>
+            </div>
+            <div className="font-bold truncate" style={{ fontSize: 13, color: 'var(--text-1)' }}>
+              {session.tournamentName}
+            </div>
+            <div
+              className={`font-mono font-extrabold leading-none mt-1.5 ${lowTime ? 'animate-pulse' : ''}`}
+              style={{ fontSize: 30, letterSpacing: '-0.03em', color: accent }}
+            >
+              {ready ? fmtTime(readyLeft) : fmtTime(sec)}
+            </div>
+          </div>
+        </div>
+
+        {/* 진행률 막대 */}
+        <div className="mt-2.5">
+          <div className="w-full rounded-full overflow-hidden" style={{ height: 4, background: 'var(--surface-3, rgba(0,0,0,0.06))' }}>
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${ready ? 0 : levelProgress}%`, background: barColor }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+
+        {/* 메트릭 2x2 */}
+        <div className="grid grid-cols-2 gap-1.5 mt-2.5">
+          <MetricCell
+            label="블라인드"
+            value={`${sb.toLocaleString()}/${bb.toLocaleString()}`}
+            sub={nextBlind ? `next ${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : ante > 0 ? `ante ${ante.toLocaleString()}` : ''}
+          />
+          <MetricCell
+            label="인원"
+            value={`${remaining}/${total}`}
+            sub={`${Math.round(survivePct)}% 생존`}
+          />
+          <MetricCell
+            label="상금"
+            value={prizeShort}
+            sub={session.tournamentType ? '' : ''}
+          />
+          <MetricCell
+            label="등록"
+            value={session.lateRegClosed ? '마감' : `${lateMin}분`}
+            sub={session.lateRegClosed ? '' : '남음'}
+          />
+        </div>
+      </Link>
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // 1열 — Hero 큰 카드
+  // ─────────────────────────────────────────────
   return (
     <Link
       href={`/m/live/${session.id}`}
-      className="block rounded-2xl transition active:scale-[0.98]"
+      className="block rounded-2xl overflow-hidden transition active:scale-[0.99]"
       style={{
-        background: ready
-          ? 'rgba(59,130,246,0.06)'
-          : paused
-            ? 'rgba(245,158,11,0.06)'
-            : lowTime
-              ? 'rgba(229,62,62,0.06)'
-              : 'var(--surface-2)',
-        border: `1px solid ${ready ? 'rgba(59,130,246,0.25)' : paused ? 'rgba(245,158,11,0.20)' : lowTime ? 'rgba(229,62,62,0.20)' : 'var(--border)'}`,
-        padding: sz.p,
+        background: tintBg,
+        border: `1px solid ${tintBorder}`,
+        padding: 16,
+        boxShadow: finishing || lowTime
+          ? '0 0 0 1px rgba(229,62,62,0.10), 0 6px 18px -8px rgba(229,62,62,0.25)'
+          : '0 1px 2px rgba(0,0,0,0.03)',
       }}
     >
-      {/* 상태 라벨 */}
-      <div className="flex items-center gap-1 mb-1">
-        {ready ? (
-          <span className="text-[9px] font-extrabold tracking-wider" style={{ color: '#2563eb' }}>⏳ 곧 게임 시작</span>
-        ) : paused ? (
-          <span className="text-[9px] font-extrabold tracking-wider" style={{ color: 'var(--gold)' }}>⏸ 일시정지</span>
-        ) : (
-          <>
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 pulse-live" style={{ background: 'var(--live)' }} aria-hidden="true" />
-            <span className="text-[9px] font-extrabold tracking-wider" style={{ color: 'var(--live)' }}>LIVE</span>
-          </>
-        )}
-      </div>
-      {/* 토너 이름 */}
-      <div className="font-bold truncate" style={{ fontSize: sz.name, color: 'var(--text-1)' }}>
-        {session.tournamentName}
-      </div>
-      {/* 카운트다운 — ready면 시작 만료까지 시간, 그 외엔 현재 레벨 남은 시간 */}
-      <div
-        className="font-mono font-extrabold leading-none mt-1.5"
-        style={{
-          fontSize: sz.timer,
-          letterSpacing: '-0.03em',
-          color: ready ? '#2563eb' : lowTime ? 'var(--live)' : paused ? 'var(--gold)' : 'var(--text-1)',
-        }}
-      >
-        {ready ? fmtTime(readyLeft) : fmtTime(sec)}
-      </div>
-      {/* 메타 */}
-      <div className="mt-1.5" style={{ fontSize: sz.meta, color: 'var(--text-3)' }}>
-        {ready ? (
-          <span>{cols === 1 ? '시작 대기 — 만료까지 ' : ''}자동 취소까지</span>
-        ) : (
-          <>
-            Lv {session.currentLevel} · {session.playersRemaining}명
-            {cols === 1 && (
-              <span> · {session.lateRegClosed ? '등록 마감' : `등록 ${lateMin}분`}</span>
+      {/* 헤더 — 포스터 + 토너명/배지 */}
+      <div className="flex items-start gap-3">
+        <PosterBadge session={session} size="lg" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            {statusBadge}
+            {ready && (
+              <span className="text-[10px] font-semibold" style={{ color: 'var(--text-3)' }}>
+                · 시작 대기
+              </span>
             )}
-          </>
-        )}
+          </div>
+          <div className="font-extrabold truncate" style={{ fontSize: 16, color: 'var(--text-1)', lineHeight: 1.2 }}>
+            {session.tournamentName}
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+            바이인 ₩{(session.buyIn || 0).toLocaleString()}
+            {' · '}Lv {liveLevel}
+            {' / '}{structureForNext?.length ?? '–'}
+          </div>
+        </div>
+      </div>
+
+      {/* 타이머 + 진행률 */}
+      <div className="mt-3 flex items-end gap-3">
+        <div
+          className={`font-mono font-extrabold leading-none ${lowTime ? 'animate-pulse' : ''}`}
+          style={{ fontSize: 48, letterSpacing: '-0.04em', color: accent }}
+        >
+          {ready ? fmtTime(readyLeft) : fmtTime(sec)}
+        </div>
+        <div className="flex-1 pb-1.5">
+          <div className="flex items-center justify-between text-[10px] mb-1" style={{ color: 'var(--text-3)' }}>
+            <span className="font-semibold">
+              {ready ? '자동 취소 만료' : paused ? '일시정지 중' : finishing ? '곧 종료' : '레벨 진행률'}
+            </span>
+            <span className="font-mono font-bold" style={{ color: 'var(--text-2)' }}>
+              {ready ? '–' : `${Math.round(levelProgress)}%`}
+            </span>
+          </div>
+          <div className="w-full rounded-full overflow-hidden" style={{ height: 6, background: 'var(--surface-3, rgba(0,0,0,0.06))' }}>
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${ready ? 0 : levelProgress}%`, background: barColor }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 4분할 메트릭 */}
+      <div className="grid grid-cols-4 gap-1.5 mt-3">
+        <MetricCell
+          label="블라인드"
+          value={`${sb.toLocaleString()}/${bb.toLocaleString()}`}
+          sub={ante > 0 ? `ante ${ante.toLocaleString()}` : nextBlind ? `next ${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : '—'}
+        />
+        <MetricCell
+          label={`Lv ${liveLevel}`}
+          value={nextBlind ? `→ ${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : '최종 레벨'}
+          sub={nextBlind ? '다음 레벨' : ''}
+        />
+        <MetricCell
+          label="인원"
+          value={`${remaining}/${total}`}
+          sub={`${Math.round(survivePct)}% 생존`}
+        />
+        <MetricCell
+          label="상금풀"
+          value={prizeShort}
+          sub={session.lateRegClosed ? '등록 마감' : `등록 ${lateMin}분`}
+        />
       </div>
     </Link>
+  );
+}
+
+/** 메트릭 셀 — 2/4분할 grid 공용 */
+function MetricCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div
+      className="rounded-xl px-2 py-1.5 min-w-0"
+      style={{
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      <div className="text-[9px] font-extrabold tracking-wider uppercase truncate" style={{ color: 'var(--text-3)' }}>
+        {label}
+      </div>
+      <div className="font-mono font-extrabold truncate" style={{ fontSize: 13, color: 'var(--text-1)', letterSpacing: '-0.02em' }}>
+        {value}
+      </div>
+      {sub ? (
+        <div className="text-[9px] font-semibold truncate" style={{ color: 'var(--text-3)' }}>
+          {sub}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
