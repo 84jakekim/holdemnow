@@ -224,6 +224,16 @@ service cloud.firestore {
       }
     }
 
+    // ===== LIVE 세션 종료 audit (2026-05-21 3차 핫픽스) =====
+    // 모든 stopLiveSession 호출 / 자가 치유 시도가 여기 기록됨. 결정적 진단용.
+    // 누구나 작성 (사장·본사·자동 cron) — 진단 데이터이므로 손실 방지가 우선.
+    // 읽기는 platform_admin만 (사용자 식별 정보 포함 가능).
+    match /liveSessionsAudit/{auditId} {
+      allow read: if isPlatformAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
     // ===== 사용자 =====
     match /users/{userId} {
       // 본인 또는 platform_admin 읽기 가능 (회원 관리 페이지)

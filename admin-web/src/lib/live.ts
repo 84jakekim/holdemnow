@@ -104,18 +104,42 @@ export function computeReadyExpirySec(s: LiveSession): number | null {
  *  ① 그레이스 만료 (finishingAt + 180초)
  *  ② ready 만료 (createdAt + 5분)
  *
+ *  ⚠ 2026-05-21 3차 핫픽스 (사용자 보고: 12레벨 토너인데 중간에 사라짐):
+ *    finishingAt이 박혀있어도 currentLevel이 진짜 마지막 레벨이 아니면 expired로
+ *    판정하지 않는다. cron의 sanity guard가 한 번이라도 뚫리면 finishingAt이 잘못
+ *    박힐 수 있는데, 클라이언트가 그 잘못된 finishingAt을 신뢰해 세션을 화면에서
+ *    가리면 사용자는 "타이머 중도종료"로 인지한다. structure 기반 elapsed로 한 번 더 검증.
+ *
  *  ⚠ 과거에 있던 "levelEndsAt + 180초 = 좀비" 룰은 **제거**됨.
  *    Deterministic timeline 도입 후 autoAdvanceLevel cron은 같은 currentLevel이면
- *    doc update를 의도적으로 skip한다. 결과적으로 doc의 levelEndsAt은 "첫 레벨 시작 시점에
- *    박힌 deadline" 상태로 머무르고, 첫 레벨 종료 + 180초 시점에 정상 진행 중인 세션을
- *    "좀비"로 오판해 화면에서 가리는 버그가 발생했다.
- *    좀비 세션 정리는 서버 cron(autoStopFinishedSessions)이 totalStartedAt + structure로
- *    실제 elapsed를 계산해 처리한다 — 클라이언트는 doc의 status만 신뢰한다.
+ *    doc update를 의도적으로 skip한다. 좀비 세션 정리는 서버 cron이 totalStartedAt +
+ *    structure로 실제 elapsed를 계산해 처리한다.
  */
 function isSessionExpired(s: LiveSession): boolean {
   if (s.finishingAt) {
     const endsMs = s.finishingAt.toMillis() + FINISHING_GRACE_SEC * 1000;
-    if (endsMs <= Date.now()) return true;
+    if (endsMs <= Date.now()) {
+      // 2026-05-21 3차 핫픽스: finishingAt이 잘못 박힌 케이스 방어.
+      // structure를 보고 currentLevel이 진짜 마지막 레벨인지 검증.
+      const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+        ? s.blindStructureLocked
+        : s.blindStructure;
+      const lastLevelNum = structure && structure.length > 0
+        ? structure[structure.length - 1].level
+        : -1;
+      const isReallyLastLevel = s.currentLevel === lastLevelNum && lastLevelNum > 0;
+      if (!isReallyLastLevel) {
+        // 잘못 박힌 finishingAt — expired 판정 거부. 화면에서 가리지 않음.
+        // (별도 자가 치유 로직이 finishingAt 자체를 null로 복구함)
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[isSessionExpired] BLOCKED — finishingAt 박혔지만 currentLevel=${s.currentLevel}이 ` +
+          `lastLevelNum=${lastLevelNum} 아님. 잘못 박힌 finishingAt으로 추정.`
+        );
+        return false;
+      }
+      return true;
+    }
   }
   if (s.status === 'ready') {
     const created = s.createdAt as Timestamp | undefined;
@@ -642,15 +666,65 @@ export async function toggleLateRegInSession(s: LiveSession, currentSecondsLeft:
   });
 }
 
-export async function stopLiveSession(s: LiveSession, currentSecondsLeft: number) {
+/**
+ * 세션 종료 — caller를 명시해 어디서 호출됐는지 추적한다.
+ * 2026-05-21 3차 핫픽스: "타이머 중도종료" 신고 3회 후 결정적 진단 위해 audit 도입.
+ * 모든 호출이 stack trace + 호출 컨텍스트를 console과 Firestore audit 컬렉션에 기록한다.
+ *
+ * caller 예: 'LivePanel:auto-finishing', 'LivePanel:user-button',
+ *           'TournamentControlCenter:auto-finishing', 'TournamentControlCenter:user-button',
+ *           'platform/live:auto-finishing', 'platform/live:user-button'
+ */
+export async function stopLiveSession(
+  s: LiveSession,
+  currentSecondsLeft: number,
+  caller: string = 'unknown',
+) {
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+  const lastLevelNum = structure && structure.length > 0
+    ? structure[structure.length - 1].level
+    : -1;
+  const isLastLevel = s.currentLevel === lastLevelNum && lastLevelNum > 0;
+
+  // 콘솔에 항상 풀 스택 — 매장 사장 브라우저에서 어떤 경로로 종료됐는지 즉시 파악
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[stopLiveSession] caller=${caller} sessionId=${s.id} tournament="${s.tournamentName}" ` +
+    `status=${s.status} currentLevel=${s.currentLevel} lastLevelNum=${lastLevelNum} ` +
+    `isLastLevel=${isLastLevel} finishingAt=${s.finishingAt ? 'set' : 'null'} ` +
+    `secondsLeft=${currentSecondsLeft}`,
+    new Error('stopLiveSession call site').stack
+  );
+
+  // Firestore audit (best-effort, 실패해도 stop은 진행)
+  try {
+    const auditCol = collection(db, 'liveSessionsAudit');
+    await addDoc(auditCol, {
+      sessionId: s.id,
+      storeId: s.storeId,
+      storeName: s.storeName,
+      tournamentName: s.tournamentName,
+      caller,
+      currentLevel: s.currentLevel,
+      lastLevelNum,
+      isLastLevel,
+      hadFinishingAt: !!s.finishingAt,
+      secondsLeft: currentSecondsLeft,
+      structureLen: structure?.length ?? 0,
+      timestamp: serverTimestamp(),
+    });
+  } catch {
+    // audit 실패해도 본업은 계속
+  }
+
   await patchSession(s.id, {
     levelSecondsLeft: currentSecondsLeft,
     levelEndsAt: null,
     status: 'completed',
     endedAt: serverTimestamp(),
   });
-  // v0.1 데모: 완료된 세션은 어드민 리스트에서 자동 제외 (where status in running/paused/break)
-  // 영구 삭제는 v0.2에서 (이력 보관 목적)
 }
 
 /**
@@ -662,6 +736,53 @@ export async function stopLiveSession(s: LiveSession, currentSecondsLeft: number
 export async function nextLevelTick(_s: LiveSession): Promise<boolean> {
   // No-op: 서버 cron이 doc 동기화를, 클라이언트가 화면 갱신을 담당한다.
   return false;
+}
+
+/**
+ * 2026-05-21 3차 핫픽스 — 잘못 박힌 finishingAt 자가 치유.
+ * cron의 sanity guard가 우연히 뚫려 finishingAt이 잘못 박힌 케이스(12레벨 토너에서
+ * 7레벨에 finishingAt 박힘) 발견 시 클라이언트가 즉시 Firestore에서 null로 복구한다.
+ * 진단 로그를 audit에도 남긴다. 매장 사장 화면이 켜져 있는 한 빠르게 자가 치유됨.
+ */
+export async function selfHealStaleFinishingAt(s: LiveSession): Promise<boolean> {
+  if (!s.finishingAt) return false;
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+  const lastLevelNum = structure && structure.length > 0
+    ? structure[structure.length - 1].level
+    : -1;
+  const isReallyLastLevel = s.currentLevel === lastLevelNum && lastLevelNum > 0;
+  if (isReallyLastLevel) return false; // 정상
+
+  // 잘못 박힘 — 복구
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[selfHealStaleFinishingAt] HEALING ${s.id} — currentLevel=${s.currentLevel} ` +
+    `lastLevelNum=${lastLevelNum}. finishingAt=null로 복구.`
+  );
+  try {
+    const auditCol = collection(db, 'liveSessionsAudit');
+    await addDoc(auditCol, {
+      sessionId: s.id,
+      storeId: s.storeId,
+      storeName: s.storeName,
+      tournamentName: s.tournamentName,
+      action: 'self-heal-finishingAt',
+      currentLevel: s.currentLevel,
+      lastLevelNum,
+      structureLen: structure?.length ?? 0,
+      timestamp: serverTimestamp(),
+    });
+  } catch {
+    // audit 실패해도 복구는 진행
+  }
+  try {
+    await patchSession(s.id, { finishingAt: null });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function computeLateRegMinutes(s: LiveSession, currentSecondsLeft: number): number {

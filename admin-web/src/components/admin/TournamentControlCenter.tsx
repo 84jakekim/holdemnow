@@ -30,6 +30,7 @@ import {
   eliminatePlayerInSession,
   toggleLateRegInSession,
   stopLiveSession,
+  selfHealStaleFinishingAt,
   computeLateRegMinutes,
   fmtTime,
   useLiveCountdown,
@@ -480,11 +481,12 @@ function SessionControlPanel({
       if (!isReallyLastLevel) {
         // eslint-disable-next-line no-console
         console.warn(
-          `[TournamentControlCenter] BLOCKED auto-stop — currentLevel=${session.currentLevel} lastLevelNum=${lastLevelNum}.`
+          `[TournamentControlCenter] BLOCKED auto-stop — currentLevel=${session.currentLevel} lastLevelNum=${lastLevelNum}. 자가 치유 시도.`
         );
+        selfHealStaleFinishingAt(session).catch(() => {});
         return;
       }
-      stopLiveSession(session, 0).catch(() => {});
+      stopLiveSession(session, 0, 'TournamentControlCenter:auto-finishing').catch(() => {});
     };
     const remainMs = finishingMs + FINISHING_GRACE_SEC * 1000 - Date.now();
     if (remainMs <= 0) {
@@ -676,7 +678,7 @@ function SessionControlPanel({
         <button
           onClick={() => {
             if (window.confirm(`"${session.tournamentName}" 종료할까요?`)) {
-              stopLiveSession(session, seconds);
+              stopLiveSession(session, seconds, 'TournamentControlCenter:user-button');
             }
           }}
           className="flex-1 py-2.5 rounded-lg font-bold text-xs"

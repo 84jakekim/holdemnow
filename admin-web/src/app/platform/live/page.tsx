@@ -14,6 +14,7 @@ import {
   goToLevelInSession,
   addSecondsToSession,
   stopLiveSession,
+  selfHealStaleFinishingAt,
   startLiveSession,
   computeFinishingGraceSec,
   computeReadyExpirySec,
@@ -242,17 +243,38 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
   const readyLeftSec = isReady ? computeReadyExpirySec(session) : null;
 
   // 본사 권한으로 그레이스 만료 시 자동 정리 시도 (매장 사장 부재 안전망).
+  // 2026-05-21 3차 핫픽스: sanity guard 누락 — 매장 사장 측 LivePanel/통합 페이지와 동일한
+  // 검증을 본사 측에도 적용. 잘못 박힌 finishingAt이면 stop 대신 자가 치유.
   const finishingMs = session.finishingAt?.toMillis?.();
   useEffect(() => {
     if (!finishingMs) return;
+    const structure = (session.blindStructureLocked && session.blindStructureLocked.length > 0)
+      ? session.blindStructureLocked
+      : session.blindStructure;
+    const lastLevelNum = structure && structure.length > 0
+      ? structure[structure.length - 1].level
+      : -1;
+    const isReallyLastLevel = session.currentLevel === lastLevelNum && lastLevelNum > 0;
+
+    const safeStop = () => {
+      if (!isReallyLastLevel) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[platform/live] BLOCKED auto-stop — currentLevel=${session.currentLevel} ` +
+          `lastLevelNum=${lastLevelNum}. 자가 치유.`
+        );
+        selfHealStaleFinishingAt(session).catch(() => {});
+        return;
+      }
+      stopLiveSession(session, 0, 'platform/live:auto-finishing').catch(() => {});
+    };
+
     const remainMs = finishingMs + FINISHING_GRACE_SEC * 1000 - Date.now();
     if (remainMs <= 0) {
-      stopLiveSession(session, 0).catch(() => {});
+      safeStop();
       return;
     }
-    const t = setTimeout(() => {
-      stopLiveSession(session, 0).catch(() => {});
-    }, remainMs);
+    const t = setTimeout(safeStop, remainMs);
     return () => clearTimeout(t);
   }, [finishingMs, session]);
 
@@ -270,7 +292,7 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
   const handleStop = async () => {
     const verb = isReady ? '취소' : '종료';
     if (!window.confirm(`[${session.storeName}] ${session.tournamentName} LIVE를 ${verb}할까요?`)) return;
-    await wrap(() => stopLiveSession(session, sec), verb);
+    await wrap(() => stopLiveSession(session, sec, 'platform/live:user-button'), verb);
   };
 
   return (
