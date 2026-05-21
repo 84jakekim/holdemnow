@@ -92,16 +92,18 @@ function radiusForZoomLevel(level: number): number {
 // ─── 메인 페이지 (useSearchParams 사용 → Suspense 필수) ───────
 
 function FindPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const modeParam = searchParams.get('mode');
-  const mode: 'list' | 'map' = modeParam === 'map' ? 'map' : 'list';
+  // 초기 mode는 URL ?mode=map 으로 진입 가능 — 첫 렌더 한 번만 반영.
+  // 이후 토글은 useState로 관리 (URL 동기화는 history.replaceState 로 비파괴적으로 갱신).
+  const initialMode: 'list' | 'map' =
+    searchParams.get('mode') === 'map' ? 'map' : 'list';
+  const [mode, setMode] = useState<'list' | 'map'>(initialMode);
 
   const handleToggle = (m: 'list' | 'map') => {
-    if (m === 'map') {
-      router.replace('/m/find?mode=map');
-    } else {
-      router.replace('/m/find');
+    setMode(m);
+    if (typeof window !== 'undefined') {
+      const next = m === 'map' ? '/m/find?mode=map' : '/m/find';
+      window.history.replaceState(null, '', next);
     }
   };
 
