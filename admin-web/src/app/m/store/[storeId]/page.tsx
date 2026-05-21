@@ -970,11 +970,16 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
   const remaining = Math.max(0, session.playersRemaining || 0);
   const survivePct = Math.max(0, Math.min(100, (remaining / total) * 100));
 
-  // 상금풀 표기
-  const prize = session.prizePool || 0;
-  const prizeShort = prize >= 100000
-    ? `₩${Math.floor(prize / 10000).toLocaleString()}만`
-    : `₩${prize.toLocaleString()}`;
+  // ── 참가 가능/마감 판정 (홈의 PrimaryLiveCard와 동일 정책)
+  // 마감: lateRegClosed === true || currentLevel > lateRegEndLevel
+  // 가능: 마감이 아니면서 lateMin > 0 (분 단위로 남았을 때만 "가능"으로 노출)
+  const isLateRegClosed =
+    session.lateRegClosed === true ||
+    (typeof session.lateRegEndLevel === 'number' && liveLevel > session.lateRegEndLevel);
+  const isLateRegOpen = !isLateRegClosed && lateMin > 0;
+
+  // 등록 임박 (5분 이하) — 시각적으로 "지금 가야 함" 강조
+  const lateRegUrgent = isLateRegOpen && lateMin <= 5;
 
   // 상태별 컬러 토큰
   const accent = ready
@@ -1036,6 +1041,33 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
     </span>
   );
 
+  // ── 참가 가능/마감 뱃지 — 한눈에 예약 판단
+  //   · 녹색(에메랄드) = 참가 가능
+  //   · 회색 = 참가 마감
+  // 라이트 톤 + 단단한 컬러 토큰. ready/paused는 LIVE 상태 자체가 우선이라 노출하지 않음.
+  const entryBadge = ready || paused
+    ? null
+    : isLateRegOpen ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wide"
+          style={{
+            background: lateRegUrgent ? 'rgba(229,62,62,0.14)' : 'rgba(16,185,129,0.14)',
+            color: lateRegUrgent ? 'var(--live)' : '#059669',
+          }}
+          aria-label={lateRegUrgent ? `참가 마감 임박 ${lateMin}분` : '참가 가능'}
+        >
+          {lateRegUrgent ? '마감 임박' : '참가 가능'}
+        </span>
+      ) : (
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wide"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}
+          aria-label="참가 마감"
+        >
+          참가 마감
+        </span>
+      );
+
   // ─────────────────────────────────────────────
   // 3열 — 컴팩트 카드
   // ─────────────────────────────────────────────
@@ -1059,6 +1091,10 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
             Lv{liveLevel}
           </span>
         </div>
+        {/* 참가 가능/마감 뱃지 — 한 줄 분리. 3열 폭에서 status 옆에 두기엔 좁아서 별도 라인 */}
+        {entryBadge && (
+          <div className="mb-1 pl-1.5">{entryBadge}</div>
+        )}
         <div className="font-bold truncate pl-1.5" style={{ fontSize: 11, color: 'var(--text-1)' }}>
           {session.tournamentName}
         </div>
@@ -1107,8 +1143,11 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
           <PosterBadge session={session} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-1 mb-1">
-              {statusBadge}
-              <span className="font-mono text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>
+              <div className="flex items-center gap-1 min-w-0">
+                {statusBadge}
+                {entryBadge}
+              </div>
+              <span className="font-mono text-[10px] font-bold flex-shrink-0" style={{ color: 'var(--text-3)' }}>
                 Lv {liveLevel}
               </span>
             </div>
@@ -1135,12 +1174,13 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
           </div>
         </div>
 
-        {/* 메트릭 2x2 */}
+        {/* 메트릭 2x2 — 상금 제거. 등록(레지) 상태가 사용자 의사결정에 더 직접적.
+            우선순위: 블라인드 → 인원 → 다음 블라인드 → 등록 */}
         <div className="grid grid-cols-2 gap-1.5 mt-2.5">
           <MetricCell
             label="블라인드"
             value={`${sb.toLocaleString()}/${bb.toLocaleString()}`}
-            sub={nextBlind ? `next ${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : ante > 0 ? `ante ${ante.toLocaleString()}` : ''}
+            sub={ante > 0 ? `ante ${ante.toLocaleString()}` : ''}
           />
           <MetricCell
             label="인원"
@@ -1148,14 +1188,15 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
             sub={`${Math.round(survivePct)}% 생존`}
           />
           <MetricCell
-            label="상금"
-            value={prizeShort}
-            sub={session.tournamentType ? '' : ''}
+            label="다음 블라인드"
+            value={nextBlind ? `${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : '최종'}
+            sub={nextBlind ? `Lv ${liveLevel + 1}` : ''}
           />
           <MetricCell
             label="등록"
-            value={session.lateRegClosed ? '마감' : `${lateMin}분`}
-            sub={session.lateRegClosed ? '' : '남음'}
+            value={isLateRegClosed ? '마감' : `${lateMin}분`}
+            sub={isLateRegClosed ? '' : (lateRegUrgent ? '마감 임박' : '남음')}
+            accent={isLateRegClosed ? 'muted' : (lateRegUrgent ? 'urgent' : 'positive')}
           />
         </div>
       </Link>
@@ -1182,8 +1223,9 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
       <div className="flex items-start gap-3">
         <PosterBadge session={session} size="lg" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
+          <div className="flex items-center flex-wrap gap-1.5 mb-1">
             {statusBadge}
+            {entryBadge}
             {ready && (
               <span className="text-[10px] font-semibold" style={{ color: 'var(--text-3)' }}>
                 · 시작 대기
@@ -1231,17 +1273,18 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
         </div>
       </div>
 
-      {/* 4분할 메트릭 */}
+      {/* 4분할 메트릭 — 상금풀 제거. 등록(레지) 상태를 별도 셀로 격상해
+          "지금 가야 하나" 판단을 가장 직접적으로 지원. 컬러는 가능=초록, 임박=빨강, 마감=회색. */}
       <div className="grid grid-cols-4 gap-1.5 mt-3">
         <MetricCell
           label="블라인드"
           value={`${sb.toLocaleString()}/${bb.toLocaleString()}`}
-          sub={ante > 0 ? `ante ${ante.toLocaleString()}` : nextBlind ? `next ${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : '—'}
+          sub={ante > 0 ? `ante ${ante.toLocaleString()}` : '—'}
         />
         <MetricCell
-          label={`Lv ${liveLevel}`}
-          value={nextBlind ? `→ ${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : '최종 레벨'}
-          sub={nextBlind ? '다음 레벨' : ''}
+          label="다음 블라인드"
+          value={nextBlind ? `${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : '최종'}
+          sub={nextBlind ? `Lv ${liveLevel + 1}` : '마지막 레벨'}
         />
         <MetricCell
           label="인원"
@@ -1249,29 +1292,50 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
           sub={`${Math.round(survivePct)}% 생존`}
         />
         <MetricCell
-          label="상금풀"
-          value={prizeShort}
-          sub={session.lateRegClosed ? '등록 마감' : `등록 ${lateMin}분`}
+          label="등록"
+          value={isLateRegClosed ? '마감' : `${lateMin}분`}
+          sub={isLateRegClosed ? '재참가 불가' : (lateRegUrgent ? '마감 임박' : '남음')}
+          accent={isLateRegClosed ? 'muted' : (lateRegUrgent ? 'urgent' : 'positive')}
         />
       </div>
     </Link>
   );
 }
 
-/** 메트릭 셀 — 2/4분할 grid 공용 */
-function MetricCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
+/** 메트릭 셀 — 2/4분할 grid 공용.
+ *  accent: 'positive' (참가 가능: 에메랄드) | 'urgent' (마감 임박: 라이브 레드) | 'muted' (마감/종료: 회색).
+ *  기본은 무채색. 등록 셀에서 상태 즉각 인지용. */
+function MetricCell({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: 'positive' | 'urgent' | 'muted';
+}) {
+  const styled =
+    accent === 'positive'
+      ? { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.32)', valueColor: '#059669' }
+      : accent === 'urgent'
+        ? { bg: 'rgba(229,62,62,0.08)', border: 'rgba(229,62,62,0.32)', valueColor: 'var(--live)' }
+        : accent === 'muted'
+          ? { bg: 'var(--surface-2)', border: 'var(--border)', valueColor: 'var(--text-3)' }
+          : { bg: 'var(--surface-1)', border: 'var(--border)', valueColor: 'var(--text-1)' };
   return (
     <div
       className="rounded-xl px-2 py-1.5 min-w-0"
       style={{
-        background: 'var(--surface-1)',
-        border: '1px solid var(--border)',
+        background: styled.bg,
+        border: `1px solid ${styled.border}`,
       }}
     >
       <div className="text-[9px] font-extrabold tracking-wider uppercase truncate" style={{ color: 'var(--text-3)' }}>
         {label}
       </div>
-      <div className="font-mono font-extrabold truncate" style={{ fontSize: 13, color: 'var(--text-1)', letterSpacing: '-0.02em' }}>
+      <div className="font-mono font-extrabold truncate" style={{ fontSize: 13, color: styled.valueColor, letterSpacing: '-0.02em' }}>
         {value}
       </div>
       {sub ? (
