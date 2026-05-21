@@ -23,6 +23,7 @@ import {
 import { CARD_STYLES, resolveCardVisual } from '@/lib/postCardStyle';
 import { formatRelativeKo } from '@/lib/relativeTime';
 import { useAuth, useStoreDoc } from '@/lib/hooks';
+import { primeModerationKeywordsCache } from '@/lib/moderationKeywords';
 
 interface Props {
   storeId: string;
@@ -44,6 +45,8 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
   const [activating, setActivating] = useState(false);
 
   useEffect(() => {
+    // 금지어 캐시 prime — 첫 글 작성도 즉시 새 사전 적용
+    primeModerationKeywordsCache();
     const unsub = subscribeStorePostsAll(
       storeId,
       (items) => { setPosts(items); setLoading(false); },

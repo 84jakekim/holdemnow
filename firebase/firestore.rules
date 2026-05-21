@@ -540,6 +540,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ===== 금지어 사전 (moderationKeywords) — 2026-05-22 =====
+    // 본사 어드민 /platform/moderation-keywords에서 단어 관리.
+    // 매장 글·리뷰·커뮤니티 작성 시 클라이언트에서 직접 fetch + 1분 캐시 + onSnapshot 실시간 반영.
+    // - read: 누구나 (사용자 글 작성 검증용. 단어 자체가 유출되어도 보안 영향 없음).
+    // - write: platform_admin만 (단어 추가/삭제/토글).
+    match /moderationKeywords/{keywordId} {
+      allow read: if true;
+      allow create, update, delete: if isPlatformAdmin();
+    }
+
     // ===== 본사 감사 로그 (adminAuditLog) =====
     // 본사 관리자 행위(비밀번호 재설정 메일 발송 등) 기록.
     // - read: platform_admin만.

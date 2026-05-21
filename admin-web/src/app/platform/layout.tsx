@@ -68,6 +68,7 @@ const MENU_GROUPS: MenuGroup[] = [
       { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
       { id: 'pinned', icon: '📌', label: '홈 고정 공지', href: '/platform/pinned' },
       { id: 'feed-config', icon: '📍', label: '채팅방 반경', href: '/platform/feed-config' },
+      { id: 'moderation-keywords', icon: '🚫', label: '금지어 사전', href: '/platform/moderation-keywords' },
       { id: 'marketing', icon: '📣', label: '마케팅 푸시', href: '/platform/marketing' },
     ],
   },

@@ -7,9 +7,16 @@
  * - 같은 글자 30+ 연속 도배 차단.
  * - 빈 텍스트·길이·작성빈도 차단.
  *
+ * 2026-05-22 업데이트 (PM 단독):
+ *   - false positive 차단: "오늘 20시 발표"가 "시발"로 매칭되던 normalize+substring 버그를
+ *     **토큰 단위 매칭**으로 교체. (lib/moderationKeywords 참고)
+ *   - 본사 어드민 /platform/moderation-keywords에서 단어를 동적으로 추가/삭제 가능.
+ *     Firestore /moderationKeywords 컬렉션이 우선이며, 없을 때만 아래 하드코딩 사전이 fallback.
+ *
  * 호출 시점:
  *   - 리뷰 createReview/updateReview 전 moderateText() — 통과해야 진행
  *   - 커뮤니티 createJob/createDealerProfile/createUsedListing 전 moderateText()
+ *   - 매장 데일리 글 createStorePost 전 moderateText()
  *   - 작성 직전 checkWriteRateLimit() — uid+namespace 빈도 제한
  *
  * Firestore: writeRateLimits/{uid}_{namespace} 단일 doc — timestamps[] 윈도우 관리.
@@ -18,6 +25,7 @@
 
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { matchKeywordsSync, getModerationKeywordsCacheSync } from './moderationKeywords';
 
 // ─────────────────────────────────────────────────────────────
 // 타입
@@ -202,13 +210,7 @@ export function countEmojis(text: string): number {
   return m ? m.length : 0;
 }
 
-/** normalize 후 빈 문자열이 되는 항목은 제외(예: 'ㅗ ㅗ' 같은 케이스 보호) */
-const BANNED_WORDS_NORMALIZED: readonly string[] = BANNED_WORDS_RAW
-  .map((w) => ({ raw: w, norm: normalizeForMatch(w) }))
-  .filter((p) => p.norm.length > 0)
-  .map((p) => p.norm);
-
-/** 금지어 사전 크기 — 로그/디버그용 */
+/** 금지어 사전 크기 (하드코딩 fallback) — 로그/디버그용 */
 export const BANNED_WORD_COUNT = BANNED_WORDS_RAW.length;
 
 // ─────────────────────────────────────────────────────────────
@@ -281,21 +283,70 @@ export function moderateText(
     }
   }
 
-  // 4) 금지어 검사 — normalized 비교
-  const normalized = normalizeForMatch(trimmed);
-  for (let i = 0; i < BANNED_WORDS_NORMALIZED.length; i++) {
-    const w = BANNED_WORDS_NORMALIZED[i];
-    if (normalized.includes(w)) {
+  // 4) 금지어 검사 — Firestore 동적 사전 우선, 비어있으면 하드코딩 fallback
+  //    토큰 단위 매칭으로 false positive 차단 (lib/moderationKeywords).
+  const dyn = matchKeywordsSync(trimmed);
+  if (dyn.matched) {
+    return {
+      ok: false,
+      reason: 'banned_word',
+      matchedWord: dyn.word ?? '',
+      message: '부적절한 표현이 포함되어 있어요',
+    };
+  }
+
+  // Firestore 캐시가 비어있을 때만 하드코딩 사전을 사용 (출시 전 시드 안 된 상태 보호).
+  const cache = getModerationKeywordsCacheSync();
+  if (!cache || cache.keywords.length === 0) {
+    const fb = matchHardcodedFallback(trimmed);
+    if (fb) {
       return {
         ok: false,
         reason: 'banned_word',
-        matchedWord: BANNED_WORDS_RAW[i],
+        matchedWord: fb,
         message: '부적절한 표현이 포함되어 있어요',
       };
     }
   }
 
   return { ok: true };
+}
+
+/**
+ * 하드코딩 사전 fallback — Firestore가 비어있거나 fetch 실패한 경우.
+ * 토큰 단위 매칭으로 "오늘 20시 발표" false positive 차단.
+ *
+ * 알고리즘은 lib/moderationKeywords.matchKeywordsSync와 동일 (partial=토큰 안 substring).
+ */
+function matchHardcodedFallback(text: string): string | null {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) return null;
+  const fullNorm = normalizeForMatch(trimmed);
+
+  // contains 카테고리: 도박/환금/사기 — 전체 normalize substring
+  for (const raw of GAMBLING_FRAUD) {
+    const norm = normalizeForMatch(raw);
+    if (norm && fullNorm.includes(norm)) return raw;
+  }
+
+  // partial: 한국어 욕설 + 영문 욕설 — 토큰 단위
+  const tokens = trimmed
+    .split(/[^A-Za-z0-9가-힣ㄱ-ㅎㅏ-ㅣ]+/u)
+    .filter((t) => t.length > 0)
+    .map((t) => normalizeForMatch(t))
+    .filter((t) => t.length > 0);
+
+  for (const t of tokens) {
+    for (const raw of KOREAN_PROFANITY) {
+      const norm = normalizeForMatch(raw);
+      if (norm && t.includes(norm)) return raw;
+    }
+    for (const raw of ENGLISH_PROFANITY) {
+      const norm = normalizeForMatch(raw);
+      if (norm && t.includes(norm)) return raw;
+    }
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
