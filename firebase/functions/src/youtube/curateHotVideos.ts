@@ -96,6 +96,9 @@ interface YoutubeCurationConfig {
   excludeShorts: boolean;
   minDurationSec: number;
   maxAgeDays: number;
+  refreshIntervalDays: number;
+  expirePreviousOnRefresh: boolean;
+  autoVideoMaxAgeDays: number;
 }
 
 const DEFAULT_CONFIG: YoutubeCurationConfig = {
@@ -116,6 +119,9 @@ const DEFAULT_CONFIG: YoutubeCurationConfig = {
   excludeShorts: true,
   minDurationSec: 61,
   maxAgeDays: 90,
+  refreshIntervalDays: 1,
+  expirePreviousOnRefresh: true,
+  autoVideoMaxAgeDays: 7,
 };
 
 // ─── 헬퍼 ─────────────────────────────────────────────────────

@@ -99,6 +99,14 @@ service cloud.firestore {
         allow write: if isStoreOwnerOrMember(storeId) || isPlatformAdmin();
       }
 
+      // 매장별 타이머 디스플레이 다중 프리셋 (Phase 2, 2026-05-21) —
+      // 사장이 여러 배경/색 조합을 저장해두고 빠르게 전환.
+      // read=public(프리셋 미리보기 미리보기 패널에서도 활용), write=owner/member/platform_admin.
+      match /timerDisplayPresets/{presetId} {
+        allow read: if true;
+        allow write: if isStoreOwnerOrMember(storeId) || isPlatformAdmin();
+      }
+
       // 노출·클릭 카운터 (sharded-free, v0.1 demo)
       // v0.1: 누구나 increment 가능 — 베타에서 abuse 감지 시 Cloud Function 인덱싱으로 이관
       match /metrics/{metricId} {

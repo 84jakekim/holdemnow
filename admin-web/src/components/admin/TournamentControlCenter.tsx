@@ -100,10 +100,16 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
         setLoading(false);
       },
     );
-    const unsubT = subscribeTemplates(storeId, setTemplates, () => {});
-    const unsubSl = subscribeSlots(storeId, setSlots, () => {});
-    const unsubD = subscribeTimerDisplay(storeId, setDisplay, () => {});
-    const unsubP = subscribeTimerDisplayPresets(storeId, setPresets, () => {});
+    // 보조 구독 — 권한 에러가 발생하면 메인 에러 배너에 노출 (이전엔 silent fail이라 사장이 원인 파악 불가).
+    const onSubErr = (label: string) => (e: Error) => {
+      // eslint-disable-next-line no-console
+      console.error(`[TournamentControlCenter] ${label} 구독 실패`, e);
+      setError((prev) => prev ?? `${label} 데이터를 불러오지 못했습니다 (${e.message})`);
+    };
+    const unsubT = subscribeTemplates(storeId, setTemplates, onSubErr('템플릿'));
+    const unsubSl = subscribeSlots(storeId, setSlots, onSubErr('TV 슬롯'));
+    const unsubD = subscribeTimerDisplay(storeId, setDisplay, onSubErr('디스플레이 설정'));
+    const unsubP = subscribeTimerDisplayPresets(storeId, setPresets, onSubErr('프리셋'));
     return () => {
       unsubS();
       unsubT();
@@ -1023,6 +1029,8 @@ function DisplaySettingsPane({
       await saveTimerDisplay(storeId, local);
       onChange(local);
       setDirty(false);
+    } catch (e: unknown) {
+      alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setSaving(false);
     }
@@ -1036,17 +1044,29 @@ function DisplaySettingsPane({
   const handleSaveAsPreset = async () => {
     const name = window.prompt('프리셋 이름?', '내 프리셋');
     if (!name || !name.trim()) return;
-    await createTimerDisplayPreset(storeId, name.trim(), local);
+    try {
+      await createTimerDisplayPreset(storeId, name.trim(), local);
+    } catch (e: unknown) {
+      alert(`프리셋 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const handleUpdatePreset = async (p: TimerDisplayPreset) => {
     if (!window.confirm(`"${p.name}" 프리셋을 현재 설정으로 덮어씁니까?`)) return;
-    await updateTimerDisplayPreset(storeId, p.id, local);
+    try {
+      await updateTimerDisplayPreset(storeId, p.id, local);
+    } catch (e: unknown) {
+      alert(`프리셋 덮어쓰기 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const handleDeletePreset = async (p: TimerDisplayPreset) => {
     if (!window.confirm(`"${p.name}" 프리셋 삭제?`)) return;
-    await deleteTimerDisplayPreset(storeId, p.id);
+    try {
+      await deleteTimerDisplayPreset(storeId, p.id);
+    } catch (e: unknown) {
+      alert(`프리셋 삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   return (

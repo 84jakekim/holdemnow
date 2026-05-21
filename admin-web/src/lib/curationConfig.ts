@@ -47,6 +47,21 @@ export interface YoutubeCurationConfig {
   minDurationSec: number;
   /** 영상 최대 나이 (일). 너무 옛날 영상 제외. */
   maxAgeDays: number;
+  /**
+   * 큐레이션 실행 주기 (일). 1=매일, 2=이틀마다, 7=주1회.
+   * scheduleHourKst와 함께 작동 — 지정 시각에 도달했더라도
+   * 마지막 실행으로부터 이 일수가 지나지 않았으면 건너뜀.
+   */
+  refreshIntervalDays: number;
+  /**
+   * true: 새 큐레이션 실행 시 기존 auto doc 모두 삭제 후 새 목록만 노출.
+   * false: autoVideoMaxAgeDays 기반 점진적 만료.
+   */
+  expirePreviousOnRefresh: boolean;
+  /**
+   * auto doc이 N일 이상 지나면 자동 삭제 (expirePreviousOnRefresh=false일 때만).
+   */
+  autoVideoMaxAgeDays?: number;
   /** 마지막 실행 시각. */
   lastRunAt?: Timestamp;
   /** 마지막 실행 결과. */
@@ -72,6 +87,9 @@ export const DEFAULT_CURATION_CONFIG: YoutubeCurationConfig = {
   excludeShorts: true,
   minDurationSec: 61,
   maxAgeDays: 90,
+  refreshIntervalDays: 1,
+  expirePreviousOnRefresh: true,
+  autoVideoMaxAgeDays: 7,
 };
 
 const DOC_PATH = ['platformConfig', 'youtubeCuration'] as const;
