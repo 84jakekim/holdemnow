@@ -364,6 +364,9 @@ function TemplateEditor({
     try {
       await onSave({
         ...form,
+        // 게런티/상금풀 강제 0 — 법적 리스크 (현금 상금 표기 금지)
+        guarantee: 0,
+        prizePool: 0,
         blindStructure: form.blindStructure.map((b, i) => {
           if (b.isBreak) {
             return {
@@ -415,7 +418,7 @@ function TemplateEditor({
 
       <div className="space-y-4">
         <Field label="토너 제목">
-          <input className="form-input" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="예: 프리징 90GTD" />
+          <input className="form-input" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="예: 프리징 90" />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
@@ -439,7 +442,9 @@ function TemplateEditor({
           </Field>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        {/* 게런티/상금풀 입력 제거 — 법적 리스크 (현금 상금 표기 금지).
+            저장 시 guarantee/prizePool은 항상 0으로 처리됨. */}
+        <div className="grid grid-cols-2 gap-3">
           <Field label="바이인 (T · 1T=1만원)">
             <div className="relative">
               <input
@@ -456,24 +461,6 @@ function TemplateEditor({
             </div>
             <div className="text-[10px] text-gray-400 mt-1 font-mono">
               ≈ ₩{form.buyIn.toLocaleString()}
-            </div>
-          </Field>
-          <Field label="게런티 (T)">
-            <div className="relative">
-              <input
-                type="number"
-                min={0}
-                step={1}
-                className="form-input font-mono pr-7"
-                value={wonToTickets(form.guarantee)}
-                onChange={(e) => update('guarantee', ticketsToWon(parseInt(e.target.value) || 0))}
-              />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
-                T
-              </span>
-            </div>
-            <div className="text-[10px] text-gray-400 mt-1 font-mono">
-              ≈ ₩{form.guarantee.toLocaleString()}
             </div>
           </Field>
           <Field label="인원">

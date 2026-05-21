@@ -617,14 +617,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
                       {' '}· 바이인 ₩{t.buyIn.toLocaleString()}
                     </div>
                   </div>
-                  {t.guarantee > 0 && (
-                    <div
-                      className="text-[10px] font-extrabold rounded-full px-2 py-1 flex-shrink-0"
-                      style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)', color: 'var(--gold)' }}
-                    >
-                      GTD {(t.guarantee / 10000).toFixed(0)}만
-                    </div>
-                  )}
+                  {/* GTD 표기 제거 — 법적 리스크 (현금 상금 노출 금지) */}
                   <TournamentInterestStar tournament={t} size="sm" />
                 </div>
               );

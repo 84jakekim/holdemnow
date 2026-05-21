@@ -392,7 +392,8 @@ export async function startLiveSession(
     ante: first.ante,
     playersRemaining: template.totalPlayers,
     tablesRemaining: Math.max(1, Math.ceil(template.totalPlayers / 8)),
-    prizePool: template.prizePool || template.buyIn * template.totalPlayers,
+    // 상금풀 항상 0 — 사용자 앱 어디에도 표기되지 않음 (법적 리스크)
+    prizePool: 0,
     lateRegClosed: false,
     viewerCount: 0,
     createdAt: serverTimestamp(),

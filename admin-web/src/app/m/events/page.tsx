@@ -11,7 +11,6 @@ import {
   EVENT_STATUS_LABEL,
   formatEventDateRange,
   daysFromNow,
-  formatPrize,
 } from '@/lib/events';
 
 type ViewMode = 'list' | 'large' | 'album';
@@ -252,11 +251,7 @@ function CompactList({ items }: { items: EventDoc[] }) {
               {e.status === 'ongoing' && (
                 <div className="text-[10px] font-extrabold text-green-600">진행 중</div>
               )}
-              {e.guaranteedPrize ? (
-                <div className="text-[10px] text-gray-500 mt-0.5 font-mono">
-                  {formatPrize(e.guaranteedPrize)} GTD
-                </div>
-              ) : null}
+              {/* GTD 표기 제거 — 법적 리스크 */}
             </div>
           </Link>
         );
@@ -320,17 +315,13 @@ function LargeList({ items }: { items: EventDoc[] }) {
                 {e.venueName && (
                   <div className="text-[11px] text-gray-500 truncate">📍 {e.venueName}</div>
                 )}
+                {/* GTD 표기 제거 — 법적 리스크. 바이인(좌석 이용권)만 표시 */}
                 <div className="mt-auto pt-2 flex items-center gap-3 text-[11px]">
                   {e.buyIn != null && e.buyIn > 0 && (
                     <span className="text-gray-700 font-mono">
                       바이인 ₩{e.buyIn.toLocaleString()}
                     </span>
                   )}
-                  {e.guaranteedPrize ? (
-                    <span className="text-red-600 font-extrabold font-mono">
-                      GTD {formatPrize(e.guaranteedPrize)}
-                    </span>
-                  ) : null}
                 </div>
               </div>
             </div>
@@ -388,11 +379,7 @@ function AlbumGrid({ items }: { items: EventDoc[] }) {
               <div className="text-[10px] text-gray-500 mt-1">
                 {formatEventDateRange(e.startDate, e.endDate)}
               </div>
-              {e.guaranteedPrize ? (
-                <div className="text-[10px] text-red-600 font-extrabold mt-0.5 font-mono">
-                  GTD {formatPrize(e.guaranteedPrize)}
-                </div>
-              ) : null}
+              {/* GTD 표기 제거 — 법적 리스크 */}
             </div>
           </Link>
         );

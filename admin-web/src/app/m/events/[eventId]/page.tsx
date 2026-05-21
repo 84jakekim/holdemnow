@@ -10,7 +10,6 @@ import {
   EVENT_STATUS_LABEL,
   formatEventDateRange,
   daysFromNow,
-  formatPrize,
 } from '@/lib/events';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { loadKakaoMaps } from '@/lib/kakao';
@@ -131,12 +130,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
         {event.buyIn != null && event.buyIn > 0 && (
           <InfoCell label="바이인" value={`₩${event.buyIn.toLocaleString()}`} />
         )}
-        {event.guaranteedPrize ? (
-          <InfoCell label="개런티 (GTD)" value={formatPrize(event.guaranteedPrize)} highlight />
-        ) : null}
-        {event.prizePool ? (
-          <InfoCell label="총 상금" value={formatPrize(event.prizePool)} />
-        ) : null}
+        {/* 개런티/총상금 표기 제거 — 법적 리스크 (현금 상금 노출 금지) */}
         {event.expectedPlayers != null && event.expectedPlayers > 0 && (
           <InfoCell label="예상 인원" value={`${event.expectedPlayers.toLocaleString()}명`} />
         )}

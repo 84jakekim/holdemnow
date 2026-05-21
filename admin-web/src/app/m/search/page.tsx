@@ -213,7 +213,7 @@ export default function SearchPage() {
                         <Highlight text={sr.name} term={term} />
                       </div>
                       <div className="text-[11px] text-gray-500 mt-0.5 truncate">
-                        {sr.season} · ₩{(sr.finalGuarantee / 100000000).toFixed(1)}억 GTD
+                        {sr.season}
                       </div>
                     </div>
                     <span className="text-gray-400">›</span>

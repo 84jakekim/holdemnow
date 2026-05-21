@@ -138,7 +138,7 @@ export default function SeriesPage({ params }: { params: Promise<{ seriesId: str
             ←
           </button>
           <button
-            onClick={() => series && shareContent({ title: series.name, text: `${series.name} · 본선 게런티 ₩${(series.finalGuarantee / 100000000).toFixed(1)}억` })}
+            onClick={() => series && shareContent({ title: series.name, text: `${series.name} · ${series.season}` })}
             className="w-9 h-9 rounded-full bg-black/30 backdrop-blur flex items-center justify-center text-white"
             title="공유"
           >
@@ -173,7 +173,7 @@ export default function SeriesPage({ params }: { params: Promise<{ seriesId: str
           <Cell label="일자" value={series.finalDate ? series.finalDate.toDate().toISOString().slice(0, 10) : '미정'} />
           <Cell label="장소" value={series.finalVenue || '미정'} />
           <Cell label="바이인" value={`₩${series.finalBuyIn.toLocaleString()}`} mono />
-          <Cell label="게런티" value={`₩${(series.finalGuarantee / 100000000).toFixed(1)}억`} mono highlight />
+          {/* 게런티 표기 제거 — 법적 리스크 (현금 상금 노출 금지) */}
         </div>
         {series.seedRule && (
           <div className="mt-4 px-3 py-2.5 bg-gray-50 rounded-lg text-xs text-gray-900">

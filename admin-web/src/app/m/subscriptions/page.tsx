@@ -122,9 +122,8 @@ export default function SubscriptionsPage() {
                         ? s.finalDate.toDate().toISOString().slice(0, 10)
                         : '미정'}
                     </div>
-                    <div className="font-mono text-sm font-extrabold text-red-500">
-                      ₩{(s.finalGuarantee / 100000000).toFixed(1)}억
-                    </div>
+                    {/* 게런티 표기 제거 — 법적 리스크 (현금 상금 노출 금지) */}
+                    <div className="text-[10px] text-gray-400 font-bold">{s.season}</div>
                   </div>
                 )}
               </Link>

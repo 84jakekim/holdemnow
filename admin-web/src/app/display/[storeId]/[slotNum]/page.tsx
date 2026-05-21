@@ -356,18 +356,12 @@ export default function DisplayPage({
             </div>
           )}
 
-          {/* 하단 stats */}
-          <div className="mt-10 grid grid-cols-3 gap-12 max-w-3xl">
+          {/* 하단 stats — PRIZE POOL 제거 (법적 리스크: 현금 상금 노출 금지) */}
+          <div className="mt-10 grid grid-cols-2 gap-12 max-w-3xl">
             <Stat
               label="PLAYERS"
               value={`${session.playersRemaining}/${session.totalPlayers}`}
               sub={`${session.tablesRemaining}테이블`}
-              color={display.textColor}
-            />
-            <Stat
-              label="PRIZE POOL"
-              value={display.prizeOverride || `₩${(session.prizePool / 10000).toFixed(0)}만`}
-              sub=""
               color={display.textColor}
             />
             <Stat

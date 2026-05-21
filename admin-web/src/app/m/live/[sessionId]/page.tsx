@@ -282,10 +282,9 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
 
       <div className="h-px bg-[#2A2A2A] mx-10 mt-6" />
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 px-5 pt-5">
+      {/* Stats — 상금풀 표기 제거 (법적 리스크). 2-col 균형 레이아웃 */}
+      <div className="grid grid-cols-2 gap-2 px-5 pt-5">
         <Stat label="PLAYERS" value={`${session.playersRemaining}/${session.totalPlayers}`} sub={`${session.tablesRemaining}테이블`} />
-        <Stat label="PRIZE POOL" value={`₩${Math.floor(session.prizePool / 10000)}만`} sub="" />
         <Stat
           label="LATE REG"
           value={session.lateRegClosed ? '마감' : `${lateMin}분`}

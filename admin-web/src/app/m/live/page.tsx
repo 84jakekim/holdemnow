@@ -201,6 +201,17 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
     return firstWord.charAt(0);
   })();
 
+  // 다음 블라인드 미리보기 — locked 우선, 없으면 base. 마지막 레벨이면 null.
+  const nextBlind = (() => {
+    const structure = (session.blindStructureLocked && session.blindStructureLocked.length > 0)
+      ? session.blindStructureLocked
+      : session.blindStructure;
+    if (!structure || structure.length === 0) return null;
+    const nextIdx = structure.findIndex((b) => b.level === session.currentLevel) + 1;
+    if (nextIdx <= 0 || nextIdx >= structure.length) return null;
+    return structure[nextIdx];
+  })();
+
   // 타이머 색 분기
   const timerColor = isFinishing
     ? 'var(--live, #E53E3E)'
@@ -293,7 +304,7 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
             {session.tournamentName}
           </div>
 
-          {/* hero 타이머 + 레벨/블라인드 */}
+          {/* hero 타이머 + 레벨/블라인드 + 다음 블라인드 미리보기 */}
           <div className="mt-2 flex items-baseline gap-2.5 min-w-0">
             <span
               className={`font-mono text-[30px] font-extrabold leading-none tabular-nums tracking-tight flex-shrink-0 ${timerPulse ? 'animate-pulse' : ''}`}
@@ -316,10 +327,36 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
               </span>
             </div>
           </div>
+
+          {/* 다음 블라인드 미리보기 — 정보 밀도 ↑, 상금 표기 빈자리 보강 */}
+          {nextBlind && !isFinishing && (
+            <div
+              className="mt-2 inline-flex items-center gap-1.5 self-start rounded-md px-2 py-[3px]"
+              style={{
+                background: nextBlind.isBreak ? 'rgba(245,158,11,0.10)' : 'rgba(0,0,0,0.04)',
+                border: `1px solid ${nextBlind.isBreak ? 'rgba(245,158,11,0.25)' : 'var(--border-soft, rgba(0,0,0,0.06))'}`,
+              }}
+            >
+              <span
+                className="text-[9px] font-extrabold tracking-wider"
+                style={{ color: nextBlind.isBreak ? 'var(--gold, #F59E0B)' : 'var(--text-3, #9CA3AF)' }}
+              >
+                NEXT
+              </span>
+              <span
+                className="text-[10px] font-mono font-bold tabular-nums"
+                style={{ color: 'var(--text-2, #6B7280)' }}
+              >
+                {nextBlind.isBreak
+                  ? `BREAK ${Math.round(nextBlind.durationSec / 60)}분`
+                  : `${nextBlind.sb}/${nextBlind.bb}`}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 하단 메타 바 — 상금·인원·등록·지역·거리 */}
+      {/* 하단 메타 바 — 인원·등록·지역·거리 (상금 표기 금지: 법적 리스크) */}
       <div
         className="px-4 py-2.5 flex items-center gap-2 text-[11px] flex-wrap"
         style={{
@@ -328,28 +365,33 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
           color: 'var(--text-2, #6B7280)',
         }}
       >
-        {session.prizePool > 0 && (
+        {/* 인원 — 남은/총 */}
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden>👥</span>
           <span className="font-mono font-bold" style={{ color: 'var(--text-1, #111827)' }}>
-            ₩{Math.floor(session.prizePool / 10000)}만 GTD
-          </span>
-        )}
-        {session.prizePool > 0 && <span aria-hidden style={{ color: 'var(--text-3, #9CA3AF)' }}>·</span>}
-        <span>
-          <span className="font-mono font-bold" style={{ color: 'var(--text-2, #6B7280)' }}>
             {session.playersRemaining}
           </span>
           <span className="font-mono" style={{ color: 'var(--text-3, #9CA3AF)' }}>
             /{session.totalPlayers}
           </span>
-          명
         </span>
         <span aria-hidden style={{ color: 'var(--text-3, #9CA3AF)' }}>·</span>
+        {/* 등록 마감 상태 */}
         {session.lateRegClosed ? (
-          <span style={{ color: 'var(--text-3, #9CA3AF)' }}>등록 마감</span>
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded font-bold"
+            style={{
+              background: 'rgba(156,163,175,0.15)',
+              color: 'var(--text-3, #9CA3AF)',
+            }}
+          >
+            등록 마감
+          </span>
         ) : (
           <span
-            className={lateMin <= 5 ? 'font-bold' : ''}
+            className={`inline-flex items-center gap-1 px-1.5 py-[1px] rounded ${lateMin <= 5 ? 'font-bold' : ''}`}
             style={{
+              background: lateMin <= 5 ? 'rgba(229,62,62,0.10)' : 'transparent',
               color: lateMin <= 5 ? 'var(--live, #E53E3E)' : 'var(--text-2, #6B7280)',
             }}
           >

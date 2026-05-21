@@ -27,7 +27,8 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
-  type FilterId = 'all' | 'gtd-large' | 'buyin-low' | 'satellite';
+  // 'gtd-large' 필터 제거 — 게런티/상금 표기 법적 리스크
+  type FilterId = 'all' | 'buyin-low' | 'satellite';
   const [filter, setFilter] = useState<FilterId>('all');
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -96,7 +97,6 @@ export default function CalendarPage() {
     return nearbyTournaments.filter((t) => {
       const d = t.startsAt.toDate();
       if (d.getDate() !== selectedDay || t.status !== 'scheduled') return false;
-      if (filter === 'gtd-large' && t.guarantee < 1000000) return false;
       if (filter === 'buyin-low' && t.buyIn > 50000) return false;
       if (filter === 'satellite' && t.type !== 'satellite') return false;
       return true;
@@ -163,7 +163,6 @@ export default function CalendarPage() {
       <div className="px-4 py-3 flex gap-1.5 overflow-x-auto scrollbar-none">
         {([
           { id: 'all', label: '전체' },
-          { id: 'gtd-large', label: '게런티 100만+' },
           { id: 'buyin-low', label: '바이인 5만↓' },
           { id: 'satellite', label: '위성 예선' },
         ] as { id: FilterId; label: string }[]).map((c) => {
@@ -297,6 +296,7 @@ export default function CalendarPage() {
                         <span className="font-mono font-bold" style={{ color: 'var(--text-2)' }}>{hh}:{mm}</span>
                         {' '}· {t.storeName} · {t.totalPlayers}명
                       </div>
+                      {/* GTD 뱃지 제거 — 법적 리스크. 바이인(좌석 이용권 가격)만 표시 */}
                       <div className="flex gap-1.5 mt-1.5">
                         <span
                           className="text-[10px] font-bold rounded-md px-1.5 py-0.5"
@@ -304,14 +304,6 @@ export default function CalendarPage() {
                         >
                           ₩{(t.buyIn / 1000).toFixed(0)}K
                         </span>
-                        {t.guarantee > 0 && (
-                          <span
-                            className="text-[10px] font-bold rounded-md px-1.5 py-0.5"
-                            style={{ background: 'rgba(255,183,28,0.12)', border: '1px solid rgba(255,183,28,0.25)', color: 'var(--gold)' }}
-                          >
-                            GTD ₩{(t.guarantee / 10000).toFixed(0)}만
-                          </span>
-                        )}
                       </div>
                     </div>
                   </button>
