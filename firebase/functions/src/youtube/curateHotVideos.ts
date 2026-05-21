@@ -560,7 +560,7 @@ export async function runCuration(
     }
   }
 
-  // 6. upsert (manual 보호)
+  // 6. upsert (manual 보호) — priority 1부터 score 순위대로 부여
   let upsertedCount = 0;
   let batch = firestore.batch();
   let batchCount = 0;
@@ -576,6 +576,7 @@ export async function runCuration(
   // 상위 항목들의 docId를 모아두고, 큐레이션에서 빠진 auto 항목은 삭제 후보로
   const keepIds = new Set<string>();
 
+  let autoPriority = 0; // 실제 upsert 직전 +1 — 수동 영상 보호로 skip된 항목 제외하고 1, 2, 3, ...
   for (const sv of top) {
     const item = sv.item;
     const viewCount = parseInt(item.statistics.viewCount ?? '0', 10);
@@ -593,6 +594,7 @@ export async function runCuration(
       if (data.source !== 'auto' || data.manualLocked === true) continue;
     }
     keepIds.add(item.id);
+    autoPriority++;
 
     const isNew = !existing.exists;
     const payload: Record<string, unknown> = {
@@ -607,6 +609,8 @@ export async function runCuration(
       score: sv.score,
       durationSec: sv.durationSec,
       source: 'auto',
+      // 자동 영상은 score 순위대로 1, 2, 3, ... — 수동 영상(0)이 항상 위에 노출.
+      priority: autoPriority,
       isActive: true,
       order: 0,
       curatedAt: FieldValue.serverTimestamp(),

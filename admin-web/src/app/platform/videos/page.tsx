@@ -24,6 +24,17 @@ import {
   type YoutubeCurationConfig,
   type YoutubeCurationLastRunResult,
 } from '@/lib/curationConfig';
+import {
+  addManualVideo,
+  deleteManualVideo,
+  fetchYoutubeOembed,
+  shiftManualVideoPriority,
+  subscribeAllHotVideos,
+  updateManualVideoPriority,
+} from '@/lib/hotVideos';
+import { useAuth } from '@/lib/hooks';
+import { extractYoutubeVideoId, youtubeThumbnailUrl } from '@/lib/youtube';
+import type { HotYoutubeVideo } from '@/lib/homeContent';
 
 interface FormState {
   includeText: string;
@@ -585,6 +596,11 @@ export default function PlatformVideosPage() {
           </div>
         )}
       </div>
+
+      {/* 수동 영상 관리 — priority 0이 최상단 */}
+      <div className="mt-6">
+        <ManualVideosSection />
+      </div>
     </div>
   );
 }
@@ -633,6 +649,568 @@ function Stat({ label, value }: { label: string; value: string }) {
       </div>
       <div className="text-base font-extrabold" style={{ color: 'var(--text-1)' }}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 수동 영상 관리 섹션 — priority 체계
+// ─────────────────────────────────────────────────────────────────
+
+function ManualVideosSection() {
+  const authState = useAuth();
+  const [videos, setVideos] = useState<HotYoutubeVideo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<HotYoutubeVideo | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeAllHotVideos(
+      (items) => {
+        setVideos(items);
+        setLoading(false);
+      },
+      (e) => {
+        setError(e.message);
+        setLoading(false);
+      },
+    );
+    return unsub;
+  }, []);
+
+  const manualVideos = useMemo(
+    () => videos.filter((v) => v.source !== 'auto'),
+    [videos],
+  );
+  const autoVideos = useMemo(
+    () => videos.filter((v) => v.source === 'auto'),
+    [videos],
+  );
+
+  const uid =
+    authState.status === 'authenticated' ? authState.user.uid : null;
+
+  const handleShift = async (v: HotYoutubeVideo, delta: number) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await shiftManualVideoPriority(v.videoId, v.priority, delta);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (v: HotYoutubeVideo) => {
+    if (!window.confirm(`"${v.title}" 영상을 삭제할까요?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteManualVideo(v.videoId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div
+            className="text-xs font-extrabold tracking-widest mb-1"
+            style={{ color: 'var(--gold)' }}
+          >
+            📌 수동 등록 영상
+          </div>
+          <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+            자동 큐레이션과 별도로 본사가 직접 등록·고정합니다.
+            priority 0이 가장 위, 자동 영상(1, 2, …) 보다 먼저 노출됩니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          disabled={!uid}
+          className="px-4 py-2.5 rounded-xl font-bold text-sm disabled:opacity-40 flex-shrink-0"
+          style={{ background: 'var(--gold)', color: '#0F1419' }}
+        >
+          + 영상 추가
+        </button>
+      </div>
+
+      {error && (
+        <div
+          className="mb-3 rounded-lg p-3 text-xs"
+          style={{
+            background: 'rgba(239,68,68,0.10)',
+            border: '1px solid rgba(239,68,68,0.35)',
+            color: '#fecaca',
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-xs" style={{ color: 'var(--text-3)' }}>로딩 중…</div>
+      ) : manualVideos.length === 0 ? (
+        <div
+          className="rounded-xl p-5 text-center text-xs"
+          style={{
+            background: 'var(--surface-2)',
+            border: '1px dashed var(--border)',
+            color: 'var(--text-3)',
+          }}
+        >
+          등록된 수동 영상이 없습니다. &ldquo;+ 영상 추가&rdquo;로 시작하세요.
+        </div>
+      ) : (
+        <>
+          <div
+            className="text-[11px] font-bold mb-2"
+            style={{ color: 'var(--text-3)' }}
+          >
+            현재 등록된 수동 영상 ({manualVideos.length}개) · 자동 영상 {autoVideos.length}개와 함께 노출됨
+          </div>
+          <ul className="flex flex-col gap-2">
+            {manualVideos.map((v) => (
+              <ManualVideoCard
+                key={v.videoId}
+                video={v}
+                disabled={busy}
+                onUp={() => handleShift(v, -1)}
+                onDown={() => handleShift(v, +1)}
+                onEdit={() => setEditing(v)}
+                onDelete={() => handleDelete(v)}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* 영상 추가 모달 */}
+      {adding && uid && (
+        <ManualVideoModal
+          mode="add"
+          onClose={() => setAdding(false)}
+          onSave={async ({ urlOrId, priority, title, channelName }) => {
+            await addManualVideo({ urlOrId, priority, title, channelName }, uid);
+          }}
+        />
+      )}
+
+      {/* 영상 priority 수정 모달 */}
+      {editing && (
+        <ManualVideoModal
+          mode="edit"
+          video={editing}
+          onClose={() => setEditing(null)}
+          onSave={async ({ priority }) => {
+            await updateManualVideoPriority(editing.videoId, priority ?? 0);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ManualVideoCard({
+  video,
+  disabled,
+  onUp,
+  onDown,
+  onEdit,
+  onDelete,
+}: {
+  video: HotYoutubeVideo;
+  disabled: boolean;
+  onUp: () => void;
+  onDown: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const thumb =
+    video.thumbnailUrl || youtubeThumbnailUrl(video.videoId, 'mqdefault');
+  const priority = video.priority ?? 0;
+
+  return (
+    <li
+      className="rounded-xl p-3 flex items-center gap-3"
+      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+    >
+      {/* priority badge */}
+      <div
+        className="flex flex-col items-center justify-center rounded-lg flex-shrink-0"
+        style={{
+          width: 44,
+          minHeight: 44,
+          background: 'rgba(255,31,143,0.15)',
+          color: 'var(--brand, #FF1F8F)',
+          border: '1px solid rgba(255,31,143,0.35)',
+        }}
+        title="priority (0이 최상단)"
+      >
+        <span className="text-[10px] font-bold leading-none">순위</span>
+        <span className="text-base font-extrabold leading-none mt-1">
+          {priority}
+        </span>
+      </div>
+
+      {/* 썸네일 */}
+      <div
+        className="rounded-md overflow-hidden flex-shrink-0"
+        style={{ width: 80, aspectRatio: '16/9', background: '#0F0F0F' }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={thumb}
+          alt={video.title}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      </div>
+
+      {/* 텍스트 */}
+      <div className="flex-1 min-w-0">
+        <div
+          className="text-sm font-bold line-clamp-1"
+          style={{ color: 'var(--text-1)' }}
+        >
+          {video.title}
+        </div>
+        <div className="text-[11px] truncate" style={{ color: 'var(--text-3)' }}>
+          {video.channelName ?? '-'} · videoId: {video.videoId}
+        </div>
+      </div>
+
+      {/* 컨트롤 */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          type="button"
+          onClick={onUp}
+          disabled={disabled || priority <= 0}
+          className="w-8 h-8 rounded-lg text-sm font-extrabold disabled:opacity-30"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-1)',
+          }}
+          aria-label="순위 올리기"
+          title="순위 올리기 (priority -1)"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          onClick={onDown}
+          disabled={disabled}
+          className="w-8 h-8 rounded-lg text-sm font-extrabold disabled:opacity-30"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-1)',
+          }}
+          aria-label="순위 내리기"
+          title="순위 내리기 (priority +1)"
+        >
+          ▼
+        </button>
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={disabled}
+          className="px-2.5 h-8 rounded-lg text-[11px] font-bold disabled:opacity-30"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-1)',
+          }}
+        >
+          수정
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={disabled}
+          className="px-2.5 h-8 rounded-lg text-[11px] font-bold disabled:opacity-30"
+          style={{
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.35)',
+            color: '#fecaca',
+          }}
+        >
+          삭제
+        </button>
+      </div>
+    </li>
+  );
+}
+
+interface ManualVideoModalProps {
+  mode: 'add' | 'edit';
+  video?: HotYoutubeVideo;
+  onClose: () => void;
+  onSave: (input: {
+    urlOrId: string;
+    priority?: number;
+    title?: string;
+    channelName?: string;
+  }) => Promise<void>;
+}
+
+function ManualVideoModal({ mode, video, onClose, onSave }: ManualVideoModalProps) {
+  const [urlOrId, setUrlOrId] = useState(
+    video ? `https://www.youtube.com/watch?v=${video.videoId}` : '',
+  );
+  const [priority, setPriority] = useState<number>(video?.priority ?? 0);
+  const [title, setTitle] = useState(video?.title ?? '');
+  const [channelName, setChannelName] = useState(video?.channelName ?? '');
+  const [thumbnailUrl, setThumbnailUrl] = useState(
+    video?.thumbnailUrl ?? (video ? youtubeThumbnailUrl(video.videoId, 'mqdefault') : ''),
+  );
+  const [resolvedId, setResolvedId] = useState<string | null>(
+    video?.videoId ?? null,
+  );
+  const [oembedLoading, setOembedLoading] = useState(false);
+  const [oembedError, setOembedError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleResolve = async (value: string) => {
+    setOembedError(null);
+    const id = extractYoutubeVideoId(value);
+    if (!id) {
+      setResolvedId(null);
+      return;
+    }
+    setResolvedId(id);
+    setThumbnailUrl(youtubeThumbnailUrl(id, 'mqdefault'));
+    if (mode === 'edit') return; // 편집 모드는 메타 그대로
+    setOembedLoading(true);
+    try {
+      const meta = await fetchYoutubeOembed(id);
+      if (meta) {
+        if (meta.title) setTitle(meta.title);
+        if (meta.channelName) setChannelName(meta.channelName);
+        if (meta.thumbnailUrl) setThumbnailUrl(meta.thumbnailUrl);
+      } else {
+        setOembedError('유튜브 메타를 가져오지 못했습니다. 제목·채널을 직접 입력해 주세요.');
+      }
+    } catch (e) {
+      setOembedError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOembedLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave({
+        urlOrId,
+        priority: Number.isFinite(priority) ? Math.max(0, Math.floor(priority)) : 0,
+        title: title.trim() || undefined,
+        channelName: channelName.trim() || undefined,
+      });
+      onClose();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canSave =
+    mode === 'edit' ? Number.isFinite(priority) : !!resolvedId && !saving;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.55)' }}
+    >
+      <div
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl"
+        style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+      >
+        <div
+          className="p-5 border-b"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <div className="text-base font-extrabold" style={{ color: 'var(--text-1)' }}>
+            {mode === 'add' ? '수동 영상 추가' : '수동 영상 수정'}
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* URL */}
+          <div>
+            <label
+              className="block text-xs font-bold mb-1.5"
+              style={{ color: 'var(--text-1)' }}
+            >
+              YouTube URL 또는 videoId
+            </label>
+            <input
+              type="text"
+              value={urlOrId}
+              onChange={(e) => setUrlOrId(e.target.value)}
+              onBlur={(e) => handleResolve(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              disabled={mode === 'edit'}
+              className="w-full rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+              style={fieldStyle}
+            />
+            <div
+              className="text-[11px] mt-1"
+              style={{ color: oembedError ? '#fecaca' : 'var(--text-3)' }}
+            >
+              {oembedLoading
+                ? '메타 가져오는 중…'
+                : oembedError
+                ? oembedError
+                : resolvedId
+                ? `videoId: ${resolvedId}`
+                : 'URL을 붙여넣으면 제목·채널·썸네일이 자동으로 채워집니다.'}
+            </div>
+          </div>
+
+          {/* 미리보기 */}
+          {resolvedId && (
+            <div className="flex gap-3 items-start">
+              <div
+                className="rounded-md overflow-hidden flex-shrink-0"
+                style={{ width: 140, aspectRatio: '16/9', background: '#0F0F0F' }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={thumbnailUrl}
+                  alt={title}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div
+                  className="text-sm font-bold line-clamp-2"
+                  style={{ color: 'var(--text-1)' }}
+                >
+                  {title || '(제목 없음)'}
+                </div>
+                <div className="text-[11px] mt-1" style={{ color: 'var(--text-3)' }}>
+                  {channelName || '(채널명 없음)'}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 제목 (수정 가능) */}
+          {mode === 'add' && (
+            <>
+              <div>
+                <label
+                  className="block text-xs font-bold mb-1.5"
+                  style={{ color: 'var(--text-1)' }}
+                >
+                  제목 (자동 채움 — 필요시 수정)
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm"
+                  style={fieldStyle}
+                />
+              </div>
+              <div>
+                <label
+                  className="block text-xs font-bold mb-1.5"
+                  style={{ color: 'var(--text-1)' }}
+                >
+                  채널명 (자동 채움 — 필요시 수정)
+                </label>
+                <input
+                  type="text"
+                  value={channelName}
+                  onChange={(e) => setChannelName(e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm"
+                  style={fieldStyle}
+                />
+              </div>
+            </>
+          )}
+
+          {/* priority */}
+          <div>
+            <label
+              className="block text-xs font-bold mb-1.5"
+              style={{ color: 'var(--text-1)' }}
+            >
+              priority (0 = 최상단)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={priority}
+              onChange={(e) => setPriority(parseInt(e.target.value, 10) || 0)}
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={fieldStyle}
+            />
+            <div className="text-[11px] mt-1" style={{ color: 'var(--text-3)' }}>
+              자동 영상은 1, 2, 3, … 순으로 부여되므로 수동 영상을 자동 위에 두려면 0 권장.
+            </div>
+          </div>
+
+          {saveError && (
+            <div
+              className="rounded-lg p-2.5 text-xs"
+              style={{
+                background: 'rgba(239,68,68,0.10)',
+                border: '1px solid rgba(239,68,68,0.35)',
+                color: '#fecaca',
+              }}
+            >
+              {saveError}
+            </div>
+          )}
+        </div>
+
+        <div
+          className="p-5 border-t flex items-center justify-end gap-2"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-bold"
+            style={{
+              background: 'var(--surface-2)',
+              color: 'var(--text-1)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave || saving}
+            className="px-5 py-2 rounded-lg text-sm font-extrabold disabled:opacity-40"
+            style={{ background: 'var(--gold)', color: '#0F1419' }}
+          >
+            {saving ? '저장 중…' : '저장'}
+          </button>
+        </div>
       </div>
     </div>
   );
