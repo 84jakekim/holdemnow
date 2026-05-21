@@ -11,8 +11,9 @@ import { useHeartbeat } from '@/lib/heartbeat';
 
 /* ============================================================
  * 탭 정의 — 5탭 (대회 → 토너 흡수, 즐겨찾기 유지)
- * 활성: 핑크 아이콘·라벨 + 상단 underline indicator
- * 컨테이너: Floating Glass Pill (Soft Pink + Glass)
+ * 컨테이너: Floating Solid White Pill (시인성 최우선)
+ * 활성: 핫핑크 풀필 알약 박스 + 흰 아이콘·라벨
+ * 비활성: 진한 회색 아이콘·라벨
  * ========================================================== */
 const TABS = [
   {
@@ -129,15 +130,12 @@ function TabBar({ pathname }: { pathname: string }) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="메인 내비게이션"
     >
-      {/* Floating Translucent Hot Pink Pill — 핫핑크 alpha 0.28.
-       * 핑크 톤 유지 + 투명도만 낮춤. 아이콘은 진한 핫핑크. */}
-      <div
-        className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden"
-        style={{
-          background: 'rgba(255, 31, 143, 0.28)',
-        }}
-      >
-        <div className="flex items-stretch h-[60px] px-1">
+      {/* Floating Solid White Pill — 시인성 최우선.
+       * 컨테이너는 흰 솔리드 + 또렷한 그림자.
+       * 활성 탭에만 핫핑크 풀필 박스 + 흰 텍스트로 강조.
+       * 다크 모드는 .tabbar-glass 클래스가 자동 분기 (배경 → #1A1F2A). */}
+      <div className="mx-3 mb-3 rounded-full tabbar-glass overflow-hidden">
+        <div className="flex items-stretch h-[60px] px-1.5 gap-0.5">
           {TABS.map((t) => {
             const active =
               pathname === t.href ||
@@ -152,33 +150,37 @@ function TabBar({ pathname }: { pathname: string }) {
                 aria-label={t.label}
                 aria-current={active ? 'page' : undefined}
                 className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200 active:scale-90"
-                style={{ color: active ? '#E01077' : 'rgba(224, 16, 119, 0.55)' }}
               >
-                {/* 활성 indicator — 상단 짧은 진한 핑크 underline */}
-                <span
-                  className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-full pointer-events-none transition-all duration-200"
-                  style={{
-                    width: active ? 28 : 0,
-                    background: '#E01077',
-                    opacity: active ? 1 : 0,
-                  }}
-                  aria-hidden="true"
-                />
+                {/* 활성 indicator — 핫핑크 풀필 알약 박스 (탭 내부) */}
+                {active && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-1.5 inset-x-1 rounded-full pointer-events-none"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, var(--brand) 0%, var(--brand-dim) 100%)',
+                      boxShadow:
+                        '0 2px 8px rgba(255, 31, 143, 0.35), 0 1px 2px rgba(255, 31, 143, 0.20)',
+                    }}
+                  />
+                )}
                 {/* 아이콘 — 활성 시 살짝 위로 떠오르고 scale-up */}
                 <span
-                  className="transition-transform duration-200"
+                  className="relative z-10 transition-transform duration-200"
                   style={{
+                    color: active ? '#FFFFFF' : 'var(--text-2)',
                     transform: active
-                      ? 'translateY(-2px) scale(1.05)'
+                      ? 'translateY(-1px) scale(1.05)'
                       : 'translateY(0) scale(1)',
                   }}
                 >
                   {t.icon(active)}
                 </span>
                 <span
-                  className="text-[11px] leading-none transition-all duration-200"
+                  className="relative z-10 text-[10px] leading-none transition-all duration-200"
                   style={{
-                    fontWeight: active ? 700 : 500,
+                    color: active ? '#FFFFFF' : 'var(--text-2)',
+                    fontWeight: active ? 800 : 600,
                   }}
                 >
                   {t.label}

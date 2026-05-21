@@ -282,28 +282,28 @@ html, body {
   border-top: 1px solid var(--border);
 }
 
-/* ── 모바일 탭바 — Floating Solid Pill (가시성 100% 보장) ─
- * backdrop-filter 호환성 이슈로 완전 솔리드로 전환.
- * 핑크 윤곽 + 떠 있는 그림자로 "떠 있는 카드" 느낌 유지.
+/* ── 모바일 탭바 — Solid White Pill + Pink Active Pill (시인성 최우선) ─
+ * 사장님 피드백 v3: 핑크 alpha 0.28은 시인성 너무 낮음 → 완전 솔리드 흰색으로 전환.
+ * 컨테이너는 흰 알약(또렷한 그림자) + 활성 탭만 핑크 풀필 박스로 강조.
+ * 토스·당근 패턴 — 익숙하고 안정적이며 콘트라스트 최대.
  */
 .tabbar-glass {
-  /* 브랜드 핫핑크 alpha 0.28 — 핑크 톤은 유지하되 투명도 강하게 */
-  background: rgba(255, 31, 143, 0.28) !important;
-  background-color: rgba(255, 31, 143, 0.28) !important;
-  border: 1px solid rgba(255, 31, 143, 0.55);
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  border: 1.5px solid rgba(0, 0, 0, 0.06);
   box-shadow:
-    0 8px 24px rgba(255, 31, 143, 0.22),
-    0 3px 10px rgba(0, 0, 0, 0.08),
-    0 1px 3px rgba(0, 0, 0, 0.05);
+    0 10px 30px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.04);
 }
 html[data-theme="dark"] .tabbar-glass {
-  background: rgba(255, 31, 143, 0.45) !important;
-  background-color: rgba(255, 31, 143, 0.45) !important;
-  border: 1px solid rgba(255, 31, 143, 0.70);
+  background: #1A1F2A !important;
+  background-color: #1A1F2A !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 8px 24px rgba(255, 31, 143, 0.35),
-    0 3px 10px rgba(0, 0, 0, 0.50),
-    0 1px 3px rgba(0, 0, 0, 0.35);
+    0 10px 30px rgba(0, 0, 0, 0.50),
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.30);
 }
 
 /* ── Shimmer 스켈레톤 (라이트) ─────────────────────────── */
