@@ -53,6 +53,10 @@ export interface TournamentTemplate {
    *  ITM(In The Money) 기준 1~N등 비율 분배. 매장 TV·어드민 전용 노출, 사용자 앱에는 노출 안 됨.
    *  payouts.length 등수만큼. ratio는 [0,1] 합계 1.0. preset='auto'면 ITM 자동 계산. */
   prizeDistribution?: PrizeDistribution;
+  /** 상금풀 분배 정책 — Phase 3 (2026-05-21).
+   *  사용자 요구: "탑 헤비 / 스탠다드 / 균등 + 시상등수 + 참가비 자동 계산".
+   *  설정되지 않으면 기존 prizePool 수동 입력 + computeAutoITM fallback. */
+  payoutStructure?: PayoutStructure;
 }
 
 /** 상금 분배표 정의. */
@@ -62,6 +66,134 @@ export interface PrizeDistribution {
   /** 등수별 비율 (합계 1.0). 1등이 index 0. */
   payouts: Array<{ rank: number; ratio: number }>;
 }
+
+// =====================================================================
+// 상금풀 분배 정책 (Phase 3 — 2026-05-21)
+// =====================================================================
+/**
+ * 사용자 요구 — 사장이 토너 템플릿마다 상금 분배 정책을 설정:
+ *  ① "프라이즈풀 = 수동 입력" or "참가비 × 인원 × 시상비율(%) = 자동 계산"
+ *  ② 시상 등수 (top N) — 정수 or 'auto' (인원의 15%)
+ *  ③ 분배 방식 — top-heavy / standard / flat / custom(직접 편집)
+ *
+ * UI 위치: 토너 템플릿 편집기.
+ * 노출: 매장 어드민 + 매장 TV (사용자 앱 X).
+ */
+export interface PayoutStructure {
+  /** 'manual' = 사장이 prizePool 직접 입력. 'auto-percent' = buyIn × players × payoutPercent% 자동 계산. */
+  mode: 'manual' | 'auto-percent';
+  /** mode='auto-percent'일 때 시상 비율 (0~100). 예: 90이면 10% rake. */
+  payoutPercent?: number;
+  /** 시상 등수. 정수 or 'auto' (인원의 15%로 자동 산출, computeAutoITM과 동일 룰). */
+  itmCount: number | 'auto';
+  /** 분배 방식. 'custom'은 customPercents 사용. */
+  distribution: 'top-heavy' | 'standard' | 'flat' | 'custom';
+  /** distribution='custom'일 때 등수별 % 배열 (합계 100). 예: [50, 30, 20]. */
+  customPercents?: number[];
+}
+
+/**
+ * 프리셋 기준 비율 테이블 (1등~기준등수까지). 합계는 1.0.
+ * 출처: 업계 표준(WSOP / Hendon Mob / Tournament Director Mavens 평균)을 PM이 채택.
+ *  - top-heavy: 1등에 강한 가중 (소규모 펍 토너 시상의 흥행 강조)
+ *  - standard: 토너 중상위 균형 (가장 흔한 분배)
+ *  - flat: 모든 시상자 동일 분배 (예선·새틀라이트 스타일)
+ */
+export const PRESET_PAYOUT_TABLES: Record<'top-heavy' | 'standard' | 'flat', number[]> = {
+  // 1등 60 / 2등 25 / 3등 15 — 4등 이상은 끝 항목 0.5%로 채우고 normalize
+  'top-heavy': [0.60, 0.25, 0.15, 0.08, 0.05, 0.04, 0.02, 0.01],
+  // 1등 50 / 2등 30 / 3등 20 — 4등 이상은 표준 페이드
+  'standard': [0.50, 0.30, 0.20, 0.10, 0.06, 0.04, 0.03, 0.02],
+  // 균등 — itmCount만큼 1/N 분배 (런타임 계산)
+  'flat': [1.0],
+};
+
+/**
+ * ITM 인원 자동 산출 — totalPlayers × 0.15, 최소 1명.
+ * computeAutoITM과 동일 룰. payoutStructure.itmCount='auto'일 때 사용.
+ */
+export function computeAutoItmCount(totalPlayers: number): number {
+  const players = Math.max(1, Math.floor(totalPlayers || 0));
+  return Math.max(1, Math.round(players * 0.15));
+}
+
+/**
+ * 프리셋 기반 등수별 비율 산출.
+ * 반환: [{rank, ratio}] 합계 1.0. 인원수에 맞춰 잘라내거나 패딩 후 normalize.
+ */
+export function computePresetPayouts(
+  distribution: 'top-heavy' | 'standard' | 'flat',
+  itmCount: number,
+): Array<{ rank: number; ratio: number }> {
+  const n = Math.max(1, Math.floor(itmCount));
+  if (distribution === 'flat') {
+    const r = 1 / n;
+    return Array.from({ length: n }, (_, i) => ({ rank: i + 1, ratio: r }));
+  }
+  const base = PRESET_PAYOUT_TABLES[distribution];
+  let ratios: number[];
+  if (n <= base.length) {
+    ratios = base.slice(0, n);
+  } else {
+    // 기본 테이블 + 나머지는 끝쪽 0.5%로 채움
+    ratios = [...base];
+    const tail = 0.005;
+    for (let i = base.length; i < n; i++) ratios.push(tail);
+  }
+  const sum = ratios.reduce((a, b) => a + b, 0);
+  return ratios.map((r, i) => ({ rank: i + 1, ratio: r / sum }));
+}
+
+/**
+ * payoutStructure 기반으로 분배표 계산 — 매장 TV/어드민 통합 진입점.
+ * - 'custom'이면 customPercents를 정규화 후 사용
+ * - 그 외 프리셋은 computePresetPayouts
+ * - itmCount='auto'면 totalPlayers 기준 자동 산출
+ */
+export function computePayoutsFromStructure(
+  ps: PayoutStructure,
+  totalPlayers: number,
+): Array<{ rank: number; ratio: number }> {
+  const itmN = ps.itmCount === 'auto' ? computeAutoItmCount(totalPlayers) : Math.max(1, ps.itmCount);
+  if (ps.distribution === 'custom') {
+    const arr = (ps.customPercents ?? []).slice(0, itmN).map((p) => Math.max(0, p));
+    if (arr.length === 0) return computePresetPayouts('standard', itmN);
+    const sum = arr.reduce((a, b) => a + b, 0) || 1;
+    return arr.map((p, i) => ({ rank: i + 1, ratio: p / sum }));
+  }
+  return computePresetPayouts(ps.distribution, itmN);
+}
+
+/**
+ * 참가비 기반 prizePool 자동 계산 — payoutStructure.mode='auto-percent'일 때.
+ * 예: buyIn 10,000 × 30명 × 90% = 270,000원 (10% 매장 rake)
+ */
+export function computeAutoPrizePool(
+  buyIn: number,
+  totalPlayers: number,
+  payoutPercent: number,
+): number {
+  const bi = Math.max(0, Math.floor(buyIn || 0));
+  const n = Math.max(0, Math.floor(totalPlayers || 0));
+  const pct = Math.min(100, Math.max(0, payoutPercent || 0));
+  return Math.floor((bi * n * pct) / 100);
+}
+
+/** payoutStructure 기본값 — 새 템플릿 생성 시 자동 부착. */
+export const DEFAULT_PAYOUT_STRUCTURE: PayoutStructure = {
+  mode: 'manual',
+  payoutPercent: 90,
+  itmCount: 'auto',
+  distribution: 'standard',
+};
+
+/** 분배 방식 라벨 (UI 표시용). */
+export const DISTRIBUTION_LABELS: Record<PayoutStructure['distribution'], string> = {
+  'top-heavy': '탑 헤비 (1등 몰빵)',
+  'standard': '스탠다드 (일반)',
+  'flat': '균등 분배',
+  'custom': '직접 편집',
+};
 
 /**
  * ITM 자동 계산 — 등록 인원 기준 ITM 인원과 표준 비율 산출.

@@ -16,7 +16,8 @@ import {
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { db } from './firebase';
-import type { BlindLevel, TournamentTemplate } from './templates';
+import type { BlindLevel, PayoutStructure, TournamentTemplate } from './templates';
+import { computeAutoPrizePool } from './templates';
 
 /**
  * LIVE 세션 상태.
@@ -76,6 +77,10 @@ export interface LiveSession {
    *  사장이 도중에 템플릿/blindStructure를 수정해도 영향 없음.
    *  computeTimelinePosition의 진실의 원천. */
   blindStructureLocked?: BlindLevel[];
+  /** 시작 시점에 고정된 상금 분배 정책 스냅샷 — Phase 3 (2026-05-21).
+   *  사장이 도중에 템플릿 분배 정책을 바꿔도 진행 중 세션엔 영향 없음.
+   *  매장 TV 분배표(PrizeDistributionPanel)가 우선 사용. 없으면 computeAutoITM fallback. */
+  payoutStructure?: PayoutStructure;
 }
 
 /** 마지막 레벨 종료 후 자동 정리까지의 그레이스(초). */
@@ -396,7 +401,17 @@ export async function startLiveSession(
     // 권한 없음 등 — popularity 신호만 누락
   });
   const first = template.blindStructure[0];
-  const ref = await addDoc(liveSessionsCol(), {
+
+  // 상금풀 계산 — payoutStructure.mode='auto-percent'면 참가비 × 인원 × 시상비율(%)
+  // 그 외(또는 미지정)는 템플릿 prizePool 그대로.
+  const ps = template.payoutStructure;
+  const finalPrizePool =
+    ps?.mode === 'auto-percent'
+      ? computeAutoPrizePool(template.buyIn, template.totalPlayers, ps.payoutPercent ?? 90)
+      : template.prizePool || 0;
+
+  // 세션 doc — payoutStructure가 있을 때만 필드 부착 (undefined 저장 방지: Firestore 에러 회피)
+  const docData: Record<string, unknown> = {
     storeId,
     storeName,
     templateId: template.id,
@@ -416,14 +431,17 @@ export async function startLiveSession(
     ante: first.ante,
     playersRemaining: template.totalPlayers,
     tablesRemaining: Math.max(1, Math.ceil(template.totalPlayers / 8)),
-    // 상금풀 = 템플릿 prizePool 그대로. 매장 어드민/매장 TV 디스플레이에서만 표시되며
+    // 상금풀 = 위 finalPrizePool. 매장 어드민/매장 TV 디스플레이에서만 표시되며
     // 사용자 모바일 앱(/m/*)에는 어떤 상금 필드도 렌더링하지 않음 (UI 레이어에서 분리).
-    prizePool: template.prizePool || 0,
+    prizePool: finalPrizePool,
     lateRegClosed: false,
     viewerCount: 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  };
+  if (ps) docData.payoutStructure = ps; // 정책 스냅샷 (분배 방식·ITM·custom 비율 등 전부 포함)
+
+  const ref = await addDoc(liveSessionsCol(), docData);
   return ref.id;
 }
 

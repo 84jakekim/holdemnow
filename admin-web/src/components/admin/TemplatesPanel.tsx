@@ -5,6 +5,7 @@ import {
   type TournamentTemplate,
   type TournamentType,
   type BlindLevel,
+  type PayoutStructure,
   subscribeTemplates,
   createTemplate,
   updateTemplate,
@@ -13,6 +14,8 @@ import {
   DEFAULT_BLIND_STRUCTURE,
   DEFAULT_LEVEL_DURATION_SEC,
   DEFAULT_BREAK_DURATION_SEC,
+  DEFAULT_PAYOUT_STRUCTURE,
+  DISTRIBUTION_LABELS,
   BLIND_STEP,
   POSTER_STYLES,
   posterStyleFor,
@@ -21,6 +24,8 @@ import {
   wonToTickets,
   ticketsToWon,
   fmtBuyIn,
+  computePayoutsFromStructure,
+  computeAutoPrizePool,
 } from '@/lib/templates';
 
 interface Props {
@@ -233,6 +238,8 @@ function TemplateEditor({
           posterStyle: initial.posterStyle,
           blindStructure: initial.blindStructure,
           anteEnabled: initialAnteEnabled,
+          // 기존 템플릿에 payoutStructure 없으면 기본값 부착 (UI에서 즉시 편집 가능)
+          payoutStructure: initial.payoutStructure ?? { ...DEFAULT_PAYOUT_STRUCTURE },
         }
       : {
           name: '',
@@ -246,6 +253,7 @@ function TemplateEditor({
           posterStyle: 'poster-dark',
           blindStructure: DEFAULT_BLIND_STRUCTURE.map((b) => ({ ...b })),
           anteEnabled: false,
+          payoutStructure: { ...DEFAULT_PAYOUT_STRUCTURE },
         },
   );
   const [saving, setSaving] = useState(false);
@@ -362,8 +370,19 @@ function TemplateEditor({
     setSaving(true);
     setError(null);
     try {
+      // payoutStructure.mode='auto-percent'면 prizePool도 자동 계산값으로 저장
+      // (매장 TV/LivePanel은 session.prizePool을 직접 읽으므로 사전 계산해서 박아둠).
+      const finalPrizePool =
+        form.payoutStructure?.mode === 'auto-percent'
+          ? computeAutoPrizePool(
+              form.buyIn,
+              form.totalPlayers,
+              form.payoutStructure?.payoutPercent ?? 90,
+            )
+          : form.prizePool;
       await onSave({
         ...form,
+        prizePool: finalPrizePool,
         // 게런티/상금풀은 form 값 그대로 저장 — 매장 어드민/매장 TV 디스플레이에서만 노출됨.
         // 사용자 모바일 앱(/m/*)은 prizePool/guarantee 필드 자체를 화면에 표기하지 않으므로 분리 안전.
         blindStructure: form.blindStructure.map((b, i) => {
@@ -467,8 +486,19 @@ function TemplateEditor({
                 type="number"
                 min={0}
                 step={1}
-                className="form-input font-mono pr-7"
-                value={wonToTickets(form.prizePool)}
+                disabled={form.payoutStructure?.mode === 'auto-percent'}
+                className="form-input font-mono pr-7 disabled:opacity-60 disabled:bg-gray-50"
+                value={
+                  form.payoutStructure?.mode === 'auto-percent'
+                    ? wonToTickets(
+                        computeAutoPrizePool(
+                          form.buyIn,
+                          form.totalPlayers,
+                          form.payoutStructure?.payoutPercent ?? 90,
+                        ),
+                      )
+                    : wonToTickets(form.prizePool)
+                }
                 onChange={(e) => update('prizePool', ticketsToWon(parseInt(e.target.value) || 0))}
               />
               <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
@@ -476,7 +506,11 @@ function TemplateEditor({
               </span>
             </div>
             <div className="text-[10px] text-gray-400 mt-1 font-mono">
-              ≈ ₩{form.prizePool.toLocaleString()} · 매장 TV에서 PRIZE POOL로 표시
+              {form.payoutStructure?.mode === 'auto-percent' ? (
+                <>🔄 자동 계산 — 아래 분배 정책에서 시상 비율 조정</>
+              ) : (
+                <>≈ ₩{form.prizePool.toLocaleString()} · 매장 TV에서 PRIZE POOL로 표시</>
+              )}
             </div>
           </Field>
         </div>
@@ -556,6 +590,15 @@ function TemplateEditor({
             />
           </button>
         </div>
+
+        {/* ─── 상금 분배 정책 (Phase 3 — 2026-05-21) ──────────────────
+            매장 어드민/TV 전용. 사용자 모바일 앱에는 어떤 상금/분배 정보도 노출되지 않음. */}
+        <PayoutStructureEditor
+          structure={form.payoutStructure ?? DEFAULT_PAYOUT_STRUCTURE}
+          buyIn={form.buyIn}
+          totalPlayers={form.totalPlayers}
+          onChange={(next) => update('payoutStructure', next)}
+        />
 
         {/* 블라인드 구조 */}
         <div>
@@ -785,6 +828,280 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{label}</div>
       {children}
+    </div>
+  );
+}
+
+// =====================================================================
+// 상금 분배 정책 편집기 (Phase 3 — 2026-05-21)
+// =====================================================================
+/**
+ * 사용자 요구:
+ *  - 프라이즈풀 = 수동 입력 vs 참가비 × 인원 × 시상비율(%) 자동 계산
+ *  - 시상 등수 (top N) — 정수 or 자동
+ *  - 분배 방식 — 탑헤비 / 스탠다드 / 균등 / 직접편집 4개 프리셋
+ *  - 직접편집 시 등수별 % 자유 조정 + 합계 100% 검증
+ *  - 실시간 분배표 미리보기 (등수 · 비율 · 금액)
+ *
+ * 노출: 매장 어드민/매장 TV. 사용자 앱 X (정책 확립).
+ */
+function PayoutStructureEditor({
+  structure,
+  buyIn,
+  totalPlayers,
+  onChange,
+}: {
+  structure: PayoutStructure;
+  buyIn: number;
+  totalPlayers: number;
+  onChange: (next: PayoutStructure) => void;
+}) {
+  const update = <K extends keyof PayoutStructure>(k: K, v: PayoutStructure[K]) => {
+    onChange({ ...structure, [k]: v });
+  };
+
+  // 자동 계산 prizePool — 미리보기/표 계산에 사용
+  const computedPrize =
+    structure.mode === 'auto-percent'
+      ? computeAutoPrizePool(buyIn, totalPlayers, structure.payoutPercent ?? 90)
+      : 0;
+
+  // 분배표 계산 — 사장이 변경할 때마다 즉시 업데이트
+  const payouts = computePayoutsFromStructure(structure, totalPlayers);
+  const itmN = payouts.length;
+  const displayPrize = structure.mode === 'auto-percent' ? computedPrize : 0; // 표 우측 금액 표시용 (수동 모드는 미리보기 비율만)
+
+  // 분배 방식 변경 시: custom→다른 프리셋으로 가면 customPercents 비움; 다른→custom이면 현재 프리셋 비율을 seed
+  const handleDistChange = (next: PayoutStructure['distribution']) => {
+    if (next === 'custom') {
+      const seed = payouts.map((p) => Math.round(p.ratio * 1000) / 10); // % 1자리
+      onChange({ ...structure, distribution: 'custom', customPercents: seed });
+    } else {
+      onChange({ ...structure, distribution: next, customPercents: undefined });
+    }
+  };
+
+  // ITM 인원 변경 — auto/수동 토글
+  const handleItmAuto = () => {
+    onChange({ ...structure, itmCount: 'auto', customPercents: undefined });
+  };
+  const handleItmManual = (n: number) => {
+    const clamped = Math.max(1, Math.min(99, Math.floor(n)));
+    onChange({ ...structure, itmCount: clamped });
+  };
+
+  // custom 등수별 % 변경
+  const updateCustomPercent = (idx: number, v: number) => {
+    if (structure.distribution !== 'custom') return;
+    const next = [...(structure.customPercents ?? payouts.map((p) => p.ratio * 100))];
+    next[idx] = Math.max(0, Math.min(100, v));
+    onChange({ ...structure, customPercents: next });
+  };
+
+  // custom 모드일 때 합계 검증
+  const customSum =
+    structure.distribution === 'custom'
+      ? (structure.customPercents ?? []).slice(0, itmN).reduce((a, b) => a + (b || 0), 0)
+      : 100;
+  const customSumOff = structure.distribution === 'custom' && Math.abs(customSum - 100) > 0.5;
+
+  return (
+    <div className="bg-white border-[1.5px] border-gray-200 rounded-xl p-3.5 space-y-3">
+      <div>
+        <div className="text-xs font-extrabold text-gray-900 mb-0.5">💰 상금 분배 정책</div>
+        <div className="text-[10px] text-gray-500 leading-relaxed">
+          매장 TV·어드민에만 노출. 사용자 앱에는 어떤 상금 정보도 표시 안 됨.
+        </div>
+      </div>
+
+      {/* ① 프라이즈풀 모드 — 수동 vs 자동 */}
+      <div>
+        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">
+          ① 프라이즈풀 결정 방식
+        </div>
+        <div className="flex gap-1">
+          {(['manual', 'auto-percent'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => update('mode', m)}
+              className="flex-1 py-2 rounded text-[11px] font-bold border-[1.5px] transition"
+              style={{
+                background: structure.mode === m ? '#111' : '#fff',
+                color: structure.mode === m ? '#fff' : '#111',
+                borderColor: structure.mode === m ? '#111' : '#eaeaea',
+              }}
+            >
+              {m === 'manual' ? '수동 입력 (위 상금풀)' : '참가비 기반 자동 계산'}
+            </button>
+          ))}
+        </div>
+        {structure.mode === 'auto-percent' && (
+          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2 items-end">
+            <Field label="시상 비율 (% — 나머지는 매장 rake)">
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  className="form-input font-mono pr-7"
+                  value={structure.payoutPercent ?? 90}
+                  onChange={(e) =>
+                    update('payoutPercent', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))
+                  }
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
+                  %
+                </span>
+              </div>
+            </Field>
+            <div className="bg-gray-900 text-white rounded-lg px-3 py-2 text-right">
+              <div className="text-[9px] font-bold tracking-widest text-gray-400">자동 계산</div>
+              <div className="font-mono text-sm font-extrabold">
+                ₩{computedPrize.toLocaleString()}
+              </div>
+              <div className="text-[9px] text-gray-400 font-mono">
+                {wonToTickets(buyIn)}T × {totalPlayers}명 × {structure.payoutPercent ?? 90}%
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ② 시상 등수 */}
+      <div>
+        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">
+          ② 시상 등수 (ITM, In The Money)
+        </div>
+        <div className="flex gap-2 items-center">
+          <button
+            type="button"
+            onClick={handleItmAuto}
+            className="px-3 py-2 rounded text-[11px] font-bold border-[1.5px] transition"
+            style={{
+              background: structure.itmCount === 'auto' ? '#111' : '#fff',
+              color: structure.itmCount === 'auto' ? '#fff' : '#111',
+              borderColor: structure.itmCount === 'auto' ? '#111' : '#eaeaea',
+            }}
+          >
+            자동 (인원의 15%)
+          </button>
+          <span className="text-[10px] text-gray-400">또는</span>
+          <div className="relative flex-1 max-w-[120px]">
+            <input
+              type="number"
+              min={1}
+              max={99}
+              step={1}
+              className="form-input font-mono pr-12"
+              value={typeof structure.itmCount === 'number' ? structure.itmCount : ''}
+              placeholder="직접"
+              onChange={(e) => {
+                const n = parseInt(e.target.value);
+                if (!isNaN(n) && n > 0) handleItmManual(n);
+              }}
+            />
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 pointer-events-none">
+              등까지
+            </span>
+          </div>
+          <div className="text-[10px] text-gray-500 font-mono">→ {itmN}명 시상</div>
+        </div>
+      </div>
+
+      {/* ③ 분배 방식 프리셋 */}
+      <div>
+        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">
+          ③ 분배 방식
+        </div>
+        <div className="grid grid-cols-4 gap-1">
+          {(['top-heavy', 'standard', 'flat', 'custom'] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => handleDistChange(d)}
+              className="py-2 rounded text-[10px] font-bold border-[1.5px] transition leading-tight"
+              style={{
+                background: structure.distribution === d ? '#FF1F8F' : '#fff',
+                color: structure.distribution === d ? '#fff' : '#111',
+                borderColor: structure.distribution === d ? '#FF1F8F' : '#eaeaea',
+              }}
+              title={DISTRIBUTION_LABELS[d]}
+            >
+              {d === 'top-heavy' ? '탑 헤비' : d === 'standard' ? '스탠다드' : d === 'flat' ? '균등' : '직접 편집'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ④ 분배표 미리보기 + custom 편집 */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-[10px] font-bold text-gray-500 tracking-wider">
+            ④ 분배표 미리보기 ({itmN}등까지)
+          </div>
+          {customSumOff && (
+            <div className="text-[10px] font-bold text-red-600">
+              ⚠ 합계 {customSum.toFixed(1)}% (100% 필요)
+            </div>
+          )}
+        </div>
+        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+          <div className="grid grid-cols-[40px_1fr_1fr] text-[10px] font-bold text-gray-500 tracking-wider px-2 py-1.5 border-b border-gray-200 bg-white">
+            <div>등수</div>
+            <div>비율</div>
+            <div className="text-right">금액 (자동)</div>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            {payouts.map((p, idx) => {
+              const ratioPct = p.ratio * 100;
+              const won = Math.round(displayPrize * p.ratio);
+              return (
+                <div
+                  key={p.rank}
+                  className="grid grid-cols-[40px_1fr_1fr] items-center px-2 py-1 text-[11px] border-b border-gray-100 last:border-b-0"
+                >
+                  <div className="font-mono font-extrabold text-gray-900">
+                    {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `${p.rank}`}
+                  </div>
+                  {structure.distribution === 'custom' ? (
+                    <div className="relative max-w-[100px]">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        className="form-input font-mono text-xs pr-6"
+                        value={
+                          structure.customPercents?.[idx] != null
+                            ? structure.customPercents[idx]
+                            : Math.round(ratioPct * 10) / 10
+                        }
+                        onChange={(e) => updateCustomPercent(idx, parseFloat(e.target.value) || 0)}
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 pointer-events-none">
+                        %
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="font-mono text-gray-700">{ratioPct.toFixed(1)}%</div>
+                  )}
+                  <div className="text-right font-mono text-gray-900 font-bold">
+                    {displayPrize > 0 ? `₩${won.toLocaleString()}` : '—'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {structure.mode === 'manual' && (
+          <div className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+            💡 수동 모드는 미리보기 금액 표시 X (위 상금풀 입력값 × 비율로 LIVE 시점에 계산됨).
+            <br />참가비 × 인원 자동 계산을 원하면 ① "참가비 기반 자동 계산" 선택.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

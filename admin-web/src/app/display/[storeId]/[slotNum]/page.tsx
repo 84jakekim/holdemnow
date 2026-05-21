@@ -19,7 +19,7 @@ import {
   buildBackgroundCss,
 } from '@/lib/timerDisplay';
 import { playCountdownBeep, playFinalBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
-import { computeAutoITM } from '@/lib/templates';
+import { computeAutoITM, computePayoutsFromStructure } from '@/lib/templates';
 
 interface StoreData {
   name: string;
@@ -830,13 +830,13 @@ function Stat({
 }
 
 /**
- * 상금 분배표 — TV 화면 좌/우 사이드에 노출 (Phase 2).
+ * 상금 분배표 — TV 화면 좌/우 사이드에 노출 (Phase 2 + Phase 3).
  *
- * 데이터 소스:
- *  - 세션의 prizePool이 0이면 표시 안 함
- *  - 향후 LiveSession.prizeDistribution 필드가 박히면 그걸 우선 사용
- *  - 지금은 totalPlayers 기준 computeAutoITM으로 자동 계산
+ * 데이터 소스 우선순위:
+ *  ① session.payoutStructure (Phase 3 — 사장이 템플릿에 설정한 분배 정책 스냅샷)
+ *  ② fallback: totalPlayers 기준 computeAutoITM (Phase 2)
  *
+ * prizePool이 0이면 표시 안 함.
  * 위치는 display.prizeDistributionLayout='left'|'right' 결정. 'hidden'이면 렌더 안 함.
  */
 function PrizeDistributionPanel({
@@ -849,8 +849,11 @@ function PrizeDistributionPanel({
   side: 'left' | 'right';
 }) {
   if (session.prizePool <= 0) return null;
-  const itm = computeAutoITM(session.totalPlayers);
-  const rows = itm.slice(0, 8); // 8등까지만 노출 (그 이상은 화면 공간 부족)
+  // Phase 3 우선: 세션에 박힌 분배 정책 사용. 없으면 Phase 2 auto ITM fallback.
+  const payouts = session.payoutStructure
+    ? computePayoutsFromStructure(session.payoutStructure, session.totalPlayers)
+    : computeAutoITM(session.totalPlayers);
+  const rows = payouts.slice(0, 8); // 8등까지만 노출 (그 이상은 화면 공간 부족)
   return (
     <div
       className="fixed top-1/2 -translate-y-1/2 z-10 rounded-2xl backdrop-blur-sm border-2"
@@ -899,7 +902,7 @@ function PrizeDistributionPanel({
         className="px-3 py-1.5 text-[9px] tracking-widest text-center border-t"
         style={{ color: display.textColor, opacity: 0.5, borderColor: 'rgba(255,255,255,0.10)' }}
       >
-        ITM {itm.length}명 · 자동 계산
+        ITM {payouts.length}명 · {session.payoutStructure ? '템플릿 정책' : '자동 계산'}
       </div>
     </div>
   );
