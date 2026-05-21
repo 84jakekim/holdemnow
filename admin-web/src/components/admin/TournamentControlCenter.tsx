@@ -888,6 +888,42 @@ function TvCastingPane({
     window.open(url, '_blank', 'noopener');
   };
 
+  const handleAddSlot = async () => {
+    try {
+      await addSlot(storeId);
+    } catch (e) {
+      console.error('[addSlot] failed', e);
+      alert(`TV 추가 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleSetSession = async (slotNum: number, sessionId: string | null) => {
+    try {
+      await setSlotSession(storeId, slotNum, sessionId);
+    } catch (e) {
+      console.error('[setSlotSession] failed', e);
+      alert(`송출 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleRename = async (slotNum: number, name: string) => {
+    try {
+      await renameSlot(storeId, slotNum, name);
+    } catch (e) {
+      console.error('[renameSlot] failed', e);
+      alert(`이름 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleRemove = async (slotNum: number) => {
+    try {
+      await removeSlot(storeId, slotNum);
+    } catch (e) {
+      console.error('[removeSlot] failed', e);
+      alert(`TV 삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between mb-1">
@@ -895,7 +931,7 @@ function TvCastingPane({
           매장 TV {slots.length}개
         </div>
         <button
-          onClick={() => addSlot(storeId)}
+          onClick={handleAddSlot}
           className="text-[11px] font-bold rounded-md px-2 py-1"
           style={{ background: '#111', color: '#fff' }}
         >
@@ -948,7 +984,7 @@ function TvCastingPane({
                 {selected ? (
                   isSelectedAssigned ? (
                     <button
-                      onClick={() => setSlotSession(storeId, s.slotNum, null)}
+                      onClick={() => handleSetSession(s.slotNum, null)}
                       className="flex-1 text-[10px] font-bold rounded px-2 py-1.5"
                       style={{ background: 'rgba(239,68,68,0.10)', color: '#B91C1C', border: '1px solid rgba(239,68,68,0.30)' }}
                     >
@@ -956,7 +992,7 @@ function TvCastingPane({
                     </button>
                   ) : (
                     <button
-                      onClick={() => setSlotSession(storeId, s.slotNum, selected.id)}
+                      onClick={() => handleSetSession(s.slotNum, selected.id)}
                       className="flex-1 text-[10px] font-bold rounded px-2 py-1.5"
                       style={{ background: '#FF1F8F', color: '#fff' }}
                     >
@@ -971,7 +1007,7 @@ function TvCastingPane({
                 <button
                   onClick={() => {
                     const name = window.prompt('TV 이름', s.name ?? `${s.slotNum}번 TV`);
-                    if (name && name.trim()) renameSlot(storeId, s.slotNum, name.trim());
+                    if (name && name.trim()) handleRename(s.slotNum, name.trim());
                   }}
                   className="text-[10px] font-bold rounded px-2 py-1.5"
                   style={{ background: 'var(--surface-1)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
@@ -979,7 +1015,7 @@ function TvCastingPane({
                   ✎
                 </button>
                 <button
-                  onClick={() => { if (window.confirm(`${s.slotNum}번 TV 삭제?`)) removeSlot(storeId, s.slotNum); }}
+                  onClick={() => { if (window.confirm(`${s.slotNum}번 TV 삭제?`)) handleRemove(s.slotNum); }}
                   className="text-[10px] font-bold rounded px-2 py-1.5"
                   style={{ background: 'var(--surface-1)', color: '#B91C1C', border: '1px solid var(--border)' }}
                 >

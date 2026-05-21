@@ -88,7 +88,7 @@ service cloud.firestore {
 
       match /displaySlots/{slotNum} {
         allow read: if true;                             // TV 디스플레이는 URL만으로 접근 가능
-        allow write: if isStoreOwnerOrMember(storeId);
+        allow write: if isStoreOwnerOrMember(storeId) || isPlatformAdmin();
       }
 
       // 매장별 토너 타이머 디스플레이 prefs (배경/색/공지/스폰서) —
