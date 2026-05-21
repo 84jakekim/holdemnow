@@ -114,20 +114,16 @@ service cloud.firestore {
         allow write: if true;
       }
 
-      // 매장 데일리 홍보 "오늘의 소식" — 매장 owner/member만 write, 누구나 read.
-      // pending 매장은 글 작성 차단 — 본사 승인 후에만 가능.
-      // status 필드 없는 기존 매장은 'active'로 간주 (하위호환).
+      // 매장 데일리 홍보 "오늘의 소식" — 매장 owner/member/platform_admin만 write, 누구나 read.
+      // pending 매장이어도 owner는 미리 글 작성 가능 — 매장이 사용자에게 노출 안 되는 동안
+      // 글도 마찬가지로 노출되지 않으며, status=active로 전환되는 순간 함께 노출됨.
+      // 이는 사장 입장에서 가입 직후부터 운영 데이터를 입력해두는 데 필수.
       // collectionGroup('posts') 쿼리는 아래 별도 와일드카드 규칙으로 허용.
       match /posts/{postId} {
         allow read: if true;
         allow create: if isSignedIn()
-          && (isStoreOwner(storeId) || isStoreMember(storeId))
-          && request.resource.data.authorUid == request.auth.uid
-          && (
-            isPlatformAdmin()
-            || get(/databases/$(database)/documents/stores/$(storeId)).data.get('status', 'active') == 'active'
-            || get(/databases/$(database)/documents/stores/$(storeId)).data.get('isDemo', false) == true
-          );
+          && (isStoreOwner(storeId) || isStoreMember(storeId) || isPlatformAdmin())
+          && request.resource.data.authorUid == request.auth.uid;
         allow update, delete: if isSignedIn()
           && (isStoreOwner(storeId) || isStoreMember(storeId) || isPlatformAdmin());
       }

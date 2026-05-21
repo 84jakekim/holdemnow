@@ -57,9 +57,10 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
   const isDemo = (store as unknown as { isDemo?: boolean } | null | undefined)?.isDemo === true;
   const myUid = authState.user.uid;
   const isOwner = storeOwnerUid != null && storeOwnerUid === myUid;
-  // rules 통과 조건: isSignedIn && (owner || member) && authorUid=본인 && (platformAdmin || active || isDemo)
-  // platform_admin은 매장 status 무관하게 통과 — 본사 어드민이 본인 pending 매장에 글 쓰는 케이스 지원.
-  const canWrite = isPlatformAdmin || isDemo || storeStatus === 'active';
+  // 새 정책(rules 동기화 2026-05-21): owner/member/platform_admin이면 매장 status 무관하게
+  // 글 작성 가능. pending 매장은 어차피 사용자에게 노출 안 되므로 미리 작성해두고 활성화
+  // 후 자동 노출되는 게 사장 친화적.
+  const canWrite = isPlatformAdmin || isOwner || isDemo || storeStatus === 'active';
 
   const activateStore = async () => {
     if (!isPlatformAdmin) return;
@@ -80,13 +81,15 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
   // 상태별 안내 메시지
   const statusBanner = (() => {
     if (!store) return null;
-    // platform_admin이 pending 매장에 글을 쓸 수 있도록 풀어주되, 일반 사용자에게는 아직 노출되지 않음을 명시.
-    if (isPlatformAdmin && storeStatus === 'pending') {
+    // owner/platform_admin이 pending 매장에 글을 쓸 수 있도록 풀어주되, 일반 사용자에게는 아직 노출되지 않음을 명시.
+    if ((isOwner || isPlatformAdmin) && storeStatus === 'pending') {
       return {
         tone: 'amber' as const,
-        icon: '👑',
-        title: '본사 권한 — 작성 가능 (사용자에겐 아직 노출 안 됨)',
-        msg: '이 매장은 status=pending이라 일반 사용자에게 매장·소식이 보이지 않습니다. 활성화 후 즉시 노출됩니다.',
+        icon: isPlatformAdmin ? '👑' : '✍️',
+        title: isPlatformAdmin
+          ? '본사 권한 — 작성 가능 (사용자에겐 아직 노출 안 됨)'
+          : '승인 대기 중 — 미리 작성 가능 (활성화 후 자동 노출)',
+        msg: '이 매장은 status=pending이라 일반 사용자에게 매장·소식이 보이지 않습니다. 활성화되는 순간 즉시 노출됩니다.',
       };
     }
     if (canWrite) return null;

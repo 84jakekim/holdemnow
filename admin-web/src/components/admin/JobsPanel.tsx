@@ -117,15 +117,17 @@ export default function JobsPanel({ storeId, storeName }: JobsPanelProps) {
     }
     setSaving(true);
     try {
-      const wage = {
+      // Firestore는 undefined를 허용하지 않으므로 키 자체를 조건부로 생성.
+      const wage: { type: typeof form.wageType; amount?: number; currency: 'KRW' } = {
         type: form.wageType,
-        amount: form.wageType !== 'negotiable' && form.wageAmount ? Number(form.wageAmount) : undefined,
-        currency: 'KRW' as const,
+        currency: 'KRW',
       };
-      const contact = {
-        phone: form.phone || undefined,
-        kakaoOpenChat: form.kakaoOpenChat || undefined,
-      };
+      if (form.wageType !== 'negotiable' && form.wageAmount) {
+        wage.amount = Number(form.wageAmount);
+      }
+      const contact: { phone?: string; kakaoOpenChat?: string } = {};
+      if (form.phone) contact.phone = form.phone;
+      if (form.kakaoOpenChat) contact.kakaoOpenChat = form.kakaoOpenChat;
       const expiresAt = new Date(Date.now() + form.expiresInDays * 86_400_000);
       if (modalMode === 'create') {
         await createJob({
