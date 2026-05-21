@@ -280,9 +280,12 @@ function sanitizeHeadline(raw: string | undefined): string {
   if (!trimmed) throw new PostGuardError('empty', '카드에 노출될 한 줄을 입력해주세요');
   const mod = moderateText(trimmed, { maxLength: HEADLINE_MAX_LENGTH * 4 }); // 길이 자체는 grapheme로 별도
   if (!mod.ok) {
+    const detail = mod.matchedWord
+      ? `카드 노출 문구에 사용할 수 없는 표현이 있어요: "${mod.matchedWord}"`
+      : (mod.message ?? '카드 노출 문구에 사용할 수 없는 표현이 있어요');
     throw new PostGuardError(
       mod.reason === 'banned_word' ? 'banned' : 'length',
-      mod.message ?? '카드 노출 문구에 사용할 수 없는 표현이 있어요',
+      detail,
     );
   }
   const linkCheck = checkLinkWhitelist(trimmed);
@@ -336,9 +339,12 @@ export async function createStorePost(input: {
   // 1) 욕설·도박·환금 키워드 + 길이 + 도배
   const mod = moderateText(trimmed, { maxLength: POST_MAX_LENGTH });
   if (!mod.ok) {
+    const detail = mod.matchedWord
+      ? `본문에 사용할 수 없는 표현이 있어요: "${mod.matchedWord}"`
+      : (mod.message ?? '작성할 수 없는 내용이에요');
     throw new PostGuardError(
       mod.reason === 'banned_word' ? 'banned' : 'length',
-      mod.message ?? '작성할 수 없는 내용이에요',
+      detail,
     );
   }
   // 2) 외부 링크 whitelist
