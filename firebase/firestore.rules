@@ -375,7 +375,16 @@ service cloud.firestore {
           || (request.resource.data.type == 'usedListing'
             && isStoreOwner(request.resource.data.storeId))
         );
-      allow update, delete: if isSignedIn()
+      // update — 작성자 본인만 본문 변경 가능. authorUid·type 변경 차단으로
+      // 권한 escalation 방어(다른 사람 uid로 바꿔치기 금지). platform_admin은
+      // 모더레이션(hidden 토글 등) 목적으로 자유 update 허용.
+      allow update: if isSignedIn() && (
+        (resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.type == resource.data.type)
+        || isPlatformAdmin()
+      );
+      allow delete: if isSignedIn()
         && (resource.data.authorUid == request.auth.uid || isPlatformAdmin());
     }
 
