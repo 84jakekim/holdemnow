@@ -40,7 +40,7 @@ function tryResume(ctx: AudioContext): void {
   }
 }
 
-/** 짧은 비프 — 카운트다운 (10~2초). 700Hz 150ms. */
+/** 짧은 비프 — 카운트다운 (10~2초). 700Hz 150ms. 볼륨 3배 (0.3→0.9). */
 export function playCountdownBeep(): void {
   const ctx = getCtx();
   if (!ctx) return;
@@ -52,7 +52,7 @@ export function playCountdownBeep(): void {
     osc.type = 'sine';
     osc.frequency.value = 700;
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+    gain.gain.linearRampToValueAtTime(0.9, ctx.currentTime + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -63,7 +63,7 @@ export function playCountdownBeep(): void {
   }
 }
 
-/** 1초/0초 마지막 비프 — 더 높고 길게. 900Hz 250ms. */
+/** 1초/0초 마지막 비프 — 더 높고 길게. 900Hz 250ms. 볼륨 3배 (0.4→1.0 max). */
 export function playFinalBeep(): void {
   const ctx = getCtx();
   if (!ctx) return;
@@ -75,7 +75,7 @@ export function playFinalBeep(): void {
     osc.type = 'sine';
     osc.frequency.value = 900;
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.01);
+    gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -108,7 +108,8 @@ function playNote(ctx: AudioContext, freq: number, startAt: number, duration: nu
   osc.type = 'triangle'; // sine보다 살짝 풍부한 톤
   osc.frequency.value = freq;
   gain.gain.setValueAtTime(0, startAt);
-  gain.gain.linearRampToValueAtTime(0.35, startAt + 0.02);
+  // 블라인드업 — 볼륨 3배 (0.35 → 1.0 max, 클리핑 방지로 1.0 캡)
+  gain.gain.linearRampToValueAtTime(1.0, startAt + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
   osc.connect(gain);
   gain.connect(ctx.destination);
