@@ -7,33 +7,26 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'HoldemNow',
-    short_name: 'HoldemNow',
-    description: '전국 홀덤펍 · 토너먼트 디스커버리 플랫폼',
+    name: 'Pink Rabbit',
+    short_name: 'Pink Rabbit',
+    description: '내 주변 홀덤펍 정보는 Pink Rabbit · 전국 홀덤펍·토너먼트 디스커버리',
     start_url: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    // Midnight Felt 디자인 시스템 (브라우저 상단바, 스플래시 배경)
+    // 스플래시·상태바 배경 — Pink Rabbit 다크 톤
     background_color: '#0A0E0C',
     theme_color: '#0A0E0C',
     lang: 'ko',
     categories: ['entertainment', 'lifestyle', 'social'],
     icons: [
-      // 신규 통합 로고 SVG — 모든 sizes 대응 + maskable 겸용
+      // Pink Rabbit 메인 로고 (PNG) — 안드로이드/iOS 홈 아이콘
       {
-        src: '/top_right_logo.svg',
-        sizes: 'any',
-        type: 'image/svg+xml',
+        src: '/logo.png',
+        sizes: '512x512',
+        type: 'image/png',
         purpose: 'any',
       },
-      {
-        src: '/top_right_logo.svg',
-        sizes: 'any',
-        type: 'image/svg+xml',
-        purpose: 'maskable',
-      },
-      // 폴백 PNG — 일부 안드로이드 구버전이 SVG 미지원 시 사용
       {
         src: '/icon-192.png',
         sizes: '192x192',
@@ -46,22 +39,28 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
         purpose: 'any',
       },
+      // maskable — Android 어댑티브 아이콘
+      {
+        src: '/icon-maskable-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
     ],
-    // 모바일 앱에서 자주 가는 경로를 long-press 빠른 진입으로 제공
     shortcuts: [
       {
         name: '지금 LIVE',
         short_name: 'LIVE',
         description: '진행 중인 LIVE 토너먼트',
         url: '/m',
-        icons: [{ src: '/top_right_logo.svg', sizes: 'any', type: 'image/svg+xml' }],
+        icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
       },
       {
         name: '지도 탐색',
         short_name: '탐색',
         description: '주변 매장 지도 보기',
         url: '/m/discover',
-        icons: [{ src: '/top_right_logo.svg', sizes: 'any', type: 'image/svg+xml' }],
+        icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
       },
     ],
   };

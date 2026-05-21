@@ -5,6 +5,7 @@ import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   type StorePost,
+  type PostCardColor,
   subscribeStorePostsAll,
   createStorePost,
   updateStorePost,
@@ -12,7 +13,14 @@ import {
   uploadPostImage,
   deletePostImageByUrl,
   MAX_POST_IMAGES,
+  HEADLINE_MAX_LENGTH,
+  POST_CARD_COLORS,
+  POST_CARD_EMOJIS,
+  graphemeLength,
+  truncateGraphemes,
 } from '@/lib/posts';
+import { CARD_STYLES, resolveCardVisual } from '@/lib/postCardStyle';
+import { formatRelativeKo } from '@/lib/relativeTime';
 import { useAuth, useStoreDoc } from '@/lib/hooks';
 
 interface Props {
@@ -264,6 +272,72 @@ function QuickTemplateBtn({ label, onClick }: { label: string; onClick: () => vo
   );
 }
 
+function LivePreviewCard({
+  headline,
+  cardColor,
+  cardEmoji,
+  storeName,
+}: {
+  headline: string;
+  cardColor: PostCardColor;
+  cardEmoji: string;
+  storeName: string;
+}) {
+  const { style, emoji } = resolveCardVisual({ cardColor, cardEmoji });
+  const oneLiner = headline.trim() || '카드에 노출될 한 줄을 입력해주세요';
+  return (
+    <div
+      className="rounded-2xl"
+      style={{
+        background: style.surface,
+        border: `1px solid ${style.border}`,
+        padding: '14px 14px 12px',
+        maxWidth: 280,
+      }}
+    >
+      <div className="flex items-start gap-2 mb-2.5">
+        {emoji && (
+          <div
+            className="flex-shrink-0 flex items-center justify-center rounded-lg"
+            style={{
+              width: 28,
+              height: 28,
+              background: style.accent,
+              fontSize: 15,
+            }}
+          >
+            <span>{emoji}</span>
+          </div>
+        )}
+        <div
+          className="text-[14px] font-extrabold leading-[1.4] flex-1"
+          style={{
+            color: style.textPrimary,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            minHeight: 40,
+          }}
+        >
+          {oneLiner}
+        </div>
+      </div>
+      <div
+        className="pt-2 mt-1 flex items-center justify-between gap-1.5"
+        style={{ borderTop: `1px solid ${style.border}` }}
+      >
+        <div className="text-[11px] font-semibold truncate" style={{ color: style.textSecondary }}>
+          📍 {storeName}
+        </div>
+        <div className="text-[10px] font-medium" style={{ color: style.textSecondary, opacity: 0.85 }}>
+          방금 전
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PostRow({
   post,
   storeId,
@@ -281,6 +355,9 @@ function PostRow({
   const isHidden = post.status === 'hidden';
   const isActive = !isExpired && !isHidden;
   const hoursLeft = isActive && expMs > now ? Math.max(0, Math.floor((expMs - now) / (60 * 60 * 1000))) : 0;
+  const relative = formatRelativeKo(post.createdAt, now);
+  const { style: rowStyle, emoji: rowEmoji } = resolveCardVisual(post);
+  const displayHeadline = (post.headline ?? '').trim() || (post.body || '').split('\n')[0]?.trim() || '(제목 없음)';
 
   const remove = async () => {
     if (!window.confirm('이 소식을 삭제할까요? 첨부 이미지도 같이 삭제됩니다.')) return;
@@ -301,18 +378,27 @@ function PostRow({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={post.imageUrls[0]} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
       ) : (
-        <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center text-xl flex-shrink-0">📝</div>
+        <div
+          className="w-16 h-16 rounded-lg flex items-center justify-center text-xl flex-shrink-0"
+          style={{ background: rowStyle.surface, border: `1px solid ${rowStyle.border}` }}
+        >
+          {rowEmoji || '📝'}
+        </div>
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className={`text-[10px] font-extrabold tracking-wider px-2 py-0.5 rounded ${isActive ? 'bg-emerald-100 text-emerald-800' : isExpired ? 'bg-gray-200 text-gray-600' : 'bg-amber-100 text-amber-800'}`}>
             {isActive ? `노출 중 · ${hoursLeft}h 남음` : isExpired ? '만료' : '숨김'}
           </span>
+          {relative && (
+            <span className="text-[10px] font-semibold text-gray-500">· {relative}</span>
+          )}
           {post.eventTags.slice(0, 4).map((t) => (
             <span key={t} className="text-[10px] font-bold bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded">#{t}</span>
           ))}
         </div>
-        <div className="text-sm text-gray-900 line-clamp-3 whitespace-pre-wrap leading-relaxed">{post.body}</div>
+        <div className="text-sm font-extrabold text-gray-900 line-clamp-1 leading-snug">{displayHeadline}</div>
+        <div className="text-[12px] text-gray-600 line-clamp-2 whitespace-pre-wrap leading-relaxed mt-0.5">{post.body}</div>
         <div className="text-[11px] text-gray-400 mt-1">
           이미지 {post.imageUrls.length}장
           {post.ctaUrl ? ' · 🔗 링크' : ''}
@@ -346,7 +432,12 @@ function PostEditModal({
   onClose: () => void;
 }) {
   const isNew = post === null;
+  // headline 우선, 없으면 body 첫 줄을 초기값으로 (백워드 호환).
+  const initialHeadline = post?.headline ?? (post?.body ?? '').split('\n')[0]?.trim() ?? '';
+  const [headline, setHeadline] = useState(truncateGraphemes(initialHeadline, HEADLINE_MAX_LENGTH));
   const [body, setBody] = useState(post?.body ?? '');
+  const [cardColor, setCardColor] = useState<PostCardColor>((post?.cardColor as PostCardColor) ?? 'white');
+  const [cardEmoji, setCardEmoji] = useState<string>(post?.cardEmoji ?? '');
   const [imageUrls, setImageUrls] = useState<string[]>(post?.imageUrls ?? []);
   const [tagsInput, setTagsInput] = useState((post?.eventTags ?? []).join(', '));
   const [ctaUrl, setCtaUrl] = useState(post?.ctaUrl ?? '');
@@ -355,6 +446,15 @@ function PostEditModal({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const tempIdRef = useRef<string>(post?.id ?? `temp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
+
+  // 헤드라인 grapheme 카운트
+  const headlineLen = graphemeLength(headline);
+  const headlineOver = headlineLen > HEADLINE_MAX_LENGTH;
+
+  // 입력 갱신: grapheme 단위로 자동 자르기 (Over 시 시각적 경고만 추가, 차단은 가드에서)
+  const onHeadlineChange = (raw: string) => {
+    setHeadline(truncateGraphemes(raw, HEADLINE_MAX_LENGTH));
+  };
 
   const onFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -385,18 +485,26 @@ function PostEditModal({
   };
 
   const save = async () => {
-    if (!body.trim()) { setError('내용을 입력해주세요'); return; }
+    if (!headline.trim()) { setError('카드에 노출될 한 줄을 입력해주세요'); return; }
+    if (!body.trim()) { setError('상세 본문을 입력해주세요'); return; }
     setError(null); setBusy(true);
     const eventTags = tagsInput.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
     try {
       if (isNew) {
         await createStorePost({
-          storeId, storeName, body: body.trim(), imageUrls, eventTags,
+          storeId, storeName,
+          headline: headline.trim(),
+          body: body.trim(),
+          cardColor, cardEmoji,
+          imageUrls, eventTags,
           ctaUrl: ctaUrl.trim(), ctaLabel: ctaLabel.trim(), authorUid,
         });
       } else {
         await updateStorePost(storeId, post!.id, {
-          body: body.trim(), imageUrls, eventTags, ctaUrl: ctaUrl.trim(), ctaLabel: ctaLabel.trim(),
+          headline: headline.trim(),
+          body: body.trim(),
+          cardColor, cardEmoji,
+          imageUrls, eventTags, ctaUrl: ctaUrl.trim(), ctaLabel: ctaLabel.trim(),
         });
       }
       onClose();
@@ -418,14 +526,19 @@ function PostEditModal({
           <div className="font-extrabold text-gray-900">{isNew ? '새 소식' : '소식 수정'}</div>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* 노출 미리보기 박스 — Phase D (2026-05-21) */}
+          {/* 노출 미리보기 박스 — Phase F (2026-05-22): 실시간 카드 프리뷰 */}
           <div className="rounded-lg p-3 text-[11.5px] leading-relaxed" style={{ background: 'linear-gradient(135deg, #FFF1F8 0%, #FFFAFC 100%)', border: '1px solid #FFC1DE' }}>
-            <div className="font-extrabold text-pink-700 mb-1.5">💡 작성 즉시 다음 위치에 노출됩니다</div>
-            <ul className="space-y-0.5 text-gray-700">
-              <li>· 홈 화면 <b>“오늘의 매장 소식”</b> 카드 (본문 첫 줄 + 매장명)</li>
-              <li>· 매장찾기 <b>“오늘의 매장 소식”</b> 섹션 (이미지 포함 portrait 카드)</li>
-            </ul>
-            <div className="text-gray-500 mt-1.5">📍 매장 주변 사용자에게 우선 노출 · 24시간 후 자동 만료</div>
+            <div className="font-extrabold text-pink-700 mb-2">👀 홈 노출 미리보기</div>
+            <LivePreviewCard
+              headline={headline}
+              cardColor={cardColor}
+              cardEmoji={cardEmoji}
+              storeName={storeName}
+            />
+            <div className="text-gray-500 mt-2 leading-snug">
+              · 홈 “오늘의 매장 소식” 카드 / 매장찾기 섹션에 자동 노출<br />
+              · 24시간 후 자동 만료 · 매장 주변 사용자에게 우선 노출
+            </div>
           </div>
 
           {isNew && (
@@ -434,34 +547,121 @@ function PostEditModal({
               <div className="flex flex-wrap gap-1.5">
                 <QuickTemplateBtn
                   label="토너 시작"
-                  onClick={() => setBody(`오늘 ${'00'}:00 ${'0'}T 프리롤 토너 시작!\nOPEN ${'00'}:00\n오픈채팅 https://open.kakao.com/`)}
+                  onClick={() => {
+                    setHeadline('오늘 9시 5T 프리롤 토너 시작! 🃏');
+                    setBody(`오늘 ${'00'}:00 ${'0'}T 프리롤 토너 시작!\nOPEN ${'00'}:00\n오픈채팅 https://open.kakao.com/`);
+                    setCardColor('green'); setCardEmoji('🃏');
+                  }}
                 />
                 <QuickTemplateBtn
                   label="휴무 안내"
-                  onClick={() => setBody(`금일 정기 휴무입니다.\n다음 영업일에 뵙겠습니다 :)`)}
+                  onClick={() => {
+                    setHeadline('금일 정기 휴무입니다 🙏');
+                    setBody(`금일 정기 휴무입니다.\n다음 영업일에 뵙겠습니다 :)`);
+                    setCardColor('navy'); setCardEmoji('');
+                  }}
                 />
                 <QuickTemplateBtn
                   label="신규 이벤트"
-                  onClick={() => setBody(`이번 주 신규 이벤트 OPEN!\n· 빙고 / 하이핸드 / 바운티\n오픈채팅 https://open.kakao.com/`)}
+                  onClick={() => {
+                    setHeadline('이번 주 신규 이벤트 OPEN! 🎉');
+                    setBody(`이번 주 신규 이벤트 OPEN!\n· 빙고 / 하이핸드 / 바운티\n오픈채팅 https://open.kakao.com/`);
+                    setCardColor('pink'); setCardEmoji('🎉');
+                  }}
                 />
                 <QuickTemplateBtn
                   label="딜러 채용"
-                  onClick={() => setBody(`신규 딜러 모집 중\n· 경력/신입 무관\n· 야간 시급 협의\n문의 010-0000-0000`)}
+                  onClick={() => {
+                    setHeadline('신규 딜러 모집 중 🆕');
+                    setBody(`신규 딜러 모집 중\n· 경력/신입 무관\n· 야간 시급 협의\n문의 010-0000-0000`);
+                    setCardColor('gold'); setCardEmoji('🆕');
+                  }}
                 />
               </div>
             </div>
           )}
 
+          {/* 카드 노출 한 줄 (headline) — Phase F */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">내용 *</label>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <label className="block text-xs font-bold text-gray-700">🎯 카드 노출 한 줄 *</label>
+              <span className={`text-[10px] font-mono ${headlineOver ? 'text-red-600' : headlineLen > HEADLINE_MAX_LENGTH * 0.85 ? 'text-amber-600' : 'text-gray-400'}`}>
+                {headlineLen} / {HEADLINE_MAX_LENGTH}
+              </span>
+            </div>
+            <input
+              value={headline}
+              onChange={(e) => onHeadlineChange(e.target.value)}
+              maxLength={HEADLINE_MAX_LENGTH * 4} /* HTML maxLength는 코드포인트라 여유 곱하기 */
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm"
+              placeholder="예: 오늘 9시 5T 토너 시작! 🃏"
+            />
+            <div className="text-[11px] text-gray-400 mt-1">홈 카드에 그대로 노출 · 이모지 OK · 최대 {HEADLINE_MAX_LENGTH}자</div>
+          </div>
+
+          {/* 카드 색상 (cardColor) */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">🎨 카드 색상</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {POST_CARD_COLORS.map((c) => {
+                const s = CARD_STYLES[c];
+                const selected = cardColor === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCardColor(c)}
+                    className="rounded-lg px-2 py-2 text-[11px] font-bold transition active:scale-95"
+                    style={{
+                      background: s.surface,
+                      color: s.textPrimary,
+                      border: selected ? `2px solid ${s.accent}` : `1px solid ${s.border}`,
+                      boxShadow: selected ? `0 2px 8px -3px ${s.accent}` : 'none',
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 카드 이모지 (cardEmoji) */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">✨ 카드 이모지 (선택)</label>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCardEmoji('')}
+                className={`text-[11px] font-bold px-2.5 py-1.5 rounded-md border ${cardEmoji === '' ? 'border-black bg-black text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                없음
+              </button>
+              {POST_CARD_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setCardEmoji(e)}
+                  className={`text-[15px] px-2 py-1 rounded-md border active:scale-95 ${cardEmoji === e ? 'border-black bg-black/5 ring-2 ring-black' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                  aria-label={`이모지 ${e}`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-gray-400 mt-1">미선택 시 색상 톤에 맞는 기본 이모지가 자동 적용됩니다</div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">📝 상세 본문 *</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              rows={10}
+              rows={8}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm resize-none font-mono"
               placeholder={'예) 오늘 8시 5T 프리롤 토너 시작!\n     수요일 정기 50T 모집중\n     신규 딜러 OPEN 안내\n\n카톡방에 올리던 글 그대로 붙여넣어도 OK'}
             />
-            <div className="text-[11px] text-gray-400 mt-1">카톡 톤 그대로 OK · 이모지는 5개까지 자동 적용 · 외부 링크는 open.kakao.com / pf.kakao.com만 허용</div>
+            <div className="text-[11px] text-gray-400 mt-1">매장 상세/매장찾기 카드에서 노출 · 이모지 5개까지 자동 적용 · 외부 링크는 open.kakao.com / pf.kakao.com만 허용</div>
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">이벤트 태그 (쉼표/공백으로 구분, 최대 8개)</label>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { JetBrains_Mono, Fraunces } from 'next/font/google';
 import Script from 'next/script';
+import SplashScreen from '@/components/SplashScreen';
 import './globals.css';
 
 const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? '';
@@ -18,23 +19,24 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: 'HoldemNow',
-  description: '전국 홀덤펍 + 토너먼트 디스커버리 플랫폼',
-  applicationName: 'HoldemNow',
-  // PWA 설치 시 표시 — manifest.ts에서 정의한 값과 일치
+  title: 'Pink Rabbit · 내 주변 홀덤펍',
+  description: '내 주변 홀덤펍 정보는 Pink Rabbit · 전국 홀덤펍·토너먼트 디스커버리',
+  applicationName: 'Pink Rabbit',
   appleWebApp: {
     capable: true,
-    title: 'HoldemNow',
+    title: 'Pink Rabbit',
     statusBarStyle: 'black-translucent',
   },
   icons: {
     icon: [
+      { url: '/logo.png', type: 'image/png' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
     apple: [
       { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
     ],
+    shortcut: [{ url: '/logo.png', type: 'image/png' }],
   },
   formatDetection: {
     telephone: false,
@@ -66,6 +68,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-sans">
+        <SplashScreen />
         {children}
         {/* Kakao Maps SDK + services + clusterer 라이브러리.
             strategy="afterInteractive" 유지 — beforeInteractive로 바꾸면 Next.js가 head에

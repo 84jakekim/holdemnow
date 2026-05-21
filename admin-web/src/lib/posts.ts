@@ -52,10 +52,56 @@ export class PostGuardError extends Error {
 }
 
 const POST_MAX_LENGTH = 500;
+/** 카드 노출용 한 줄 헤드라인 최대 길이 (grapheme 기준 — 이모지 1자 = 1자) */
+export const HEADLINE_MAX_LENGTH = 40;
 
 const POST_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_POST_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/**
+ * 카드 색상 팔레트 (Phase F, 2026-05-22).
+ * 매장 어드민이 글 작성 시 선택. 홈 캐러셀에서 카드 톤으로 적용.
+ * 'white'=기본, 'pink'=이벤트, 'green'=정기토너, 'gold'=프리미엄,
+ * 'navy'=공지, 'red'=긴급/마감.
+ */
+export type PostCardColor = 'white' | 'pink' | 'green' | 'gold' | 'navy' | 'red';
+export const POST_CARD_COLORS: PostCardColor[] = ['white', 'pink', 'green', 'gold', 'navy', 'red'];
+/** 큐레이션된 카드 액센트 이모지 (12종) */
+export const POST_CARD_EMOJIS = ['🎰', '🎮', '🃏', '🎯', '☕', '🍻', '🔥', '⭐', '💎', '🎉', '⚡', '🆕'] as const;
+export type PostCardEmoji = typeof POST_CARD_EMOJIS[number];
+
+/** grapheme 기준 길이 — 이모지/한글/영문 1자 = 1 */
+export function graphemeLength(s: string): number {
+  if (!s) return 0;
+  try {
+    const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    let n = 0;
+    for (const _ of seg.segment(s)) n++;
+    return n;
+  } catch {
+    // fallback (구형 환경): Array.from은 코드포인트 단위라 일부 ZWJ는 분리되지만 근사치 OK
+    return Array.from(s).length;
+  }
+}
+
+/** grapheme 기준으로 자르기 (UI 카운터/저장 시 안전) */
+export function truncateGraphemes(s: string, max: number): string {
+  if (!s) return '';
+  try {
+    const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    let out = '';
+    let n = 0;
+    for (const part of seg.segment(s)) {
+      if (n >= max) break;
+      out += part.segment;
+      n++;
+    }
+    return out;
+  } catch {
+    return Array.from(s).slice(0, max).join('');
+  }
+}
 
 export type PostAuthorType = 'store' | 'platform' | 'user'; // user는 v1.0 SNS 확장용
 export type PostStatus = 'published' | 'hidden' | 'pending';
@@ -65,6 +111,12 @@ export interface StorePost {
   storeId: string;
   storeName?: string;
   body: string;
+  /** 카드 노출용 한 줄 (Phase F, 2026-05-22). 없으면 body 첫 줄 fallback. 최대 40 grapheme. */
+  headline?: string;
+  /** 카드 색상 톤. 미설정 시 'white' (기본). */
+  cardColor?: PostCardColor;
+  /** 카드 좌측 액센트 이모지 (단일). 미설정 시 자동 매핑(색상에 따라). */
+  cardEmoji?: string;
   imageUrls: string[];
   eventTags: string[];
   ctaUrl?: string;
@@ -187,10 +239,37 @@ export async function hasRecentPostByStore(storeId: string, authorUid: string): 
   return !snap.empty;
 }
 
+/**
+ * headline에 대한 가드:
+ *  - 빈 값 → 차단 (Phase F 이후 필수 필드)
+ *  - 40 grapheme 초과 → 자동 자르기 (UX 마찰 최소화)
+ *  - 욕설/도박/링크/이모지 캡(5개)은 본문과 동일 적용
+ */
+function sanitizeHeadline(raw: string | undefined): string {
+  const trimmed = (raw ?? '').trim().replace(/\s+/g, ' ');
+  if (!trimmed) throw new PostGuardError('empty', '카드에 노출될 한 줄을 입력해주세요');
+  const mod = moderateText(trimmed, { maxLength: HEADLINE_MAX_LENGTH * 4 }); // 길이 자체는 grapheme로 별도
+  if (!mod.ok) {
+    throw new PostGuardError(
+      mod.reason === 'banned_word' ? 'banned' : 'length',
+      mod.message ?? '카드 노출 문구에 사용할 수 없는 표현이 있어요',
+    );
+  }
+  const linkCheck = checkLinkWhitelist(trimmed);
+  if (!linkCheck.ok) {
+    throw new PostGuardError('link', '카드 노출 문구에는 외부 링크를 넣을 수 없어요');
+  }
+  const capped = capEmojis(trimmed);
+  return truncateGraphemes(capped, HEADLINE_MAX_LENGTH);
+}
+
 export async function createStorePost(input: {
   storeId: string;
   storeName?: string;
   body: string;
+  headline?: string;
+  cardColor?: PostCardColor;
+  cardEmoji?: string;
   imageUrls?: string[];
   eventTags?: string[];
   ctaUrl?: string;
@@ -231,11 +310,24 @@ export async function createStorePost(input: {
   }
   // 5) 이모지 5개 캡 — 자동 자르기 (UX 마찰 최소화)
   const cappedBody = capEmojis(trimmed);
+  // 6) headline 가드 — 필수, grapheme 기준 40자 캡, 동일 키워드/링크 가드
+  const headline = sanitizeHeadline(input.headline ?? (input.body ?? '').split('\n')[0]);
+  // 7) cardColor 화이트리스트
+  const cardColor: PostCardColor = POST_CARD_COLORS.includes(input.cardColor as PostCardColor)
+    ? (input.cardColor as PostCardColor)
+    : 'white';
+  // 8) cardEmoji 검증 — 큐레이션 셋에 포함되거나 비어있어야 함 (임의 텍스트 차단)
+  const cardEmoji = input.cardEmoji && (POST_CARD_EMOJIS as readonly string[]).includes(input.cardEmoji)
+    ? input.cardEmoji
+    : '';
 
   const ref = await addDoc(postsCol(input.storeId), stripUndefined({
     storeId: input.storeId,
     storeName: input.storeName ?? '',
     body: cappedBody,
+    headline,
+    cardColor,
+    cardEmoji,
     imageUrls: input.imageUrls ?? [],
     eventTags: input.eventTags ?? [],
     ctaUrl: input.ctaUrl ?? '',
@@ -255,7 +347,22 @@ export async function updateStorePost(
   postId: string,
   updates: Partial<Omit<StorePost, 'id' | 'storeId' | 'authorType' | 'authorUid' | 'createdAt' | 'expiresAt'>>,
 ): Promise<void> {
-  await updateDoc(doc(postsCol(storeId), postId), stripUndefined(updates));
+  // headline/cardColor/cardEmoji가 업데이트에 포함되면 동일 가드 적용
+  const next: Record<string, unknown> = { ...updates };
+  if (typeof updates.headline === 'string') {
+    next.headline = sanitizeHeadline(updates.headline);
+  }
+  if (typeof updates.cardColor === 'string') {
+    next.cardColor = POST_CARD_COLORS.includes(updates.cardColor as PostCardColor)
+      ? updates.cardColor
+      : 'white';
+  }
+  if (typeof updates.cardEmoji === 'string') {
+    next.cardEmoji = (POST_CARD_EMOJIS as readonly string[]).includes(updates.cardEmoji)
+      ? updates.cardEmoji
+      : '';
+  }
+  await updateDoc(doc(postsCol(storeId), postId), stripUndefined(next));
 }
 
 export async function deleteStorePost(storeId: string, postId: string): Promise<void> {

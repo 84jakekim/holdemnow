@@ -3,16 +3,12 @@
 /**
  * DailyPostsCarousel — 홈 최상단의 "오늘의 매장 소식" 1.5장 peek 슬라이더.
  *
- * 목적 (Sprint 2 Phase A):
- *  - 홈에서는 가벼움 + 차별화 우선. 본문 첫 줄 + 매장명만 (이미지 X).
- *  - 매장찾기(/m/find) 섹션은 2장 portrait + 이미지 — 깊이있는 둘러보기.
- *  - LIVE 히어로 자리에 위치하지만, LIVE 자체는 /m/find로 이동(섹션 헤더 + 큰 카드).
- *
- * 동작:
- *  - 1.5장 peek (우측 fade), 5초 자동 페이드 진행, 8장 캡.
- *  - 본사 pinned 글 있으면 상단에 슬림 stripe로 표시 (피쳐플래그처럼).
- *  - posts 0건이면 컴포넌트 자체 미렌더(섹션 사라짐).
- *  - 카드 탭 → /m/store/{storeId} 이동.
+ * Phase F (2026-05-22) — 가독성 우선 리디자인:
+ *  - headline 노출(없으면 body 첫 줄 fallback). cardColor/cardEmoji 시각 다양화.
+ *  - 자동 슬라이드 정책: **첫 진입 3장만 8초 hold 자동 페이드 → 정지**.
+ *    "휙휙 날라다녀서 정신없음" 사용자 호소 정확 반영. 이후엔 사용자 스와이프만.
+ *  - 카드 우측 하단 "5분 전" 상대 시각 (60초 ticking).
+ *  - 색상 톤(pink/green/gold/navy/red/white) + 좌측 이모지 액센트.
  *
  * 데이터:
  *  - loadActivePostsAll: collectionGroup('posts'), 최신 50건 fetch
@@ -32,16 +28,21 @@ import {
   type StorePost,
   type PinnedPost,
 } from '@/lib/posts';
+import { resolveCardVisual } from '@/lib/postCardStyle';
+import { formatRelativeKo, useTickingNow } from '@/lib/relativeTime';
 
 const MAX_POSTS = 8;
-const ROTATE_INTERVAL_MS = 5000;
+const AUTO_HOLD_MS = 8000;        // 카드 한 장 노출 유지 시간 (8초)
+const AUTO_ROUNDS = 3;            // 자동 전환 횟수 — 3장 후 정지
 
 export default function DailyPostsCarousel() {
   const [posts, setPosts] = useState<StorePost[]>([]);
   const [pinned, setPinned] = useState<PinnedPost[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [autoDone, setAutoDone] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const userInteractedRef = useRef(false);
 
   // posts fetch
   useEffect(() => {
@@ -63,23 +64,53 @@ export default function DailyPostsCarousel() {
     return subscribeActivePinnedPosts(setPinned, () => {});
   }, []);
 
-  // 5초 페이드 자동 진행 (디스플레이 dot 없음 — 인디케이터는 fade affordance로)
+  // 자동 슬라이드 — 첫 3장만 진행 후 정지.
   useEffect(() => {
-    if (posts.length <= 1) return;
+    if (posts.length <= 1 || autoDone) return;
     const id = window.setInterval(() => {
-      setActiveIdx((i) => (i + 1) % posts.length);
-    }, ROTATE_INTERVAL_MS);
+      // 사용자가 스크롤로 개입하면 자동 진행 중단
+      if (userInteractedRef.current) {
+        setAutoDone(true);
+        return;
+      }
+      setActiveIdx((i) => {
+        const next = i + 1;
+        // AUTO_ROUNDS 만큼 진행했으면 정지 (마지막 표시 카드에서 멈춤)
+        if (next >= Math.min(AUTO_ROUNDS, posts.length)) {
+          setAutoDone(true);
+          return next % posts.length;
+        }
+        return next % posts.length;
+      });
+    }, AUTO_HOLD_MS);
     return () => window.clearInterval(id);
-  }, [posts.length]);
+  }, [posts.length, autoDone]);
 
-  // activeIdx 변경 시 스크롤 동기화
+  // activeIdx 변경 시 스크롤 동기화 (자동 진행 중일 때만)
   useEffect(() => {
+    if (autoDone || userInteractedRef.current) return;
     const el = scrollerRef.current;
     if (!el) return;
     const card = el.children[activeIdx] as HTMLElement | undefined;
     if (!card) return;
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
-  }, [activeIdx]);
+  }, [activeIdx, autoDone]);
+
+  // 사용자 스크롤/터치 감지 → 자동 진행 중단
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const onUserScroll = () => {
+      userInteractedRef.current = true;
+      setAutoDone(true);
+    };
+    el.addEventListener('touchstart', onUserScroll, { passive: true });
+    el.addEventListener('wheel', onUserScroll, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onUserScroll);
+      el.removeEventListener('wheel', onUserScroll);
+    };
+  }, [loaded]);
 
   // 빈 상태: 섹션 자체 렌더하지 않음 (홈 가벼움)
   if (loaded && posts.length === 0 && pinned.length === 0) return null;
@@ -121,7 +152,7 @@ export default function DailyPostsCarousel() {
             }}
           >
             {posts.map((p, idx) => (
-              <PostCard key={p.id} post={p} active={idx === activeIdx} />
+              <PostCard key={p.id} post={p} active={idx === activeIdx && !autoDone} />
             ))}
             {/* 1.5장 peek을 위한 우측 공간 — 마지막 카드 우측 50% 노출 보장 */}
             <div style={{ minWidth: '12px', flexShrink: 0 }} aria-hidden />
@@ -141,15 +172,21 @@ export default function DailyPostsCarousel() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 카드 — 본문 첫 줄 + 매장명 (이미지 X)
+// 카드 — headline + 이모지 액센트 + 매장명 + 상대시각
 // ─────────────────────────────────────────────────────────────
 
 function PostCard({ post, active }: { post: StorePost; active: boolean }) {
-  // 본문 첫 줄 (개행 기준, 최대 60자)
-  const firstLine = useMemo(() => {
-    const line = (post.body || '').split('\n')[0]?.trim() ?? '';
-    return line.length > 60 ? line.slice(0, 60) + '…' : line;
-  }, [post.body]);
+  const { style, emoji } = useMemo(() => resolveCardVisual(post), [post]);
+  const now = useTickingNow();
+  const relative = useMemo(() => formatRelativeKo(post.createdAt, now), [post.createdAt, now]);
+
+  // headline 우선, 없으면 body 첫 줄 fallback (백워드 호환)
+  const oneLiner = useMemo(() => {
+    const head = (post.headline ?? '').trim();
+    if (head) return head;
+    const firstLine = (post.body || '').split('\n')[0]?.trim() ?? '';
+    return firstLine.length > 40 ? firstLine.slice(0, 40) + '…' : firstLine;
+  }, [post.headline, post.body]);
 
   return (
     <Link
@@ -159,39 +196,74 @@ function PostCard({ post, active }: { post: StorePost; active: boolean }) {
         width: 'calc(66vw)',
         maxWidth: '280px',
         minWidth: '220px',
-        background: 'var(--surface-1)',
-        border: active ? '1.5px solid var(--brand)' : '1px solid var(--border)',
+        background: style.surface,
+        border: active ? `1.5px solid ${style.accent}` : `1px solid ${style.border}`,
         padding: '14px 14px 12px',
-        opacity: active ? 1 : 0.78,
+        opacity: active ? 1 : 0.88,
+        boxShadow: active ? `0 4px 14px -8px ${style.accent}` : 'none',
       }}
       aria-label={`${post.storeName ?? '매장'} 소식 보기`}
     >
-      {/* 본문 첫 줄 */}
-      <div
-        className="text-[14px] font-semibold leading-[1.45] mb-2.5"
-        style={{
-          color: 'var(--text-1)',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          minHeight: '40px',
-        }}
-      >
-        {firstLine || '오늘의 매장 소식'}
-      </div>
-      {/* 구분선 + 매장명 */}
-      <div
-        className="pt-2 mt-1 flex items-center gap-1.5"
-        style={{ borderTop: '1px solid var(--border)' }}
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)', flexShrink: 0 }} aria-hidden>
-          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-          <circle cx="12" cy="10" r="3" />
-        </svg>
-        <div className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-2)' }}>
-          {post.storeName || '매장'}
+      {/* 상단: 이모지 액센트 + 헤드라인 */}
+      <div className="flex items-start gap-2 mb-2.5">
+        {emoji && (
+          <div
+            className="flex-shrink-0 flex items-center justify-center rounded-lg"
+            style={{
+              width: '28px',
+              height: '28px',
+              background: style.accent,
+              fontSize: '15px',
+            }}
+            aria-hidden
+          >
+            <span style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.15))' }}>{emoji}</span>
+          </div>
+        )}
+        <div
+          className="text-[14px] font-extrabold leading-[1.4] flex-1"
+          style={{
+            color: style.textPrimary,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            minHeight: '40px',
+          }}
+        >
+          {oneLiner || '오늘의 매장 소식'}
         </div>
+      </div>
+      {/* 하단: 매장명 + 상대시각 */}
+      <div
+        className="pt-2 mt-1 flex items-center justify-between gap-1.5"
+        style={{ borderTop: `1px solid ${style.border}` }}
+      >
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ color: style.textSecondary, flexShrink: 0 }}
+            aria-hidden
+          >
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+          <div className="text-[11px] font-semibold truncate" style={{ color: style.textSecondary }}>
+            {post.storeName || '매장'}
+          </div>
+        </div>
+        {relative && (
+          <div className="text-[10px] font-medium flex-shrink-0" style={{ color: style.textSecondary, opacity: 0.85 }}>
+            {relative}
+          </div>
+        )}
       </div>
     </Link>
   );
