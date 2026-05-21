@@ -35,6 +35,26 @@ async function hasActiveContent(col: string): Promise<boolean> {
   return !snap.empty;
 }
 
+/**
+ * 홈 전용 섹션 wrapper — 모든 섹션의 좌우 패딩(16px)·세로 패딩(20px)을 통일.
+ * 자식 컴포넌트는 width/스크롤만 책임지고, 정렬은 부모가 보장.
+ *
+ * 모든 콘텐츠 카드의 좌측 끝선이 정확히 같은 X좌표(16px)에 위치하도록 강제.
+ */
+function HomeSection({
+  ariaLabel,
+  children,
+}: {
+  ariaLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section aria-label={ariaLabel} className="px-4 py-5">
+      {children}
+    </section>
+  );
+}
+
 export default function MobileHome() {
   const authState = useAuth();
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
@@ -218,38 +238,34 @@ export default function MobileHome() {
       {liveSessions.length > 0 && <div className="brand-strip-divider" />}
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          3. 본사 광고 상단 — 16:9 슬라이드 (어두운 톤)
-          첫 슬라이드: "내 주변 매장 찾기" CTA 카드 등록 가능
+          모든 콘텐츠 섹션은 HomeSection wrapper를 통해
+          좌우 padding(16px) · 세로 padding(20px) 통일.
+          모든 카드의 좌측 끝선이 정확히 같은 X좌표에 정렬됨.
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <HomeAdsCarousel position="top" />
 
-      {/* 섹션 구분 */}
-      <div className="brand-strip-divider" />
+      {/* 2. 본사 광고 상단 — 16:9 카드 (전체 콘텐츠와 좌측 끝선 일치) */}
+      <HomeSection ariaLabel="추천 광고">
+        <HomeAdsCarousel position="top" />
+      </HomeSection>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          3. 인기 유튜브 영상 — 가로 카드 슬라이드 (밝은 톤)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <HotVideosCarousel />
+      {/* 3. 인기 유튜브 영상 — 가로 카드 슬라이드 */}
+      <HomeSection ariaLabel="인기 유튜브 영상">
+        <HotVideosCarousel />
+      </HomeSection>
 
-      {/* 섹션 구분 */}
-      <div className="brand-strip-divider" />
+      {/* 4. 인기 유튜버 채널 — 원형 아바타 스크롤 */}
+      <HomeSection ariaLabel="인기 유튜버 채널">
+        <HotYoutubersScroll />
+      </HomeSection>
 
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          4. 인기 유튜버 채널 — 원형 아바타 스크롤 (빨간 ▶ 배지)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <HotYoutubersScroll />
-
-      {/* 섹션 구분 */}
-      <div className="brand-strip-divider" />
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          5. 본사 광고 하단 — 21:9 서브 배너
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <HomeAdsCarousel position="bottom" />
+      {/* 5. 본사 광고 하단 — 16:9 카드 (상단과 동일 스타일) */}
+      <HomeSection ariaLabel="추천 광고">
+        <HomeAdsCarousel position="bottom" />
+      </HomeSection>
 
       {/* 일반 사용자용 친화적 빈상태 placeholder — 콘텐츠 0건이고 본사 관리자가 아닌 경우 */}
       {!isPlatformAdmin && allEmpty === true && (
-        <section className="px-4 py-6">
+        <section className="px-4 py-5">
           <div
             className="rounded-2xl px-5 py-6 flex flex-col items-center text-center gap-3"
             style={{
@@ -290,7 +306,7 @@ export default function MobileHome() {
 
       {/* 본사 관리자 전용 — 4섹션 콘텐츠 0건 안내 카드 */}
       {isPlatformAdmin && allEmpty === true && (
-        <section className="px-4 py-4">
+        <section className="px-4 py-5">
           <div
             className="rounded-2xl px-5 py-4 flex flex-col gap-3"
             style={{

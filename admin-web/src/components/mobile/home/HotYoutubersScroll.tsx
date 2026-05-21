@@ -20,30 +20,31 @@ export default function HotYoutubersScroll() {
   // 6개 이상이면 더 진한 페이드
   const fadeWidth = youtubers.length >= 6 ? 'w-12' : 'w-8';
 
+  // 좌우 padding·세로 padding은 부모 HomeSection이 담당.
+  // 가로 스크롤은 음수 마진으로 padding을 뚫고 viewport 끝까지 스크롤 가능.
   return (
-    <section aria-label="인기 유튜버 채널" className="py-5">
-      {/* 섹션 헤더 */}
-      <div className="px-4 flex items-end justify-between mb-3">
-        <div>
-          <div
-            className="text-[17px] font-extrabold tracking-tight"
-            style={{ color: 'var(--text-1)' }}
-          >
-            인기 유튜버
-          </div>
-          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-            홀덤 크리에이터 채널 구독하기
-          </div>
+    <>
+      {/* 섹션 헤더 — 모든 섹션과 동일한 톤 */}
+      <div className="mb-3">
+        <div
+          className="text-[17px] font-extrabold tracking-tight"
+          style={{ color: 'var(--text-1)' }}
+        >
+          인기 유튜버
+        </div>
+        <div className="text-[12px] mt-1" style={{ color: 'var(--text-3)' }}>
+          홀덤 크리에이터 채널 구독하기
         </div>
       </div>
 
-      {/* 원형 아바타 가로 스크롤 — 페이드 오버레이용 relative */}
-      <div className="relative">
+      {/* 원형 아바타 가로 스크롤 — 페이드 오버레이용 relative
+         -mx-4 + pl-4 = 좌측 끝선은 부모 px-4와 일치, 우측은 viewport까지 스크롤 가능 */}
+      <div className="relative -mx-4">
         <div className="pl-4 flex gap-4 overflow-x-auto scrollbar-none pb-1">
           {youtubers.map((yt) => (
             <YoutuberAvatarItem key={yt.id} youtuber={yt} />
           ))}
-          <div className="w-3 flex-shrink-0" aria-hidden="true" />
+          <div className="w-4 flex-shrink-0" aria-hidden="true" />
         </div>
 
         {/* 우측 페이드 오버레이 — 6개 이상이면 더 진하게 */}
@@ -53,7 +54,7 @@ export default function HotYoutubersScroll() {
           aria-hidden="true"
         />
       </div>
-    </section>
+    </>
   );
 }
 

@@ -248,10 +248,12 @@ export default function HotVideosCarousel() {
 
   const hasSmallRow = videos.length >= 2;
 
+  // 좌우 padding(px-4)·세로 padding(py-5)·헤더 톤은 부모 HomeSection이 담당.
+  // 본 컴포넌트는 카드 width와 스크롤만 책임 — 좌측 끝선 일치 보장.
   return (
-    <section aria-label="인기 유튜브 영상" className="py-5">
-      {/* 섹션 헤더 */}
-      <div className="px-4 mb-3">
+    <>
+      {/* 섹션 헤더 — 모든 섹션과 동일한 톤 */}
+      <div className="mb-3">
         <div
           className="text-[17px] font-extrabold tracking-tight"
           style={{ color: 'var(--text-1)' }}
@@ -259,14 +261,14 @@ export default function HotVideosCarousel() {
           홀덤 관련{' '}
           <span style={{ color: 'var(--brand)' }}>인기 영상</span>
         </div>
-        <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+        <div className="text-[12px] mt-1" style={{ color: 'var(--text-3)' }}>
           홀덤 필수 시청 콘텐츠
         </div>
       </div>
 
-      {/* 큰 카드 행 — 한 화면 1개, snap = 카드 1개 */}
+      {/* 큰 카드 행 — 한 화면 1개, 좌측 끝선이 부모 px-4와 일치 (calc -32px = 좌우 16px씩) */}
       <div
-        className="px-4 flex overflow-x-auto scrollbar-none gap-3"
+        className="flex overflow-x-auto scrollbar-none gap-3 -mx-4 px-4"
         style={{ scrollSnapType: 'x mandatory' }}
         aria-label="큰 영상 카드 가로 스크롤"
       >
@@ -281,10 +283,10 @@ export default function HotVideosCarousel() {
         ))}
       </div>
 
-      {/* 작은 카드 행 — 한 화면 2개, snap = 카드 1개 (영상 2개 이상일 때만) */}
+      {/* 작은 카드 행 — 한 화면 2개 (영상 2개 이상일 때만) */}
       {hasSmallRow && (
         <div
-          className="mt-3 px-4 flex overflow-x-auto scrollbar-none gap-3"
+          className="mt-3 flex overflow-x-auto scrollbar-none gap-3 -mx-4 px-4"
           style={{ scrollSnapType: 'x mandatory' }}
           aria-label="작은 영상 카드 가로 스크롤"
         >
@@ -302,6 +304,6 @@ export default function HotVideosCarousel() {
           ))}
         </div>
       )}
-    </section>
+    </>
   );
 }

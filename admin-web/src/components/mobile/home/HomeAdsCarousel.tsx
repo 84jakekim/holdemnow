@@ -108,16 +108,19 @@ export default function HomeAdsCarousel({ position }: Props) {
     }
   };
 
+  // 두 광고(상단/하단) 동일한 카드 스타일 — 좌측 끝선·radius·비율·테두리 통일.
+  // 상단만 살짝 어두운 오버레이로 시각적 임팩트 유지.
   return (
-    <div
-      ref={containerRef}
-      className={isTop ? 'mb-0' : 'px-4 pb-5'}
-    >
-      {/* 가로 스크롤 컨테이너 */}
+    <div ref={containerRef} className="w-full">
+      {/* 가로 스크롤 컨테이너 — 카드형, 모서리·테두리·그림자 통일 */}
       <div
         ref={scrollRef}
-        className={`flex overflow-x-auto scrollbar-none ${isTop ? 'rounded-none' : 'rounded-2xl'}`}
-        style={{ scrollSnapType: 'x mandatory' }}
+        className="flex overflow-x-auto scrollbar-none rounded-2xl"
+        style={{
+          scrollSnapType: 'x mandatory',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-card)',
+        }}
         onTouchStart={handleUserInteraction}
         onPointerDown={handleUserInteraction}
         aria-label="광고 슬라이드"
@@ -134,7 +137,7 @@ export default function HomeAdsCarousel({ position }: Props) {
             <div
               className="relative w-full overflow-hidden"
               style={{
-                aspectRatio: isTop ? '16/9' : '21/9',
+                aspectRatio: '16/9',
                 background: isTop ? '#0A0A0F' : 'var(--surface-2)',
               }}
             >
@@ -147,7 +150,7 @@ export default function HomeAdsCarousel({ position }: Props) {
                 loading="lazy"
               />
 
-              {/* 상단: 어두운 오버레이 (콘텐츠 구분) */}
+              {/* 상단: 어두운 오버레이 (텍스트 가독성·임팩트) */}
               {isTop && (
                 <div
                   className="absolute inset-0"
