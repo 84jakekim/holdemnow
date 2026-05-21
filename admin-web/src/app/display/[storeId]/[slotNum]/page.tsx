@@ -19,6 +19,7 @@ import {
   buildBackgroundCss,
 } from '@/lib/timerDisplay';
 import { playCountdownBeep, playFinalBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
+import { computeAutoITM } from '@/lib/templates';
 
 interface StoreData {
   name: string;
@@ -69,10 +70,43 @@ export default function DisplayPage({
   // 절대 시각(levelEndsAt) 기반 카운트다운
   const sec = useLiveCountdown(session ?? null);
 
-  // ─── 사운드 활성화 (autoplay 정책 우회) ─────────────────────────
-  // TV는 보통 켜놓고 두지만 첫 진입 시 한 번은 터치/클릭 필요.
-  // localStorage에 이전 unlock 기록 있으면 오버레이 즉시 통과 시도.
+  // ─── 사운드 활성화 + 자동 풀스크린 + Wake Lock (Phase 3 — 2026-05-21) ───
+  // 매장 사장님 요구: "화면 터치로 전체화면" — F11 누를 필요 없이 한 번 터치로
+  // 풀스크린 + 사운드 unlock + 화면 절전 방지(wakeLock)까지 한 번에 활성화.
+  //
+  // 동작:
+  //  ① audio unlock (autoplay 정책 우회 — 기존 동작 유지)
+  //  ② document.documentElement.requestFullscreen() — TV 브라우저 전체화면
+  //  ③ navigator.wakeLock.request('screen') — 매장 TV는 몇 시간 켜놔야 하므로 화면 꺼짐 방지
+  //
+  // 모두 best-effort. 실패해도 화면은 정상 동작.
   const [audioReady, setAudioReady] = useState<boolean>(false);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Wake Lock 재획득 — 탭이 다시 visible 될 때 (모바일/태블릿에서 wakeLock이 자동 해제됨)
+  useEffect(() => {
+    const reacquire = async () => {
+      if (document.visibilityState !== 'visible' || wakeLockRef.current != null) return;
+      try {
+        const nav = navigator as Navigator & { wakeLock?: WakeLock };
+        if (nav.wakeLock?.request) {
+          wakeLockRef.current = await nav.wakeLock.request('screen');
+          wakeLockRef.current.addEventListener('release', () => {
+            wakeLockRef.current = null;
+          });
+        }
+      } catch {
+        // 일부 브라우저는 WakeLock API 미지원
+      }
+    };
+    document.addEventListener('visibilitychange', reacquire);
+    return () => {
+      document.removeEventListener('visibilitychange', reacquire);
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     let unlockedBefore = false;
     try {
@@ -84,20 +118,52 @@ export default function DisplayPage({
       setAudioReady(true);
     }
 
-    const tryUnlock = () => {
+    const requestFullscreenSafe = async () => {
+      const el = document.documentElement as HTMLElement & {
+        webkitRequestFullscreen?: () => Promise<void>;
+        msRequestFullscreen?: () => Promise<void>;
+      };
+      try {
+        if (document.fullscreenElement) return;
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+        else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+      } catch {
+        // 사용자 제스처가 아니거나 브라우저가 거부한 경우 무시
+      }
+    };
+
+    const requestWakeLockSafe = async () => {
+      try {
+        const nav = navigator as Navigator & { wakeLock?: WakeLock };
+        if (nav.wakeLock?.request && wakeLockRef.current == null) {
+          wakeLockRef.current = await nav.wakeLock.request('screen');
+          wakeLockRef.current.addEventListener('release', () => {
+            wakeLockRef.current = null;
+          });
+        }
+      } catch {
+        // Wake Lock API 미지원 또는 권한 거부
+      }
+    };
+
+    const tryActivate = () => {
       unlockAudio();
       setAudioReady(true);
       try {
         localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
       } catch {}
+      // 사용자 제스처 내에서만 fullscreen/wakeLock 요청 가능
+      requestFullscreenSafe();
+      requestWakeLockSafe();
     };
-    window.addEventListener('click', tryUnlock, { once: true });
-    window.addEventListener('touchstart', tryUnlock, { once: true });
-    window.addEventListener('keydown', tryUnlock, { once: true });
+    window.addEventListener('click', tryActivate, { once: true });
+    window.addEventListener('touchstart', tryActivate, { once: true });
+    window.addEventListener('keydown', tryActivate, { once: true });
     return () => {
-      window.removeEventListener('click', tryUnlock);
-      window.removeEventListener('touchstart', tryUnlock);
-      window.removeEventListener('keydown', tryUnlock);
+      window.removeEventListener('click', tryActivate);
+      window.removeEventListener('touchstart', tryActivate);
+      window.removeEventListener('keydown', tryActivate);
     };
   }, []);
 
@@ -293,6 +359,16 @@ export default function DisplayPage({
         </div>
       </div>
 
+      {/* 상금 분배표 — Phase 2. display.prizeDistributionLayout=='left'/'right' 일 때만 렌더 */}
+      {session && session.status !== 'completed' &&
+        (display.prizeDistributionLayout === 'left' || display.prizeDistributionLayout === 'right') && (
+          <PrizeDistributionPanel
+            session={session}
+            display={display}
+            side={display.prizeDistributionLayout}
+          />
+        )}
+
       {/* 동기화 끊김 배너 */}
       {showStale && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-20 bg-amber-500/90 text-black px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 backdrop-blur shadow-lg">
@@ -350,11 +426,11 @@ export default function DisplayPage({
             {isCurrentBreak ? `BREAK · ${currentLevelObj?.level ?? ''}레벨` : `LEVEL ${session.currentLevel}`}
           </div>
 
-          {/* 거대 카운트다운 */}
+          {/* 거대 카운트다운 — display.timerScale로 매장 환경별 폰트 배율 (Phase 3) */}
           <div
             className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
             style={{
-              fontSize: 'clamp(150px, 18vw, 280px)',
+              fontSize: `clamp(${150 * (display.timerScale ?? 1)}px, ${18 * (display.timerScale ?? 1)}vw, ${280 * (display.timerScale ?? 1)}px)`,
               letterSpacing: '-0.05em',
               color: paused
                 ? '#A8A8A8'
@@ -389,7 +465,10 @@ export default function DisplayPage({
               </div>
               <div
                 className="font-mono font-extrabold"
-                style={{ fontSize: 'clamp(36px, 5vw, 64px)', color: display.blindsColor }}
+                style={{
+                  fontSize: `clamp(${36 * (display.blindsScale ?? 1)}px, ${5 * (display.blindsScale ?? 1)}vw, ${64 * (display.blindsScale ?? 1)}px)`,
+                  color: display.blindsColor,
+                }}
               >
                 {session.smallBlind.toLocaleString()} / {session.bigBlind.toLocaleString()}
               </div>
@@ -402,13 +481,15 @@ export default function DisplayPage({
           )}
 
           {/* 하단 stats — 매장 TV 운영 화면. PRIZE POOL은 매장 내 노출 전용
-              (사용자 모바일 앱 /m/* 에는 어떤 상금 필드도 렌더링하지 않음). */}
+              (사용자 모바일 앱 /m/* 에는 어떤 상금 필드도 렌더링하지 않음).
+              statsScale로 폰트 배율 적용 (Phase 3). */}
           <div className="mt-10 grid grid-cols-3 gap-10 max-w-5xl">
             <Stat
               label="PLAYERS"
               value={`${session.playersRemaining}/${session.totalPlayers}`}
               sub={`${session.tablesRemaining}테이블`}
               color={display.textColor}
+              scale={display.statsScale ?? 1}
             />
             <Stat
               label="PRIZE POOL"
@@ -421,6 +502,7 @@ export default function DisplayPage({
               }
               sub=""
               color={display.textColor}
+              scale={display.statsScale ?? 1}
             />
             <Stat
               label="LATE REG"
@@ -429,6 +511,7 @@ export default function DisplayPage({
               highlight={!lateClosed && lateMin <= 5}
               color={display.textColor}
               accentColor={display.accentColor}
+              scale={display.statsScale ?? 1}
             />
           </div>
 
@@ -713,6 +796,7 @@ function Stat({
   highlight,
   color,
   accentColor,
+  scale = 1,
 }: {
   label: string;
   value: string;
@@ -720,6 +804,7 @@ function Stat({
   highlight?: boolean;
   color: string;
   accentColor?: string;
+  scale?: number;
 }) {
   return (
     <div className="text-center">
@@ -729,7 +814,7 @@ function Stat({
       <div
         className="font-mono font-extrabold"
         style={{
-          fontSize: 'clamp(28px, 3.5vw, 44px)',
+          fontSize: `clamp(${28 * scale}px, ${3.5 * scale}vw, ${44 * scale}px)`,
           color: highlight && accentColor ? accentColor : color,
         }}
       >
@@ -740,6 +825,82 @@ function Stat({
           {sub}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 상금 분배표 — TV 화면 좌/우 사이드에 노출 (Phase 2).
+ *
+ * 데이터 소스:
+ *  - 세션의 prizePool이 0이면 표시 안 함
+ *  - 향후 LiveSession.prizeDistribution 필드가 박히면 그걸 우선 사용
+ *  - 지금은 totalPlayers 기준 computeAutoITM으로 자동 계산
+ *
+ * 위치는 display.prizeDistributionLayout='left'|'right' 결정. 'hidden'이면 렌더 안 함.
+ */
+function PrizeDistributionPanel({
+  session,
+  display,
+  side,
+}: {
+  session: LiveSession;
+  display: TimerDisplaySettings;
+  side: 'left' | 'right';
+}) {
+  if (session.prizePool <= 0) return null;
+  const itm = computeAutoITM(session.totalPlayers);
+  const rows = itm.slice(0, 8); // 8등까지만 노출 (그 이상은 화면 공간 부족)
+  return (
+    <div
+      className="fixed top-1/2 -translate-y-1/2 z-10 rounded-2xl backdrop-blur-sm border-2"
+      style={{
+        [side]: '24px' as never,
+        background: 'rgba(0,0,0,0.45)',
+        borderColor: `${display.accentColor}66`,
+        minWidth: 200,
+        maxWidth: 260,
+      }}
+    >
+      <div className="px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.10)' }}>
+        <div
+          className="text-[10px] font-extrabold tracking-[0.3em] text-center"
+          style={{ color: display.accentColor }}
+        >
+          💰 PRIZE POOL
+        </div>
+        <div
+          className="font-mono text-lg font-extrabold text-center mt-1"
+          style={{ color: display.blindsColor }}
+        >
+          ₩{session.prizePool.toLocaleString()}
+        </div>
+      </div>
+      <div className="p-2">
+        {rows.map((p) => {
+          const won = Math.round(session.prizePool * p.ratio);
+          return (
+            <div
+              key={p.rank}
+              className="flex items-center justify-between py-1 px-2 rounded"
+              style={{ color: display.textColor }}
+            >
+              <div className="text-[11px] font-extrabold tracking-wider">
+                {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `${p.rank}등`}
+              </div>
+              <div className="font-mono text-[12px] font-bold">
+                ₩{won.toLocaleString()}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div
+        className="px-3 py-1.5 text-[9px] tracking-widest text-center border-t"
+        style={{ color: display.textColor, opacity: 0.5, borderColor: 'rgba(255,255,255,0.10)' }}
+      >
+        ITM {itm.length}명 · 자동 계산
+      </div>
     </div>
   );
 }
