@@ -1047,8 +1047,8 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
       style={{ background: 'var(--surface-1)' }}
     >
       {photo ? (
-        /* 가로 포스터 표준 21:9 비율 — 시네마 와이드. PinnedBanner와 통일 */
-        <div className="relative w-full" style={{ aspectRatio: '21/9', background: 'var(--surface-2)' }}>
+        /* 홈 광고 카드와 동일 16:9 — 유튜브 표준 가로 비율 */
+        <div className="relative w-full" style={{ aspectRatio: '16/9', background: 'var(--surface-2)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt={post.storeName ?? ''} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
           {post.imageUrls.length > 1 && (
