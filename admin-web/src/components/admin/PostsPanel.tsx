@@ -239,8 +239,28 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
           <li>이미지 최대 4장, 5MB/장</li>
           <li>작성 후 24시간 뒤 자동으로 사용자 화면에서 사라집니다 — 매일 새로 올려주세요</li>
         </ul>
+        <div className="font-bold text-gray-900 mt-4 mb-2">⚠️ 자동 거부 규정</div>
+        <ul className="list-disc list-inside space-y-1.5">
+          <li>도박/환금/현금화/캐시게임/베팅/사다리/사설 등 키워드 자동 거부</li>
+          <li>외부 링크는 <code>open.kakao.com</code> / <code>pf.kakao.com</code>만 허용 (tel: 가능)</li>
+          <li>매장당 하루 1글만 가능 — 두 번째 작성은 기존 글 수정으로 대체</li>
+          <li>같은 글자 30회 연속, 욕설/비속어/혐오 표현 등은 자동 거부</li>
+          <li>사용자 신고가 누적되면 자동 숨김 처리됩니다</li>
+        </ul>
       </div>
     </div>
+  );
+}
+
+function QuickTemplateBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-[11px] font-bold px-2.5 py-1 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 active:scale-95"
+    >
+      {label}
+    </button>
   );
 }
 
@@ -382,6 +402,8 @@ function PostEditModal({
       onClose();
     } catch (e: unknown) {
       const raw = e instanceof Error ? e.message : String(e);
+      // PostGuardError (Phase E 가드) — 메시지 그대로 노출 (이미 한국어 친화).
+      // PERMISSION_DENIED → 매장 상태 진단 패널 안내.
       const friendly = /insufficient permissions|PERMISSION_DENIED/i.test(raw)
         ? '저장 권한이 없습니다. 매장 상태가 active이거나 본사(platform_admin) 권한이 필요합니다. 상단 "🔍 매장 상태 진단" 패널을 확인해 주세요.'
         : raw;
@@ -396,6 +418,40 @@ function PostEditModal({
           <div className="font-extrabold text-gray-900">{isNew ? '새 소식' : '소식 수정'}</div>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {/* 노출 미리보기 박스 — Phase D (2026-05-21) */}
+          <div className="rounded-lg p-3 text-[11.5px] leading-relaxed" style={{ background: 'linear-gradient(135deg, #FFF1F8 0%, #FFFAFC 100%)', border: '1px solid #FFC1DE' }}>
+            <div className="font-extrabold text-pink-700 mb-1.5">💡 작성 즉시 다음 위치에 노출됩니다</div>
+            <ul className="space-y-0.5 text-gray-700">
+              <li>· 홈 화면 <b>“오늘의 매장 소식”</b> 카드 (본문 첫 줄 + 매장명)</li>
+              <li>· 매장찾기 <b>“오늘의 매장 소식”</b> 섹션 (이미지 포함 portrait 카드)</li>
+            </ul>
+            <div className="text-gray-500 mt-1.5">📍 매장 주변 사용자에게 우선 노출 · 24시간 후 자동 만료</div>
+          </div>
+
+          {isNew && (
+            <div>
+              <div className="text-[11px] font-bold text-gray-500 mb-1.5">빠른 템플릿 — 클릭해서 내용 자동 채우기</div>
+              <div className="flex flex-wrap gap-1.5">
+                <QuickTemplateBtn
+                  label="토너 시작"
+                  onClick={() => setBody(`오늘 ${'00'}:00 ${'0'}T 프리롤 토너 시작!\nOPEN ${'00'}:00\n오픈채팅 https://open.kakao.com/`)}
+                />
+                <QuickTemplateBtn
+                  label="휴무 안내"
+                  onClick={() => setBody(`금일 정기 휴무입니다.\n다음 영업일에 뵙겠습니다 :)`)}
+                />
+                <QuickTemplateBtn
+                  label="신규 이벤트"
+                  onClick={() => setBody(`이번 주 신규 이벤트 OPEN!\n· 빙고 / 하이핸드 / 바운티\n오픈채팅 https://open.kakao.com/`)}
+                />
+                <QuickTemplateBtn
+                  label="딜러 채용"
+                  onClick={() => setBody(`신규 딜러 모집 중\n· 경력/신입 무관\n· 야간 시급 협의\n문의 010-0000-0000`)}
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">내용 *</label>
             <textarea
@@ -403,9 +459,9 @@ function PostEditModal({
               onChange={(e) => setBody(e.target.value)}
               rows={10}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm resize-none font-mono"
-              placeholder={`예시:\n🩵 매장 이름 🩵\n🔹 오늘의 토너 / 이벤트\n⏰ 19:30 OPEN\n📞 010-xxxx-xxxx\n오픈채팅 https://...`}
+              placeholder={'예) 오늘 8시 5T 프리롤 토너 시작!\n     수요일 정기 50T 모집중\n     신규 딜러 OPEN 안내\n\n카톡방에 올리던 글 그대로 붙여넣어도 OK'}
             />
-            <div className="text-[11px] text-gray-400 mt-1">카톡방 글 그대로 붙여넣기 OK · 이모지 권장</div>
+            <div className="text-[11px] text-gray-400 mt-1">카톡 톤 그대로 OK · 이모지는 5개까지 자동 적용 · 외부 링크는 open.kakao.com / pf.kakao.com만 허용</div>
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">이벤트 태그 (쉼표/공백으로 구분, 최대 8개)</label>
