@@ -288,7 +288,7 @@ function LoginPageInner() {
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
         {/* 로고 */}
         <div className="flex flex-col items-center mb-8 mt-6">
-          <img src="/logo.svg" alt="HoldemNow" width={180} height={30} className="mb-2" />
+          <img src="/logo.svg" alt="Pink Rabbit" width={180} height={30} className="mb-2" />
           <p className="text-xs text-gray-500">전국 홀덤펍 · 토너먼트 디스커버리</p>
         </div>
 

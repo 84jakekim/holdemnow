@@ -169,7 +169,7 @@ export default function StoreSignupPage() {
             <div className="font-bold text-amber-900 mb-1">심사 안내</div>
             심사는 영업일 기준 1~3일 소요됩니다. 승인 후 등록하신 이메일로 안내 메일이 발송되며, 어드민 페이지에 접근하실 수 있습니다.
             <br /><br />
-            문의: 카카오톡 채널 <b>HoldemNow</b> 또는 이메일 <b>admin@holdemnow.com</b>
+            문의: 카카오톡 채널 <b>Pink Rabbit</b> 또는 이메일 <b>admin@holdemnow.com</b>
           </div>
           <Link
             href="/login"

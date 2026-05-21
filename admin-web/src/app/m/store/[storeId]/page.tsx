@@ -330,7 +330,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
             </button>
             {/* 공유 */}
             <button
-              onClick={() => shareContent({ title: store.name, text: `${store.name} — HoldemNow에서 확인` })}
+              onClick={() => shareContent({ title: store.name, text: `${store.name} — Pink Rabbit에서 확인` })}
               className="w-9 h-9 flex items-center justify-center rounded-xl transition active:scale-90"
               style={{ background: 'rgba(255,255,255,0.90)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
               aria-label="공유"
@@ -520,7 +520,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
             전화
           </button>
           <button
-            onClick={() => shareContent({ title: store.name, text: `${store.name} — HoldemNow에서 확인` })}
+            onClick={() => shareContent({ title: store.name, text: `${store.name} — Pink Rabbit에서 확인` })}
             className="h-12 flex items-center justify-center gap-2 rounded-2xl font-semibold text-[14px] transition active:scale-[0.97]"
             style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
           >

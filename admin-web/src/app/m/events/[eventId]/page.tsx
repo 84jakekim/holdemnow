@@ -236,7 +236,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
       )}
 
       <div className="px-5 py-6 text-center text-[10px] text-gray-400">
-        🏆 HoldemNow · 대회 정보
+        🏆 Pink Rabbit · 대회 정보
       </div>
     </div>
   );

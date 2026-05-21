@@ -138,7 +138,7 @@ function PlatformLoginInner() {
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
         {/* 로고 + 컨텍스트 라벨 (다크 톤 — 본사 어드민 컨텍스트 유지) */}
         <div className="flex flex-col items-center mb-8 mt-6">
-          <img src="/logo-white.svg" alt="HoldemNow" width={180} height={30} className="mb-2" />
+          <img src="/logo-white.svg" alt="Pink Rabbit" width={180} height={30} className="mb-2" />
           <div className="flex items-center gap-1.5 mt-1.5">
             <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full tracking-widest border border-amber-400/30">
               🏢 본사 관리자 전용
@@ -260,7 +260,7 @@ function PlatformLoginInner() {
       </div>
 
       <p className="text-[10px] text-gray-500 text-center pb-6 leading-relaxed">
-        본사 운영 대시보드 · HoldemNow Internal
+        본사 운영 대시보드 · Pink Rabbit Internal
       </p>
 
       <style jsx global>{`

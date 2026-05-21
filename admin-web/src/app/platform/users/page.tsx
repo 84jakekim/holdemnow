@@ -43,12 +43,12 @@ interface CardState {
   authInfoLoading?: boolean;
 }
 
-const GOOGLE_NOTICE = `안녕하세요, HoldemNow입니다.
+const GOOGLE_NOTICE = `안녕하세요, Pink Rabbit입니다.
 Google 계정으로 가입하신 분이라 우리 앱에서 비밀번호 재설정을 도와드릴 수 없습니다.
 Google 계정 비밀번호 분실 시 아래 페이지에서 재설정 가능합니다:
 https://accounts.google.com/signin/recovery`;
 
-const KAKAO_NOTICE = `안녕하세요, HoldemNow입니다.
+const KAKAO_NOTICE = `안녕하세요, Pink Rabbit입니다.
 카카오 계정으로 가입하신 분이라 우리 앱에서 비밀번호 재설정을 도와드릴 수 없습니다.
 카카오 계정 비밀번호 분실 시 카카오톡 → 더보기 → 설정 → 카카오계정 → 비밀번호 변경에서 가능합니다.`;
 

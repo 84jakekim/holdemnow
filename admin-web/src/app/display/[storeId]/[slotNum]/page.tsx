@@ -609,7 +609,7 @@ export default function DisplayPage({
             className="w-2 h-2 rounded-full animate-pulse"
             style={{ background: display.accentColor }}
           />
-          <span className="font-bold tracking-tight">HoldemNow</span>
+          <span className="font-bold tracking-tight">Pink Rabbit</span>
           {display.sponsorText && (
             <span className="ml-3 tracking-widest text-[10px]" style={{ opacity: 0.8 }}>
               · {display.sponsorText}

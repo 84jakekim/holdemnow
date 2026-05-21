@@ -92,7 +92,7 @@ export default function OnboardingPhonePage() {
             전화번호 등록
           </h1>
           <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--text-2)' }}>
-            HoldemNow 사용을 위해 본인 명의 핸드폰 번호를 등록해 주세요.
+            Pink Rabbit 사용을 위해 본인 명의 핸드폰 번호를 등록해 주세요.
           </p>
         </div>
 

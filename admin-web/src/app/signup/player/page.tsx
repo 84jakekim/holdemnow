@@ -151,7 +151,7 @@ export default function PlayerSignupPage() {
             </svg>
             로그인
           </Link>
-          <img src="/logo.svg" alt="HoldemNow" width={140} height={24} className="mb-5" />
+          <img src="/logo.svg" alt="Pink Rabbit" width={140} height={24} className="mb-5" />
           <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">일반 가입</h1>
           <p className="text-sm text-gray-500 mt-1.5">플레이어·일반 사용자로 시작하세요.</p>
         </div>

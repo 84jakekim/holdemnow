@@ -428,7 +428,7 @@ function NoticeEditModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm"
-                  placeholder="예: HoldemNow 베타 OPEN"
+                  placeholder="예: Pink Rabbit 베타 OPEN"
                 />
               </div>
 

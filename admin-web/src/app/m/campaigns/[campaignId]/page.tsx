@@ -234,7 +234,7 @@ export default function CampaignDetailPage({
 
       {/* 푸터 */}
       <div className="px-5 py-8 text-center text-[10px] text-gray-400">
-        HoldemNow · 본사 공지
+        Pink Rabbit · 본사 공지
       </div>
     </div>
   );

@@ -64,7 +64,7 @@ function OrganizerAdminPageInner({ organizerId }: { organizerId: string }) {
         <div className="p-5 border-b border-gray-800">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="font-extrabold tracking-tight">HoldemNow</span>
+            <span className="font-extrabold tracking-tight">Pink Rabbit</span>
           </div>
           <div className="text-[10px] text-amber-400 font-bold tracking-wider">대회사 어드민</div>
         </div>

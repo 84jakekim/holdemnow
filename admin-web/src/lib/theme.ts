@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * HoldemNow 어드민 공용 테마 시스템
+ * Pink Rabbit 어드민 공용 테마 시스템
  *
  * 본사 어드민(다크 기본)과 매장 어드민(라이트 기본)이 동일한 인프라를 공유.
  * 3-state 토글: light / dark / system.

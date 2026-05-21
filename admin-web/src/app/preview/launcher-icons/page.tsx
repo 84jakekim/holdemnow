@@ -348,7 +348,7 @@ function HomeMock({ icon }: { icon: ReactNode }) {
           <div className="w-full aspect-square rounded-[28%] overflow-hidden shadow-md">
             {icon}
           </div>
-          <span className="text-[9px] text-white/90 font-semibold">홀덤나우</span>
+          <span className="text-[9px] text-white/90 font-semibold">핑크래빗</span>
         </div>
         {dummy.map((name) => (
           <div key={name} className="flex flex-col items-center gap-1">

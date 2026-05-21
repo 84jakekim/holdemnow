@@ -14,7 +14,7 @@ export default function AppSplash() {
     >
       <img
         src="/logo-white.svg"
-        alt="HoldemNow"
+        alt="Pink Rabbit"
         width={160}
         height={28}
         className="mb-8"

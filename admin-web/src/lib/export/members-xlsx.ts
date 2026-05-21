@@ -145,7 +145,7 @@ export async function exportMembersToXlsx(opts: ExportMembersOpts): Promise<Blob
   const { tab, users = [], stores = [], organizers = [], masking } = opts;
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'HoldemNow 본사';
+  wb.creator = 'Pink Rabbit 본사';
   wb.created = new Date();
 
   // ── 시트 1: 일반 사용자 ──

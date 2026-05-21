@@ -153,16 +153,34 @@ export default function MobileHome() {
       <header className="sticky top-0 z-30 header-minimal">
         <div className="px-4 h-14 flex items-center justify-between gap-3">
 
-          {/* 좌: Pink Rabbit 로고 */}
-          <Link href="/m" aria-label="Pink Rabbit 홈" className="flex-shrink-0 transition active:opacity-60">
+          {/* 좌: Pink Rabbit 로고 + 워드마크 (브랜드 정체성 강화) */}
+          <Link
+            href="/m"
+            aria-label="Pink Rabbit 홈"
+            className="flex-shrink-0 flex items-center gap-1.5 transition active:opacity-60"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.png"
-              alt="Pink Rabbit"
-              width={40}
-              height={40}
-              style={{ display: 'block', width: 40, height: 40, objectFit: 'contain' }}
+              alt=""
+              width={36}
+              height={36}
+              style={{ display: 'block', width: 36, height: 36, objectFit: 'contain' }}
             />
+            <span
+              className="font-black leading-none whitespace-nowrap"
+              style={{
+                fontSize: 16,
+                letterSpacing: '-0.03em',
+                background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+              }}
+            >
+              Pink Rabbit
+            </span>
           </Link>
 
           {/* 중앙: 환영 + 위치 */}

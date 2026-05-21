@@ -292,7 +292,7 @@ export default function UsedDetailPage({ params }: { params: Promise<{ id: strin
           role="note"
           aria-label="거래 안내"
         >
-          HoldemNow는 판매자와 구매자의 만남을 주선합니다. 실제 거래 및 배송 책임은 거래 당사자에게 있습니다.
+          Pink Rabbit는 판매자와 구매자의 만남을 주선합니다. 실제 거래 및 배송 책임은 거래 당사자에게 있습니다.
         </div>
       </div>
 

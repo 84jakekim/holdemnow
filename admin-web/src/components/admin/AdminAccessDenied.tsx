@@ -87,7 +87,7 @@ export default function AdminAccessDenied({ isLoggedIn, myStoreId }: AdminAccess
 
       {/* 문의 안내 */}
       <p className="text-[11px] text-gray-400 text-center mt-8">
-        문의: 카카오톡 채널 HoldemNow 또는 admin@holdemnow.com
+        문의: 카카오톡 채널 Pink Rabbit 또는 admin@holdemnow.com
       </p>
     </main>
   );

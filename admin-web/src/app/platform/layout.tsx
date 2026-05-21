@@ -270,7 +270,7 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
               color: 'var(--text-1)',
             }}
           >
-            HoldemNow
+            Pink Rabbit
           </div>
         </div>
         <div

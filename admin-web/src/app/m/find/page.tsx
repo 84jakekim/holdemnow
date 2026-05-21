@@ -399,7 +399,7 @@ function ListMode() {
 
       {/* 푸터 */}
       <div className="px-4 py-6 text-center text-[11px]" style={{ borderTop: '1px solid var(--border)', color: 'var(--text-3)' }}>
-        HoldemNow BETA · 부산/경남 홀덤펍 디스커버리
+        Pink Rabbit BETA · 부산/경남 홀덤펍 디스커버리
       </div>
     </div>
   );

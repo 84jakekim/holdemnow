@@ -145,7 +145,7 @@ export default function BusinessLoginPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
         {/* 로고 + 컨텍스트 라벨 */}
         <div className="flex flex-col items-center mb-8 mt-6">
-          <img src="/logo.svg" alt="HoldemNow" width={180} height={30} className="mb-2" />
+          <img src="/logo.svg" alt="Pink Rabbit" width={180} height={30} className="mb-2" />
           <div className="flex items-center gap-1.5 mt-1.5">
             <span className="text-[10px] font-bold text-[#FF1F8F] bg-[#FF1F8F]/10 px-2 py-0.5 rounded-full tracking-widest">
               매장·대회사 전용

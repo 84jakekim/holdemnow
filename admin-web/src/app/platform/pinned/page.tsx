@@ -183,7 +183,7 @@ function PinnedEditModal({ post, onClose }: { post: PinnedPost | null; onClose: 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">제목 *</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm" placeholder="예: HoldemNow 베타 오픈" />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm" placeholder="예: Pink Rabbit 베타 오픈" />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">본문</label>

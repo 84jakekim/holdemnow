@@ -144,7 +144,7 @@ export default function OrganizerSignupPage() {
             <div className="font-bold text-amber-900 mb-1">심사 안내</div>
             대회사 심사는 영업일 기준 2~5일 소요됩니다. 레퍼런스 확인 후 승인 연락드립니다.
             <br /><br />
-            문의: 카카오톡 채널 <b>HoldemNow</b> 또는 이메일 <b>admin@holdemnow.com</b>
+            문의: 카카오톡 채널 <b>Pink Rabbit</b> 또는 이메일 <b>admin@holdemnow.com</b>
           </div>
           <Link
             href="/login"

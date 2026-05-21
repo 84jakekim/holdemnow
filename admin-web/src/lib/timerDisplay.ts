@@ -53,7 +53,7 @@ export interface TimerDisplaySettings {
   customTournamentTitle: string;
   /** 자유 공지 텍스트 (TV 하단 띠로 노출 — 비우면 표시 안 함) */
   announcement: string;
-  /** 후원/스폰서 줄 (예: "Powered by HoldemNow · 부산 협회") */
+  /** 후원/스폰서 줄 (예: "Powered by Pink Rabbit · 부산 협회") */
   sponsorText: string;
   /** 상금 텍스트 오버라이드 — 보장상금 등 자유롭게 (비우면 prizePool 자동 표기) */
   prizeOverride: string;

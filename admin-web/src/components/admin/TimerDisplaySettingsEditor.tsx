@@ -262,7 +262,7 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           <input
             value={settings.sponsorText}
             onChange={(e) => update('sponsorText', e.target.value)}
-            placeholder="예: powered by HoldemNow · 부산경남 협회"
+            placeholder="예: powered by Pink Rabbit · 부산경남 협회"
             className="form-input"
           />
           <div className="mt-3" />
