@@ -296,13 +296,16 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if isSignedIn()
-        && (resource.data.ownerUid == request.auth.uid || isOrganizerMember(resource.data.organizerId));
+        && (resource.data.ownerUid == request.auth.uid
+            || isOrganizerMember(resource.data.organizerId)
+            || isPlatformAdmin());
 
       match /finalists/{finalistId} {
         allow read: if true;
         allow write: if isSignedIn() && (
           get(/databases/$(database)/documents/series/$(seriesId)).data.ownerUid == request.auth.uid
           || isOrganizerMember(get(/databases/$(database)/documents/series/$(seriesId)).data.organizerId)
+          || isPlatformAdmin()
         );
       }
     }
