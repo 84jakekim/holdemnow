@@ -256,34 +256,6 @@ export default function MyPage() {
         )}
       </div>
 
-      {/* ── 딜러 프로필 카드 ── */}
-      <div className="px-5 py-4" style={{ borderBottom: '6px solid var(--surface-2)' }}>
-        <div className="text-base font-extrabold mb-3" style={{ color: 'var(--text-1)' }}>딜러 활동</div>
-        <button
-          onClick={() => router.push('/m/community/dealers/me')}
-          className="w-full rounded-2xl p-4 flex items-center gap-3 text-left transition active:scale-[0.99]"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,31,143,0.07) 0%, rgba(255,31,143,0.03) 100%)',
-            border: '1px solid rgba(255,31,143,0.18)',
-          }}
-        >
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center font-extrabold text-white flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BB5 100%)' }}
-            aria-hidden="true"
-          >
-            🃏
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[14px] font-bold" style={{ color: 'var(--text-1)' }}>내 딜러 프로필</div>
-            <div className="text-[12px] mt-0.5" style={{ color: 'var(--text-3)' }}>프로필 등록 시 매장이 먼저 연락해요</div>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
-        </button>
-      </div>
-
       {/* ── 메뉴 ── */}
       <div className="px-5 py-4" style={{ borderBottom: '6px solid var(--surface-2)' }}>
         {[

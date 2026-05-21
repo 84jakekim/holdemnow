@@ -30,8 +30,8 @@ const CATEGORIES: CategoryCard[] = [
   {
     id: 'dealers',
     emoji: '🃏',
-    title: '내 딜러 프로필 등록/수정',
-    subtitle: '매장 대표가 보는 딜러 풀에 노출됩니다',
+    title: '구직 게시 (딜러)',
+    subtitle: '게시글 한 번이면 매장에서 먼저 연락해요',
     href: '/m/community/dealers/me',
     accentColor: '#FF1F8F',
   },
