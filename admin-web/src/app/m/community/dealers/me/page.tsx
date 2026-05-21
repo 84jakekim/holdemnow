@@ -271,7 +271,7 @@ export default function MyDealerProfilePage() {
         <div className="w-9 h-9 flex-shrink-0" aria-hidden="true" />
       </header>
 
-      <div className="pb-36">
+      <div style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 110px)' }}>
 
         {/* ── 매장 owner 공개 안내 박스 ── */}
         <div className="mx-4 mt-5 px-4 py-3.5 rounded-2xl flex items-start gap-3"
@@ -578,10 +578,13 @@ export default function MyDealerProfilePage() {
         </div>
       </div>
 
-      {/* ── 하단 CTA ── */}
+      {/* ── 하단 CTA ── 탭바보다 위 + iOS safe-area 반영 */}
       <div
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-30 px-4 pb-6 pt-3"
-        style={{ background: 'linear-gradient(to top, var(--bg) 80%, transparent 100%)' }}
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 px-4 pt-3"
+        style={{
+          background: 'linear-gradient(to top, var(--bg) 80%, transparent 100%)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
+        }}
       >
         <button
           onClick={handleSave}
