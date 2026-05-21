@@ -149,39 +149,59 @@ function BigCard({
             >
               {statusLabel(session)}
             </span>
-            {/* 우측: 참가가능 / 참가마감 — 사용자가 한눈에 예약 판단.
-             * 시인성 강화: 가능=네온 그린 + 펄스 도트, 마감=짙은 슬레이트 + 자물쇠. */}
+            {/* 우측: 참가가능 / 참가마감 뱃지 — premium pill 디자인
+             * · 가능: emerald 그라데이션 + 내부 inset 하이라이트 + 외부 글로우 + 펄스 도트
+             * · 마감: 다크 글래스(blur) + 미세 border + SVG 자물쇠 라인 아이콘 (이모지 X) */}
             <span className="ml-auto" />
             {isLateRegOpen ? (
               <span
-                className="inline-flex items-center gap-1 text-[11px] font-extrabold pl-1.5 pr-2 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1.5 text-[11px] font-extrabold pl-2 pr-2.5 py-1 rounded-full"
                 style={{
-                  background: '#10B981',
-                  color: '#06281C',
-                  boxShadow: '0 0 0 1.5px rgba(16,185,129,0.45), 0 2px 10px rgba(16,185,129,0.55)',
+                  background: 'linear-gradient(135deg, #34E89E 0%, #00C853 100%)',
+                  color: '#03311B',
+                  letterSpacing: '-0.01em',
+                  boxShadow:
+                    'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.10), 0 0 14px rgba(0,200,83,0.55), 0 2px 8px rgba(0,0,0,0.30)',
                 }}
-                aria-label="참가 가능"
+                aria-label="참가가능"
               >
                 <span
                   className="w-1.5 h-1.5 rounded-full pulse-live flex-shrink-0"
-                  style={{ background: '#06281C' }}
+                  style={{ background: '#03311B', boxShadow: '0 0 6px rgba(3,49,27,0.6)' }}
                   aria-hidden="true"
                 />
-                참가 가능
+                참가가능
               </span>
             ) : (
               <span
-                className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full"
                 style={{
-                  background: 'rgba(15,23,42,0.78)',
-                  color: 'rgba(255,255,255,0.92)',
-                  border: '1px solid rgba(255,255,255,0.20)',
-                  boxShadow: '0 1px 6px rgba(0,0,0,0.5)',
+                  background: 'rgba(15,23,42,0.55)',
+                  color: 'rgba(255,255,255,0.72)',
+                  backdropFilter: 'blur(14px) saturate(140%)',
+                  WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+                  border: '1px solid rgba(255,255,255,0.14)',
+                  letterSpacing: '-0.01em',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.25)',
                 }}
-                aria-label="참가 마감"
+                aria-label="참가마감"
               >
-                <span aria-hidden="true">🔒</span>
-                참가 마감
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  className="flex-shrink-0"
+                >
+                  <rect x="5" y="11" width="14" height="9" rx="2" />
+                  <path d="M8 11V7a4 4 0 018 0v4" />
+                </svg>
+                참가마감
               </span>
             )}
           </div>

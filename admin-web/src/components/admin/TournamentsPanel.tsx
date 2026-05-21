@@ -76,7 +76,10 @@ export default function TournamentsPanel({ storeId, storeName }: Props) {
       },
     );
 
-    const unsubTpl = subscribeTemplates(storeId, setTemplates, () => {});
+    const unsubTpl = subscribeTemplates(storeId, setTemplates, (e) => {
+      // eslint-disable-next-line no-console
+      console.warn('[TournamentsPanel] 템플릿 구독 실패', e);
+    });
     return () => {
       unsubT();
       unsubExpired();

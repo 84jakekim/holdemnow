@@ -76,10 +76,20 @@ export default function UsedItemsPanel({ storeId, storeName, storePhotoUrl }: Us
   const [form, setForm] = useState<UsedForm>(defaultForm());
   const [saving, setSaving] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const unsub = subscribeStoreAllUsedListings(storeId, setItems, () => {});
+    // 인덱스 또는 권한 에러를 사장이 인지할 수 있도록 onError를 silent fail에서 인라인 표시로 전환.
+    const unsub = subscribeStoreAllUsedListings(
+      storeId,
+      (list) => { setItems(list); setSubError(null); },
+      (e) => {
+        // eslint-disable-next-line no-console
+        console.warn('[UsedItemsPanel] 중고거래 구독 실패', e);
+        setSubError(e instanceof Error ? e.message : String(e));
+      },
+    );
     return unsub;
   }, [storeId]);
 
@@ -224,6 +234,13 @@ export default function UsedItemsPanel({ storeId, storeName, storePhotoUrl }: Us
           새 매물
         </button>
       </div>
+
+      {/* ── 구독 에러 안내 (권한·인덱스 실패) ── */}
+      {subError && (
+        <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
+          중고거래 매물을 불러오지 못했습니다. ({subError})
+        </div>
+      )}
 
       {/* ── 글 리스트 ── */}
       {items.length === 0 ? (

@@ -118,33 +118,53 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
           <span className="ml-auto" />
           {isLateRegOpen ? (
             <span
-              className="inline-flex items-center gap-0.5 text-[10px] font-extrabold pl-1 pr-1.5 py-0.5 rounded-full"
+              className="inline-flex items-center gap-1 text-[10px] font-extrabold pl-1.5 pr-2 py-0.5 rounded-full"
               style={{
-                background: '#10B981',
-                color: '#06281C',
-                boxShadow: '0 0 0 1px rgba(16,185,129,0.55), 0 1px 5px rgba(16,185,129,0.45)',
+                background: 'linear-gradient(135deg, #34E89E 0%, #00C853 100%)',
+                color: '#03311B',
+                letterSpacing: '-0.01em',
+                boxShadow:
+                  'inset 0 1px 0 rgba(255,255,255,0.40), 0 0 10px rgba(0,200,83,0.55), 0 1px 5px rgba(0,0,0,0.30)',
               }}
-              aria-label="참가 가능"
+              aria-label="참가가능"
             >
               <span
                 className="w-1 h-1 rounded-full pulse-live flex-shrink-0"
-                style={{ background: '#06281C' }}
+                style={{ background: '#03311B' }}
                 aria-hidden="true"
               />
-              가능
+              참가가능
             </span>
           ) : (
             <span
-              className="inline-flex items-center gap-0.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
+              className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
               style={{
-                background: 'rgba(15,23,42,0.82)',
-                color: 'rgba(255,255,255,0.92)',
-                border: '1px solid rgba(255,255,255,0.20)',
+                background: 'rgba(15,23,42,0.55)',
+                color: 'rgba(255,255,255,0.72)',
+                backdropFilter: 'blur(10px) saturate(140%)',
+                WebkitBackdropFilter: 'blur(10px) saturate(140%)',
+                border: '1px solid rgba(255,255,255,0.14)',
+                letterSpacing: '-0.01em',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 5px rgba(0,0,0,0.25)',
               }}
-              aria-label="참가 마감"
+              aria-label="참가마감"
             >
-              <span aria-hidden="true" style={{ fontSize: 8 }}>🔒</span>
-              마감
+              <svg
+                width="8"
+                height="8"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="flex-shrink-0"
+              >
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M8 11V7a4 4 0 018 0v4" />
+              </svg>
+              참가마감
             </span>
           )}
         </div>

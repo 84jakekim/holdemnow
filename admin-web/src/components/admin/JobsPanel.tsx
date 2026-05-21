@@ -67,9 +67,19 @@ export default function JobsPanel({ storeId, storeName }: JobsPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<NewJobForm>(defaultForm());
   const [saving, setSaving] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = subscribeStoreJobs(storeId, setJobs, () => {});
+    // 인덱스 또는 권한 에러를 사장이 인지할 수 있도록 onError를 silent fail에서 인라인 표시로 전환.
+    const unsub = subscribeStoreJobs(
+      storeId,
+      (list) => { setJobs(list); setSubError(null); },
+      (e) => {
+        // eslint-disable-next-line no-console
+        console.warn('[JobsPanel] 구인 구독 실패', e);
+        setSubError(e instanceof Error ? e.message : String(e));
+      },
+    );
     return unsub;
   }, [storeId]);
 
@@ -205,6 +215,13 @@ export default function JobsPanel({ storeId, storeName }: JobsPanelProps) {
           새 구인
         </button>
       </div>
+
+      {/* ── 구독 에러 안내 (권한·인덱스 실패) ── */}
+      {subError && (
+        <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
+          구인 공고를 불러오지 못했습니다. ({subError})
+        </div>
+      )}
 
       {/* ── 공고 리스트 ── */}
       {jobs.length === 0 ? (

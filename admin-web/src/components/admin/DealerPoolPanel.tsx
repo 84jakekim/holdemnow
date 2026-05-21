@@ -31,16 +31,23 @@ type LevelFilter = 'all' | ExperienceLevel;
 export default function DealerPoolPanel({ storeName }: DealerPoolPanelProps) {
   const [profiles, setProfiles] = useState<DealerProfile[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [abilityFilter, setAbilityFilter] = useState<AbilityFilter>('all');
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all');
   const [regionKeyword, setRegionKeyword] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<DealerProfile | null>(null);
 
   useEffect(() => {
+    // 사장이 권한·인덱스 에러를 인지할 수 있게 onError를 더 이상 silent 처리하지 않음.
     const unsub = subscribeAllDealerProfiles(
       {},
-      (items) => { setProfiles(items); setLoaded(true); },
-      () => setLoaded(true),
+      (items) => { setProfiles(items); setLoaded(true); setError(null); },
+      (e) => {
+        // eslint-disable-next-line no-console
+        console.warn('[DealerPoolPanel] 딜러 풀 구독 실패', e);
+        setError(e instanceof Error ? e.message : String(e));
+        setLoaded(true);
+      },
     );
     return unsub;
   }, []);
@@ -148,6 +155,13 @@ export default function DealerPoolPanel({ storeName }: DealerPoolPanelProps) {
           )}
         </div>
       </div>
+
+      {/* ── 에러 안내 (권한·인덱스 실패) ── */}
+      {error && (
+        <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
+          딜러 풀을 불러오지 못했습니다. ({error})
+        </div>
+      )}
 
       {/* ── 리스트 / 빈 상태 ── */}
       {!loaded ? (
