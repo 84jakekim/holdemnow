@@ -599,11 +599,41 @@ function Lightbox({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, onPrev, onNext]);
 
+  // 터치 스와이프 — 다중 이미지에서 좌우 넘기기
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const SWIPE_THRESHOLD = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
+    touchStartXRef.current = t.clientX;
+    touchStartYRef.current = t.clientY;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const sx = touchStartXRef.current;
+    const sy = touchStartYRef.current;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    if (sx == null || sy == null) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - sx;
+    const dy = t.clientY - sy;
+    // 수평 이동이 더 크고 임계치 초과 시 스와이프로 인식
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
+      if (dx < 0) onNext();
+      else onPrev();
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.92)' }}
       onClick={onClose}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       <button
         type="button"
