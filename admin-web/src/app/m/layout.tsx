@@ -96,6 +96,7 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     pathname.startsWith('/m/events/') ||
     pathname.startsWith('/m/campaigns/') ||
     pathname.startsWith('/m/notice/') ||
+    pathname.startsWith('/m/ad/') ||
     pathname.startsWith('/m/onboarding/');
 
   // 전화번호 미등록 강제 게이트 — 비활성화.

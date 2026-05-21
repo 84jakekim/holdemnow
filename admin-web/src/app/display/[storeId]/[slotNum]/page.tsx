@@ -24,6 +24,7 @@ import {
   computePayoutsFromStructure,
   computePayoutAmounts,
   fmtPrizeDisplay,
+  resolvePayoutStructure,
 } from '@/lib/templates';
 
 interface StoreData {
@@ -855,8 +856,9 @@ function PrizeDistributionPanel({
 }) {
   if (session.prizePool <= 0) return null;
   // Phase 3 우선: 세션에 박힌 분배 정책 사용. 없으면 Phase 2 auto ITM fallback.
+  // Phase 5 (2026-05-21): resolvePayoutStructure로 레거시 mode='manual' 데이터 안전 정규화.
   const payouts = session.payoutStructure
-    ? computePayoutsFromStructure(session.payoutStructure, session.totalPlayers)
+    ? computePayoutsFromStructure(resolvePayoutStructure(session.payoutStructure), session.totalPlayers)
     : computeAutoITM(session.totalPlayers);
   // Phase 4: 만원 단위 내림 + 1등 잔여 추가로 합계=prizePool 보장
   const amountsAll = computePayoutAmounts(session.prizePool, payouts);

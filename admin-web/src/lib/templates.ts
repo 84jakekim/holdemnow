@@ -89,28 +89,62 @@ export interface PrizeDistribution {
 }
 
 // =====================================================================
-// 상금풀 분배 정책 (Phase 3 — 2026-05-21)
+// 상금풀 분배 정책 (Phase 3 — 2026-05-21, Phase 5 — 2026-05-21 단일화)
 // =====================================================================
 /**
  * 사용자 요구 — 사장이 토너 템플릿마다 상금 분배 정책을 설정:
- *  ① "프라이즈풀 = 수동 입력" or "참가비 × 인원 × 시상비율(%) = 자동 계산"
+ *  ① 프라이즈풀 = 참가비 × 인원 × 시상비율(payoutPercent %) = 자동 계산 (단일 모드)
  *  ② 시상 등수 (top N) — 정수 or 'auto' (인원의 15%)
  *  ③ 분배 방식 — top-heavy / standard / flat / custom(직접 편집)
+ *
+ * Phase 5 (2026-05-21): 'manual' 모드 제거. 사용자 결정 — "참가비 기반 자동계산은 계산이 잘되고있고,
+ * 수동입력은 어떤기능인지 이해가 어려움". UI 단순화 우선.
+ * 백워드 호환: 기존 mode='manual' 데이터는 읽을 때 무시되고 항상 auto-percent로 추론됨
+ * (resolvePayoutStructure 헬퍼 사용).
  *
  * UI 위치: 토너 템플릿 편집기.
  * 노출: 매장 어드민 + 매장 TV (사용자 앱 X).
  */
 export interface PayoutStructure {
-  /** 'manual' = 사장이 prizePool 직접 입력. 'auto-percent' = buyIn × players × payoutPercent% 자동 계산. */
-  mode: 'manual' | 'auto-percent';
-  /** mode='auto-percent'일 때 시상 비율 (0~100). 예: 90이면 10% rake. */
-  payoutPercent?: number;
+  /** 시상 비율 (0~100). 예: 90이면 10% rake. prizePool = buyIn × players × payoutPercent / 100. */
+  payoutPercent: number;
   /** 시상 등수. 정수 or 'auto' (인원의 15%로 자동 산출, computeAutoITM과 동일 룰). */
   itmCount: number | 'auto';
   /** 분배 방식. 'custom'은 customPercents 사용. */
   distribution: 'top-heavy' | 'standard' | 'flat' | 'custom';
   /** distribution='custom'일 때 등수별 % 배열 (합계 100). 예: [50, 30, 20]. */
   customPercents?: number[];
+}
+
+/**
+ * 백워드 호환 정규화 — 기존 데이터(mode='manual', payoutPercent 누락)를 안전한 auto-percent로 변환.
+ * Phase 5 단일 모드 전환 시점에 추가. UI/세션 생성 모두 이 헬퍼를 통과시켜 사용한다.
+ */
+export function resolvePayoutStructure(
+  ps: PayoutStructure | Partial<PayoutStructure> | Record<string, unknown> | null | undefined,
+): PayoutStructure {
+  if (!ps || typeof ps !== 'object') return { ...DEFAULT_PAYOUT_STRUCTURE };
+  const raw = ps as Record<string, unknown>;
+  const payoutPercent = raw.payoutPercent;
+  const itmCount = raw.itmCount;
+  const distribution = raw.distribution;
+  const customPercents = raw.customPercents;
+  return {
+    payoutPercent:
+      typeof payoutPercent === 'number' && payoutPercent >= 0 && payoutPercent <= 100
+        ? payoutPercent
+        : 90,
+    itmCount:
+      itmCount === 'auto' || typeof itmCount === 'number' ? (itmCount as number | 'auto') : 'auto',
+    distribution:
+      distribution === 'top-heavy' ||
+      distribution === 'standard' ||
+      distribution === 'flat' ||
+      distribution === 'custom'
+        ? (distribution as PayoutStructure['distribution'])
+        : 'standard',
+    customPercents: Array.isArray(customPercents) ? (customPercents as number[]) : undefined,
+  };
 }
 
 /**
@@ -207,9 +241,8 @@ export function computeAutoPrizePool(
   return Math.floor(raw / 10000) * 10000;
 }
 
-/** payoutStructure 기본값 — 새 템플릿 생성 시 자동 부착. */
+/** payoutStructure 기본값 — 새 템플릿 생성 시 자동 부착. Phase 5: 자동 계산 단일 모드. */
 export const DEFAULT_PAYOUT_STRUCTURE: PayoutStructure = {
-  mode: 'manual',
   payoutPercent: 90,
   itmCount: 'auto',
   distribution: 'standard',

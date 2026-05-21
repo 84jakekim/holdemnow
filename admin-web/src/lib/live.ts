@@ -17,7 +17,7 @@ import {
 import { useEffect, useState } from 'react';
 import { db } from './firebase';
 import type { BlindLevel, PayoutStructure, PrizeDisplayUnit, TournamentTemplate } from './templates';
-import { computeAutoPrizePool } from './templates';
+import { computeAutoPrizePool, resolvePayoutStructure } from './templates';
 
 /**
  * LIVE 세션 상태.
@@ -406,13 +406,10 @@ export async function startLiveSession(
   });
   const first = template.blindStructure[0];
 
-  // 상금풀 계산 — payoutStructure.mode='auto-percent'면 참가비 × 인원 × 시상비율(%)
-  // 그 외(또는 미지정)는 템플릿 prizePool 그대로.
-  const ps = template.payoutStructure;
-  const finalPrizePool =
-    ps?.mode === 'auto-percent'
-      ? computeAutoPrizePool(template.buyIn, template.totalPlayers, ps.payoutPercent ?? 90)
-      : template.prizePool || 0;
+  // 상금풀 계산 — Phase 5 단일 모드: payoutStructure 항상 auto-percent (수동 입력 제거됨).
+  // resolvePayoutStructure로 레거시 데이터 정규화 → 항상 참가비 × 인원 × payoutPercent% 계산.
+  const ps = resolvePayoutStructure(template.payoutStructure);
+  const finalPrizePool = computeAutoPrizePool(template.buyIn, template.totalPlayers, ps.payoutPercent);
 
   // 세션 doc — payoutStructure가 있을 때만 필드 부착 (undefined 저장 방지: Firestore 에러 회피)
   const docData: Record<string, unknown> = {
@@ -443,7 +440,7 @@ export async function startLiveSession(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  if (ps) docData.payoutStructure = ps; // 정책 스냅샷 (분배 방식·ITM·custom 비율 등 전부 포함)
+  docData.payoutStructure = ps; // 정책 스냅샷 (분배 방식·ITM·custom 비율 등 전부 포함) — Phase 5 항상 부착
   if (template.prizeDisplayUnit) docData.prizeDisplayUnit = template.prizeDisplayUnit; // Phase 4 표시 단위 스냅샷
 
   const ref = await addDoc(liveSessionsCol(), docData);
