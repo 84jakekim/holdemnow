@@ -189,7 +189,11 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
 
   const paused = session.status === 'paused';
   const lateMin = computeLateRegMinutes(session, sec);
-  const nextBlind = session.blindStructure.find((l) => l.level === session.currentLevel + 1);
+  const structureForNext =
+    session.blindStructureLocked && session.blindStructureLocked.length > 0
+      ? session.blindStructureLocked
+      : session.blindStructure;
+  const nextBlind = structureForNext.find((l) => l.level === session.currentLevel + 1);
   // 10초 이하 빨강 강조 (running 중일 때만) — 사용자 요청 핵심
   const isWarning = !paused && sec > 0 && sec <= 10 && session.status === 'running';
 
@@ -291,11 +295,43 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
       </div>
 
       {nextBlind && (
-        <div className="text-center text-[11px] text-gray-500 mt-6">
-          NEXT · Lv {nextBlind.level} ·{' '}
-          <span className="font-mono">
-            {nextBlind.sb}/{nextBlind.bb}
-          </span>
+        <div className="mx-5 mt-6">
+          <div
+            className={`rounded-2xl px-5 py-4 border ${
+              nextBlind.isBreak
+                ? 'bg-amber-500/10 border-amber-500/40'
+                : 'bg-white/5 border-white/15'
+            }`}
+          >
+            <div
+              className={`text-[10px] font-extrabold tracking-[0.3em] mb-1.5 text-center ${
+                nextBlind.isBreak ? 'text-amber-400' : 'text-red-400'
+              }`}
+            >
+              ▶ NEXT
+            </div>
+            {nextBlind.isBreak ? (
+              <div className="text-center font-extrabold text-amber-300 text-lg">
+                ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+              </div>
+            ) : (
+              <div className="flex items-baseline justify-center gap-3 flex-wrap">
+                <div className="text-[10px] font-extrabold tracking-widest text-gray-500">
+                  LV {nextBlind.level}
+                </div>
+                <div className="font-mono font-extrabold tabular-nums text-white text-2xl leading-none">
+                  {nextBlind.sb.toLocaleString()}
+                  <span className="text-gray-500 mx-1.5">/</span>
+                  {nextBlind.bb.toLocaleString()}
+                </div>
+                {nextBlind.ante ? (
+                  <div className="font-mono text-xs text-gray-400 font-bold">
+                    ante {nextBlind.ante.toLocaleString()}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

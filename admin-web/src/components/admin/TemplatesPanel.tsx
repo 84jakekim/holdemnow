@@ -680,6 +680,34 @@ function TemplateEditor({
               );
             })}
           </div>
+          {/* 다음 레벨 추가 시 미리보기 — 사장님이 "+ 레벨 추가" 누르기 전에 SB/BB가 얼마가 되는지 확인 */}
+          {(() => {
+            const lastPlay = [...form.blindStructure].reverse().find((b) => !b.isBreak);
+            if (!lastPlay) return null;
+            const baseSb = lastPlay.sb;
+            const nextSb = snap100(baseSb + BLIND_STEP);
+            const nextBb = nextSb * 2;
+            const nextAnte = form.anteEnabled ? suggestAnte(nextBb) : 0;
+            const playCount = form.blindStructure.filter((b) => !b.isBreak).length;
+            return (
+              <div className="mt-2 bg-gray-900 text-white rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                <div className="text-[10px] font-extrabold tracking-widest text-gray-400">
+                  ▶ NEXT (+레벨 추가 시)
+                </div>
+                <div className="flex items-baseline gap-2 font-mono tabular-nums">
+                  <span className="text-[10px] text-gray-400 font-bold">Lv {playCount + 1}</span>
+                  <span className="text-sm font-extrabold">
+                    {nextSb.toLocaleString()}
+                    <span className="text-gray-500 mx-0.5">/</span>
+                    {nextBb.toLocaleString()}
+                  </span>
+                  {nextAnte > 0 && (
+                    <span className="text-[10px] text-gray-400">ante {nextAnte.toLocaleString()}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           <div className="text-[10px] text-gray-400 mt-1 leading-relaxed">
             💡 시간은 <b>분</b> 단위 (예: 10, 15, 20). SB는 100 단위, BB는 자동으로 SB×2.
             <br />☕ 휴식은 ↑/↓로 원하는 위치에 끼워 넣을 수 있어요.

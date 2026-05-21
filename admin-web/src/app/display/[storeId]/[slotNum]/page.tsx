@@ -380,20 +380,67 @@ export default function DisplayPage({
             />
           </div>
 
-          {/* 다음 레벨 / 휴식 */}
+          {/* 다음 레벨 / 휴식 — 큰 박스로 강조 (관중·플레이어가 즉시 인지) */}
           {nextBlind && (
-            <div className="mt-10 text-sm tracking-wider font-bold" style={{ color: display.textColor, opacity: 0.7 }}>
-              NEXT ·{' '}
+            <div
+              className="mt-10 rounded-2xl px-8 py-5 border-2 backdrop-blur-sm"
+              style={{
+                background: 'rgba(0,0,0,0.45)',
+                borderColor: nextBlind.isBreak ? '#FFD166' : `${display.accentColor}66`,
+              }}
+            >
+              <div
+                className="text-[11px] font-extrabold tracking-[0.35em] mb-2 text-center"
+                style={{ color: nextBlind.isBreak ? '#FFD166' : display.accentColor }}
+              >
+                ▶ NEXT
+              </div>
               {nextBlind.isBreak ? (
-                <span style={{ color: '#FFD166' }}>
+                <div
+                  className="font-extrabold text-center"
+                  style={{
+                    color: '#FFD166',
+                    fontSize: 'clamp(28px, 3.5vw, 44px)',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
                   ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
-                </span>
+                </div>
               ) : (
-                <span className="font-mono">
-                  LV {nextBlind.level} · {nextBlind.sb.toLocaleString()}/
-                  {nextBlind.bb.toLocaleString()}
-                  {nextBlind.ante ? ` · ante ${nextBlind.ante.toLocaleString()}` : ''}
-                </span>
+                <div className="flex items-baseline justify-center gap-4 flex-wrap">
+                  <div
+                    className="text-xs tracking-[0.25em] font-extrabold opacity-70"
+                    style={{ color: display.textColor }}
+                  >
+                    LV {nextBlind.level}
+                  </div>
+                  <div
+                    className="font-mono font-extrabold tabular-nums leading-none"
+                    style={{
+                      fontSize: 'clamp(40px, 5.5vw, 72px)',
+                      letterSpacing: '-0.03em',
+                      color: display.blindsColor,
+                    }}
+                  >
+                    {nextBlind.sb.toLocaleString()}
+                    <span style={{ color: display.textColor, opacity: 0.4 }} className="mx-2">
+                      /
+                    </span>
+                    {nextBlind.bb.toLocaleString()}
+                  </div>
+                  {nextBlind.ante ? (
+                    <div
+                      className="font-mono font-bold"
+                      style={{
+                        fontSize: 'clamp(14px, 1.6vw, 20px)',
+                        color: display.textColor,
+                        opacity: 0.7,
+                      }}
+                    >
+                      ante {nextBlind.ante.toLocaleString()}
+                    </div>
+                  ) : null}
+                </div>
               )}
             </div>
           )}

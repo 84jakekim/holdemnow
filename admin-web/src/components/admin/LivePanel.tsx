@@ -300,15 +300,43 @@ function SessionControls({ session }: { session: LiveSession }) {
           </div>
         )}
         {nextBlind && !isFinishing && (
-          <div className="text-[11px] text-gray-500 mt-3 font-bold">
-            다음:{' '}
+          <div
+            className={`mt-4 rounded-xl px-4 py-3 border-[1.5px] ${
+              nextBlind.isBreak
+                ? 'bg-amber-50 border-amber-300'
+                : 'bg-gray-900 border-gray-900 text-white'
+            }`}
+          >
+            <div
+              className={`text-[10px] font-extrabold tracking-[0.25em] mb-1 ${
+                nextBlind.isBreak ? 'text-amber-700' : 'text-gray-400'
+              }`}
+            >
+              NEXT · 다음 레벨
+            </div>
             {nextBlind.isBreak ? (
-              <span className="text-amber-700">☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분</span>
+              <div className="font-extrabold text-amber-800 text-lg">
+                ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+              </div>
             ) : (
-              <span className="text-gray-900">
-                Lv{nextBlind.level} · {nextBlind.sb.toLocaleString()}/{nextBlind.bb.toLocaleString()}
-                {nextBlind.ante ? ` · ante ${nextBlind.ante.toLocaleString()}` : ''}
-              </span>
+              <div className="flex items-baseline justify-center gap-3 flex-wrap">
+                <div className="text-[11px] font-extrabold tracking-widest text-gray-400">
+                  Lv {nextBlind.level}
+                </div>
+                <div
+                  className="font-mono font-extrabold tabular-nums leading-none"
+                  style={{ fontSize: '28px', letterSpacing: '-0.02em' }}
+                >
+                  {nextBlind.sb.toLocaleString()}
+                  <span className="text-gray-500 mx-1">/</span>
+                  {nextBlind.bb.toLocaleString()}
+                </div>
+                {nextBlind.ante ? (
+                  <div className="font-mono text-xs text-gray-300 font-bold">
+                    ante {nextBlind.ante.toLocaleString()}
+                  </div>
+                ) : null}
+              </div>
             )}
           </div>
         )}
