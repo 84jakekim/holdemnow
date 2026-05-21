@@ -542,6 +542,21 @@ export default function DisplayPage({
         </div>
       )}
 
+      {/* 사운드 테스트 버튼 — 운영자가 사운드 작동 확인용. audioReady 후 우상단 작게 */}
+      {audioReady && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            playBlindUp();
+          }}
+          className="fixed top-3 right-3 bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 text-xs font-bold px-3 py-2 rounded-lg backdrop-blur z-30 border border-amber-400/40"
+          title="블라인드업 사운드 테스트"
+        >
+          🔊 사운드 테스트
+        </button>
+      )}
+
       {/* 사운드 활성화 오버레이 — 첫 진입 + unlock 안 된 상태 */}
       {!audioReady && (
         <button
@@ -556,7 +571,16 @@ export default function DisplayPage({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
           aria-label="사운드 활성화"
         >
-          <div className="text-center text-white p-10 rounded-3xl bg-gray-900/95 border-2 border-amber-400 shadow-2xl max-w-md mx-6">
+          <div className="text-center text-white p-10 rounded-3xl bg-gray-900/95 border-2 border-amber-400 shadow-2xl max-w-md mx-6"
+            onClick={(e) => {
+              // 오버레이 내부 클릭 시에도 unlock + 테스트 비프 한 번 즉시
+              e.stopPropagation();
+              unlockAudio();
+              setAudioReady(true);
+              try { localStorage.setItem('holdemnow:tvAudioUnlocked', '1'); } catch {}
+              setTimeout(() => playCountdownBeep(), 100);
+            }}
+          >
             <div className="text-7xl mb-5">🔊</div>
             <div className="text-2xl font-extrabold mb-3">사운드 활성화</div>
             <div className="text-sm text-gray-300 mb-7 leading-relaxed">

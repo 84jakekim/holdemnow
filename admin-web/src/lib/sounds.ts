@@ -31,63 +31,75 @@ function getCtx(): AudioContext | null {
   }
 }
 
-/** ctx가 suspended이면 비동기로 resume 시도하고 true 반환 (이번 재생은 skip 권장). */
-function ensureRunningOrResume(ctx: AudioContext): boolean {
+/** ctx가 suspended이면 resume 시도. 동기적으론 즉시 깨어나지 않을 수 있지만
+ *  Web Audio API는 suspended 상태에서도 osc.start()가 큐에 들어가 깨어난 직후 재생됨.
+ *  → skip하지 말고 그대로 재생 시도. */
+function tryResume(ctx: AudioContext): void {
   if (ctx.state === 'suspended') {
     ctx.resume().catch(() => {});
-    return false;
   }
-  return ctx.state === 'running';
 }
 
 /** 짧은 비프 — 카운트다운 (10~2초). 700Hz 150ms. */
 export function playCountdownBeep(): void {
   const ctx = getCtx();
   if (!ctx) return;
-  if (!ensureRunningOrResume(ctx)) return;
+  tryResume(ctx);
 
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = 700;
-  gain.gain.setValueAtTime(0, ctx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start();
-  osc.stop(ctx.currentTime + 0.16);
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 700;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.16);
+  } catch {
+    /* AudioContext가 닫혀있거나 비정상 — 무시 */
+  }
 }
 
 /** 1초/0초 마지막 비프 — 더 높고 길게. 900Hz 250ms. */
 export function playFinalBeep(): void {
   const ctx = getCtx();
   if (!ctx) return;
-  if (!ensureRunningOrResume(ctx)) return;
+  tryResume(ctx);
 
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = 900;
-  gain.gain.setValueAtTime(0, ctx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start();
-  osc.stop(ctx.currentTime + 0.26);
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 900;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.26);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** 블라인드업! 알림 — 세 톤 상승 (C5→E5→G5). */
 export function playBlindUp(): void {
   const ctx = getCtx();
   if (!ctx) return;
-  if (!ensureRunningOrResume(ctx)) return;
+  tryResume(ctx);
 
-  const now = ctx.currentTime;
-  playNote(ctx, 523, now, 0.18); // C5
-  playNote(ctx, 659, now + 0.15, 0.25); // E5
-  playNote(ctx, 784, now + 0.3, 0.35); // G5
+  try {
+    const now = ctx.currentTime;
+    playNote(ctx, 523, now, 0.18); // C5
+    playNote(ctx, 659, now + 0.15, 0.25); // E5
+    playNote(ctx, 784, now + 0.3, 0.35); // G5
+  } catch {
+    /* ignore */
+  }
 }
 
 function playNote(ctx: AudioContext, freq: number, startAt: number, duration: number): void {
