@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import {
   type StorePost,
   subscribeStorePostsAll,
@@ -16,19 +18,21 @@ import { useAuth, useStoreDoc } from '@/lib/hooks';
 interface Props {
   storeId: string;
   storeName: string;
+  isPlatformAdmin?: boolean;
 }
 
 /**
  * 매장 어드민 — "오늘의 소식" 패널.
  * 1일 1글 권장(데일리), 24h 자동 만료. 자유 텍스트 + 이미지 4장 + 자유 태그.
  */
-export default function PostsPanel({ storeId, storeName }: Props) {
+export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false }: Props) {
   const authState = useAuth();
   const store = useStoreDoc(storeId);
   const [posts, setPosts] = useState<StorePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<StorePost | 'new' | null>(null);
+  const [activating, setActivating] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeStorePostsAll(
@@ -53,13 +57,38 @@ export default function PostsPanel({ storeId, storeName }: Props) {
   const isDemo = (store as unknown as { isDemo?: boolean } | null | undefined)?.isDemo === true;
   const myUid = authState.user.uid;
   const isOwner = storeOwnerUid != null && storeOwnerUid === myUid;
-  // rules 통과 조건: (active || isDemo) && (isStoreOwner || isStoreMember)
-  // 본 페이지는 이미 owner/platform_admin 검증을 통과한 상태에서 진입함
-  const canWrite = isDemo || storeStatus === 'active';
+  // rules 통과 조건: isSignedIn && (owner || member) && authorUid=본인 && (platformAdmin || active || isDemo)
+  // platform_admin은 매장 status 무관하게 통과 — 본사 어드민이 본인 pending 매장에 글 쓰는 케이스 지원.
+  const canWrite = isPlatformAdmin || isDemo || storeStatus === 'active';
+
+  const activateStore = async () => {
+    if (!isPlatformAdmin) return;
+    if (!window.confirm(`"${storeName}" 매장을 즉시 활성(active)으로 전환할까요?`)) return;
+    setActivating(true);
+    try {
+      await updateDoc(doc(db, 'stores', storeId), {
+        status: 'active',
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setActivating(false);
+    }
+  };
 
   // 상태별 안내 메시지
   const statusBanner = (() => {
     if (!store) return null;
+    // platform_admin이 pending 매장에 글을 쓸 수 있도록 풀어주되, 일반 사용자에게는 아직 노출되지 않음을 명시.
+    if (isPlatformAdmin && storeStatus === 'pending') {
+      return {
+        tone: 'amber' as const,
+        icon: '👑',
+        title: '본사 권한 — 작성 가능 (사용자에겐 아직 노출 안 됨)',
+        msg: '이 매장은 status=pending이라 일반 사용자에게 매장·소식이 보이지 않습니다. 활성화 후 즉시 노출됩니다.',
+      };
+    }
     if (canWrite) return null;
     if (storeStatus === 'pending') {
       return {
@@ -133,8 +162,11 @@ export default function PostsPanel({ storeId, storeName }: Props) {
         </div>
       )}
 
-      {/* 진단 정보 — 사장님이 즉시 원인 파악 가능 */}
-      <details className="mb-4 text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+      {/* 진단 정보 — 사장님이 즉시 원인 파악 가능. 작성 불가 상태에선 자동 펼침 */}
+      <details
+        className="mb-4 text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2"
+        open={!canWrite}
+      >
         <summary className="cursor-pointer select-none font-bold text-gray-700">🔍 매장 상태 진단</summary>
         <div className="mt-2 font-mono space-y-0.5">
           <div>매장 ID: {storeId}</div>
@@ -143,8 +175,18 @@ export default function PostsPanel({ storeId, storeName }: Props) {
           <div>매장 ownerUid: {storeOwnerUid ?? '(없음 — 본사 승인 필요)'}</div>
           <div>내 uid: {myUid}</div>
           <div>owner 일치: {isOwner ? '✓' : '✗'}</div>
+          <div>platform_admin: {isPlatformAdmin ? '✓' : '✗'}</div>
           <div>글 작성 가능: {canWrite ? '✓' : '✗ — 본사 승인 또는 isDemo=true 필요'}</div>
         </div>
+        {isPlatformAdmin && storeStatus === 'pending' && (
+          <button
+            onClick={activateStore}
+            disabled={activating}
+            className="mt-3 inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-md"
+          >
+            {activating ? '활성화 중…' : '⚡ 이 매장 즉시 활성화 (status=active)'}
+          </button>
+        )}
       </details>
 
       {error && (
@@ -336,7 +378,11 @@ function PostEditModal({
       }
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      const raw = e instanceof Error ? e.message : String(e);
+      const friendly = /insufficient permissions|PERMISSION_DENIED/i.test(raw)
+        ? '저장 권한이 없습니다. 매장 상태가 active이거나 본사(platform_admin) 권한이 필요합니다. 상단 "🔍 매장 상태 진단" 패널을 확인해 주세요.'
+        : raw;
+      setError(friendly);
     } finally { setBusy(false); }
   };
 

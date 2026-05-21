@@ -259,7 +259,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
 
           {activeMenu === 'dashboard' && <DashboardContent storeId={storeId} storeName={store.name} />}
           {activeMenu === 'tournament' && <TournamentControlCenter storeId={storeId} storeName={store.name} />}
-          {activeMenu === 'posts' && <PostsPanel storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'posts' && <PostsPanel storeId={storeId} storeName={store.name} isPlatformAdmin={isPlatformAdmin} />}
           {activeMenu === 'jobs' && <JobsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'dealers' && <DealerPoolPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'used' && <UsedItemsPanel storeId={storeId} storeName={store.name} storePhotoUrl={store.photoUrls?.[0]} />}
