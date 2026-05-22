@@ -87,44 +87,68 @@ export function playFinalBeep(): void {
 }
 
 /**
- * 블라인드업! 알림 — TTS 음성 ("Blind up!!").
- * 사장 요청(2026-05-23): 톤 차임 대신 명확한 음성으로 전달.
+ * 블라인드업! 알림 — 게임풍 fanfare 차임 + TTS "Blind up!" 결합.
+ * 사장 요청(2026-05-23 정정): 톤은 익사이팅하게, 속도는 좀 늦춰서 또렷이.
  *
- * Web Speech API SpeechSynthesisUtterance 사용. iOS/Android 모던 브라우저 지원.
- * 미지원/거부 시 silent (앱은 멈추지 않음).
+ * 흐름:
+ *   1. 사각파 fanfare C5→E5→G5→C6 (0.32초, 게임 레벨업 느낌)
+ *   2. 0.42초 후 TTS "Blind up!" (rate 0.85 / pitch 1.45 — 흥분된 톤)
+ *
+ * Web Audio API (fanfare) + Web Speech API (TTS) 결합.
+ * 미지원/거부 시 일부만 재생되어도 흐름은 계속.
  */
 export function playBlindUp(): void {
   if (typeof window === 'undefined') return;
+
+  // 1) 게임풍 fanfare — 사각파 4음 상승
+  const ctx = getCtx();
+  if (ctx) {
+    tryResume(ctx);
+    try {
+      const start = ctx.currentTime;
+      playGameNote(ctx, 523, start + 0.0, 0.10);  // C5
+      playGameNote(ctx, 659, start + 0.08, 0.10); // E5
+      playGameNote(ctx, 784, start + 0.16, 0.10); // G5
+      playGameNote(ctx, 1047, start + 0.24, 0.22); // C6 — 길게 강조
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 2) TTS — fanfare 직후 발화
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
-  try {
-    // 진행 중 발화 취소 — 빠른 연속 레벨업 시 누적 방지
-    synth.cancel();
-    const utter = new SpeechSynthesisUtterance('Blind up!');
-    utter.lang = 'en-US';
-    utter.rate = 1.0;
-    utter.pitch = 1.0;
-    utter.volume = 1.0;
-    synth.speak(utter);
-  } catch {
-    /* ignore — TTS 실패는 무시 */
-  }
+  setTimeout(() => {
+    try {
+      synth.cancel();
+      const utter = new SpeechSynthesisUtterance('Blind up!');
+      utter.lang = 'en-US';
+      utter.rate = 0.85;   // 좀 천천히 또렷하게
+      utter.pitch = 1.45;  // 흥분된 높은 톤
+      utter.volume = 1.0;
+      synth.speak(utter);
+    } catch {
+      /* ignore */
+    }
+  }, 420);
 }
 
-function playNote(ctx: AudioContext, freq: number, startAt: number, duration: number): void {
+/** 게임 레벨업 느낌의 사각파 노트. envelope 짧고 또렷. */
+function playGameNote(ctx: AudioContext, freq: number, startAt: number, duration: number): void {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = 'triangle'; // sine보다 살짝 풍부한 톤
+  osc.type = 'square'; // sine보다 게임풍 — 게임 SFX 톤
   osc.frequency.value = freq;
   gain.gain.setValueAtTime(0, startAt);
-  // 블라인드업 — 볼륨 3배 (0.35 → 1.0 max, 클리핑 방지로 1.0 캡)
-  gain.gain.linearRampToValueAtTime(1.0, startAt + 0.02);
+  // 게임 SFX 톤 — 빠른 attack + 짧은 decay
+  gain.gain.linearRampToValueAtTime(0.55, startAt + 0.008);
   gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start(startAt);
   osc.stop(startAt + duration + 0.05);
 }
+
 
 /**
  * 모바일 Safari/iOS는 사용자 첫 터치 이전엔 AudioContext suspended.
