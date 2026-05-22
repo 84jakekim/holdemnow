@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   createReservation,
   MAX_PARTICIPATING_GAME_LEN,
@@ -65,6 +66,7 @@ export default function ReservationSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const now = Date.now();
@@ -179,6 +181,8 @@ export default function ReservationSheet({
       });
       alert('예약이 접수되었습니다. 매장 확인 후 알림드립니다.');
       onClose();
+      // 예약 신청 후 홈으로 자동 이동 — 홈 상단 노란 banner에서 진행 상태 확인 가능.
+      router.push('/m');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

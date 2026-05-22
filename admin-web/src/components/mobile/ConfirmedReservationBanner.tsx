@@ -102,11 +102,12 @@ export default function ConfirmedReservationBanner() {
     return unsub;
   }, [uid]);
 
-  // 60초마다 만료 체크
+  // 만료·표시 갱신을 위한 짧은 tick (5초). onSnapshot이 status 변화는 즉시
+  // 전달하지만 reservedFor + duration 만료 같은 시간 기반 필터는 tick으로 재평가.
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setNow(Date.now());
-    }, 60_000);
+    }, 5_000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -145,6 +146,8 @@ export default function ConfirmedReservationBanner() {
           height: 36,
           display: 'flex',
           alignItems: 'center',
+          // 노랑→녹색 색 전환을 부드럽게 시각화 (사용자가 확정을 인지하도록).
+          transition: 'background 600ms ease',
         }}
       >
         <span
