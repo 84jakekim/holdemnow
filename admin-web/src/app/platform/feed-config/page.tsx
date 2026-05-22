@@ -208,6 +208,39 @@ export default function FeedConfigPage() {
         </p>
       </header>
 
+      {/* 자동확장 기능 안내 박스 */}
+      <section
+        className="rounded-2xl p-4 text-[12px] leading-relaxed"
+        style={{
+          background: 'rgba(245,158,11,0.08)',
+          border: '1px solid rgba(245,158,11,0.25)',
+          color: 'var(--text-2)',
+        }}
+      >
+        <div className="font-extrabold mb-2 flex items-center gap-1.5" style={{ color: 'var(--gold)' }}>
+          <span aria-hidden style={{ fontSize: 14 }}>💡</span>
+          자동확장이란?
+        </div>
+        <p className="mb-2">
+          사용자의 현재 위치 기준 <b>기본 반경 안의 매장 수가 부족할 때</b> 다음 반경 단계로
+          자동으로 넓혀 결과를 채워주는 정책입니다. 사용자가 "더 보기" 버튼을 누르지 않아도
+          빈 화면을 보지 않게 보장.
+        </p>
+        <div className="space-y-1.5 mb-2">
+          <div>
+            <b style={{ color: 'var(--text-1)' }}>예시</b> — 기본 10km · 옵션 [3, 5, 10, 20, 50] · 자동확장 ON · 최대 50km:
+          </div>
+          <div className="pl-3" style={{ color: 'var(--text-3)' }}>
+            → 10km에서 5곳 미만 → <b>20km</b>로 확장 → 여전히 부족 → <b>50km</b>로 확장 → 종료
+          </div>
+        </div>
+        <ul className="space-y-1 pl-3 list-disc list-outside">
+          <li><b style={{ color: 'var(--text-1)' }}>ON</b>: 결과 부족 시 옵션 배열의 다음 큰 값으로 단계적 확장. <b>최대 km</b>를 넘지 않음.</li>
+          <li><b style={{ color: 'var(--text-1)' }}>OFF</b>: 기본 반경 단일 단계만 검색. 결과가 적어도 확장하지 않음 — "내 동네 매장만 보고 싶다" 정책일 때 사용.</li>
+          <li>채팅방 반경에는 자동확장이 없음 — 채팅방은 사용자가 직접 반경을 고르는 구조라 별도 단계 확장 불필요.</li>
+        </ul>
+      </section>
+
       {/* 섹션 1 — 채팅방 반경 */}
       <RadiusSectionCard
         icon="💬"
@@ -480,9 +513,13 @@ function AutoExpandRow({
           style={{ accentColor: 'var(--gold)' }}
         />
         <div className="min-w-0">
-          <div className="text-[12px] font-bold" style={{ color: 'var(--text-1)' }}>자동확장</div>
+          <div className="text-[12px] font-bold" style={{ color: 'var(--text-1)' }}>
+            자동확장 {enabled ? 'ON' : 'OFF'}
+          </div>
           <div className="text-[10.5px]" style={{ color: 'var(--text-3)' }}>
-            반경 안 결과가 적으면 단계적으로 확장
+            {enabled
+              ? `결과 5곳 미만이면 옵션의 다음 단계로 자동 확장 (최대 ${maxKm}km까지)`
+              : `${defaultKm}km 안의 매장만 노출. 결과가 적어도 확장하지 않음`}
           </div>
         </div>
       </label>
