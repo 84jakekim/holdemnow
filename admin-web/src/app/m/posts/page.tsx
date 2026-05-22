@@ -133,30 +133,56 @@ export default function PostsPage() {
     return () => { unsub1(); unsub2(); };
   }, []);
 
-  // 5) 스크롤 위치 복원 + sessionStorage 저장
+  // 5) 스크롤 위치 — 채팅방 톤
+  //    - 첫 데이터 로드 시: 무조건 맨 아래(최신 글)로 즉시 jump. smooth X (카톡과 동일).
+  //    - 매장 상세 다녀와서 복귀(sessionStorage에 위치 있고 같은 세션 내 navigation): 그 위치 복원.
+  //    - 정책: 첫 진입 = 항상 맨 아래. sessionStorage는 페이지 내 이탈→복귀 케이스에서만 작동.
+  //
+  //    `sessionStorage`의 SCROLL_KEY는 onbeforeunload가 아닌 onscroll로 매 프레임 기록되므로,
+  //    "최초 진입인지"를 메모리 ref(initialScrollDoneRef)로 판정. 페이지 첫 mount 시점에는
+  //    SCROLL_KEY가 남아있어도 강제로 맨 아래로 이동.
+  const initialScrollDoneRef = useRef(false);
+  const isFirstMountRef = useRef(true);
+
+  useEffect(() => {
+    // 페이지 첫 mount 시점에 sessionStorage를 비워 "이번 진입은 최초"임을 보장
+    // (이전 세션의 SCROLL_KEY가 남아있으면 그 위치로 복원되어 맨 위 고정 버그 재발)
+    if (isFirstMountRef.current) {
+      sessionStorage.removeItem(SCROLL_KEY);
+      isFirstMountRef.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const raw = sessionStorage.getItem(SCROLL_KEY);
-    if (raw) {
-      const top = Number(raw);
-      if (Number.isFinite(top)) {
-        // 데이터 로드 후 복원
-        requestAnimationFrame(() => { el.scrollTop = top; });
-      }
-    } else if (loaded) {
-      // 최초 진입 시 맨 아래로 (채팅방 톤)
-      requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+
+    // 첫 데이터 도착 시 맨 아래로 즉시 jump (loaded && posts 도착 후 1회만)
+    if (loaded && !initialScrollDoneRef.current && el.scrollHeight > 0) {
+      // 다음 paint에 layout 확정 후 scroll. requestAnimationFrame 2회로 안정성 확보.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const node = scrollRef.current;
+          if (!node) return;
+          node.scrollTop = node.scrollHeight;
+          isNearBottomRef.current = true;
+          initialScrollDoneRef.current = true;
+        });
+      });
     }
+
     const onScroll = () => {
-      sessionStorage.setItem(SCROLL_KEY, String(el.scrollTop));
+      // 최초 스크롤 점프 이후에만 위치 기록 (점프 자체로 0이 저장되는 것 방지)
+      if (initialScrollDoneRef.current) {
+        sessionStorage.setItem(SCROLL_KEY, String(el.scrollTop));
+      }
       const bottomDist = el.scrollHeight - (el.scrollTop + el.clientHeight);
       isNearBottomRef.current = bottomDist <= STICKY_BOTTOM_PX;
       if (isNearBottomRef.current) setNewPostsBadge(0);
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [loaded]);
+  }, [loaded, posts.length]);
 
   // 거리 필터링 — 결과 + 자동 확장 계산
   const visiblePostsAndExpansion = useMemo(() => {
