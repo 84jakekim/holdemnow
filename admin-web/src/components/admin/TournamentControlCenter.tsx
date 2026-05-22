@@ -74,6 +74,8 @@ interface Props {
 }
 
 type RightTab = 'tv' | 'display' | 'preview';
+// 모바일(lg 미만)에서만 활성 — 3분할을 좌/중/우 sub-tab으로 전환
+type MobilePane = 'left' | 'center' | 'right';
 
 export default function TournamentControlCenter({ storeId, storeName }: Props) {
   // ─── 데이터 구독 (Rules of Hooks: early return 이전) ──────────────────────
@@ -89,6 +91,8 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
   const [rightTab, setRightTab] = useState<RightTab>('tv');
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [pickTemplateOpen, setPickTemplateOpen] = useState(false);
+  // 모바일 sub-tab — 좌(세션·템플릿) / 중(타이머) / 우(TV·디스플레이·미리보기)
+  const [mobilePane, setMobilePane] = useState<MobilePane>('center');
 
   useEffect(() => {
     const unsubS = subscribeStoreLiveSessions(
@@ -185,29 +189,29 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
 
   return (
     <div>
-      {/* 헤더 */}
-      <div className="mb-4 flex items-end justify-between gap-4">
+      {/* 헤더 — 모바일: 세로 stack / 데스크탑: 기존 가로 */}
+      <div className="mb-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 lg:gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+          <h1 className="text-xl lg:text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
             🎬 토너 운영
           </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+          <p className="text-xs lg:text-sm mt-1" style={{ color: 'var(--text-2)' }}>
             템플릿·LIVE·TV 송출·디스플레이 설정을 한 페이지에서 — {storeName}
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowTemplateEditor(true)}
-            className="text-xs font-bold rounded-lg px-3 py-2"
-            style={{ background: 'var(--surface-1)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
+            className="flex-1 lg:flex-none text-xs font-bold rounded-lg px-3 py-2.5 lg:py-2"
+            style={{ background: 'var(--surface-1)', color: 'var(--text-1)', border: '1px solid var(--border)', minHeight: 44 }}
           >
             🎲 템플릿 만들기
           </button>
           <button
             onClick={() => setPickTemplateOpen(true)}
             disabled={templates.length === 0}
-            className="text-xs font-bold rounded-lg px-4 py-2 text-white disabled:opacity-40"
-            style={{ background: '#FF1F8F' }}
+            className="flex-1 lg:flex-none text-xs font-bold rounded-lg px-4 py-2.5 lg:py-2 text-white disabled:opacity-40"
+            style={{ background: '#FF1F8F', minHeight: 44 }}
           >
             ▶ 새 LIVE 시작
           </button>
@@ -221,13 +225,34 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
         </div>
       )}
 
-      {/* 3분할 그리드 */}
+      {/* 모바일 sub-tab (lg 미만 전용) — 좌/중/우 전환 */}
+      <div className="lg:hidden mb-3 flex gap-1 rounded-xl p-1" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        <MobilePaneTab
+          active={mobilePane === 'left'}
+          onClick={() => setMobilePane('left')}
+          label="LIVE·템플릿"
+          badge={sessions.length > 0 ? sessions.length : undefined}
+        />
+        <MobilePaneTab
+          active={mobilePane === 'center'}
+          onClick={() => setMobilePane('center')}
+          label="타이머"
+          dot={!!selected}
+        />
+        <MobilePaneTab
+          active={mobilePane === 'right'}
+          onClick={() => setMobilePane('right')}
+          label="TV·화면"
+        />
+      </div>
+
+      {/* 데스크탑: 3분할 그리드 / 모바일: sub-tab 기반 단일 컬럼 */}
       <div
-        className="grid gap-4"
+        className="lg:grid gap-4"
         style={{ gridTemplateColumns: '260px 1fr 380px', minHeight: 'calc(100vh - 220px)' }}
       >
         {/* ─── 좌: 세션 + 빠른 템플릿 ─────────────────────────────── */}
-        <aside className="space-y-3">
+        <aside className={`space-y-3 ${mobilePane === 'left' ? 'block' : 'hidden'} lg:block`}>
           {/* 진행 중 세션 */}
           <Section title={`진행 중 LIVE (${sessions.length})`} pad>
             {sessions.length === 0 ? (
@@ -274,7 +299,7 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
         </aside>
 
         {/* ─── 중: 타이머 컨트롤 ─────────────────────────────────── */}
-        <main>
+        <main className={`${mobilePane === 'center' ? 'block' : 'hidden'} lg:block`}>
           {selected ? (
             <SessionControlPanel
               session={selected}
@@ -300,7 +325,7 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
         </main>
 
         {/* ─── 우: TV/디스플레이/미리보기 ───────────────────────── */}
-        <aside>
+        <aside className={`${mobilePane === 'right' ? 'block' : 'hidden'} lg:block`}>
           <div
             className="rounded-xl overflow-hidden"
             style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
@@ -1410,6 +1435,57 @@ function Section({ title, children, pad }: { title: string; children: React.Reac
       </div>
       {children}
     </div>
+  );
+}
+
+// 모바일 sub-tab — 좌/중/우 전환 (lg 미만 전용)
+function MobilePaneTab({
+  active,
+  onClick,
+  label,
+  badge,
+  dot,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  badge?: number;
+  dot?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg text-[12px] font-bold transition"
+      style={{
+        minHeight: 40,
+        background: active ? 'var(--surface-1)' : 'transparent',
+        color: active ? '#FF1F8F' : 'var(--text-2)',
+        border: active ? '1px solid rgba(255,31,143,0.30)' : '1px solid transparent',
+        boxShadow: active ? '0 1px 2px rgba(0,0,0,0.04)' : undefined,
+      }}
+    >
+      <span>{label}</span>
+      {typeof badge === 'number' && (
+        <span
+          className="inline-flex items-center justify-center rounded-full text-[10px] font-extrabold text-white tabular-nums"
+          style={{
+            minWidth: 18,
+            height: 18,
+            padding: '0 5px',
+            background: '#FF1F8F',
+          }}
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+      {dot && !badge && (
+        <span
+          className="inline-block w-1.5 h-1.5 rounded-full"
+          style={{ background: '#FF1F8F' }}
+          aria-hidden
+        />
+      )}
+    </button>
   );
 }
 
