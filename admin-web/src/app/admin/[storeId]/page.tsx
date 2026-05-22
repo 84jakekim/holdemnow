@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useStoreDoc, useUserDoc, hasRole } from '@/lib/hooks';
@@ -51,6 +51,7 @@ const PENDING_DISABLED_MENUS = new Set(['tournament', 'jobs', 'dealers', 'used',
 
 function AdminPageInner({ storeId }: { storeId: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const authState = useAuth();
   const store = useStoreDoc(storeId);
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
@@ -58,6 +59,8 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [showPwModal, setShowPwModal] = useState(false);
   const [unreadReservationCount, setUnreadReservationCount] = useState(0);
+  // 모바일 드로어 — lg(1024px) 미만에서 햄버거로 토글
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { pref, change } = useTheme('light-default');
   // 사운드 알림 훅은 early return 전에 호출 — Rules of Hooks
   useReservationSoundAlert(storeId);
@@ -75,6 +78,31 @@ function AdminPageInner({ storeId }: { storeId: string }) {
     );
     return unsub;
   }, [storeId]);
+
+  // 메뉴 전환 시 드로어 자동 닫힘
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [activeMenu, pathname]);
+
+  // ESC 키로 드로어 닫기
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
+
+  // 드로어 열렸을 때 body 스크롤 잠금
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [drawerOpen]);
 
   if (authState.status === 'loading' || store === undefined) {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
@@ -119,13 +147,16 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const isMenuLocked = (id: string) =>
     isPending && !isPlatformAdmin && PENDING_DISABLED_MENUS.has(id);
 
-  return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg-sub)' }}>
-      {/* 좌측 사이드바 — 매장(현장 운영) 톤: 라이트 기본 + 핫핑크 액센트 */}
-      <aside
-        className="w-64 flex flex-col"
-        style={{ background: 'var(--surface-1)', borderRight: '1px solid var(--border)' }}
-      >
+  // 현재 활성 메뉴 라벨 (상단 모바일 바 타이틀)
+  const activeMenuMeta = MENUS.find((m) => m.id === activeMenu);
+  const pageTitle = activeMenuMeta ? `${activeMenuMeta.icon} ${activeMenuMeta.label}` : '매장 어드민';
+
+  // 사이드바 — 데스크탑/모바일 드로어 공용
+  const SidebarContent = (
+    <aside
+      className="w-64 flex flex-col h-full"
+      style={{ background: 'var(--surface-1)', borderRight: '1px solid var(--border)' }}
+    >
         {/* 로고 + STORE OPS 워드마크 (핑크 그라데이션 강조) */}
         <div
           className="p-5"
@@ -153,10 +184,13 @@ function AdminPageInner({ storeId }: { storeId: string }) {
             email={authState.user.email ?? undefined}
             subLabel={isPending ? '⏳ 심사 대기' : undefined}
           />
-          <AdminNotificationBell
-            storeId={storeId}
-            onNavigate={() => setActiveMenu('reservations')}
-          />
+          {/* 모바일에서는 상단 바에 종이 있으므로 사이드바 종은 lg+에만 노출 */}
+          <div className="hidden lg:block">
+            <AdminNotificationBell
+              storeId={storeId}
+              onNavigate={() => setActiveMenu('reservations')}
+            />
+          </div>
         </div>
 
         {/* 푸시 알림 권한 위젯 — 사장이 브라우저 푸시 권한을 켜고 fcmToken을
@@ -260,6 +294,32 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           </button>
         </div>
       </aside>
+  );
+
+  return (
+    <div className="min-h-screen flex" style={{ background: 'var(--bg-sub)' }}>
+      {/* 데스크탑 사이드바 (lg+) — 기존 UX 그대로 */}
+      <div className="hidden lg:block" style={{ width: 256, flexShrink: 0 }}>
+        {SidebarContent}
+      </div>
+
+      {/* 모바일 드로어 (lg 미만) */}
+      {drawerOpen && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 z-40"
+            style={{ background: 'rgba(0,0,0,0.55)' }}
+            onClick={() => setDrawerOpen(false)}
+            aria-hidden
+          />
+          <div
+            className="lg:hidden fixed inset-y-0 left-0 z-50"
+            style={{ width: 280, maxWidth: '85vw', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' }}
+          >
+            {SidebarContent}
+          </div>
+        </>
+      )}
 
       {/* 비밀번호 변경 모달 */}
       {showPwModal && (
@@ -269,9 +329,61 @@ function AdminPageInner({ storeId }: { storeId: string }) {
         />
       )}
 
-      {/* 메인 컨텐츠 — 현장 운영 톤: 여유 패딩 + 라운드 큼 */}
-      <main className="flex-1 p-8 overflow-y-auto" style={{ background: 'var(--bg-sub)' }}>
-        <div className="max-w-4xl">
+      {/* 메인 영역 — 모바일 상단바 + 콘텐츠 */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* 모바일 상단 바 (lg 미만) — 햄버거 + 페이지 타이틀 + 알림 종 */}
+        <header
+          className="lg:hidden sticky top-0 z-30 flex items-center gap-2 px-3"
+          style={{
+            height: 52,
+            background: 'var(--surface-1)',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="inline-flex items-center justify-center rounded-md"
+            style={{
+              width: 40,
+              height: 40,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+            aria-label="메뉴 열기"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+            {unreadReservationCount > 0 && (
+              <span
+                className="absolute inline-block rounded-full"
+                style={{
+                  top: 6,
+                  left: 24,
+                  width: 8,
+                  height: 8,
+                  background: '#FF1F8F',
+                  boxShadow: '0 0 0 1.5px var(--surface-1)',
+                }}
+                aria-label={`알림 ${unreadReservationCount}건`}
+              />
+            )}
+          </button>
+          <div className="flex-1 truncate" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>
+            {pageTitle}
+          </div>
+          <AdminNotificationBell
+            storeId={storeId}
+            onNavigate={() => setActiveMenu('reservations')}
+          />
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8" style={{ background: 'var(--bg-sub)' }}>
+          <div className="max-w-4xl">
           {isPending && (
             <div
               className="mb-6 p-4 flex items-start gap-3"
@@ -308,6 +420,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           )}
         </div>
       </main>
+      </div>
     </div>
   );
 }
