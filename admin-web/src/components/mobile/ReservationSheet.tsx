@@ -59,7 +59,7 @@ export default function ReservationSheet({
   const [displayName, setDisplayName] = useState<string>(authorName ?? '');
   const [reservedFor, setReservedFor] = useState<string>('');
   const [minDateTime, setMinDateTime] = useState<string>('');
-  const [partySize, setPartySize] = useState<number>(2);
+  const [partySize, setPartySize] = useState<number>(1);
   const [participatingGame, setParticipatingGame] = useState<string>('');
   const [phone, setPhone] = useState<string>(defaultPhone ?? '');
   const [note, setNote] = useState<string>('');
@@ -70,10 +70,11 @@ export default function ReservationSheet({
 
   useEffect(() => {
     const now = Date.now();
+    // 기본 예약 시각: 1시간 후 정각 / 최소: 5분 후
     const def = new Date(now + 60 * 60 * 1000);
     def.setSeconds(0, 0);
     def.setMinutes(0);
-    const min = new Date(now + 30 * 60 * 1000);
+    const min = new Date(now + 5 * 60 * 1000);
     min.setSeconds(0, 0);
     setReservedFor(toLocalInputValue(def));
     setMinDateTime(toLocalInputValue(min));
@@ -121,8 +122,8 @@ export default function ReservationSheet({
       setError('방문 일시가 올바르지 않습니다.');
       return;
     }
-    if (reservedDate.getTime() < Date.now() + 25 * 60 * 1000) {
-      setError('방문 일시는 현재로부터 30분 이후로 선택해주세요.');
+    if (reservedDate.getTime() < Date.now() + 4 * 60 * 1000) {
+      setError('방문 일시는 현재로부터 5분 이후로 선택해주세요.');
       return;
     }
     if (
