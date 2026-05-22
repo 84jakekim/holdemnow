@@ -57,12 +57,39 @@ export interface TimerDisplaySettings {
 
   /** TV 상단에 큰 글씨로 표시할 대회명 (비우면 session.tournamentName 사용) */
   customTournamentTitle: string;
-  /** 자유 공지 텍스트 (TV 하단 띠로 노출 — 비우면 표시 안 함) */
+  /** 자유 공지 텍스트 (TV 하단 띠로 노출 — 비우면 표시 안 함).
+   *  ※ 2026-05-23 이후 marqueeText로 대체. 비어 있으면 marqueeText로 자동 fallback. */
   announcement: string;
   /** 후원/스폰서 줄 (예: "Powered by Pink Rabbit · 부산 협회") */
   sponsorText: string;
   /** 상금 텍스트 오버라이드 — 보장상금 등 자유롭게 (비우면 prizePool 자동 표기) */
   prizeOverride: string;
+
+  /** ─── 텍스트 3줄 신규 (2026-05-23) ───────────────────────────────
+   *  TV 디스플레이에 사장이 자유 텍스트 3줄을 띄울 수 있도록.
+   *  첫째 줄(title): 상단 중앙 — 경기 타이틀 (예: 🎰 6/15 정기 토너).
+   *                  비우면 기존 customTournamentTitle / session.tournamentName fallback.
+   *  둘째 줄(note):  본문 보조 위치 — 게임 참고사항 (예: 리바이 3회까지).
+   *                  비우면 노출 안 함.
+   *  셋째 줄(marquee): 하단 풀폭 — 우→좌 무한 스와이프 (뉴스 chyron 톤).
+   *                    비우면 노출 안 함. 기존 announcement → 자동 fallback (resolveTimerDisplay).
+   *  각 줄마다 텍스트/폰트크기/색/스타일 독립. 이모지 자유. */
+  titleText: string;
+  titleFontSize: number;        // px (vw 계산은 layout에서 처리)
+  titleColor: string;           // #RRGGBB
+  titleStyle: 'normal' | 'bold' | 'italic' | 'bold-italic';
+
+  noteText: string;
+  noteFontSize: number;
+  noteColor: string;
+  noteStyle: 'normal' | 'bold' | 'italic' | 'bold-italic';
+
+  marqueeText: string;
+  marqueeFontSize: number;
+  marqueeColor: string;
+  marqueeStyle: 'normal' | 'bold' | 'italic' | 'bold-italic';
+  /** 한 바퀴 도는 시간(초). 기본 30초 — 작을수록 빠름. */
+  marqueeSpeedSec: number;
 
   /** 60초 경고 비프 사운드 (기본 false — 사장님이 명시적으로 켜야 작동) */
   soundWarn60: boolean;
@@ -105,6 +132,23 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
   announcement: '',
   sponsorText: '',
   prizeOverride: '',
+
+  // 텍스트 3줄 — 2026-05-23 신규
+  titleText: '',
+  titleFontSize: 32,
+  titleColor: '#FFFFFF',
+  titleStyle: 'bold',
+
+  noteText: '',
+  noteFontSize: 18,
+  noteColor: '#E5E5E5',
+  noteStyle: 'normal',
+
+  marqueeText: '',
+  marqueeFontSize: 20,
+  marqueeColor: '#FFFFFF',
+  marqueeStyle: 'bold',
+  marqueeSpeedSec: 30,
 
   soundWarn60: false,
   soundWarn30: true,
@@ -151,7 +195,7 @@ export function subscribeTimerDisplayPresets(
         return {
           id: d.id,
           name: data.name ?? d.id,
-          settings: { ...DEFAULT_TIMER_DISPLAY, ...(data.settings ?? {}) },
+          settings: resolveTimerDisplay(data.settings ?? null),
         };
       });
       onChange(items);
@@ -209,6 +253,26 @@ function timerDisplayDoc(storeId: string) {
   return doc(db, 'stores', storeId, 'timerDisplay', 'default');
 }
 
+/**
+ * Firestore 원본을 화면용 settings로 정규화.
+ * - 누락 필드를 DEFAULT_TIMER_DISPLAY로 채움.
+ * - backward compat: marqueeText가 비어 있고 기존 announcement만 채워진 매장은
+ *   announcement → marqueeText로 자동 노출 (사용자가 따로 재입력하지 않아도 작동).
+ * - titleText가 비어 있으면 customTournamentTitle을 fallback으로 사용 가능 — 단,
+ *   여기서는 fallback을 강제하지 않고 layout 측에서 빈 문자열로 두면 자체 분기에서
+ *   session.tournamentName으로 fallback 한다 (기존 동작 유지).
+ */
+export function resolveTimerDisplay(
+  raw: Partial<TimerDisplaySettings> | null | undefined,
+): TimerDisplaySettings {
+  const merged: TimerDisplaySettings = { ...DEFAULT_TIMER_DISPLAY, ...(raw ?? {}) };
+  // 기존 announcement만 있고 marqueeText가 비어있으면 자동 마이그레이션.
+  if ((!merged.marqueeText || merged.marqueeText.trim().length === 0) && merged.announcement) {
+    merged.marqueeText = merged.announcement;
+  }
+  return merged;
+}
+
 /** 매장 타이머 디스플레이 설정 실시간 구독. 없으면 DEFAULT 반환. */
 export function subscribeTimerDisplay(
   storeId: string,
@@ -219,11 +283,11 @@ export function subscribeTimerDisplay(
     timerDisplayDoc(storeId),
     (snap) => {
       if (!snap.exists()) {
-        onChange(DEFAULT_TIMER_DISPLAY);
+        onChange(resolveTimerDisplay(null));
         return;
       }
       const data = snap.data() as Partial<TimerDisplaySettings>;
-      onChange({ ...DEFAULT_TIMER_DISPLAY, ...data });
+      onChange(resolveTimerDisplay(data));
     },
     (err) => onError?.(err as Error),
   );
@@ -232,9 +296,9 @@ export function subscribeTimerDisplay(
 /** 한 번만 조회 (TV가 초기 페인트에서 즉시 채워야 할 때). */
 export async function getTimerDisplay(storeId: string): Promise<TimerDisplaySettings> {
   const snap = await getDoc(timerDisplayDoc(storeId));
-  if (!snap.exists()) return DEFAULT_TIMER_DISPLAY;
+  if (!snap.exists()) return resolveTimerDisplay(null);
   const data = snap.data() as Partial<TimerDisplaySettings>;
-  return { ...DEFAULT_TIMER_DISPLAY, ...data };
+  return resolveTimerDisplay(data);
 }
 
 /** 부분 업데이트 (서버 머지). */

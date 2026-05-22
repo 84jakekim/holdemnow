@@ -518,7 +518,28 @@ export default function DisplayPage({
         })()
     : '';
 
-  const heroTitle = display.customTournamentTitle || session?.tournamentName || '대기 중';
+  // 우선순위: 화면 텍스트 3줄 신규 titleText > 기존 customTournamentTitle > 세션 토너명 > '대기 중'.
+  // titleText가 채워져 있으면 폰트크기/색/스타일도 함께 적용 (layout에서 사용).
+  const heroTitle =
+    (display.titleText && display.titleText.trim().length > 0
+      ? display.titleText
+      : display.customTournamentTitle) ||
+    session?.tournamentName ||
+    '대기 중';
+  const titleStyled = !!(display.titleText && display.titleText.trim().length > 0);
+  const titleFontWeight =
+    titleStyled && display.titleStyle.includes('bold') ? 800 : 700;
+  const titleFontStyle =
+    titleStyled && display.titleStyle.includes('italic') ? 'italic' : 'normal';
+  const titleColor = titleStyled ? display.titleColor : display.textColor;
+  // 둘째 줄 (게임 참고사항)
+  const noteText = display.noteText?.trim() ?? '';
+  const noteFontWeight = display.noteStyle.includes('bold') ? 700 : 400;
+  const noteFontStyle = display.noteStyle.includes('italic') ? 'italic' : 'normal';
+  // 셋째 줄 (마퀴) — backward compat은 resolveTimerDisplay에서 처리됨
+  const marqueeText = display.marqueeText?.trim() ?? '';
+  const marqueeFontWeight = display.marqueeStyle.includes('bold') ? 700 : 400;
+  const marqueeFontStyle = display.marqueeStyle.includes('italic') ? 'italic' : 'normal';
 
   // CSS rotate fallback 폐기 (2026-05-23 핫픽스).
   // 외곽 wrapper transform 제거 — 누워서 보이던 버그(error.jpg) 해결.
@@ -687,9 +708,38 @@ export default function DisplayPage({
             )}
           </div>
 
-          <div className="text-xs tracking-widest mb-6 max-w-[80%] truncate" style={{ color: display.textColor }}>
+          {/* 첫째 줄 — 게임 타이틀 (titleText 채워졌으면 사용자 폰트 옵션 적용) */}
+          <div
+            className="mb-3 max-w-[90%] truncate text-center"
+            style={{
+              color: titleColor,
+              fontSize: titleStyled
+                ? `clamp(${Math.max(16, display.titleFontSize * 0.6)}px, ${display.titleFontSize / 18}vw, ${display.titleFontSize * 1.4}px)`
+                : '12px',
+              fontWeight: titleFontWeight,
+              fontStyle: titleFontStyle,
+              letterSpacing: titleStyled ? '-0.01em' : '0.15em',
+              lineHeight: 1.15,
+            }}
+          >
             {heroTitle}
           </div>
+          {/* 둘째 줄 — 게임 참고사항 (noteText 있을 때만) */}
+          {noteText && (
+            <div
+              className="mb-3 max-w-[85%] text-center truncate"
+              style={{
+                color: display.noteColor,
+                fontSize: `clamp(${Math.max(10, display.noteFontSize * 0.7)}px, ${display.noteFontSize / 22}vw, ${display.noteFontSize * 1.3}px)`,
+                fontWeight: noteFontWeight,
+                fontStyle: noteFontStyle,
+                opacity: 0.92,
+                lineHeight: 1.2,
+              }}
+            >
+              {noteText}
+            </div>
+          )}
           <div className="text-[10px] tracking-[0.3em] mb-3" style={{ color: display.textColor, opacity: 0.7 }}>
             {isCurrentBreak ? `BREAK · ${currentLevelObj?.level ?? ''}레벨` : `LEVEL ${session.currentLevel}`}
           </div>
@@ -850,17 +900,32 @@ export default function DisplayPage({
         </div>
       )}
 
-      {/* 공지 띠 (announcement) */}
-      {display.announcement && session && session.status !== 'completed' && (
+      {/* 셋째 줄 — 하단 마퀴 (우→좌 무한 스와이프, 뉴스 chyron 톤).
+          marqueeText가 비어 있으면 표시 안 함. backward compat: 기존 announcement는
+          resolveTimerDisplay()에서 marqueeText로 자동 마이그레이션됨. */}
+      {marqueeText && session && session.status !== 'completed' && (
         <div
-          className="relative px-10 py-3 text-center font-bold text-sm border-t"
+          className="relative overflow-hidden border-t whitespace-nowrap"
           style={{
-            background: 'rgba(0,0,0,0.35)',
-            color: display.timerColor,
+            background: 'rgba(0,0,0,0.45)',
             borderColor: 'rgba(255,255,255,0.1)',
+            padding: '8px 0',
           }}
+          aria-label={marqueeText}
         >
-          📢 {display.announcement}
+          <span
+            className="inline-block tv-marquee"
+            style={{
+              color: display.marqueeColor,
+              fontSize: `clamp(${Math.max(12, display.marqueeFontSize * 0.7)}px, ${display.marqueeFontSize / 30}vw, ${display.marqueeFontSize * 1.4}px)`,
+              fontWeight: marqueeFontWeight,
+              fontStyle: marqueeFontStyle,
+              animationDuration: `${display.marqueeSpeedSec}s`,
+              willChange: 'transform',
+            }}
+          >
+            {marqueeText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{marqueeText}
+          </span>
         </div>
       )}
 
@@ -1000,6 +1065,25 @@ export default function DisplayPage({
           </div>
         </button>
       )}
+
+      {/* 텍스트 3줄 — 셋째 줄 마퀴 keyframes (페이지 스코프 inline style) */}
+      <style>{`
+        @keyframes tv-marquee-scroll {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
+        .tv-marquee {
+          animation-name: tv-marquee-scroll;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .tv-marquee {
+            animation: none;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -1091,12 +1175,46 @@ function MobilePortraitLayout({
             </>
           )}
         </div>
-        <div
-          className="text-[10px] tracking-widest text-center max-w-full truncate px-2"
-          style={{ color: display.textColor, opacity: 0.85 }}
-        >
-          {heroTitle}
-        </div>
+        {/* 첫째 줄 — 게임 타이틀 (titleText 채워졌으면 사용자 옵션 적용) */}
+        {(() => {
+          const titled = !!(display.titleText && display.titleText.trim().length > 0);
+          const bold = titled && display.titleStyle.includes('bold');
+          const italic = titled && display.titleStyle.includes('italic');
+          return (
+            <div
+              className="text-center max-w-full truncate px-2"
+              style={{
+                color: titled ? display.titleColor : display.textColor,
+                opacity: titled ? 1 : 0.85,
+                fontSize: titled
+                  ? `clamp(${Math.max(11, display.titleFontSize * 0.55)}px, ${display.titleFontSize / 24}vw, ${display.titleFontSize}px)`
+                  : '10px',
+                fontWeight: bold ? 800 : 600,
+                fontStyle: italic ? 'italic' : 'normal',
+                letterSpacing: titled ? '-0.01em' : '0.15em',
+                lineHeight: 1.15,
+              }}
+            >
+              {heroTitle}
+            </div>
+          );
+        })()}
+        {/* 둘째 줄 — 게임 참고사항 */}
+        {display.noteText && display.noteText.trim().length > 0 && (
+          <div
+            className="text-center max-w-full truncate px-2"
+            style={{
+              color: display.noteColor,
+              fontSize: `clamp(${Math.max(10, display.noteFontSize * 0.6)}px, ${display.noteFontSize / 28}vw, ${display.noteFontSize}px)`,
+              fontWeight: display.noteStyle.includes('bold') ? 700 : 400,
+              fontStyle: display.noteStyle.includes('italic') ? 'italic' : 'normal',
+              opacity: 0.9,
+              lineHeight: 1.2,
+            }}
+          >
+            {display.noteText}
+          </div>
+        )}
         <div className="text-[9px] tracking-[0.3em]" style={{ color: display.textColor, opacity: 0.7 }}>
           {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
         </div>
@@ -1258,6 +1376,33 @@ function MobilePortraitLayout({
           </div>
         </div>
       </div>
+
+      {/* 셋째 줄 — 하단 마퀴 (모바일 세로) */}
+      {display.marqueeText && display.marqueeText.trim().length > 0 && (
+        <div
+          className="mt-3 overflow-hidden border rounded-lg whitespace-nowrap"
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            borderColor: 'rgba(255,255,255,0.1)',
+            padding: '6px 0',
+          }}
+          aria-label={display.marqueeText}
+        >
+          <span
+            className="inline-block tv-marquee"
+            style={{
+              color: display.marqueeColor,
+              fontSize: `clamp(${Math.max(11, display.marqueeFontSize * 0.55)}px, ${display.marqueeFontSize / 32}vw, ${display.marqueeFontSize}px)`,
+              fontWeight: display.marqueeStyle.includes('bold') ? 700 : 400,
+              fontStyle: display.marqueeStyle.includes('italic') ? 'italic' : 'normal',
+              animationDuration: `${display.marqueeSpeedSec}s`,
+              willChange: 'transform',
+            }}
+          >
+            {display.marqueeText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{display.marqueeText}
+          </span>
+        </div>
+      )}
 
       {/* 전체화면 진입 안내 띠 — 2026-05-23 PM 정정: 타이머 컨셉에 맞게 subtle 톤으로.
           이전: 노란 풀필 → 너무 튐. 정정: 다크 ghost 버튼, 작은 회색 텍스트.
@@ -1637,14 +1782,48 @@ function MobileLandscapeLayout({
               </>
             )}
           </div>
-          {/* 토너 이름 (truncate) */}
-          <div
-            className="text-[11px] tracking-wider font-bold truncate"
-            style={{ color: display.textColor, opacity: 0.9 }}
-            title={heroTitle}
-          >
-            {heroTitle}
-          </div>
+          {/* 첫째 줄 — 게임 타이틀 (truncate, titleText면 폰트 옵션 적용) */}
+          {(() => {
+            const titled = !!(display.titleText && display.titleText.trim().length > 0);
+            const bold = titled && display.titleStyle.includes('bold');
+            const italic = titled && display.titleStyle.includes('italic');
+            return (
+              <div
+                className="truncate"
+                title={heroTitle}
+                style={{
+                  color: titled ? display.titleColor : display.textColor,
+                  opacity: titled ? 1 : 0.9,
+                  fontSize: titled
+                    ? `clamp(${Math.max(11, display.titleFontSize * 0.45)}px, ${display.titleFontSize / 36}vw, ${display.titleFontSize * 0.85}px)`
+                    : '11px',
+                  fontWeight: bold ? 800 : 700,
+                  fontStyle: italic ? 'italic' : 'normal',
+                  letterSpacing: titled ? '-0.01em' : '0.05em',
+                  lineHeight: 1.2,
+                }}
+              >
+                {heroTitle}
+              </div>
+            );
+          })()}
+          {/* 둘째 줄 — 게임 참고사항 */}
+          {display.noteText && display.noteText.trim().length > 0 && (
+            <div
+              className="truncate"
+              style={{
+                color: display.noteColor,
+                fontSize: `clamp(${Math.max(9, display.noteFontSize * 0.5)}px, ${display.noteFontSize / 40}vw, ${display.noteFontSize * 0.8}px)`,
+                fontWeight: display.noteStyle.includes('bold') ? 700 : 400,
+                fontStyle: display.noteStyle.includes('italic') ? 'italic' : 'normal',
+                opacity: 0.85,
+                lineHeight: 1.2,
+              }}
+              title={display.noteText}
+            >
+              {display.noteText}
+            </div>
+          )}
           {/* 레벨 */}
           <div className="text-[9px] tracking-[0.3em] mt-1" style={{ color: display.textColor, opacity: 0.6 }}>
             {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
@@ -1781,6 +1960,33 @@ function MobileLandscapeLayout({
           />
         </div>
       </div>
+
+      {/* ─── 셋째 줄 — 하단 마퀴 (가로 layout, 컨트롤 행 바로 위) ─── */}
+      {display.marqueeText && display.marqueeText.trim().length > 0 && (
+        <div
+          className="mt-1 overflow-hidden border-t whitespace-nowrap"
+          style={{
+            background: 'rgba(0,0,0,0.55)',
+            borderColor: 'rgba(255,255,255,0.1)',
+            padding: '4px 0',
+          }}
+          aria-label={display.marqueeText}
+        >
+          <span
+            className="inline-block tv-marquee"
+            style={{
+              color: display.marqueeColor,
+              fontSize: `clamp(${Math.max(10, display.marqueeFontSize * 0.5)}px, ${display.marqueeFontSize / 36}vw, ${display.marqueeFontSize * 0.85}px)`,
+              fontWeight: display.marqueeStyle.includes('bold') ? 700 : 400,
+              fontStyle: display.marqueeStyle.includes('italic') ? 'italic' : 'normal',
+              animationDuration: `${display.marqueeSpeedSec}s`,
+              willChange: 'transform',
+            }}
+          >
+            {display.marqueeText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{display.marqueeText}
+          </span>
+        </div>
+      )}
 
       {/* ─── 하단 컨트롤 행 — 권한자만 노출 (사용자 요구) ─── */}
       {canControl ? (

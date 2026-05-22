@@ -363,21 +363,91 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           </div>
         </Section>
 
-        {/* 텍스트 */}
-        <Section title="📝 텍스트 / 공지">
-          <FieldLabel label="대회명 오버라이드" hint="비우면 세션 토너 이름 자동 사용" />
+        {/* 텍스트 3줄 — 2026-05-23 신규 (게임타이틀 · 참고사항 · 하단 마퀴) */}
+        <Section
+          title="📝 화면 텍스트 3줄"
+          hint="TV에 띄울 자유 텍스트 3줄 — 각각 글자 크기·색·스타일 조절 가능 · 이모지 자유"
+        >
+          {/* 첫째 줄 — 게임 타이틀 */}
+          <TextLineEditor
+            badge="🎯 첫째 줄"
+            subtitle="게임 타이틀 — 화면 중앙 상단"
+            placeholder="예) 🎰 6/15 정기 토너 100K"
+            text={settings.titleText}
+            fontSize={settings.titleFontSize}
+            color={settings.titleColor}
+            style={settings.titleStyle}
+            onTextChange={(v) => update('titleText', v)}
+            onFontSizeChange={(v) => update('titleFontSize', v)}
+            onColorChange={(v) => update('titleColor', v)}
+            onStyleChange={(v) => update('titleStyle', v)}
+            sizeMin={16}
+            sizeMax={64}
+          />
+
+          <div className="h-3" />
+
+          {/* 둘째 줄 — 게임 참고사항 */}
+          <TextLineEditor
+            badge="📋 둘째 줄"
+            subtitle="게임 참고사항 — 타이틀 바로 아래"
+            placeholder="예) 리바이 3회까지 · 18:30 디너 제공"
+            text={settings.noteText}
+            fontSize={settings.noteFontSize}
+            color={settings.noteColor}
+            style={settings.noteStyle}
+            onTextChange={(v) => update('noteText', v)}
+            onFontSizeChange={(v) => update('noteFontSize', v)}
+            onColorChange={(v) => update('noteColor', v)}
+            onStyleChange={(v) => update('noteStyle', v)}
+            sizeMin={10}
+            sizeMax={40}
+          />
+
+          <div className="h-3" />
+
+          {/* 셋째 줄 — 하단 마퀴 */}
+          <TextLineEditor
+            badge="📢 셋째 줄"
+            subtitle="화면 하단 — 우→좌 자동 스와이프 (뉴스 띠)"
+            placeholder="예) 📢 오늘 8시 시작 · 좌석 한정 · 디너 18:30"
+            text={settings.marqueeText}
+            fontSize={settings.marqueeFontSize}
+            color={settings.marqueeColor}
+            style={settings.marqueeStyle}
+            onTextChange={(v) => update('marqueeText', v)}
+            onFontSizeChange={(v) => update('marqueeFontSize', v)}
+            onColorChange={(v) => update('marqueeColor', v)}
+            onStyleChange={(v) => update('marqueeStyle', v)}
+            sizeMin={12}
+            sizeMax={48}
+            extra={
+              <div className="mt-2">
+                <FieldLabel
+                  label={`스와이프 속도 ${settings.marqueeSpeedSec}초 / 1바퀴`}
+                  hint="작을수록 빠름 · 보통 25~35초"
+                />
+                <input
+                  type="range"
+                  min={10}
+                  max={60}
+                  step={1}
+                  value={settings.marqueeSpeedSec}
+                  onChange={(e) => update('marqueeSpeedSec', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            }
+          />
+        </Section>
+
+        {/* 텍스트 — 기타 */}
+        <Section title="🏷️ 텍스트 — 기타">
+          <FieldLabel label="대회명 오버라이드 (기존)" hint="비우면 세션 토너 이름 자동 사용 · 첫째 줄을 채우면 그 값을 우선 사용" />
           <input
             value={settings.customTournamentTitle}
             onChange={(e) => update('customTournamentTitle', e.target.value)}
             placeholder="예: 5월 정기 토너 100K"
-            className="form-input"
-          />
-          <div className="mt-3" />
-          <FieldLabel label="공지 텍스트" hint="TV 하단 띠에 흐르듯 노출 — 비우면 표시 안 함" />
-          <input
-            value={settings.announcement}
-            onChange={(e) => update('announcement', e.target.value)}
-            placeholder="예: 다음 레벨 후 10분 휴식 · 18:30 디너 제공"
             className="form-input"
           />
           <div className="mt-3" />
@@ -604,9 +674,43 @@ function TimerPreview({ settings }: { settings: TimerDisplaySettings }) {
               LIVE
             </span>
           </div>
-          <div className="text-[10px] tracking-widest mb-2 truncate max-w-[80%]" style={{ color: settings.textColor }}>
-            {settings.customTournamentTitle || '5월 정기 토너 100K'}
+          {/* 첫째 줄 — 게임 타이틀 (titleText 우선, 없으면 customTournamentTitle, 그것도 없으면 데모) */}
+          <div
+            className="text-center max-w-[90%] truncate"
+            style={{
+              color: settings.titleText ? settings.titleColor : settings.textColor,
+              fontSize: settings.titleText ? Math.min(settings.titleFontSize, 22) : 11,
+              fontWeight:
+                settings.titleText && settings.titleStyle.includes('bold')
+                  ? 800
+                  : 600,
+              fontStyle:
+                settings.titleText && settings.titleStyle.includes('italic')
+                  ? 'italic'
+                  : 'normal',
+              lineHeight: 1.1,
+              marginBottom: 4,
+              letterSpacing: settings.titleText ? '-0.01em' : '0.15em',
+            }}
+          >
+            {settings.titleText || settings.customTournamentTitle || '5월 정기 토너 100K'}
           </div>
+          {/* 둘째 줄 — 게임 참고사항 (있을 때만) */}
+          {settings.noteText && (
+            <div
+              className="text-center max-w-[90%] truncate"
+              style={{
+                color: settings.noteColor,
+                fontSize: Math.min(settings.noteFontSize, 14),
+                fontWeight: settings.noteStyle.includes('bold') ? 700 : 400,
+                fontStyle: settings.noteStyle.includes('italic') ? 'italic' : 'normal',
+                marginBottom: 6,
+                opacity: 0.9,
+              }}
+            >
+              {settings.noteText}
+            </div>
+          )}
           <div className="text-[9px] tracking-[0.3em] mb-1" style={{ color: settings.textColor, opacity: 0.7 }}>
             LEVEL 4
           </div>
@@ -637,16 +741,42 @@ function TimerPreview({ settings }: { settings: TimerDisplaySettings }) {
           </div>
         </div>
 
-        {settings.announcement && (
+        {/* 셋째 줄 — 하단 마퀴 (우→좌 자동 스와이프) */}
+        {(settings.marqueeText || settings.announcement) && (
           <div
-            className="px-5 py-2 text-center text-[11px] font-bold border-t"
+            className="overflow-hidden border-t whitespace-nowrap"
             style={{
-              background: 'rgba(0,0,0,0.35)',
-              color: settings.timerColor,
+              background: 'rgba(0,0,0,0.45)',
               borderColor: 'rgba(255,255,255,0.1)',
+              padding: '6px 0',
             }}
           >
-            📢 {settings.announcement}
+            <span
+              className="inline-block preview-marquee"
+              style={{
+                color: settings.marqueeColor,
+                fontSize: Math.min(settings.marqueeFontSize, 14),
+                fontWeight: settings.marqueeStyle.includes('bold') ? 700 : 400,
+                fontStyle: settings.marqueeStyle.includes('italic') ? 'italic' : 'normal',
+                animationDuration: `${settings.marqueeSpeedSec}s`,
+                willChange: 'transform',
+              }}
+            >
+              {(settings.marqueeText || settings.announcement) +
+                '         ' +
+                (settings.marqueeText || settings.announcement)}
+            </span>
+            <style jsx>{`
+              @keyframes preview-marquee-scroll {
+                from { transform: translateX(0); }
+                to   { transform: translateX(-50%); }
+              }
+              .preview-marquee {
+                animation-name: preview-marquee-scroll;
+                animation-timing-function: linear;
+                animation-iteration-count: infinite;
+              }
+            `}</style>
           </div>
         )}
         {settings.sponsorText && (
@@ -667,6 +797,117 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-[8px] tracking-widest opacity-60">{label}</div>
       <div className="font-mono text-[11px] font-extrabold">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * TextLineEditor — 텍스트 한 줄 + 폰트 크기/색/스타일 컨트롤 묶음.
+ * 3개 줄(타이틀/참고사항/마퀴) 모두 동일한 UI 구조를 재사용.
+ */
+function TextLineEditor({
+  badge,
+  subtitle,
+  placeholder,
+  text,
+  fontSize,
+  color,
+  style,
+  onTextChange,
+  onFontSizeChange,
+  onColorChange,
+  onStyleChange,
+  sizeMin,
+  sizeMax,
+  extra,
+}: {
+  badge: string;
+  subtitle: string;
+  placeholder: string;
+  text: string;
+  fontSize: number;
+  color: string;
+  style: 'normal' | 'bold' | 'italic' | 'bold-italic';
+  onTextChange: (v: string) => void;
+  onFontSizeChange: (v: number) => void;
+  onColorChange: (v: string) => void;
+  onStyleChange: (v: 'normal' | 'bold' | 'italic' | 'bold-italic') => void;
+  sizeMin: number;
+  sizeMax: number;
+  extra?: React.ReactNode;
+}) {
+  const styleOptions: { id: 'normal' | 'bold' | 'italic' | 'bold-italic'; label: string }[] = [
+    { id: 'normal', label: 'Normal' },
+    { id: 'bold', label: 'Bold' },
+    { id: 'italic', label: 'Italic' },
+    { id: 'bold-italic', label: 'B + I' },
+  ];
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[11px] font-extrabold text-gray-900 tracking-wide">{badge}</span>
+        <span className="text-[10px] text-gray-500">{subtitle}</span>
+      </div>
+      <input
+        value={text}
+        onChange={(e) => onTextChange(e.target.value)}
+        placeholder={placeholder}
+        className="form-input"
+      />
+      <div className="grid grid-cols-3 gap-2 mt-2">
+        {/* 폰트 크기 */}
+        <div className="col-span-3 sm:col-span-1">
+          <FieldLabel label={`크기 ${fontSize}px`} />
+          <input
+            type="range"
+            min={sizeMin}
+            max={sizeMax}
+            step={1}
+            value={fontSize}
+            onChange={(e) => onFontSizeChange(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        {/* 색상 */}
+        <div className="col-span-3 sm:col-span-1">
+          <FieldLabel label="색상" />
+          <div className="flex gap-1.5 items-center">
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => onColorChange(e.target.value)}
+              className="h-8 w-10 rounded cursor-pointer border-0 p-0"
+            />
+            <input
+              value={color}
+              onChange={(e) => onColorChange(e.target.value)}
+              className="form-input flex-1 font-mono text-[11px]"
+            />
+          </div>
+        </div>
+        {/* 스타일 */}
+        <div className="col-span-3 sm:col-span-1">
+          <FieldLabel label="스타일" />
+          <div className="grid grid-cols-4 gap-1">
+            {styleOptions.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onStyleChange(s.id)}
+                className={`text-[10px] py-1.5 rounded font-bold border ${
+                  style === s.id
+                    ? 'bg-black text-white border-black'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {extra}
     </div>
   );
 }
