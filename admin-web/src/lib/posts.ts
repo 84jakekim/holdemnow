@@ -31,7 +31,7 @@ import { moderateText, checkLinkWhitelist, capEmojis } from './moderation';
  * 매장 데일리 홍보 ("오늘의 소식") + 본사 pinned 공지.
  *
  * 정책 (memory: project_holdemnow_daily_posts):
- * - 매장당 1일 1글, createdAt + 24h 자동 만료
+ * - 매장당 1일 3글 (free tier, 2026-05-22 변경 — POST_DAILY_LIMIT_FREE), createdAt + 24h 자동 만료
  * - 이미지 최대 4장 (5MB/장)
  * - 자유 이벤트 태그
  * - 본사 pinned 글은 top-level `pinnedPosts` 컬렉션 (홈 최상단 고정)
@@ -40,7 +40,7 @@ import { moderateText, checkLinkWhitelist, capEmojis } from './moderation';
  * 콘텐츠 가드 (Sprint 1 Phase E, 2026-05-21):
  * - moderateText: 욕설·도박·환금 키워드 자동 거부 (lib/moderation 사전 ~250개)
  * - checkLinkWhitelist: open.kakao.com / pf.kakao.com 외 URL 거절
- * - 1일 1글 클라이언트 가드: createdAt + 24h 이내 본인 글 존재 시 차단
+ * - 1일 N글 클라이언트 가드: createdAt + 24h 이내 본인 글 수 ≥ POST_DAILY_LIMIT_FREE 시 차단
  * - 이모지 5개 캡: 자동 자르기 (UX 마찰 최소화)
  * - 신고 누적 3건 → autoHideOnReports Cloud Function이 status='hidden' 처리
  */
@@ -295,17 +295,20 @@ export function subscribeActivePostsAll(
   );
 }
 
-/** 매장이 24h 이내 작성한 글이 이미 있는지 (1일 1글 클라이언트 가드). */
-export async function hasRecentPostByStore(storeId: string, authorUid: string): Promise<boolean> {
+/** 매장 1일 작성 한도 (free tier, 2026-05-22).
+ *  향후 유료 패키지로 횟수 증액 예정 — `project_post_quota_roadmap.md` 참조. */
+export const POST_DAILY_LIMIT_FREE = 3;
+
+/** 매장이 24h 이내 작성한 글 수 (한도 가드용). */
+export async function countRecentPostsByStore(storeId: string, authorUid: string): Promise<number> {
   const since = Timestamp.fromMillis(Date.now() - POST_TTL_MS);
   const q = query(
     postsCol(storeId),
     where('authorUid', '==', authorUid),
     where('createdAt', '>=', since),
-    limit(1),
   );
   const snap = await getDocs(q);
-  return !snap.empty;
+  return snap.size;
 }
 
 /**
@@ -398,11 +401,12 @@ export async function createStorePost(input: {
       throw new PostGuardError('link', '카카오 오픈채팅·플러스친구 외 링크는 첨부할 수 없어요');
     }
   }
-  // 4) 1일 1글 가드 (24h 이내 본인 글 존재 시 차단)
-  if (await hasRecentPostByStore(input.storeId, input.authorUid)) {
+  // 4) 1일 작성 한도 가드 (free tier 3건/24h. 유료 패키지 도입 시 증액 예정)
+  const recentCount = await countRecentPostsByStore(input.storeId, input.authorUid);
+  if (recentCount >= POST_DAILY_LIMIT_FREE) {
     throw new PostGuardError(
       'rate_limit',
-      '오늘의 소식은 하루에 한 번만 작성할 수 있어요. 기존 글을 수정해주세요.',
+      `오늘의 소식은 하루에 ${POST_DAILY_LIMIT_FREE}건까지 작성할 수 있어요. 기존 글을 수정하거나 24시간 후 다시 작성해주세요.`,
     );
   }
   // 5) 이모지 5개 캡 — 자동 자르기 (UX 마찰 최소화)
