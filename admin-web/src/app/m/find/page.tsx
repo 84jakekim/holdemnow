@@ -11,6 +11,7 @@ import { posterStyleFor } from '@/lib/templates';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
 import { loadPopularStores, loadRecentlyJoinedStores, type PopularityStore } from '@/lib/popularity';
+import { subscribeFeedConfig, FEED_CONFIG_DEFAULT, type FeedConfig } from '@/lib/feedConfig';
 import { useAuth } from '@/lib/hooks';
 import { coordToRegionLabel } from '@/lib/kakao';
 import { loadKakaoMaps, geocodeAddress, DEFAULT_CENTER } from '@/lib/kakao';
@@ -70,13 +71,12 @@ interface MapStoreSummary {
 
 // ─── 상수 ─────────────────────────────────────────────────────
 
-const NEARBY_RADIUS_STEPS_KM = [20, 40, 60, 80, 100] as const;
-const NEARBY_RADIUS_INITIAL_KM = 20;
-const NEARBY_RADIUS_MAX_KM = 100;
+// 내 주변 매장·인기 매장 반경은 본사 어드민 feedConfig가 제공 (nearby/popularRadius*)
+// — 기존 NEARBY_RADIUS_STEPS_KM/_INITIAL_KM/_MAX_KM 상수 제거됨.
 const NEARBY_LIST_INITIAL_COUNT = 8;
 const HOME_POSTS_LIMIT = 15;
 const PINNED_ROTATE_MS = 3000;
-const MAP_NEARBY_RADIUS_M = 10_000;
+const MAP_NEARBY_RADIUS_M = 10_000; // 지도 모드 기본 표시 범위 (줌별 반경 fallback에만 사용)
 
 // ─── 카카오 지도 줌별 반경 ────────────────────────────────────
 
@@ -1246,6 +1246,12 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
   const [expanded, setExpanded] = useState(false);
   const [appliedRadiusKm, setAppliedRadiusKm] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [feedCfg, setFeedCfg] = useState<FeedConfig>(FEED_CONFIG_DEFAULT);
+
+  // 본사 어드민 반경 설정 구독 — 인기 매장 정책
+  useEffect(() => {
+    return subscribeFeedConfig(setFeedCfg, () => {});
+  }, []);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) { setUserLocation(null); return; }
@@ -1259,14 +1265,25 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
 
   useEffect(() => {
     let cancelled = false;
-    loadPopularStores(userLocation).then((res) => {
+    loadPopularStores(userLocation, {
+      defaultRadiusKm: feedCfg.popularRadiusDefaultKm,
+      expandStepsKm: feedCfg.popularRadiusOptionsKm,
+      autoExpand: feedCfg.popularAutoExpand,
+      maxKm: feedCfg.popularAutoExpandMaxKm,
+    }).then((res) => {
       if (cancelled) return;
       setStores(res.stores); setExpanded(res.expanded);
       setAppliedRadiusKm(res.appliedRadiusM > 0 ? Math.round(res.appliedRadiusM / 1000) : null);
       setLoaded(true);
     }).catch(() => { if (!cancelled) setLoaded(true); });
     return () => { cancelled = true; };
-  }, [userLocation]);
+  }, [
+    userLocation,
+    feedCfg.popularRadiusDefaultKm,
+    feedCfg.popularRadiusOptionsKm,
+    feedCfg.popularAutoExpand,
+    feedCfg.popularAutoExpandMaxKm,
+  ]);
 
   if (loaded && stores.length === 0) return null;
 
@@ -1381,8 +1398,21 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
 function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
   const [stores, setStores] = useState<NearbyStore[]>([]);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
-  const [radiusKm, setRadiusKm] = useState<number>(NEARBY_RADIUS_INITIAL_KM);
+  const [feedCfg, setFeedCfg] = useState<FeedConfig>(FEED_CONFIG_DEFAULT);
+  const [radiusKm, setRadiusKm] = useState<number>(FEED_CONFIG_DEFAULT.nearbyRadiusDefaultKm);
+  const [radiusManual, setRadiusManual] = useState(false);
   const [listExpanded, setListExpanded] = useState(false);
+
+  // 본사 어드민 반경 설정 구독
+  useEffect(() => {
+    return subscribeFeedConfig((cfg) => {
+      setFeedCfg(cfg);
+      // 사용자가 직접 확장한 적 없으면 본사 기본값으로 동기화
+      if (!radiusManual) setRadiusKm(cfg.nearbyRadiusDefaultKm);
+    }, () => {});
+    // radiusManual은 ref-like, dep 의도 회피
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
@@ -1417,14 +1447,18 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
     return sorted.filter((s) => s.distance != null && s.distance <= maxM);
   }, [sorted, userLocation, radiusKm]);
 
-  const nextRadiusKm = userLocation ? NEARBY_RADIUS_STEPS_KM.find((r) => r > radiusKm) ?? null : null;
+  // 본사 옵션 배열에서 현재보다 큰 다음 단계 (없으면 자동확장 max로 fallback)
+  const nextRadiusKm = userLocation
+    ? feedCfg.nearbyRadiusOptionsKm.find((r) => r > radiusKm)
+      ?? (feedCfg.nearbyAutoExpand && feedCfg.nearbyAutoExpandMaxKm > radiusKm ? feedCfg.nearbyAutoExpandMaxKm : null)
+    : null;
   const moreCount = useMemo(() => {
     if (!userLocation || nextRadiusKm == null) return 0;
     const nextMaxM = nextRadiusKm * 1000;
     return Math.max(0, sorted.filter((s) => s.distance != null && s.distance <= nextMaxM).length - visible.length);
   }, [sorted, userLocation, nextRadiusKm, visible.length]);
 
-  const canExpand = nextRadiusKm != null && radiusKm < NEARBY_RADIUS_MAX_KM;
+  const canExpand = nextRadiusKm != null && radiusKm < feedCfg.nearbyAutoExpandMaxKm;
 
   if (stores.length === 0) return null;
 
@@ -1473,7 +1507,7 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
 
       {canExpand && (
         <div className="px-4 pt-2 pb-1">
-          <button onClick={() => setRadiusKm(nextRadiusKm!)} className="w-full py-2.5 rounded-2xl text-[12px] font-semibold transition active:scale-[0.99] flex items-center justify-center gap-1" style={{ background: 'var(--surface-1)', border: '1px dashed var(--border)', color: 'var(--text-3)' }}>
+          <button onClick={() => { setRadiusKm(nextRadiusKm!); setRadiusManual(true); }} className="w-full py-2.5 rounded-2xl text-[12px] font-semibold transition active:scale-[0.99] flex items-center justify-center gap-1" style={{ background: 'var(--surface-1)', border: '1px dashed var(--border)', color: 'var(--text-3)' }}>
             더 멀리 · 반경 {nextRadiusKm}km까지 넓히기
             {moreCount > 0 && <span className="stat-number font-bold" style={{ color: 'var(--text-2)' }}> +{moreCount}개</span>}
           </button>

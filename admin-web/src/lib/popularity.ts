@@ -17,9 +17,22 @@ import { haversineMeters, type LatLng } from './geo';
  * - LIVE 신호는 stores.liveSessionCount 누적 카운터 사용 (startLiveSession에서 increment)
  */
 
+// 기본값 — 본사 feed-config 미설정 시 사용. config 인자로 덮어쓰기 가능.
 const DEFAULT_RADIUS_M = 10_000;
-const EXPAND_RADIUS_STEPS_M = [10_000, 20_000, 30_000] as const;
+const FALLBACK_EXPAND_STEPS_M = [10_000, 20_000, 50_000] as const;
 const MIN_RESULTS = 5;
+
+/** 인기 매장 반경 설정 — feedConfig에서 주입 */
+export interface PopularityRadiusConfig {
+  /** 기본 반경(km). 자동확장 단계의 첫 값 역할. */
+  defaultRadiusKm: number;
+  /** 자동확장 단계(km, asc). 자동확장 OFF면 [defaultRadiusKm]만 사용. */
+  expandStepsKm: number[];
+  /** 자동확장 ON 여부. OFF면 defaultRadiusKm 단일 단계만 시도. */
+  autoExpand: boolean;
+  /** 자동확장 최대 반경(km). expandStepsKm 중 이 값을 초과하는 단계는 제외. */
+  maxKm: number;
+}
 const TOP_N = 10;
 const NEW_BOOST_DAYS = 30;
 const NEW_BOOST_FACTOR = 0.3;
@@ -137,8 +150,23 @@ export interface PopularityResult {
  */
 export async function loadPopularStores(
   userLocation: LatLng | null,
+  config?: PopularityRadiusConfig,
 ): Promise<PopularityResult> {
   const all = await loadActiveStoresWithMetrics();
+
+  // config 정규화 — 단계 배열을 m 단위로 변환, autoExpand OFF면 단일 단계만.
+  const stepsM: readonly number[] = (() => {
+    if (!config) return FALLBACK_EXPAND_STEPS_M;
+    const cap = Math.max(config.defaultRadiusKm, config.maxKm);
+    const opts = Array.from(new Set([
+      config.defaultRadiusKm,
+      ...(config.autoExpand ? config.expandStepsKm : []),
+    ]))
+      .filter((v) => v > 0 && v <= cap)
+      .sort((a, b) => a - b);
+    return opts.length > 0 ? opts.map((km) => km * 1000) : FALLBACK_EXPAND_STEPS_M;
+  })();
+  const baseRadiusM = stepsM[0];
 
   // 좌표 + 거리 부여
   const withDistance = all.map(({ store, metrics }) => {
@@ -168,11 +196,13 @@ export async function loadPopularStores(
   }
 
   // 반경 단계별 시도 — 결과 5개 미만이면 다음 단계로
-  for (const radius of EXPAND_RADIUS_STEPS_M) {
+  for (let i = 0; i < stepsM.length; i++) {
+    const radius = stepsM[i];
+    const isLast = i === stepsM.length - 1;
     const inRadius = withDistance.filter(
       ({ store }) => store.distance != null && store.distance <= radius,
     );
-    if (inRadius.length < MIN_RESULTS && radius !== EXPAND_RADIUS_STEPS_M[EXPAND_RADIUS_STEPS_M.length - 1]) {
+    if (inRadius.length < MIN_RESULTS && !isLast) {
       continue; // 더 넓게
     }
     const scored = inRadius.map(({ store, metrics }) => {
@@ -187,11 +217,11 @@ export async function loadPopularStores(
     return {
       stores: scored.slice(0, TOP_N),
       appliedRadiusM: radius,
-      expanded: radius > DEFAULT_RADIUS_M,
+      expanded: radius > baseRadiusM,
     };
   }
 
-  return { stores: [], appliedRadiusM: DEFAULT_RADIUS_M, expanded: false };
+  return { stores: [], appliedRadiusM: baseRadiusM, expanded: false };
 }
 
 /**
