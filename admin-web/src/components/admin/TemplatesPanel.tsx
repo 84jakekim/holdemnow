@@ -1088,7 +1088,7 @@ function PayoutStructureEditor({
         <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">
           ③ 분배 방식
         </div>
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {(['top-heavy', 'standard', 'flat', 'custom'] as const).map((d) => (
             <button
               key={d}

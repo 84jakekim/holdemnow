@@ -708,7 +708,7 @@ function PostEditModal({
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">이미지 ({imageUrls.length}/{MAX_POST_IMAGES}장)</label>
-            <div className="grid grid-cols-4 gap-2 mb-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
               {imageUrls.map((url) => (
                 <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
