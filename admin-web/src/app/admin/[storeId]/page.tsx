@@ -295,7 +295,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           {activeMenu === 'tournaments' && <TournamentsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'reservations' && <ReservationsPanel storeId={storeId} />}
           {activeMenu === 'store' && <StoreInfoPanel storeId={storeId} />}
-          {activeMenu === 'ads' && <AdsPanel />}
+          {activeMenu === 'ads' && <AdsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'stats' && <StatsPanel storeId={storeId} />}
           {!['dashboard', 'tournament', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'reservations', 'store', 'ads', 'stats'].includes(activeMenu) && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />

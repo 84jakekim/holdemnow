@@ -151,6 +151,28 @@ export function subscribeAllAdSlots(
   );
 }
 
+/**
+ * 특정 매장의 슬롯 구독 — 매장 어드민 광고 페이지에서 "내 매장 현황" 표시용.
+ * 활성/대기/만료/취소 전체. 최신순.
+ */
+export function subscribeAdSlotsByStore(
+  storeId: string,
+  onChange: (items: AdSlot[]) => void,
+  onError: (e: Error) => void,
+) {
+  const q = query(
+    collection(db, ADS),
+    where('storeId', '==', storeId),
+    orderBy('createdAt', 'desc'),
+    limit(50),
+  );
+  return onSnapshot(
+    q,
+    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AdSlot, 'id'>) }))),
+    (e) => onError(e as Error),
+  );
+}
+
 /** 활성 슬롯(region + status='active' + endAt > now) — 분배 알고리즘에서 사용. */
 export async function loadActiveAdSlotsByRegion(regions: string[]): Promise<AdSlot[]> {
   if (regions.length === 0) return [];
