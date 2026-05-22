@@ -3,33 +3,37 @@
 /**
  * DailyPostsCarousel — 홈 최상단의 "오늘의 매장 소식" 세로 슬라이드 캐러셀.
  *
- * Phase G (2026-05-22) — 1장 표시 + 위로 슬라이드 + 30km 거리 필터:
- *  - 한 번에 카드 1장만 표시. 좌우 스와이프 X. 위→아래 translateY 애니메이션으로 교체.
- *    "좌우 스와이프보다 위로 한 장씩 넘어가는 형식이 깔끔" 사용자 정정 반영.
- *  - 거리: 본사 meta/feedConfig.defaultRadiusKm 적용 (채팅방 /m/posts와 동일 소스).
- *    위치 권한 거부 → 전국 fallback. 디폴트 반경 0건 → 라더 자동 확장 (50→100→999).
- *  - 매장찾기 카루셀(/m/find)은 손대지 않음 — 홈 전용 정정.
+ * Phase H (2026-05-22) — 3장 동시 노출 + 한 칸씩 위로 shift (사용자 호소: 카드가 너무 크다):
+ *  - 카드 3장을 세로로 stack. 카드당 슬림 한 줄(헤드라인 + 매장명 + 거리 + 시간 + 이모지).
+ *  - 8초마다 가장 위 카드가 위로 사라지고, 하단에서 새 카드가 올라옴 (채팅방 톤).
+ *  - 본문/이미지 X — 풀 내용은 채팅방(/m/posts) / 매장 상세에서.
+ *
+ * Phase G(이전) 정책 — 그대로 유지:
+ *  - 거리: 본사 meta/feedConfig.defaultRadiusKm 적용. 위치 거부 → 전국 fallback.
+ *  - 디폴트 반경 0건 → 자동 확장 라더 (radiusOptions 기준).
+ *  - 매장찾기 카루셀(/m/find)은 손대지 않음 — 홈 전용.
  *
  * 자동 진행 정책 (그대로 유지):
- *  - 첫 3장만 8초 hold → 자동 교체 → 정지. 이후엔 사용자 제스처만.
- *  - 사용자 위로 swipe up → 즉시 다음 카드 (수동 가속) + 자동 진행 중단.
+ *  - 첫 3회만 8초 hold → 자동 shift → 정지. 이후엔 사용자 제스처만.
+ *  - 사용자 위로 swipe up → 즉시 shift (수동 가속) + 자동 진행 중단.
  *
- * 슬라이드 애니메이션:
- *  - 현재 카드: translateY(0 → -110%) + opacity(1 → 0)
- *  - 다음 카드: translateY(110% → 0)  + opacity(0 → 1)
- *  - duration 420ms cubic-bezier(.22,.61,.36,1) — UX 표준 "ease-out-quint"에 가까운 곡선
- *  - 컨테이너 고정 높이 200px (헤드라인 2줄 + 메타 + 패딩 안정).
+ * 슬라이드 애니메이션 (3장 stack):
+ *  - 한 칸 높이 = CARD_HEIGHT + GAP.
+ *  - 컨테이너 안에서 visiblePosts 전체를 stacked positioning.
+ *  - activeIdx + 0/+1/+2 카드만 (0/1/2 슬롯에) 표시. 나머지는 화면 밖.
+ *  - shift = activeIdx 1 증가 → 슬롯 -1 으로 일제히 translateY(-1칸).
  *
  * 데이터:
  *  - loadActivePostsAll: collectionGroup('posts'), 활성 글 fetch
  *  - subscribeActivePinnedPosts: 본사 pinned 띠 (기존 유지)
  *  - subscribeFeedConfig: 본사 디폴트 반경 (채팅방과 동일)
- *  - stores collection(status='active') 1회 fetch → 좌표 map (in-memory, /m/posts와 동일 패턴)
+ *  - stores collection(status='active') 1회 fetch → 좌표 map (in-memory)
  *
  * 정책:
  *  - Firestore SDK 직접 호출 — 클라이언트 사이드.
  *  - 카카오 SDK 호출 0회 (위치 권한만, 정밀도 낮춤).
- *  - 빈 상태: 섹션 자체 렌더하지 않음 (홈 가벼움).
+ *  - 빈 상태: 섹션 자체 렌더하지 않음.
+ *  - 점 인디케이터(B) 재도입 금지 — 카운터(우측 N/M)만 사용.
  */
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
@@ -49,10 +53,15 @@ import { db } from '@/lib/firebase';
 
 const MAX_POSTS = 8;
 const AUTO_HOLD_MS = 8000;     // 카드 한 장 노출 유지 시간 (8초)
-const AUTO_ROUNDS = 3;         // 자동 전환 횟수 — 3장 후 정지
-const CARD_HEIGHT = 200;       // 컨테이너 고정 높이 (px) — CLS 방지
+const AUTO_ROUNDS = 3;         // 자동 shift 횟수 — 3회 후 정지
+const VISIBLE_SLOTS = 3;       // 동시 노출 카드 수 (3장 stack)
+const CARD_HEIGHT = 64;        // 카드 1장 높이 (px) — 한 줄 슬림
+const CARD_GAP = 8;            // 카드 간 간격 (px)
 const SLIDE_DURATION_MS = 420; // 슬라이드 transition duration
-const SWIPE_UP_THRESHOLD = 40; // 사용자 위로 스와이프 임계치 (px)
+const SWIPE_UP_THRESHOLD = 30; // 사용자 위로 스와이프 임계치 (px)
+
+const SLOT_STRIDE = CARD_HEIGHT + CARD_GAP; // 한 칸당 이동 거리
+const CONTAINER_HEIGHT = CARD_HEIGHT * VISIBLE_SLOTS + CARD_GAP * (VISIBLE_SLOTS - 1);
 
 const HQ_FALLBACK: LatLng = { lat: 35.115, lng: 129.0395 }; // 부산역 — 위치 거부 시 거리 기준
 
@@ -184,26 +193,27 @@ export default function DailyPostsCarousel() {
     }
   }, [visiblePosts.length, activeIdx]);
 
-  // 다음 카드로 이동 (자동/수동 공용)
+  // 다음 카드로 이동 (자동/수동 공용) — wrap-around
   const goNext = useCallback(() => {
     setActiveIdx((i) => {
       const total = visiblePosts.length;
-      if (total <= 1) return i;
+      if (total <= VISIBLE_SLOTS) return i; // 모두 보이면 shift 의미 없음
       return (i + 1) % total;
     });
   }, [visiblePosts.length]);
 
-  // 7) 자동 슬라이드 — 첫 3장만 진행 후 정지
+  // 7) 자동 슬라이드 — 첫 3회만 진행 후 정지
   useEffect(() => {
-    if (visiblePosts.length <= 1 || autoDone) return;
+    // 3장 이하면 자동 진행할 필요 없음 (이미 모두 노출)
+    if (visiblePosts.length <= VISIBLE_SLOTS || autoDone) return;
     const id = window.setInterval(() => {
       if (userInteractedRef.current) {
         setAutoDone(true);
         return;
       }
       autoRoundsRef.current += 1;
-      if (autoRoundsRef.current >= Math.min(AUTO_ROUNDS, visiblePosts.length)) {
-        // 마지막 자동 전환 후 정지
+      const cap = Math.min(AUTO_ROUNDS, Math.max(0, visiblePosts.length - VISIBLE_SLOTS));
+      if (autoRoundsRef.current >= cap) {
         goNext();
         setAutoDone(true);
         return;
@@ -244,7 +254,9 @@ export default function DailyPostsCarousel() {
   if (loaded && visiblePosts.length === 0 && pinned.length === 0) return null;
 
   const total = visiblePosts.length;
-  const current = visiblePosts[activeIdx];
+  // 보이는 3장 slot의 현재 위치 (1-based for counter)
+  const counterStart = total > 0 ? activeIdx + 1 : 0;
+  const counterEnd = total > 0 ? Math.min(activeIdx + VISIBLE_SLOTS, total) : 0;
 
   return (
     <section aria-label="오늘의 매장 소식" className="pt-4 pb-1">
@@ -271,12 +283,12 @@ export default function DailyPostsCarousel() {
         )}
       </div>
 
-      {/* 세로 슬라이드 — 카드 1장씩 위로 교체 */}
-      {total > 0 && current && (
+      {/* 세로 슬라이드 — 3장 stack + 위로 한 칸씩 shift */}
+      {total > 0 && (
         <div className="px-4">
           <div
             className="relative w-full overflow-hidden"
-            style={{ height: `${CARD_HEIGHT}px` }}
+            style={{ height: `${CONTAINER_HEIGHT}px` }}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
             onWheel={onWheel}
@@ -285,51 +297,69 @@ export default function DailyPostsCarousel() {
             aria-label="오늘의 매장 소식 카드"
           >
             {visiblePosts.map((p, idx) => {
-              const offset = idx - activeIdx;
-              // active=0, 위로 사라진=-1 (translateY -110%), 아래 대기=+1 (translateY +110%)
-              const isActive = offset === 0;
-              const isAbove = offset < 0 || (activeIdx === 0 && idx === total - 1 && total > 1);
-              // ↑ wrap-around: 첫 카드일 때 마지막 카드는 "위로 사라진" 상태로 둠 (다음 next 시 일관성)
-              let translateY = '0%';
-              let opacity = 1;
-              let pointerEvents: 'auto' | 'none' = 'none';
-              if (isActive) {
-                translateY = '0%';
+              // 모듈로 기반 상대 위치: activeIdx 기준으로 어느 slot에 위치하는가
+              const rel = ((idx - activeIdx) % total + total) % total;
+              // rel 값: 0 = top, 1 = middle, 2 = bottom, 3 = 아래 대기, ...
+              // 화면에 보이는 건 rel 0/1/2 (VISIBLE_SLOTS=3)
+              // rel == total-1 (직전)는 위로 사라지는 카드
+              const isAbove = rel === total - 1 && total > VISIBLE_SLOTS;
+              const isVisible = rel < VISIBLE_SLOTS;
+
+              let translateY: number;
+              let opacity: number;
+              let pointerEvents: 'auto' | 'none';
+              if (isAbove) {
+                translateY = -SLOT_STRIDE; // 위로 한 칸 사라짐
+                opacity = 0;
+                pointerEvents = 'none';
+              } else if (isVisible) {
+                translateY = rel * SLOT_STRIDE;
                 opacity = 1;
                 pointerEvents = 'auto';
-              } else if (isAbove) {
-                translateY = '-110%';
-                opacity = 0;
               } else {
-                translateY = '110%';
+                // 화면 밖 아래 대기열
+                translateY = VISIBLE_SLOTS * SLOT_STRIDE;
                 opacity = 0;
+                pointerEvents = 'none';
               }
+
+              const userOrigin = userLocation ?? (locationDenied ? null : HQ_FALLBACK);
+              const coord = storeCoords.get(p.storeId);
+              const distanceMeters = userOrigin && coord
+                ? haversineMeters(userOrigin, { lat: coord.lat, lng: coord.lng })
+                : null;
+
               return (
                 <div
                   key={p.id}
-                  className="absolute inset-0"
+                  className="absolute left-0 right-0"
                   style={{
-                    transform: `translateY(${translateY})`,
+                    top: 0,
+                    height: `${CARD_HEIGHT}px`,
+                    transform: `translateY(${translateY}px)`,
                     opacity,
                     transition: `transform ${SLIDE_DURATION_MS}ms cubic-bezier(.22,.61,.36,1), opacity ${SLIDE_DURATION_MS}ms ease-out`,
                     pointerEvents,
+                    willChange: 'transform, opacity',
                   }}
-                  aria-hidden={!isActive}
+                  aria-hidden={!isVisible}
                 >
-                  <PostCard post={p} height={CARD_HEIGHT} />
+                  <SlimPostCard post={p} distanceMeters={distanceMeters} height={CARD_HEIGHT} />
                 </div>
               );
             })}
           </div>
 
           {/* 진행 카운터 — 점 인디케이터 금지 정책에 따라 카운터 사용 */}
-          {total > 1 && (
+          {total > VISIBLE_SLOTS && (
             <div
-              className="mt-2 flex items-center justify-end gap-1.5 text-[11px] font-bold"
+              className="mt-2 flex items-center justify-end gap-1 text-[11px] font-bold"
               style={{ color: 'var(--text-3)' }}
               aria-live="polite"
             >
-              <span style={{ color: 'var(--text-1)' }}>{activeIdx + 1}</span>
+              <span style={{ color: 'var(--text-1)' }}>
+                {counterStart}–{counterEnd}
+              </span>
               <span style={{ opacity: 0.5 }}>/</span>
               <span>{total}</span>
             </div>
@@ -341,10 +371,26 @@ export default function DailyPostsCarousel() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 카드 — headline + 이모지 액센트 + 매장명 + 상대시각 (고정 높이)
+// SlimPostCard — 한 줄 카드: 좌측 accent bar + 이모지 + 헤드라인 + 매장명 · 거리 · 시간
 // ─────────────────────────────────────────────────────────────
 
-function PostCard({ post, height }: { post: StorePost; height: number }) {
+function formatDistance(meters: number | null): string {
+  if (meters == null) return '';
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  const km = meters / 1000;
+  if (km < 10) return `${km.toFixed(1)}km`;
+  return `${Math.round(km)}km`;
+}
+
+function SlimPostCard({
+  post,
+  distanceMeters,
+  height,
+}: {
+  post: StorePost;
+  distanceMeters: number | null;
+  height: number;
+}) {
   const { style, emojis } = useMemo(() => resolveCardVisual(post), [post]);
   const now = useTickingNow();
   const relative = useMemo(() => formatRelativeKo(post.createdAt, now), [post.createdAt, now]);
@@ -357,84 +403,75 @@ function PostCard({ post, height }: { post: StorePost; height: number }) {
     return firstLine.length > 40 ? firstLine.slice(0, 40) + '…' : firstLine;
   }, [post.headline, post.body]);
 
+  const distanceLabel = formatDistance(distanceMeters);
+  const topEmoji = emojis[0] ?? '';
+
   return (
     <Link
       href={`/m/store/${post.storeId}`}
-      className="block w-full rounded-2xl transition active:opacity-80"
+      className="block w-full rounded-xl transition active:opacity-80 overflow-hidden"
       style={{
         height: `${height}px`,
         background: style.surface,
-        border: `1.5px solid ${style.accent}`,
-        padding: '16px 16px 14px',
-        boxShadow: `0 6px 18px -10px ${style.accent}`,
+        border: `1px solid ${style.border}`,
+        boxShadow: `0 2px 8px -6px ${style.accent}`,
         display: 'flex',
-        flexDirection: 'column',
+        alignItems: 'stretch',
       }}
       aria-label={`${post.storeName ?? '매장'} 소식 보기`}
     >
-      {/* 상단: 이모지 액센트(최대 3개) + 헤드라인 */}
-      <div className="flex items-start gap-2 flex-1 min-h-0">
-        {emojis.length > 0 && (
-          <div className="flex-shrink-0 flex items-center gap-1" aria-hidden>
-            {emojis.map((e, i) => (
-              <div
-                key={`${e}_${i}`}
-                className="flex items-center justify-center rounded-lg"
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  background: style.accent,
-                  fontSize: '17px',
-                }}
-              >
-                <span style={{ filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.15))' }}>{e}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <div
-          className="text-[17px] font-extrabold leading-[1.35] flex-1"
-          style={{
-            color: style.textPrimary,
-            display: '-webkit-box',
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {oneLiner || '오늘의 매장 소식'}
-        </div>
-      </div>
-      {/* 하단: 매장명 + 상대시각 */}
+      {/* 좌측 accent bar */}
       <div
-        className="pt-2.5 mt-2 flex items-center justify-between gap-1.5 flex-shrink-0"
-        style={{ borderTop: `1px solid ${style.border}` }}
-      >
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <svg
-            width="11"
-            height="11"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ color: style.textSecondary, flexShrink: 0 }}
-            aria-hidden
+        aria-hidden
+        style={{
+          width: '4px',
+          background: style.accent,
+          flexShrink: 0,
+        }}
+      />
+      {/* 우측 본문 */}
+      <div className="flex-1 min-w-0 px-3 py-2 flex flex-col justify-center gap-1">
+        {/* 1줄: 이모지 + 헤드라인 */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          {topEmoji && (
+            <span
+              aria-hidden
+              className="flex-shrink-0"
+              style={{ fontSize: '14px', lineHeight: 1 }}
+            >
+              {topEmoji}
+            </span>
+          )}
+          <div
+            className="text-[14px] font-extrabold leading-[1.25] truncate flex-1"
+            style={{ color: style.textPrimary }}
           >
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
-          <div className="text-[12px] font-semibold truncate" style={{ color: style.textSecondary }}>
-            {post.storeName || '매장'}
+            {oneLiner || '오늘의 매장 소식'}
           </div>
         </div>
-        {relative && (
-          <div className="text-[11px] font-medium flex-shrink-0" style={{ color: style.textSecondary, opacity: 0.85 }}>
-            {relative}
-          </div>
-        )}
+        {/* 2줄: 매장명 · 거리 · 시간 */}
+        <div
+          className="flex items-center gap-1 text-[11px] font-semibold min-w-0"
+          style={{ color: style.textSecondary }}
+        >
+          <span className="truncate" style={{ maxWidth: '50%' }}>
+            {post.storeName || '매장'}
+          </span>
+          {distanceLabel && (
+            <>
+              <span style={{ opacity: 0.5 }}>·</span>
+              <span className="flex-shrink-0">{distanceLabel}</span>
+            </>
+          )}
+          {relative && (
+            <>
+              <span style={{ opacity: 0.5 }}>·</span>
+              <span className="flex-shrink-0" style={{ opacity: 0.85 }}>
+                {relative}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </Link>
   );
