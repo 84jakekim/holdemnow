@@ -76,7 +76,13 @@ export default function ChatPostCard({ post, distanceMeters, now, onImageClick }
   };
 
   return (
-    <div className="flex items-end gap-1.5 mb-2.5" style={{ maxWidth: '85%' }}>
+    <div
+      className="flex items-end gap-1.5 mb-2.5"
+      style={{
+        maxWidth: '85%',
+        animation: 'm-posts-fadein 240ms ease-out',
+      }}
+    >
       {/* 말풍선 본체 */}
       <div className="min-w-0 flex-1">
         <div

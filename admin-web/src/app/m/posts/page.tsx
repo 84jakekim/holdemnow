@@ -25,7 +25,7 @@
  *  - Firebase rules: meta/* read public + posts collectionGroup read public 이미 OK.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   subscribeActivePostsAll,
@@ -45,6 +45,18 @@ const NEW_BADGE_THRESHOLD = 2;
 const STICKY_BOTTOM_PX = 100;
 const TIME_BUCKET_MS = 30 * 60 * 1000;
 const HQ_FALLBACK: LatLng = { lat: 35.115, lng: 129.0395 }; // 부산역 — 위치 거부 시 거리 기준
+
+// 채팅방 톤 보장 — 첫 진입 직후 이미지 lazy/네트워크/라더 자동확장으로 scrollHeight가
+// 늦게 늘어나는 케이스가 있어, 사용자 인터랙션 없을 때만 250ms 간격으로 5초간 강제로
+// 맨 아래로 따라감. 사용자가 위로 스크롤하거나 다른 인터랙션을 시작하면 즉시 중단.
+const STICK_BOTTOM_DURATION_MS = 5000;
+const STICK_BOTTOM_INTERVAL_MS = 250;
+
+const POSTS_DEBUG =
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_POSTS_DEBUG === '1';
+function dbg(...args: unknown[]) {
+  if (POSTS_DEBUG && typeof console !== 'undefined') console.log('[m/posts]', ...args);
+}
 
 interface StoreCoord {
   id: string;
@@ -125,8 +137,14 @@ export default function PostsPage() {
 
   // 4) posts + pinned 실시간 구독
   useEffect(() => {
+    let emitCount = 0;
     const unsub1 = subscribeActivePostsAll(
-      (items) => { setPosts(items); setLoaded(true); },
+      (items) => {
+        emitCount += 1;
+        dbg('subscribeActivePostsAll emit', { emit: emitCount, count: items.length });
+        setPosts(items);
+        setLoaded(true);
+      },
       () => setLoaded(true),
     );
     const unsub2 = subscribeActivePinnedPosts(setPinned, () => {});
@@ -200,78 +218,8 @@ export default function PostsPage() {
     setAutoExpandedTo(visiblePostsAndExpansion.autoExpanded ? visiblePostsAndExpansion.effectiveRadius : null);
   }, [visiblePostsAndExpansion.autoExpanded, visiblePostsAndExpansion.effectiveRadius]);
 
-  // 스크롤 — 첫 진입 시 맨 아래로 즉시 jump + ResizeObserver로 잠금 추적
-  //  - 카톡 룩: 채팅방 열면 최신 메시지가 보이는 위치
-  //  - 첫 점프 직후 이미지 lazy load로 scrollHeight가 늘어나도 자동 따라감
-  //  - 자동 확장 라더(50→100→999)로 visiblePosts가 늘어나도 자동 따라감
-  //  - 사용자가 위로 스크롤하면(isNearBottomRef=false) ResizeObserver는 침묵
-  //  - sessionStorage SCROLL_KEY는 초기 점프 이후의 사용자 스크롤만 기록
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    if (loaded && !initialScrollDoneRef.current && el.scrollHeight > 0) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const node = scrollRef.current;
-          if (!node) return;
-          node.scrollTop = node.scrollHeight;
-          isNearBottomRef.current = true;
-          initialScrollDoneRef.current = true;
-        });
-      });
-    }
-
-    const onScroll = () => {
-      if (initialScrollDoneRef.current) {
-        sessionStorage.setItem(SCROLL_KEY, String(el.scrollTop));
-      }
-      const bottomDist = el.scrollHeight - (el.scrollTop + el.clientHeight);
-      isNearBottomRef.current = bottomDist <= STICKY_BOTTOM_PX;
-      if (isNearBottomRef.current) setNewPostsBadge(0);
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-
-    // ResizeObserver — scrollHeight 변경 시 "잠금 상태"면 맨 아래로 자동 따라감.
-    // 이미지 lazy load + 자동 확장 라더 진행 모두 커버.
-    const ro = new ResizeObserver(() => {
-      const node = scrollRef.current;
-      if (!node) return;
-      if (!isNearBottomRef.current) return; // 사용자 스크롤 의도 존중
-      node.scrollTop = node.scrollHeight;
-    });
-    ro.observe(el);
-    const firstChild = el.firstElementChild;
-    if (firstChild) ro.observe(firstChild);
-
-    return () => {
-      el.removeEventListener('scroll', onScroll);
-      ro.disconnect();
-    };
-  }, [loaded, posts.length, visiblePostsAndExpansion.items.length]);
-
-  // 새 글 토스트 — 카운트 증가 + 사용자가 맨 아래가 아닐 때 표시
-  useEffect(() => {
-    const total = visiblePostsAndExpansion.items.length;
-    const last = lastSeenCountRef.current;
-    if (total > last) {
-      if (isNearBottomRef.current) {
-        // 자동 따라감
-        requestAnimationFrame(() => {
-          const el = scrollRef.current;
-          if (el) el.scrollTop = el.scrollHeight;
-        });
-      } else {
-        const delta = total - last;
-        if (delta >= NEW_BADGE_THRESHOLD || newPostsBadge > 0) {
-          setNewPostsBadge((n) => n + delta);
-        }
-      }
-    }
-    lastSeenCountRef.current = total;
-  }, [visiblePostsAndExpansion.items.length, newPostsBadge]);
-
-  // 시간 버킷 그룹핑 (30분)
+  // 시간 버킷 그룹핑 (30분) — (B) 스크롤 effect가 groupedItems.length를 dep으로
+  // 사용하므로 effect 위에 선언 (TDZ 회피).
   const groupedItems = useMemo(() => {
     type Group = { bucket: number; label: string; items: StorePost[] };
     const groups: Group[] = [];
@@ -287,6 +235,121 @@ export default function PostsPage() {
     }
     return groups;
   }, [visiblePostsAndExpansion.items, now]);
+
+  // ──────────────────────────────────────────────────────────────────────
+  // 스크롤 — 채팅방 톤(카톡 오픈채팅)을 위해 3개 effect로 분리.
+  //
+  // (A) 마운트 1회: scroll listener + ResizeObserver를 한 번만 부착해
+  //     컴포넌트 수명 동안 유지. (deps=[] 보장 — 새 글 도착 때마다 disconnect/
+  //     reattach 되던 race를 차단.)
+  //
+  // (B) 첫 데이터 + 첫 paint 직후: useLayoutEffect로 paint 직전 강제 jump.
+  //     이후 5초간 250ms 간격으로 "사용자 인터랙션 없으면" 다시 맨 아래로 보정.
+  //     이미지 lazy decode·라더 자동확장으로 scrollHeight가 늦게 늘어나는 케이스 커버.
+  //
+  // (C) 새 글 도착 (visiblePosts 길이 증가): lock 상태면 자동 따라감,
+  //     아니면 NEW 배지로 알림. (기존 새 글 토스트 effect 유지)
+  // ──────────────────────────────────────────────────────────────────────
+
+  // (A) — listener/observer 1회 부착
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      if (initialScrollDoneRef.current) {
+        sessionStorage.setItem(SCROLL_KEY, String(el.scrollTop));
+      }
+      const bottomDist = el.scrollHeight - (el.scrollTop + el.clientHeight);
+      isNearBottomRef.current = bottomDist <= STICKY_BOTTOM_PX;
+      if (isNearBottomRef.current) setNewPostsBadge(0);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+
+    // ResizeObserver — scrollHeight 변경 시 잠금 상태면 자동 따라감.
+    // 이미지 lazy load + 자동 확장 라더 진행 모두 커버.
+    const ro = new ResizeObserver(() => {
+      const node = scrollRef.current;
+      if (!node) return;
+      if (!isNearBottomRef.current) return; // 사용자 스크롤 의도 존중
+      node.scrollTop = node.scrollHeight;
+    });
+    ro.observe(el);
+    const firstChild = el.firstElementChild;
+    if (firstChild) ro.observe(firstChild);
+
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro.disconnect();
+    };
+  }, []);
+
+  // (B) — 첫 데이터 도착 + paint 직전 강제 jump + 5초 안전망
+  //   useLayoutEffect: paint 직전이라 flicker가 없고, 첫 렌더 직후 scrollHeight가
+  //   확정된 상태에서 점프 가능.
+  useLayoutEffect(() => {
+    if (!loaded) return;
+    if (initialScrollDoneRef.current) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    // groupedItems가 아직 0이면 안전망에 맡김 (포스트 0건은 EmptyState 노출, jump 불필요)
+    if (groupedItems.length === 0) return;
+
+    // 즉시 jump (paint 직전)
+    el.scrollTop = el.scrollHeight;
+    isNearBottomRef.current = true;
+    initialScrollDoneRef.current = true;
+    dbg('initial jump', { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight });
+
+    // 5초 안전망 — 250ms 간격으로 lock 상태면 강제로 맨 아래로 보정.
+    // 사용자가 위로 스크롤하거나 인터랙션 시작하면 isNearBottomRef.current=false →
+    // 자동 중단.
+    const startedAt = Date.now();
+    const interval = window.setInterval(() => {
+      if (Date.now() - startedAt > STICK_BOTTOM_DURATION_MS) {
+        window.clearInterval(interval);
+        return;
+      }
+      const node = scrollRef.current;
+      if (!node) return;
+      if (!isNearBottomRef.current) {
+        window.clearInterval(interval);
+        return;
+      }
+      const bottomDist = node.scrollHeight - (node.scrollTop + node.clientHeight);
+      if (bottomDist > 1) {
+        node.scrollTop = node.scrollHeight;
+        dbg('safety re-stick', { bottomDist, scrollHeight: node.scrollHeight });
+      }
+    }, STICK_BOTTOM_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [loaded, groupedItems.length]);
+
+  // (C) 새 글 도착 — lock 상태면 자동 따라감 (rAF 2겹으로 이미지 layout 후
+  //     scrollHeight 확정 보장), 아니면 NEW 배지로 알림.
+  useEffect(() => {
+    const total = visiblePostsAndExpansion.items.length;
+    const last = lastSeenCountRef.current;
+    if (total > last) {
+      dbg('new posts arrived', { total, prev: last, locked: isNearBottomRef.current });
+      if (isNearBottomRef.current) {
+        // rAF 2겹 — 첫 frame에 React commit, 두 번째 frame에 layout 확정된 scrollHeight 사용
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const el = scrollRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+          });
+        });
+      } else {
+        const delta = total - last;
+        if (delta >= NEW_BADGE_THRESHOLD || newPostsBadge > 0) {
+          setNewPostsBadge((n) => n + delta);
+        }
+      }
+    }
+    lastSeenCountRef.current = total;
+  }, [visiblePostsAndExpansion.items.length, newPostsBadge]);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -308,6 +371,8 @@ export default function PostsPage() {
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
+      {/* 새 카드 페이드인 keyframes — 카톡방 톤 (ChatPostCard에서 참조) */}
+      <style>{`@keyframes m-posts-fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
       {/* 헤더 */}
       <header
         className="flex items-center gap-2 px-3"
