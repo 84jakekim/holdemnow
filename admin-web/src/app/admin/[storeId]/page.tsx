@@ -20,6 +20,7 @@ import DealerPoolPanel from '@/components/admin/DealerPoolPanel';
 import ReservationsPanel from '@/components/admin/ReservationsPanel';
 import AdminNotificationBell from '@/components/admin/AdminNotificationBell';
 import AdminIdentityBadge from '@/components/admin/AdminIdentityBadge';
+import StorePushPermissionWidget from '@/components/admin/StorePushPermissionWidget';
 import { useReservationSoundAlert } from '@/hooks/useReservationSoundAlert';
 import ThemeToggle from '@/components/admin/ThemeToggle';
 import { useTheme } from '@/lib/theme';
@@ -157,6 +158,11 @@ function AdminPageInner({ storeId }: { storeId: string }) {
             onNavigate={() => setActiveMenu('reservations')}
           />
         </div>
+
+        {/* 푸시 알림 권한 위젯 — 사장이 브라우저 푸시 권한을 켜고 fcmToken을
+         * 등록하는 진입점. 권한 default일 때만 큰 버튼 노출.
+         * (모바일에서는 /m/my에서 별도 켜기 흐름이 이미 있음) */}
+        <StorePushPermissionWidget ownerUid={authState.user.uid} />
 
         <nav className="flex-1 p-2 overflow-y-auto">
           {MENUS.map((m) => {
