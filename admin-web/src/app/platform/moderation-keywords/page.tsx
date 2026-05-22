@@ -28,6 +28,7 @@ import {
   seedDefaultKeywords,
   SEED_KEYWORDS,
 } from '@/lib/moderationKeywords';
+import { LEGAL_BLOCKED_KEYWORDS } from '@/lib/moderation';
 
 const CATEGORY_META: Record<ModerationCategory, { label: string; color: string; emoji: string }> = {
   profanity: { label: '욕설/비속어', color: '#EF4444', emoji: '🚫' },
@@ -126,7 +127,7 @@ export default function PlatformModerationKeywordsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-1)' }}>
             🚫 금지어 사전
@@ -134,7 +135,9 @@ export default function PlatformModerationKeywordsPage() {
           <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
             매장 글·리뷰·커뮤니티 작성 시 자동 차단됩니다. 변경은 사용자 앱에 즉시 반영.
             <br />
-            <span style={{ color: 'var(--gold)' }}>활성 {enabledTotal}개 / 전체 {items.length}개</span>
+            <span style={{ color: 'var(--gold)' }}>본사 등록 {enabledTotal}개</span>
+            <span style={{ color: 'var(--text-3)' }}> / 전체 {items.length}개</span>
+            <span style={{ color: 'var(--text-3)' }}> · 법적 차단 {LEGAL_BLOCKED_KEYWORDS.length}개(자동)</span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -143,11 +146,12 @@ export default function PlatformModerationKeywordsPage() {
             disabled={seeding}
             className="px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50"
             style={{
-              background: 'var(--surface-2)',
-              color: 'var(--text-1)',
-              border: '1px solid var(--border)',
+              background: enabledTotal === 0 ? 'var(--gold)' : 'var(--surface-2)',
+              color: enabledTotal === 0 ? '#0F1419' : 'var(--text-1)',
+              border: enabledTotal === 0 ? '1px solid var(--gold)' : '1px solid var(--border)',
+              boxShadow: enabledTotal === 0 ? '0 0 0 3px rgba(255,196,71,0.2)' : undefined,
             }}
-            title={`하드코딩 기본 사전 ${SEED_KEYWORDS.length}개를 Firestore로 일괄 등록`}
+            title={`욕설/비속어 기본 사전 ${SEED_KEYWORDS.length}개를 Firestore로 일괄 등록`}
           >
             {seeding ? '시드 중…' : `📦 기본 사전 시드 (${SEED_KEYWORDS.length}개)`}
           </button>
@@ -160,6 +164,26 @@ export default function PlatformModerationKeywordsPage() {
           </button>
         </div>
       </div>
+
+      {enabledTotal === 0 && (
+        <div
+          className="mb-4 rounded-lg p-3 text-xs leading-relaxed"
+          style={{
+            background: 'rgba(245,158,11,0.08)',
+            border: '1px solid rgba(245,158,11,0.4)',
+            color: 'var(--text-1)',
+          }}
+        >
+          ⚠️ <b>본사 등록 단어가 0개입니다.</b> 욕설/비속어는 현재 <b>차단되지 않습니다</b>.
+          <br />
+          → <b>📦 기본 사전 시드 ({SEED_KEYWORDS.length}개)</b> 버튼으로 한 번에 등록하거나,
+          <b>+ 새 단어</b>로 직접 추가하세요.
+          <br />
+          <span style={{ color: 'var(--text-3)' }}>
+            * 환금·도박·환전·사설토토 등 법적 리스크 키워드 {LEGAL_BLOCKED_KEYWORDS.length}개는 코드에 내장되어 항상 차단됩니다.
+          </span>
+        </div>
+      )}
 
       {seedResult && (
         <div
@@ -335,6 +359,29 @@ export default function PlatformModerationKeywordsPage() {
           <li><b style={{ color: 'var(--text-1)' }}>전체</b>: 띄어쓰기·특수문자 제거 후 전체 문자열에서 검색. 도박/환금 우회 방어용.</li>
           <li>변경은 즉시 모든 사용자 클라이언트에 반영 (onSnapshot + 1분 캐시).</li>
         </ul>
+        <div className="font-bold mt-4 mb-2" style={{ color: 'var(--text-1)' }}>
+          🔒 법적 차단 키워드 ({LEGAL_BLOCKED_KEYWORDS.length}개 · 항상 적용)
+        </div>
+        <p className="mb-2" style={{ fontSize: 11 }}>
+          아래 키워드는 사용자 앱 노출 시 법적 리스크가 있어 코드에 내장되어 있습니다.
+          본사도 토글/삭제할 수 없으며, 위 사전이 비어 있어도 항상 차단됩니다.
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {LEGAL_BLOCKED_KEYWORDS.map((w) => (
+            <span
+              key={w}
+              className="px-2 py-0.5 rounded-full text-[11px]"
+              style={{
+                background: 'rgba(168,85,247,0.12)',
+                color: '#D8B4FE',
+                border: '1px solid rgba(168,85,247,0.3)',
+                fontFamily: 'monospace',
+              }}
+            >
+              {w}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
