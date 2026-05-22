@@ -11,6 +11,10 @@ import {
   computeLateRegMinutes,
   useLiveCountdown,
   setTimeRemainingInSession,
+  togglePauseSession,
+  goToLevelInSession,
+  addSecondsToSession,
+  stopLiveSession,
 } from '@/lib/live';
 import {
   type TimerDisplaySettings,
@@ -26,6 +30,7 @@ import {
   fmtPrizeDisplay,
   resolvePayoutStructure,
 } from '@/lib/templates';
+import { useAuth, useUserDoc, useStoreDoc, hasRole } from '@/lib/hooks';
 
 interface StoreData {
   name: string;
@@ -116,26 +121,33 @@ export default function DisplayPage({
     };
   }, []);
 
-  // ─── 모바일 화면 모드 (2026-05-22 정정 PM 단독) ─────────────────
+  // ─── 모바일 화면 모드 (2026-05-23 PM 단독 — 가로 전용 레이아웃 추가) ───
   // 정정 사양:
   //  • 기본 진입 = 세로 모드 (자동 가로 강제 X)
-  //  • 모바일 폭(≤768px) 감지 시 isMobilePortrait=true → 컴팩트 세로 레이아웃
+  //  • 모바일 폭(≤768px) 세로 감지 시 isMobilePortrait=true → 컴팩트 세로 레이아웃
+  //  • 모바일 폭(≤1024px) 가로(landscape) 감지 시 isMobileLandscape=true → 가로 전용 레이아웃
   //  • "전체화면" 버튼 클릭 → fullscreen + orientation lock + wakeLock 진입
   //  • fullscreenchange exit 시 자동 해제 + 세로로 자연 복귀
   //  • race 차단: orientation은 enterFullscreenMode 안에서만 호출, 자동 X
   const [needsCssRotate, setNeedsCssRotate] = useState(false);
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
+  const [isMobileLandscape, setIsMobileLandscape] = useState(false);
 
-  // 모바일 폭 + 세로 화면 감지 — 첫 진입 + resize 시 갱신.
-  // 가로(landscape)로 들어가면 자동으로 false → 가로 전용 레이아웃으로 전환.
+  // 모바일 폭 + 세로/가로 감지 — 첫 진입 + resize 시 갱신.
+  // 세로(h>w): isMobilePortrait → 컴팩트 세로 레이아웃
+  // 가로(w>h): isMobileLandscape → 가로 전용 풀폭 레이아웃 (사용자 요구 핵심)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const update = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      // 모바일 폭(<=768px) 이고 세로(높이>폭) 일 때만 컴팩트 레이아웃
-      setIsMobilePortrait(w <= 768 && h > w);
+      const isPortraitMobile = w <= 768 && h > w;
+      // 가로는 폭 ≤1024px (태블릿 가로까지 포함) + 높이 < 폭
+      // CSS rotate fallback 활성 시에는 swap된 폭/높이 기준으로도 가로 모드로 인식
+      const isLandscapeMobile = (w <= 1024 && w > h) || needsCssRotate;
+      setIsMobilePortrait(isPortraitMobile);
+      setIsMobileLandscape(isLandscapeMobile);
     };
     update();
     window.addEventListener('resize', update);
@@ -144,7 +156,7 @@ export default function DisplayPage({
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
     };
-  }, []);
+  }, [needsCssRotate]);
 
   // 첫 진입 — audio unlock 자동 적용 (이전에 unlock 했다면). fullscreen/orientation은 X.
   useEffect(() => {
@@ -332,6 +344,70 @@ export default function DisplayPage({
     prevLevelRef.current = currLv;
   }, [session?.currentLevel, session?.status, audioReady, soundBlindUpEffective]);
 
+  // ─── 컨트롤 권한 판정 (2026-05-23 PM 단독 신설) ─────────────────
+  // 가로 모드 컨트롤 버튼은 매장 owner/staff / platform_admin만 노출.
+  // 일반 사용자(player)·anonymous는 read-only로 타이머만 본다.
+  //  • platform_admin: 모든 매장 컨트롤 가능
+  //  • store_master AND store.ownerUid === uid: 자기 매장
+  //  • store_staff AND userDoc.storeId === storeId: 자기 매장
+  //  • 그 외: 거부
+  const authState = useAuth();
+  const authedUid = authState.status === 'authenticated' ? authState.user.uid : null;
+  const userDoc = useUserDoc(authedUid);
+  const storeDoc = useStoreDoc(storeId);
+  const canControl = useMemo(() => {
+    if (!userDoc) return false;
+    if (hasRole(userDoc, 'platform_admin')) return true;
+    if (hasRole(userDoc, 'store_master')) {
+      // ownerUid 일치 OR userDoc.storeId 일치 (둘 중 하나라도)
+      if (storeDoc?.ownerUid && storeDoc.ownerUid === userDoc.uid) return true;
+      if (userDoc.storeId && userDoc.storeId === storeId) return true;
+    }
+    if (hasRole(userDoc, 'store_staff')) {
+      if (userDoc.storeId && userDoc.storeId === storeId) return true;
+    }
+    return false;
+  }, [userDoc, storeDoc, storeId]);
+
+  // ─── 가로 모드 컨트롤 핸들러 ────────────────────────────────────
+  // 각 핸들러는 권한 검증 + sec snapshot + try/catch 묶음으로 안전 호출.
+  // confirm 모달은 종료에만 (실수 방지).
+  const handleTogglePause = async () => {
+    if (!session || !canControl) return;
+    try {
+      await togglePauseSession(session, sec);
+    } catch {
+      // silent — Firestore rules에서 거부되면 콘솔 에러는 보임
+    }
+  };
+  const handlePrevLevel = async () => {
+    if (!session || !canControl) return;
+    if (session.currentLevel <= 1) return;
+    try {
+      await goToLevelInSession(session, -1, sec);
+    } catch {}
+  };
+  const handleNextLevel = async () => {
+    if (!session || !canControl) return;
+    try {
+      await goToLevelInSession(session, +1, sec);
+    } catch {}
+  };
+  const handleAddMinute = async (delta: number) => {
+    if (!session || !canControl) return;
+    try {
+      await addSecondsToSession(session, sec, delta);
+    } catch {}
+  };
+  const handleStopSession = async () => {
+    if (!session || !canControl) return;
+    const ok = window.confirm('세션을 종료할까요?\n\n종료하면 현재 LIVE 타이머가 중단되고\n슬롯의 매핑도 해제됩니다.');
+    if (!ok) return;
+    try {
+      await stopLiveSession(session, sec, 'display/TV-landscape:user-button');
+    } catch {}
+  };
+
   // F11 안내 (한 번만)
   const [showHint, setShowHint] = useState(true);
   useEffect(() => {
@@ -504,7 +580,7 @@ export default function DisplayPage({
 
       {/* ─── 모바일 세로 컴팩트 레이아웃 (2026-05-22 PM 단독 신설) ───
           isMobilePortrait=true 일 때 본문을 컴팩트 버전으로 교체.
-          가로 진입 시(isMobilePortrait=false) 자동으로 기존 풀 레이아웃 복귀.
+          가로 진입 시(isMobilePortrait=false) 자동으로 가로 전용 레이아웃 또는 풀 레이아웃 복귀.
           모바일 폭(<=768px) + 세로 화면 한정. */}
       {isMobilePortrait && session && session.status !== 'completed' ? (
         <MobilePortraitLayout
@@ -524,6 +600,39 @@ export default function DisplayPage({
           heroTitle={heroTitle}
           display={display}
           onEnterFullscreen={enterFullscreenMode}
+        />
+      ) : isMobileLandscape && session && session.status !== 'completed' ? (
+        /* ─── 모바일/태블릿 가로 전용 레이아웃 (2026-05-23 PM 단독 신설) ───
+            isMobileLandscape=true (가로 + 폭 ≤1024px 또는 CSS rotate fallback) 일 때.
+            좌측: 토너 정보 (레벨/블라인드/NEXT)
+            중앙: 거대 타이머 + 진행바
+            우측: 보조 정보 (PLAYERS/PRIZE POOL/LATE REG)
+            하단: 컨트롤 버튼 행 — 권한자만 노출
+            데스크탑/대형 TV(>1024px 가로)는 기존 풀 레이아웃 유지. */
+        <MobileLandscapeLayout
+          session={session}
+          sec={sec}
+          paused={paused}
+          isRunning={isRunning}
+          isCurrentBreak={isCurrentBreak}
+          lowTime={lowTime ?? false}
+          veryLow={veryLow ?? false}
+          currentDur={currentDur}
+          progress={progress}
+          currentLevelObj={currentLevelObj}
+          nextBlind={nextBlind}
+          lateRegDisplay={lateRegDisplay}
+          lateClosed={lateClosed}
+          lateMin={lateMin}
+          heroTitle={heroTitle}
+          display={display}
+          canControl={canControl}
+          onTogglePause={handleTogglePause}
+          onPrevLevel={handlePrevLevel}
+          onNextLevel={handleNextLevel}
+          onAddMinute={handleAddMinute}
+          onStopSession={handleStopSession}
+          onExitFullscreen={exitFullscreenMode}
         />
       ) : !session || session.status === 'completed' ? (
         <div className="relative flex-1 flex flex-col items-center justify-center">
@@ -762,31 +871,30 @@ export default function DisplayPage({
         </div>
       </div>
 
-      {/* 풀스크린 안내 — 모바일/데스크탑 따로. 모바일에선 컴팩트 레이아웃에 이미 큰 버튼 있어 미노출 */}
-      {showHint && !isMobilePortrait && !isFullscreenActive && (
+      {/* 풀스크린 안내 — 데스크탑/대형 TV 한정. 모바일 세로는 자체 큰 버튼,
+          모바일 가로는 자체 컨트롤 행에 ⛶ 종료 버튼 있음 → 안내 불필요. */}
+      {showHint && !isMobilePortrait && !isMobileLandscape && !isFullscreenActive && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur text-white px-5 py-3 rounded-xl text-xs flex items-center gap-3 z-30">
-          <span>💡 우측 상단 <span className="text-amber-300 font-bold">⛶ 전체화면</span> 버튼 · 또는 F11</span>
+          <span>💡 F11 또는 우측 상단 <span className="text-amber-300 font-bold">⛶ 전체화면</span> 버튼</span>
           <button onClick={() => setShowHint(false)} className="text-white/60 hover:text-white">
             ✕
           </button>
         </div>
       )}
 
-      {/* 전체화면 진입/종료 버튼 — PM 단독 정정 핵심 (2026-05-22)
-          • 사용자가 명시적으로 클릭할 때만 fullscreen + landscape + wakeLock 진입
-          • 가로 모드 안 race 차단 (자동 강제 X)
-          • 모바일 세로에서는 큰 사이즈로 강조, 가로/데스크탑은 작게
+      {/* 전체화면 진입 버튼 — 2026-05-23 PM 단독 정리.
+          • 우측 상단 진입 버튼은 데스크탑/대형 TV(>1024px 가로) 에서만 노출.
+          • 모바일 세로(isMobilePortrait): MobilePortraitLayout 자체 하단 버튼 사용 (중복 제거 — 사용자 요구)
+          • 모바일 가로(isMobileLandscape): 자체 컨트롤 행의 ⛶ 종료 버튼 사용
       */}
-      {audioReady && !isFullscreenActive && (
+      {audioReady && !isFullscreenActive && !isMobilePortrait && !isMobileLandscape && (
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             enterFullscreenMode();
           }}
-          className={`fixed top-3 right-3 bg-amber-500/90 hover:bg-amber-400 text-black font-extrabold rounded-lg backdrop-blur z-30 border-2 border-amber-300 shadow-lg flex items-center gap-2 transition-all active:scale-95 ${
-            isMobilePortrait ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
-          }`}
+          className="fixed top-3 right-3 bg-amber-500/90 hover:bg-amber-400 text-black font-extrabold rounded-lg backdrop-blur z-30 border-2 border-amber-300 shadow-lg flex items-center gap-2 transition-all active:scale-95 px-3 py-2 text-xs"
           title="전체화면 + 가로 모드 진입"
           aria-label="전체화면 진입"
         >
@@ -795,7 +903,9 @@ export default function DisplayPage({
         </button>
       )}
 
-      {audioReady && isFullscreenActive && (
+      {/* 전체화면 종료 버튼 — 데스크탑/대형 TV 한정.
+          모바일 가로는 컨트롤 행에 ⛶ 종료 버튼이 있으므로 중복 노출 X. */}
+      {audioReady && isFullscreenActive && !isMobileLandscape && (
         <button
           type="button"
           onClick={(e) => {
@@ -1126,18 +1236,25 @@ function MobilePortraitLayout({
         </div>
       </div>
 
-      {/* 전체화면 진입 안내 띠 — 모바일 세로 한정. 사용자에게 가로 모드 옵션 안내 */}
+      {/* 전체화면 진입 안내 띠 — 2026-05-23 PM 정정: 타이머 컨셉에 맞게 subtle 톤으로.
+          이전: 노란 풀필 → 너무 튐. 정정: 다크 ghost 버튼, 작은 회색 텍스트.
+          정보 위계에 자연스럽게 녹아들도록. */}
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           onEnterFullscreen();
         }}
-        className="mt-3 w-full bg-amber-500/90 hover:bg-amber-400 active:scale-[0.98] text-black font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 shadow-lg border-2 border-amber-300 transition-all"
+        className="mt-3 w-full bg-white/5 hover:bg-white/10 active:bg-white/15 active:scale-[0.99] rounded-lg py-2 flex items-center justify-center gap-1.5 border transition-all"
+        style={{
+          color: display.textColor,
+          borderColor: 'rgba(255,255,255,0.12)',
+          opacity: 0.7,
+        }}
         aria-label="전체화면 + 가로 모드 진입"
       >
-        <span className="text-lg">⛶</span>
-        <span className="text-sm">전체화면 (가로) 진입</span>
+        <span className="text-xs opacity-80">⛶</span>
+        <span className="text-[11px] tracking-[0.18em] font-bold">전체화면 (가로)</span>
       </button>
     </div>
   );
@@ -1373,5 +1490,434 @@ function PrizeDistributionPanel({
         ITM {payouts.length}명 · {session.payoutStructure ? '템플릿 정책' : '자동 계산'}
       </div>
     </div>
+  );
+}
+
+/**
+ * 모바일/태블릿 가로 전용 레이아웃 — 2026-05-23 PM 단독 신설.
+ *
+ * 사용자 요구:
+ *  "가로모드전향시, 가로모드에 최적화되지 않았어. 세로모드는 최적화된 화면이지만,
+ *   가로모드엔 옆으로 누어있는 화면이야"
+ *  → 세로 레이아웃을 그대로 가로로 누어놓지 말고, 가로 폭을 가득 사용하는 전용 레이아웃.
+ *
+ * 레이아웃 (3분할 grid):
+ *   ┌───────────────────────────────────────────────┐
+ *   │ [좌] 토너 정보  │ [중] 거대 타이머 │ [우] 보조 │
+ *   │   LEVEL N      │   88:88         │   PLAYERS │
+ *   │   BLINDS       │   ── 진행률 ──   │   PRIZE   │
+ *   │   NEXT          │                 │   LATE    │
+ *   ├───────────────────────────────────────────────┤
+ *   │ [컨트롤 행 — 권한자만]                          │
+ *   │ ⏮  ⏸/▶  ⏭   −1분  +1분   ⏹ 종료   ⛶ 전체화면종료 │
+ *   └───────────────────────────────────────────────┘
+ *
+ * 권한:
+ *  • canControl=true (owner/staff/admin): 모든 컨트롤 버튼 노출
+ *  • canControl=false: 컨트롤 행 자체를 숨김 (read-only)
+ */
+function MobileLandscapeLayout({
+  session,
+  sec,
+  paused,
+  isRunning,
+  isCurrentBreak,
+  lowTime,
+  veryLow,
+  currentDur,
+  progress,
+  currentLevelObj,
+  nextBlind,
+  lateRegDisplay,
+  lateClosed,
+  lateMin,
+  heroTitle,
+  display,
+  canControl,
+  onTogglePause,
+  onPrevLevel,
+  onNextLevel,
+  onAddMinute,
+  onStopSession,
+  onExitFullscreen,
+}: {
+  session: LiveSession;
+  sec: number;
+  paused: boolean;
+  isRunning: boolean;
+  isCurrentBreak: boolean;
+  lowTime: boolean;
+  veryLow: boolean;
+  currentDur: number;
+  progress: number;
+  currentLevelObj: LiveSession['blindStructure'][number] | undefined;
+  nextBlind: LiveSession['blindStructure'][number] | undefined;
+  lateRegDisplay: string;
+  lateClosed: boolean;
+  lateMin: number;
+  heroTitle: string;
+  display: TimerDisplaySettings;
+  canControl: boolean;
+  onTogglePause: () => void;
+  onPrevLevel: () => void;
+  onNextLevel: () => void;
+  onAddMinute: (delta: number) => void;
+  onStopSession: () => void;
+  onExitFullscreen: () => void;
+}) {
+  const barColor = lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor;
+  const timerColor = paused
+    ? '#A8A8A8'
+    : lowTime
+    ? display.accentColor
+    : isCurrentBreak
+    ? '#FFD166'
+    : display.timerColor;
+
+  return (
+    <div className="relative flex-1 flex flex-col px-3 pt-2 pb-2 min-h-0">
+      {/* 본문 3분할 grid — 좌 25% / 중 50% / 우 25% */}
+      <div
+        className="flex-1 grid items-stretch gap-3 min-h-0"
+        style={{ gridTemplateColumns: '1fr 2fr 1fr' }}
+      >
+        {/* ─── 좌: 토너 정보 ─── */}
+        <div className="flex flex-col justify-center gap-2 min-w-0">
+          {/* 상태 뱃지 */}
+          <div className="flex items-center gap-1.5">
+            {paused ? (
+              <span className="font-extrabold tracking-[0.25em] text-[10px]" style={{ color: '#FFD166' }}>
+                ⏸ PAUSED
+              </span>
+            ) : isCurrentBreak ? (
+              <span className="font-extrabold tracking-[0.25em] text-[10px]" style={{ color: '#FFD166' }}>
+                ☕ BREAK
+              </span>
+            ) : (
+              <>
+                <span
+                  className="w-2 h-2 rounded-full animate-pulse"
+                  style={{ background: display.accentColor }}
+                />
+                <span
+                  className="font-extrabold tracking-[0.25em] text-[10px]"
+                  style={{ color: display.accentColor }}
+                >
+                  LIVE
+                </span>
+              </>
+            )}
+          </div>
+          {/* 토너 이름 (truncate) */}
+          <div
+            className="text-[11px] tracking-wider font-bold truncate"
+            style={{ color: display.textColor, opacity: 0.9 }}
+            title={heroTitle}
+          >
+            {heroTitle}
+          </div>
+          {/* 레벨 */}
+          <div className="text-[9px] tracking-[0.3em] mt-1" style={{ color: display.textColor, opacity: 0.6 }}>
+            {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
+          </div>
+          {/* 블라인드 */}
+          {!isCurrentBreak && (
+            <div>
+              <div className="text-[9px] tracking-[0.3em] mb-1" style={{ color: display.textColor, opacity: 0.55 }}>
+                BLINDS
+              </div>
+              <div
+                className="font-mono font-extrabold leading-tight"
+                style={{
+                  fontSize: 'clamp(20px, 3.4vw, 32px)',
+                  color: display.blindsColor,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {session.smallBlind.toLocaleString()}
+                <span style={{ opacity: 0.45 }} className="mx-1">/</span>
+                {session.bigBlind.toLocaleString()}
+              </div>
+              {session.ante > 0 && (
+                <div className="font-mono text-[10px] mt-0.5" style={{ color: display.textColor, opacity: 0.6 }}>
+                  Ante {session.ante.toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
+          {/* NEXT 박스 — 컴팩트 */}
+          {nextBlind && (
+            <div
+              className="rounded-lg px-2 py-1.5 border mt-1"
+              style={{
+                background: 'rgba(0,0,0,0.45)',
+                borderColor: nextBlind.isBreak ? '#FFD166' : `${display.accentColor}55`,
+              }}
+            >
+              <div
+                className="text-[8px] font-extrabold tracking-[0.3em] mb-0.5"
+                style={{ color: nextBlind.isBreak ? '#FFD166' : display.accentColor }}
+              >
+                ▶ NEXT
+              </div>
+              {nextBlind.isBreak ? (
+                <div className="font-extrabold text-[11px]" style={{ color: '#FFD166' }}>
+                  ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+                </div>
+              ) : (
+                <div className="font-mono font-extrabold text-[12px]" style={{ color: display.blindsColor }}>
+                  LV {nextBlind.level} · {nextBlind.sb.toLocaleString()}
+                  <span style={{ color: display.textColor, opacity: 0.4 }} className="mx-1">/</span>
+                  {nextBlind.bb.toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ─── 중: 거대 타이머 + 진행바 ─── */}
+        <div className="flex flex-col items-center justify-center min-w-0">
+          <div
+            className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
+            style={{
+              fontSize: `clamp(80px, 16vw, 220px)`,
+              letterSpacing: '-0.05em',
+              color: timerColor,
+              transition: 'color 0.2s',
+            }}
+          >
+            {fmtTime(sec)}
+          </div>
+          {/* 진행바 — 가로 전용 컴팩트 (drag 미지원, 표시만; 컨트롤은 ±1분 / ⏮⏭로) */}
+          {(isRunning || paused) && currentDur > 0 && (
+            <div className="mt-4 w-full max-w-2xl px-4">
+              <div className="relative h-1.5 bg-white/15 rounded-full overflow-hidden">
+                <div
+                  className="h-full transition-all"
+                  style={{
+                    width: `${progress * 100}%`,
+                    background: barColor,
+                  }}
+                />
+              </div>
+              {currentLevelObj && (
+                <div className="flex justify-between text-[9px] mt-1 font-mono" style={{ color: display.textColor, opacity: 0.5 }}>
+                  <span>0:00</span>
+                  <span>{fmtTime(currentLevelObj.durationSec)}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ─── 우: 보조 정보 ─── */}
+        <div className="flex flex-col justify-center gap-2 min-w-0">
+          <CompactStat
+            label="PLAYERS"
+            value={`${session.playersRemaining}/${session.totalPlayers}`}
+            sub={`${session.tablesRemaining}테이블`}
+            color={display.textColor}
+          />
+          <CompactStat
+            label="PRIZE POOL"
+            value={
+              display.prizeOverride && display.prizeOverride.trim().length > 0
+                ? display.prizeOverride
+                : session.prizePool > 0
+                ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
+                : '—'
+            }
+            sub=""
+            color={display.textColor}
+          />
+          <CompactStat
+            label="LATE REG"
+            value={lateRegDisplay}
+            sub={lateClosed ? '' : '남음'}
+            color={display.textColor}
+            highlight={!lateClosed && lateMin <= 5}
+            accentColor={display.accentColor}
+          />
+        </div>
+      </div>
+
+      {/* ─── 하단 컨트롤 행 — 권한자만 노출 (사용자 요구) ─── */}
+      {canControl ? (
+        <div
+          className="mt-2 flex items-center justify-center gap-1.5 flex-wrap rounded-xl px-2 py-1.5 border"
+          style={{
+            background: 'rgba(0,0,0,0.55)',
+            borderColor: 'rgba(255,255,255,0.10)',
+          }}
+        >
+          <CtrlButton
+            label="⏮"
+            sub="이전"
+            onClick={onPrevLevel}
+            disabled={session.currentLevel <= 1}
+            color={display.textColor}
+          />
+          <CtrlButton
+            label={paused || session.status === 'ready' ? '▶' : '⏸'}
+            sub={paused || session.status === 'ready' ? '재개' : '정지'}
+            onClick={onTogglePause}
+            color={display.textColor}
+            primary
+            accentColor={display.accentColor}
+          />
+          <CtrlButton
+            label="⏭"
+            sub="다음"
+            onClick={onNextLevel}
+            color={display.textColor}
+          />
+          <div className="w-px h-7 bg-white/15 mx-0.5" />
+          <CtrlButton
+            label="−1분"
+            onClick={() => onAddMinute(-60)}
+            color={display.textColor}
+            compact
+          />
+          <CtrlButton
+            label="+1분"
+            onClick={() => onAddMinute(+60)}
+            color={display.textColor}
+            compact
+          />
+          <div className="w-px h-7 bg-white/15 mx-0.5" />
+          <CtrlButton
+            label="⏹"
+            sub="종료"
+            onClick={onStopSession}
+            color={'#FF6B6B'}
+            danger
+          />
+          <CtrlButton
+            label="⛶"
+            sub="화면"
+            onClick={onExitFullscreen}
+            color={display.textColor}
+            compact
+          />
+        </div>
+      ) : (
+        <div
+          className="mt-2 text-center py-1.5 rounded-lg border text-[9px] tracking-[0.25em]"
+          style={{
+            background: 'rgba(0,0,0,0.35)',
+            borderColor: 'rgba(255,255,255,0.08)',
+            color: display.textColor,
+            opacity: 0.45,
+          }}
+        >
+          🔒 READ-ONLY · 운영 컨트롤은 매장 관리자만
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 가로 레이아웃 우측 보조 정보 카드 — 컴팩트 stat 박스 */
+function CompactStat({
+  label,
+  value,
+  sub,
+  highlight,
+  color,
+  accentColor,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  highlight?: boolean;
+  color: string;
+  accentColor?: string;
+}) {
+  return (
+    <div
+      className="rounded-lg px-2 py-1.5 text-center border"
+      style={{ background: 'rgba(0,0,0,0.35)', borderColor: 'rgba(255,255,255,0.10)' }}
+    >
+      <div className="text-[8px] tracking-[0.3em] mb-0.5" style={{ color, opacity: 0.6 }}>
+        {label}
+      </div>
+      <div
+        className="font-mono font-extrabold leading-tight"
+        style={{
+          fontSize: 'clamp(14px, 2vw, 22px)',
+          color: highlight && accentColor ? accentColor : color,
+        }}
+      >
+        {value}
+      </div>
+      {sub && (
+        <div className="text-[9px] mt-0.5" style={{ color, opacity: 0.55 }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 가로 레이아웃 컨트롤 버튼 — 통일된 톤. ⏸/▶는 primary, ⏹는 danger */
+function CtrlButton({
+  label,
+  sub,
+  onClick,
+  disabled,
+  color,
+  primary,
+  danger,
+  compact,
+  accentColor,
+}: {
+  label: string;
+  sub?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  color: string;
+  primary?: boolean;
+  danger?: boolean;
+  compact?: boolean;
+  accentColor?: string;
+}) {
+  const baseBg = primary
+    ? `${accentColor ?? '#22D3EE'}22`
+    : danger
+    ? 'rgba(255,107,107,0.12)'
+    : 'rgba(255,255,255,0.06)';
+  const baseBorder = primary
+    ? `${accentColor ?? '#22D3EE'}66`
+    : danger
+    ? 'rgba(255,107,107,0.45)'
+    : 'rgba(255,255,255,0.12)';
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (disabled) return;
+        onClick();
+      }}
+      disabled={disabled}
+      className={`rounded-lg flex flex-col items-center justify-center transition-all active:scale-95 ${
+        compact ? 'px-2 py-1' : 'px-3 py-1.5'
+      } ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:brightness-125'}`}
+      style={{
+        background: baseBg,
+        border: `1px solid ${baseBorder}`,
+        color,
+        minWidth: compact ? 44 : 52,
+      }}
+    >
+      <span className={compact ? 'text-sm font-extrabold' : 'text-base font-extrabold leading-none'}>
+        {label}
+      </span>
+      {sub && (
+        <span className="text-[8px] tracking-[0.2em] mt-0.5 opacity-75 font-bold">
+          {sub}
+        </span>
+      )}
+    </button>
   );
 }
