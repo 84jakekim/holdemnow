@@ -111,14 +111,15 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     <AuthGate>
       <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
         <div className="max-w-md mx-auto min-h-screen relative" style={{ background: 'var(--bg)' }}>
-          {/* 인앱 FCM 예약 확정 토스트 (전역) */}
+          {/* 인앱 FCM 토스트 (전역) — 다른 type 푸시용으로 마운트 유지 */}
           <InAppToast />
-          {/* 녹색 마퀴 띠 — 헤더 바로 아래 sticky */}
-          {!isFullscreen && (
-            <div className="sticky top-0 z-30">
-              <ConfirmedReservationBanner />
-            </div>
-          )}
+          {/* 예약 상태 마퀴 띠 — 페이지 무관 항상 표시.
+           * 노란(pending) / 녹색(confirmed) 자동 전환. 페이지 이동·앱 재진입·다른
+           * 풀스크린(매장 상세/LIVE)에서도 동일하게 노출되어 사용자가 예약 진행 상태를
+           * 어디서나 인지 가능. 예약 시간 종료(+2h) 또는 취소 시에만 사라짐. */}
+          <div className="sticky top-0 z-50">
+            <ConfirmedReservationBanner />
+          </div>
           <div className={isFullscreen ? '' : 'pb-[80px]'}>{children}</div>
           {!isFullscreen && <TabBar pathname={pathname} />}
           <NoticePopup />
