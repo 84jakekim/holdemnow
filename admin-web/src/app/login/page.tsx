@@ -26,7 +26,7 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { startKakaoLogin } from '@/lib/kakaoAuth';
 import { loginAsPlayerWithGoogle, getLoginIntent, clearLoginIntent } from '@/lib/auth';
-import { loginWithEmail } from '@/lib/emailAuth';
+import { loginWithEmailExpecting, WrongRoleError } from '@/lib/emailAuth';
 
 export default function LoginPage() {
   return (
@@ -164,8 +164,24 @@ function LoginPageInner() {
     setLoggingIn(true);
     setLoginError(null);
     try {
-      await loginWithEmail(email, password);
+      // 2026-05-22: 매장·대회사·본사 어드민 이메일이 일반 /login으로 들어오면
+      // 로그인 자체를 차단 (Firebase Auth 로그인 후 즉시 signOut + 안내).
+      await loginWithEmailExpecting(email, password, 'player');
     } catch (err: unknown) {
+      if (err instanceof WrongRoleError) {
+        // 사장님 표현: "없는 계정이라고 알림". 보안상 정확한 역할까지는
+        // 노출하지 않고, 일반 사용자 전용 페이지임을 안내 + 매장·대회사 로그인 링크 제공.
+        const targetPage =
+          err.actualKind === 'platform_admin'
+            ? '본사 관리자 로그인 페이지'
+            : '매장·대회사 로그인 페이지';
+        const targetHref =
+          err.actualKind === 'platform_admin' ? '/platform-login' : '/login/business';
+        setLoginError(
+          `이 이메일은 일반 사용자 계정이 아닙니다. ${targetPage}를 이용해 주세요. (${targetHref})`,
+        );
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('invalid-credential') || msg.includes('wrong-password') || msg.includes('user-not-found')) {
         setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');

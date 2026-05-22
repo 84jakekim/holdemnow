@@ -16,7 +16,7 @@ import Link from 'next/link';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
-import { loginWithEmail } from '@/lib/emailAuth';
+import { loginWithEmailExpecting, WrongRoleError } from '@/lib/emailAuth';
 import { usernameToAdminEmail, validateAdminUsername } from '@/lib/platformAdmin';
 
 export default function PlatformLoginPage() {
@@ -90,8 +90,17 @@ function PlatformLoginInner() {
         }
         loginEmail = usernameToAdminEmail(v.value);
       }
-      await loginWithEmail(loginEmail, password);
+      // 2026-05-22: platform_admin 만 통과. 매장·대회사·일반 사용자는 차단.
+      await loginWithEmailExpecting(loginEmail, password, 'platform_admin');
     } catch (err: unknown) {
+      if (err instanceof WrongRoleError) {
+        if (err.actualKind === 'store' || err.actualKind === 'organizer') {
+          setLoginError('매장·대회사 계정입니다. 매장·대회사 로그인 페이지(/login/business)를 이용해 주세요.');
+        } else {
+          setLoginError('이 계정은 본사 관리자 권한이 없습니다. 일반 로그인(/login)을 이용해 주세요.');
+        }
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('invalid-credential') || msg.includes('wrong-password') || msg.includes('user-not-found')) {
         setLoginError('아이디(이메일) 또는 비밀번호가 올바르지 않습니다.');

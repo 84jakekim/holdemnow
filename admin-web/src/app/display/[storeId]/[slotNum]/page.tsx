@@ -113,6 +113,19 @@ export default function DisplayPage({
     };
   }, []);
 
+  // ─── 모바일 가로 모드 강제 (2026-05-22 신설) ─────────────────
+  // 사장님 요구: "TV 송출을 모바일에서 실행하면 화면이 세로로 출력돼서 타이머가
+  // 제대로 안 보임. 자동으로 옆으로 넓은 화면이 나타나서 사이즈에 최적화되어야 함.
+  // 매장 핸드폰을 TV에 HDMI로 연결해서 화면공유 하기 때문."
+  //
+  // 전략 (3단 fallback):
+  //   ① screen.orientation.lock('landscape') — Chrome/Edge Android (PWA + fullscreen 전제)
+  //   ② CSS `transform: rotate(90deg)` — iOS Safari 등 lock API 미지원
+  //   ③ 둘 다 실패해도 폰트는 vw 기반이라 동작은 함
+  //
+  // 트리거 시점은 사용자 제스처(터치) 내에서. 권한 거부/미지원은 silent fallback.
+  const [needsCssRotate, setNeedsCssRotate] = useState(false);
+
   useEffect(() => {
     let unlockedBefore = false;
     try {
@@ -153,23 +166,67 @@ export default function DisplayPage({
       }
     };
 
+    // 가로 모드 강제 — orientation lock API 우선, 실패 시 CSS rotate fallback
+    const requestLandscapeSafe = async () => {
+      try {
+        // 모바일 폭(touch 디바이스 + 세로 화면)일 때만 시도
+        const isPortrait = window.innerHeight > window.innerWidth;
+        const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+        if (!isPortrait || !isTouch) return;
+
+        // ① Screen Orientation API — Chrome Android (PWA / fullscreen 전제)
+        const scr = screen as Screen & {
+          orientation?: ScreenOrientation & { lock?: (o: string) => Promise<void> };
+        };
+        if (scr.orientation?.lock) {
+          try {
+            await scr.orientation.lock('landscape');
+            return; // 성공 — CSS rotate 불필요
+          } catch {
+            // iOS Safari 등 — fullscreen 활성화 안 되면 실패. CSS fallback으로.
+          }
+        }
+        // ② CSS rotate fallback — orientation lock 실패 시
+        setNeedsCssRotate(true);
+      } catch {
+        setNeedsCssRotate(true);
+      }
+    };
+
     const tryActivate = () => {
       unlockAudio();
       setAudioReady(true);
       try {
         localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
       } catch {}
-      // 사용자 제스처 내에서만 fullscreen/wakeLock 요청 가능
-      requestFullscreenSafe();
+      // 사용자 제스처 내에서만 fullscreen/wakeLock/orientation 요청 가능
+      // fullscreen 먼저 — orientation lock은 fullscreen 활성화된 후에야 작동(Chrome 사양)
+      requestFullscreenSafe().then(() => {
+        requestLandscapeSafe();
+      });
       requestWakeLockSafe();
     };
     window.addEventListener('click', tryActivate, { once: true });
     window.addEventListener('touchstart', tryActivate, { once: true });
     window.addEventListener('keydown', tryActivate, { once: true });
+
+    // fullscreen 해제 시 orientation unlock + CSS rotate 해제
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        try {
+          const scr = screen as Screen & { orientation?: ScreenOrientation & { unlock?: () => void } };
+          scr.orientation?.unlock?.();
+        } catch {}
+        setNeedsCssRotate(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
     return () => {
       window.removeEventListener('click', tryActivate);
       window.removeEventListener('touchstart', tryActivate);
       window.removeEventListener('keydown', tryActivate);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
     };
   }, []);
 
@@ -325,8 +382,23 @@ export default function DisplayPage({
 
   const heroTitle = display.customTournamentTitle || session?.tournamentName || '대기 중';
 
+  // CSS rotate fallback 시 외곽 wrapper에 transform 적용 + 폭·높이 swap.
+  // orientation lock API가 성공했다면 needsCssRotate=false → 일반 렌더.
+  const rotateWrapperStyle: React.CSSProperties = needsCssRotate
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: '100vw',
+        width: '100vh',
+        height: '100vw',
+        transform: 'rotate(90deg)',
+        transformOrigin: 'top left',
+        zIndex: 0,
+      }
+    : {};
+
   return (
-    <div className="min-h-screen text-white flex flex-col relative overflow-hidden" style={bgStyle}>
+    <div className="min-h-screen text-white flex flex-col relative overflow-hidden" style={{ ...bgStyle, ...rotateWrapperStyle }}>
       {/* 이미지 배경 시 어둠 overlay */}
       {display.backgroundType === 'image' && display.backgroundImageUrl && (
         <div className="absolute inset-0 pointer-events-none" style={{ background: `rgba(0,0,0,${display.overlayOpacity})` }} />
@@ -671,11 +743,14 @@ export default function DisplayPage({
             }}
           >
             <div className="text-7xl mb-5">🔊</div>
-            <div className="text-2xl font-extrabold mb-3">사운드 활성화</div>
-            <div className="text-sm text-gray-300 mb-7 leading-relaxed">
-              화면을 터치하여 카운트다운·블라인드업
-              <br />
-              사운드를 켭니다
+            <div className="text-2xl font-extrabold mb-3">TV 송출 시작</div>
+            <div className="text-sm text-gray-300 mb-5 leading-relaxed">
+              화면을 터치하면 풀스크린 + 가로 모드 +<br />
+              사운드 + 화면 절전 방지가 동시에 켜집니다.
+            </div>
+            <div className="text-[12px] text-gray-400 mb-6 leading-relaxed">
+              📱 모바일 → TV HDMI 연결 송출 시<br />
+              자동으로 가로(landscape)로 회전합니다.
             </div>
             <div className="text-amber-400 text-base font-bold animate-pulse">
               화면 아무 곳이나 터치

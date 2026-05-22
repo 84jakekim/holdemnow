@@ -371,6 +371,78 @@ export async function loginWithEmail(email: string, password: string) {
 }
 
 // =====================================================================
+// 역할 게이팅 로그인 (2026-05-22 신설)
+//
+// 사장님 요구: 매장 어드민 이메일이 일반 /login에서 로그인되면 안 됨,
+// 일반 사용자 이메일이 /login/business에서 로그인되면 안 됨.
+// 단순히 wrongRole 안내 카드만 띄우는 게 아니라 로그인 자체를 차단 + signOut.
+//
+// 동작:
+//  1) Firebase Auth 로그인 시도
+//  2) users/{uid} 1회 fetch → 역할 판정
+//  3) expectedKind와 다르면 즉시 signOut + 'wrong-role' 에러 throw
+//     (메시지에 실제 역할이 담겨 호출부에서 안내 분기)
+// =====================================================================
+
+export type LoginExpectedKind = 'player' | 'business' | 'platform_admin';
+
+export class WrongRoleError extends Error {
+  /** 실제 계정 유형 */
+  readonly actualKind: 'platform_admin' | 'store' | 'organizer' | 'player';
+  constructor(actualKind: WrongRoleError['actualKind']) {
+    super(`wrong-role:${actualKind}`);
+    this.name = 'WrongRoleError';
+    this.actualKind = actualKind;
+  }
+}
+
+export async function loginWithEmailExpecting(
+  email: string,
+  password: string,
+  expected: LoginExpectedKind,
+): Promise<void> {
+  const credential = await signInWithEmailAndPassword(
+    auth,
+    email.trim().toLowerCase(),
+    password,
+  );
+  const uid = credential.user.uid;
+
+  // users/{uid} 1회 fetch — onSnapshot 대기 없이 즉시 판정
+  let snap;
+  try {
+    snap = await getDoc(doc(db, 'users', uid));
+  } catch {
+    // 문서 조회 실패 — 보수적으로 signOut 후 일반 에러
+    try { await auth.signOut(); } catch {}
+    throw new Error('계정 정보를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+  }
+  const data = snap.exists() ? (snap.data() as { storeId?: string; organizerId?: string; role?: string; roles?: string[] }) : null;
+
+  // 역할 판정 — AuthGate.classifyAccount와 동일 규칙
+  const roles = data?.roles ?? [];
+  const role = data?.role;
+  const isPlatformAdmin = roles.includes('platform_admin') || role === 'platform_admin';
+
+  let actualKind: WrongRoleError['actualKind'];
+  if (isPlatformAdmin) actualKind = 'platform_admin';
+  else if (data?.storeId) actualKind = 'store';
+  else if (data?.organizerId) actualKind = 'organizer';
+  else actualKind = 'player';
+
+  const ok =
+    (expected === 'player' && actualKind === 'player') ||
+    (expected === 'business' && (actualKind === 'store' || actualKind === 'organizer')) ||
+    (expected === 'platform_admin' && actualKind === 'platform_admin');
+
+  if (!ok) {
+    // 역할 불일치 — 즉시 signOut → 호출부에서 "없는 계정" 메시지로 안내.
+    try { await auth.signOut(); } catch {}
+    throw new WrongRoleError(actualKind);
+  }
+}
+
+// =====================================================================
 // 비밀번호 분실 복구
 // =====================================================================
 
