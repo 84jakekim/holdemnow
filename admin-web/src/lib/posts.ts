@@ -422,6 +422,13 @@ export async function createStorePost(input: {
   // 백워드 호환: 단일 필드도 같이 저장 (예전 클라이언트 fallback 보호)
   const cardEmoji = cardEmojis[0] ?? '';
 
+  // ⚠️ createdAt: 클라이언트 Timestamp.now() 사용 (2026-05-22 hotfix #4)
+  // serverTimestamp() 사용 시 첫 onSnapshot emit에 createdAt=null → 모든 구독자의
+  // where('createdAt', '>=', since) + orderBy('createdAt') 쿼리에서 제외되어,
+  // 매장 어드민에서 글을 올려도 홈 캐러셀/채팅방/매장 상세에 즉시 안 뜨던 근본 원인.
+  // 클라 시간 사용으로 첫 emit부터 query 매칭 보장. (디바이스 clock skew 수 초는 무시 가능)
+  // serverCreatedAt은 별도 필드로 백업하여 감사 추적/정확한 정렬이 필요할 때 사용.
+  const nowTs = Timestamp.now();
   const ref = await addDoc(postsCol(input.storeId), stripUndefined({
     storeId: input.storeId,
     storeName: input.storeName ?? '',
@@ -438,7 +445,8 @@ export async function createStorePost(input: {
     authorUid: input.authorUid,
     status: 'published' as PostStatus,
     flagCount: 0,
-    createdAt: serverTimestamp(),
+    createdAt: nowTs,
+    serverCreatedAt: serverTimestamp(),
     expiresAt: expiresFromNow(),
   }));
   return ref.id;
@@ -558,6 +566,8 @@ export async function createPinnedPost(input: {
   active?: boolean;
   priority?: number;
 }): Promise<string> {
+  // 동일 함정 차단(2026-05-22 hotfix #4): createdAt을 클라 Timestamp.now()로.
+  const nowTs = Timestamp.now();
   const ref = await addDoc(collection(db, PINNED), stripUndefined({
     title: input.title,
     body: input.body ?? '',
@@ -566,8 +576,9 @@ export async function createPinnedPost(input: {
     ctaLabel: input.ctaLabel ?? '',
     active: input.active ?? true,
     priority: input.priority ?? 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: nowTs,
+    updatedAt: nowTs,
+    serverCreatedAt: serverTimestamp(),
   }));
   return ref.id;
 }
