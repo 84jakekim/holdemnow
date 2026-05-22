@@ -38,20 +38,10 @@ export default function InAppToast() {
 
     onForegroundMessage((payload) => {
       const data = payload.data ?? {};
-      if (data.type !== 'reservation_confirmed') return;
-
-      const storeName = payload.notification?.title?.replace('예약 확정 ', '') ?? data.storeName ?? '매장';
-      const body = payload.notification?.body ?? '';
-      // body 파싱보다 data 필드 우선
-      const time = data.time ?? extractTime(body);
-      const deepLink = data.deepLink ?? `/m`;
-
-      emitInAppToast({
-        type: 'reservation_confirmed',
-        storeName,
-        time,
-        deepLink,
-      });
+      // 예약 확정 토스트는 사용자 피드백에 따라 사용 안 함 — 홈 상단 banner가
+      // 노랑→녹색으로 자동 전환되며 예약 내용을 계속 표시하므로 토스트 중복 X.
+      // (다른 type FCM 알림은 향후 여기에서 분기 추가)
+      if (data.type === 'reservation_confirmed') return;
     }).then((unsub) => {
       unsubFn = unsub;
     });
