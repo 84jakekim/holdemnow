@@ -121,33 +121,44 @@ export default function DisplayPage({
     };
   }, []);
 
-  // ─── 모바일 화면 모드 (2026-05-23 PM 단독 — 가로 전용 레이아웃 추가) ───
-  // 정정 사양:
-  //  • 기본 진입 = 세로 모드 (자동 가로 강제 X)
-  //  • 모바일 폭(≤768px) 세로 감지 시 isMobilePortrait=true → 컴팩트 세로 레이아웃
-  //  • 모바일 폭(≤1024px) 가로(landscape) 감지 시 isMobileLandscape=true → 가로 전용 레이아웃
-  //  • "전체화면" 버튼 클릭 → fullscreen + orientation lock + wakeLock 진입
-  //  • fullscreenchange exit 시 자동 해제 + 세로로 자연 복귀
-  //  • race 차단: orientation은 enterFullscreenMode 안에서만 호출, 자동 X
-  const [needsCssRotate, setNeedsCssRotate] = useState(false);
+  // ─── 모바일 화면 모드 (2026-05-23 PM 핫픽스 — CSS rotate fallback 폐기) ───
+  // 정정 사양 (사용자 외출 모드 긴급 보고 — error.jpg 첨부 분석):
+  //  ❌ 이전 5bcc1b8: CSS `transform: rotate(90deg)` fallback이 활성화되면
+  //      전체 컨테이너(세로 layout 포함)가 그대로 90도 누워서 표시됨.
+  //      또한 isMobileLandscape 조건이 needsCssRotate에도 OR로 묶여있어
+  //      CSS rotate가 적용된 상태에서 가로 layout이 한 번 더 회전하는 race도 발생.
+  //  ✅ 새 동작:
+  //     ① CSS rotate fallback 폐기. orientation lock 실패 시에도 누이지 않음.
+  //        대신 사용자에게 "기기를 가로로 회전해 주세요" 안내 띠 (자체 회전 X).
+  //     ② 가로(landscape) 감지 = window.innerWidth > window.innerHeight 단독.
+  //        폭 제한 폐기 — 폰/태블릿/PC 모두 가로면 MobileLandscapeLayout. 큰 TV는
+  //        충분히 가로지만 컨트롤이 노출돼도 무해 (어차피 canControl 검증 통과 필요).
+  //        ※ 데스크탑 TV 매핑 페이지에서 더 풍부한 풀 레이아웃이 필요하면 폭 >=1280
+  //          + 마우스 hover 가능 매체일 때 풀 레이아웃 유지하도록 분기.
+  //     ③ 모바일 세로(<=768px + h>w) = MobilePortraitLayout 자체 컴팩트.
+  //     ④ fullscreen + orientation lock 시도는 사용자 명시적 클릭에서만.
+  //        race 차단을 위해 fullscreenchange만 자연 종료 트리거로 사용.
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const [isMobileLandscape, setIsMobileLandscape] = useState(false);
+  const [showLandscapeHint, setShowLandscapeHint] = useState(false);
 
   // 모바일 폭 + 세로/가로 감지 — 첫 진입 + resize 시 갱신.
-  // 세로(h>w): isMobilePortrait → 컴팩트 세로 레이아웃
-  // 가로(w>h): isMobileLandscape → 가로 전용 풀폭 레이아웃 (사용자 요구 핵심)
+  // 세로(h>w + 모바일폭): isMobilePortrait → 컴팩트 세로 레이아웃
+  // 가로(w>h): isMobileLandscape → 가로 전용 풀폭 레이아웃
+  //   ※ 폭 제한 제거 — 폰 가로(844x390 등)도, 태블릿 가로(1024x768)도, 모두 진입.
+  //   ※ 데스크탑 풀 레이아웃은 매우 큰 화면(>=1366px) AND 마우스 가능일 때만 유지.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const update = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
       const isPortraitMobile = w <= 768 && h > w;
-      // 가로는 폭 ≤1024px (태블릿 가로까지 포함) + 높이 < 폭
-      // CSS rotate fallback 활성 시에는 swap된 폭/높이 기준으로도 가로 모드로 인식
-      const isLandscapeMobile = (w <= 1024 && w > h) || needsCssRotate;
+      // 가로(landscape)만 보면 됨. 데스크탑 풀 레이아웃은 hover:fine + 큰 폭 한정.
+      const isCoarseOrSmall = !window.matchMedia('(hover: hover) and (pointer: fine)').matches || w < 1366;
+      const isLandscapeForMobileLayout = w > h && isCoarseOrSmall;
       setIsMobilePortrait(isPortraitMobile);
-      setIsMobileLandscape(isLandscapeMobile);
+      setIsMobileLandscape(isLandscapeForMobileLayout);
     };
     update();
     window.addEventListener('resize', update);
@@ -156,7 +167,7 @@ export default function DisplayPage({
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
     };
-  }, [needsCssRotate]);
+  }, []);
 
   // 첫 진입 — audio unlock 자동 적용 (이전에 unlock 했다면). fullscreen/orientation은 X.
   useEffect(() => {
@@ -190,20 +201,19 @@ export default function DisplayPage({
     };
   }, [audioReady]);
 
-  // fullscreenchange — exit 시 orientation unlock + CSS rotate 해제 + state sync
+  // fullscreenchange — exit 시 orientation unlock + state sync. CSS rotate 폐기.
   useEffect(() => {
     const onFullscreenChange = () => {
       const isActive = !!document.fullscreenElement;
       setIsFullscreenActive(isActive);
       if (!isActive) {
-        // exit — orientation/CSS rotate 모두 해제하여 세로로 자연 복귀
+        // exit — orientation 해제만. CSS rotate 폐기됐으므로 별도 해제 불필요.
         try {
           const scr = screen as Screen & {
             orientation?: ScreenOrientation & { unlock?: () => void };
           };
           scr.orientation?.unlock?.();
         } catch {}
-        setNeedsCssRotate(false);
       }
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
@@ -215,11 +225,9 @@ export default function DisplayPage({
   }, []);
 
   // ─── 전체화면(가로) 진입 핸들러 — 사용자 명시적 클릭으로만 호출 ─────────────
+  // 2026-05-23 핫픽스: CSS rotate fallback 폐기. orientation lock 실패 시에는
+  // 화면을 누이지 않고 안내 띠만 표시 → 사용자가 기기를 직접 가로로 회전.
   // 사용자 제스처 내에서 실행되어야 fullscreen + orientation 모두 권한 통과.
-  // race 차단 전략:
-  //  ① fullscreen 먼저 await — fullscreen 활성화된 후에야 orientation lock 가능
-  //  ② orientation lock 성공 시 needsCssRotate 미사용
-  //  ③ 실패해도 fullscreen 자체는 유지 → wakeLock 활성으로 화면 꺼짐 방지
   const enterFullscreenMode = async () => {
     // 사운드도 같이 unlock (혹시 첫 클릭이라면)
     if (!audioReady) {
@@ -242,10 +250,10 @@ export default function DisplayPage({
         else if (el.msRequestFullscreen) await el.msRequestFullscreen();
       }
     } catch {
-      // fullscreen 거부 — orientation lock도 보통 실패하므로 CSS rotate fallback
+      // fullscreen 거부 — orientation lock도 보통 실패하지만 안내 띠로 사용자 직접 회전 유도
     }
 
-    // ② orientation lock — 모바일 세로일 때만 가로 강제
+    // ② orientation lock — 모바일 세로일 때만 가로 강제 시도
     const isPortrait = window.innerHeight > window.innerWidth;
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     let orientationLocked = false;
@@ -261,9 +269,11 @@ export default function DisplayPage({
       } catch {
         // iOS Safari 등 — orientation lock 미지원 또는 거부
       }
-      // orientation lock 실패 시 CSS rotate fallback
+      // orientation lock 실패 시 안내 띠 노출 (CSS rotate fallback 폐기)
       if (!orientationLocked) {
-        setNeedsCssRotate(true);
+        setShowLandscapeHint(true);
+        // 6초 후 자동 숨김
+        setTimeout(() => setShowLandscapeHint(false), 6000);
       }
     }
 
@@ -344,34 +354,50 @@ export default function DisplayPage({
     prevLevelRef.current = currLv;
   }, [session?.currentLevel, session?.status, audioReady, soundBlindUpEffective]);
 
-  // ─── 컨트롤 권한 판정 (2026-05-23 PM 단독 신설) ─────────────────
+  // ─── 컨트롤 권한 판정 (2026-05-23 PM 핫픽스) ─────────────────
   // 가로 모드 컨트롤 버튼은 매장 owner/staff / platform_admin만 노출.
   // 일반 사용자(player)·anonymous는 read-only로 타이머만 본다.
   //  • platform_admin: 모든 매장 컨트롤 가능
-  //  • store_master AND store.ownerUid === uid: 자기 매장
+  //  • store_master AND (store.ownerUid === uid OR userDoc.storeId === storeId): 자기 매장
   //  • store_staff AND userDoc.storeId === storeId: 자기 매장
+  //  • role 필드는 없어도 storeDoc.ownerUid === uid 면 매장 사장으로 인정 (legacy fallback)
   //  • 그 외: 거부
+  //
+  // ⚠️ 핫픽스: thethego 처럼 role 필드가 비어있거나 'player'로 잘못 박힌 owner 계정도
+  //    storeDoc.ownerUid 와 uid가 일치하면 통과시키기.
   const authState = useAuth();
+  const authLoading = authState.status === 'loading';
   const authedUid = authState.status === 'authenticated' ? authState.user.uid : null;
   const userDoc = useUserDoc(authedUid);
   const storeDoc = useStoreDoc(storeId);
   const canControl = useMemo(() => {
-    if (!userDoc) return false;
-    if (hasRole(userDoc, 'platform_admin')) return true;
-    if (hasRole(userDoc, 'store_master')) {
-      // ownerUid 일치 OR userDoc.storeId 일치 (둘 중 하나라도)
-      if (storeDoc?.ownerUid && storeDoc.ownerUid === userDoc.uid) return true;
+    if (!authedUid) return false;
+    // platform_admin 단독 통과 (userDoc.role/roles)
+    if (userDoc && hasRole(userDoc, 'platform_admin')) return true;
+    // store_master + store.ownerUid 또는 storeId 일치
+    if (userDoc && hasRole(userDoc, 'store_master')) {
+      if (storeDoc?.ownerUid && storeDoc.ownerUid === authedUid) return true;
       if (userDoc.storeId && userDoc.storeId === storeId) return true;
     }
-    if (hasRole(userDoc, 'store_staff')) {
+    // store_staff + storeId 일치
+    if (userDoc && hasRole(userDoc, 'store_staff')) {
       if (userDoc.storeId && userDoc.storeId === storeId) return true;
     }
+    // legacy/role-missing fallback: storeDoc.ownerUid === uid 면 무조건 owner 인정
+    // (thethego 같은 prod 마이그레이션 잔재 계정 대응)
+    if (storeDoc?.ownerUid && storeDoc.ownerUid === authedUid) return true;
     return false;
-  }, [userDoc, storeDoc, storeId]);
+  }, [authedUid, userDoc, storeDoc, storeId]);
 
   // ─── 가로 모드 컨트롤 핸들러 ────────────────────────────────────
   // 각 핸들러는 권한 검증 + sec snapshot + try/catch 묶음으로 안전 호출.
   // confirm 모달은 종료에만 (실수 방지).
+  const handleSetTimeRemaining = async (targetSec: number) => {
+    if (!session || !canControl) return;
+    try {
+      await setTimeRemainingInSession(session, sec, targetSec);
+    } catch {}
+  };
   const handleTogglePause = async () => {
     if (!session || !canControl) return;
     try {
@@ -505,30 +531,24 @@ export default function DisplayPage({
 
   const heroTitle = display.customTournamentTitle || session?.tournamentName || '대기 중';
 
-  // CSS rotate fallback 시 외곽 wrapper에 transform 적용 + 폭·높이 swap.
-  // orientation lock API가 성공했다면 needsCssRotate=false → 일반 렌더.
-  const rotateWrapperStyle: React.CSSProperties = needsCssRotate
-    ? {
-        position: 'fixed',
-        top: 0,
-        left: '100vw',
-        width: '100vh',
-        height: '100vw',
-        transform: 'rotate(90deg)',
-        transformOrigin: 'top left',
-        zIndex: 0,
-      }
-    : {};
+  // CSS rotate fallback 폐기 (2026-05-23 핫픽스).
+  // 외곽 wrapper transform 제거 — 누워서 보이던 버그(error.jpg) 해결.
+  // 가로 모드는 isMobileLandscape 분기로만 처리.
 
   return (
-    <div className="min-h-screen text-white flex flex-col relative overflow-hidden" style={{ ...bgStyle, ...rotateWrapperStyle }}>
+    <div className="min-h-screen text-white flex flex-col relative overflow-hidden" style={bgStyle}>
       {/* 이미지 배경 시 어둠 overlay */}
       {display.backgroundType === 'image' && display.backgroundImageUrl && (
         <div className="absolute inset-0 pointer-events-none" style={{ background: `rgba(0,0,0,${display.overlayOpacity})` }} />
       )}
 
-      {/* 상단: 좌상단 매장명/로고 · 우상단 시계 */}
-      <div className="relative px-10 pt-8 flex items-start justify-between gap-6">
+      {/* 상단: 좌상단 매장명/로고 · 우상단 시계
+          모바일 가로 모드에선 자체 헤더가 좌측 컬럼에 있으므로 숨김. */}
+      <div
+        className={`relative px-10 pt-8 flex items-start justify-between gap-6 ${
+          isMobileLandscape ? 'hidden' : ''
+        }`}
+      >
         <div className="flex items-center gap-3">
           {display.storeLogoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -627,6 +647,9 @@ export default function DisplayPage({
           heroTitle={heroTitle}
           display={display}
           canControl={canControl}
+          authLoading={authLoading}
+          authedUid={authedUid}
+          onSetTimeRemaining={handleSetTimeRemaining}
           onTogglePause={handleTogglePause}
           onPrevLevel={handlePrevLevel}
           onNextLevel={handleNextLevel}
@@ -852,24 +875,34 @@ export default function DisplayPage({
         </div>
       )}
 
-      {/* 워터마크 / 스폰서 */}
-      <div className="relative px-10 pb-6 pt-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs" style={{ color: display.textColor, opacity: 0.5 }}>
-          <span
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ background: display.accentColor }}
-          />
-          <span className="font-bold tracking-tight">Pink Rabbit</span>
-          {display.sponsorText && (
-            <span className="ml-3 tracking-widest text-[10px]" style={{ opacity: 0.8 }}>
-              · {display.sponsorText}
-            </span>
-          )}
+      {/* 워터마크 / 스폰서 — 모바일 가로 모드에선 공간 부족하므로 숨김 */}
+      {!isMobileLandscape && (
+        <div className="relative px-10 pb-6 pt-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs" style={{ color: display.textColor, opacity: 0.5 }}>
+            <span
+              className="w-2 h-2 rounded-full animate-pulse"
+              style={{ background: display.accentColor }}
+            />
+            <span className="font-bold tracking-tight">Pink Rabbit</span>
+            {display.sponsorText && (
+              <span className="ml-3 tracking-widest text-[10px]" style={{ opacity: 0.8 }}>
+                · {display.sponsorText}
+              </span>
+            )}
+          </div>
+          <div className="text-[10px] font-mono" style={{ color: display.textColor, opacity: 0.3 }}>
+            display.holdemnow.com/{storeId}/slot/{slot.slotNum}
+          </div>
         </div>
-        <div className="text-[10px] font-mono" style={{ color: display.textColor, opacity: 0.3 }}>
-          display.holdemnow.com/{storeId}/slot/{slot.slotNum}
+      )}
+
+      {/* 가로 회전 안내 띠 — orientation lock 실패 시(iOS Safari 등) 사용자 직접 회전 유도 */}
+      {showLandscapeHint && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-black px-5 py-3 rounded-2xl text-sm font-extrabold flex items-center gap-2 backdrop-blur shadow-2xl border-2 border-amber-300">
+          <span className="text-xl">📱↻</span>
+          <span>기기를 가로로 돌려주세요</span>
         </div>
-      </div>
+      )}
 
       {/* 풀스크린 안내 — 데스크탑/대형 TV 한정. 모바일 세로는 자체 큰 버튼,
           모바일 가로는 자체 컨트롤 행에 ⛶ 종료 버튼 있음 → 안내 불필요. */}
@@ -921,8 +954,9 @@ export default function DisplayPage({
         </button>
       )}
 
-      {/* 사운드 테스트 버튼 — 운영자가 사운드 작동 확인용. 좌상단 시계 옆 */}
-      {audioReady && (
+      {/* 사운드 테스트 버튼 — 운영자가 사운드 작동 확인용. 좌상단 시계 옆.
+          모바일 가로 모드에선 컨트롤 행에 통합 또는 숨김 (공간 절약). */}
+      {audioReady && !isMobileLandscape && (
         <button
           type="button"
           onClick={(e) => {
@@ -1534,6 +1568,9 @@ function MobileLandscapeLayout({
   heroTitle,
   display,
   canControl,
+  authLoading,
+  authedUid,
+  onSetTimeRemaining,
   onTogglePause,
   onPrevLevel,
   onNextLevel,
@@ -1558,6 +1595,9 @@ function MobileLandscapeLayout({
   heroTitle: string;
   display: TimerDisplaySettings;
   canControl: boolean;
+  authLoading: boolean;
+  authedUid: string | null;
+  onSetTimeRemaining: (targetSec: number) => void;
   onTogglePause: () => void;
   onPrevLevel: () => void;
   onNextLevel: () => void;
@@ -1688,18 +1728,30 @@ function MobileLandscapeLayout({
           >
             {fmtTime(sec)}
           </div>
-          {/* 진행바 — 가로 전용 컴팩트 (drag 미지원, 표시만; 컨트롤은 ±1분 / ⏮⏭로) */}
+          {/* 진행바 — 가로 전용 (사용자 요구: 드래그로 디테일 시간 조절).
+              canControl=true 일 때만 드래그 가능. 비권한자는 표시만. */}
           {(isRunning || paused) && currentDur > 0 && (
             <div className="mt-4 w-full max-w-2xl px-4">
-              <div className="relative h-1.5 bg-white/15 rounded-full overflow-hidden">
-                <div
-                  className="h-full transition-all"
-                  style={{
-                    width: `${progress * 100}%`,
-                    background: barColor,
-                  }}
+              {canControl ? (
+                <LandscapeDraggableProgressBar
+                  currentSeconds={sec}
+                  currentDur={currentDur}
+                  progress={progress}
+                  barColor={barColor}
+                  textColor={display.textColor}
+                  onCommit={onSetTimeRemaining}
                 />
-              </div>
+              ) : (
+                <div className="relative h-1.5 bg-white/15 rounded-full overflow-hidden">
+                  <div
+                    className="h-full transition-all"
+                    style={{
+                      width: `${progress * 100}%`,
+                      background: barColor,
+                    }}
+                  />
+                </div>
+              )}
               {currentLevelObj && (
                 <div className="flex justify-between text-[9px] mt-1 font-mono" style={{ color: display.textColor, opacity: 0.5 }}>
                   <span>0:00</span>
@@ -1800,9 +1852,37 @@ function MobileLandscapeLayout({
             compact
           />
         </div>
-      ) : (
+      ) : authLoading ? (
+        /* 인증 로딩 중 — 빈 칸 유지 (깜빡임 방지) */
+        <div className="mt-2 h-9" />
+      ) : !authedUid ? (
+        /* 비로그인 — 클릭 시 매장 로그인 페이지로. 컨트롤하려면 owner 로그인 필요. */
         <div
-          className="mt-2 text-center py-1.5 rounded-lg border text-[9px] tracking-[0.25em]"
+          className="mt-2 flex items-center justify-center gap-2 rounded-xl px-3 py-1.5 border"
+          style={{
+            background: 'rgba(0,0,0,0.45)',
+            borderColor: 'rgba(255,255,255,0.10)',
+          }}
+        >
+          <span className="text-[10px] tracking-[0.18em] font-bold" style={{ color: display.textColor, opacity: 0.8 }}>
+            매장 사장님이신가요?
+          </span>
+          <a
+            href="/login/business"
+            className="text-[10px] font-extrabold tracking-[0.18em] px-3 py-1 rounded-md transition-all active:scale-95"
+            style={{
+              background: `${display.accentColor}22`,
+              border: `1px solid ${display.accentColor}66`,
+              color: display.accentColor,
+            }}
+          >
+            로그인 →
+          </a>
+        </div>
+      ) : (
+        /* 로그인됐지만 권한 없음 — 다른 매장 owner 가능성. subtle 안내 */
+        <div
+          className="mt-2 text-center py-1.5 rounded-lg border text-[9px] tracking-[0.18em]"
           style={{
             background: 'rgba(0,0,0,0.35)',
             borderColor: 'rgba(255,255,255,0.08)',
@@ -1810,9 +1890,113 @@ function MobileLandscapeLayout({
             opacity: 0.45,
           }}
         >
-          🔒 READ-ONLY · 운영 컨트롤은 매장 관리자만
+          이 매장의 owner 계정으로 로그인하면 컨트롤이 표시됩니다
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 가로 모드 전용 드래그 진행바 — 사용자 요구 핵심:
+ *  "타이머시간바로 디테일 시간조절"
+ *
+ * 컴팩트 가로 layout에 맞춰 hitbox만 키우고 thumb은 작게.
+ * 5초 단위 round, 1초 미만/현재 dur 초과 자동 clamp.
+ * Commit은 pointer up 시점에 onCommit(targetSec) 호출.
+ */
+function LandscapeDraggableProgressBar({
+  currentSeconds,
+  currentDur,
+  progress,
+  barColor,
+  textColor,
+  onCommit,
+}: {
+  currentSeconds: number;
+  currentDur: number;
+  progress: number;
+  barColor: string;
+  textColor: string;
+  onCommit: (targetSec: number) => void;
+}) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [previewSec, setPreviewSec] = useState<number | null>(null);
+
+  const displayProgress = dragging && previewSec != null
+    ? Math.min(1, Math.max(0, (currentDur - previewSec) / currentDur))
+    : progress;
+
+  const pointerToSeconds = (clientX: number): number => {
+    const rect = barRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return currentSeconds;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const elapsed = ratio * currentDur;
+    const remaining = Math.max(1, currentDur - elapsed);
+    return Math.max(1, Math.min(currentDur, Math.round(remaining / 5) * 5));
+  };
+
+  const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    setDragging(true);
+    setPreviewSec(pointerToSeconds(e.clientX));
+  };
+  const handleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    setPreviewSec(pointerToSeconds(e.clientX));
+  };
+  const handleUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const target = pointerToSeconds(e.clientX);
+    setDragging(false);
+    setPreviewSec(null);
+    onCommit(target);
+  };
+  const handleCancel = () => {
+    if (!dragging) return;
+    setDragging(false);
+    setPreviewSec(null);
+  };
+
+  return (
+    <div className="select-none">
+      {dragging && previewSec != null && (
+        <div
+          className="text-[10px] font-bold tracking-widest mb-1 text-center"
+          style={{ color: textColor, opacity: 0.9 }}
+        >
+          🎯 <span className="font-mono">{fmtTime(previewSec)}</span>
+        </div>
+      )}
+      <div
+        ref={barRef}
+        onPointerDown={handleDown}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+        onPointerCancel={handleCancel}
+        className={`relative bg-white/15 rounded-full overflow-hidden cursor-ew-resize transition-all ${
+          dragging ? 'h-3 ring-2 ring-white/30' : 'h-2 hover:h-2.5'
+        }`}
+        role="slider"
+        aria-label="현재 레벨 남은 시간 드래그 조절"
+        aria-valuemin={0}
+        aria-valuemax={currentDur}
+        aria-valuenow={dragging && previewSec != null ? previewSec : currentSeconds}
+        style={{ touchAction: 'none' }}
+      >
+        <div
+          className={`h-full ${dragging ? '' : 'transition-all'}`}
+          style={{ width: `${displayProgress * 100}%`, background: barColor }}
+        />
+        <div
+          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-white shadow-lg transition-all ${
+            dragging ? 'w-4 h-4 opacity-100' : 'w-3 h-3 opacity-0'
+          }`}
+          style={{ left: `${displayProgress * 100}%`, border: `2px solid ${barColor}` }}
+        />
+      </div>
     </div>
   );
 }

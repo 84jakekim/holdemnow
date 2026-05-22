@@ -92,10 +92,9 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
   });
 
   test('C) /display 페이지 소스 — 가로 모드 강제 로직 + 사용자 안내 문구 포함', () => {
-    // 가로 모드 강제는 fullscreen + screen.orientation.lock + CSS rotate fallback 조합.
-    // Playwright headless는 fullscreen/orientation API가 제한적이라 런타임 검증 불안정 →
+    // 2026-05-23 핫픽스: CSS rotate fallback 폐기.
+    // orientation lock 실패 시 자체 회전하지 않고 사용자에게 직접 가로 회전 안내(띠) 노출.
     // 페이지 소스 정적 검증으로 핵심 로직 + 안내 문구가 들어가 있는지만 확인.
-    // 실기기 검증은 사용자가 모바일 Chrome / iOS Safari 에서 직접.
     const sourcePath = join(
       __dirname,
       '..',
@@ -110,13 +109,15 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
 
     // ① orientation lock API 호출 (enterFullscreenMode 안에서)
     expect(source).toMatch(/orientation\.lock\(['"]landscape['"]\)/);
-    // ② CSS rotate fallback (needsCssRotate 상태)
-    expect(source).toMatch(/needsCssRotate/);
-    expect(source).toMatch(/rotate\(90deg\)/);
-    // ③ 사운드 활성화 오버레이의 가로 모드 안내 문구
+    // ② CSS rotate fallback 폐기 — 외곽 rotate(90deg) 사용 X
+    expect(source).not.toMatch(/transform:\s*['"]rotate\(90deg\)['"]/);
+    // ③ orientation lock 실패 시 안내 띠 노출 (showLandscapeHint)
+    expect(source).toMatch(/showLandscapeHint/);
+    expect(source).toMatch(/기기를 가로로 돌려주세요/);
+    // ④ 사운드 활성화 오버레이의 가로 모드 안내 문구
     expect(source).toContain('TV 송출 시작');
-    expect(source).toMatch(/가로.*landscape.*회전|가로\(landscape\)/);
-    // ④ fullscreen + wakeLock 통합 호출 (기존 동작 유지)
+    expect(source).toMatch(/가로\(landscape\)|가로.*돌려/);
+    // ⑤ fullscreen + wakeLock 통합 호출 (기존 동작 유지)
     expect(source).toMatch(/requestFullscreen|webkitRequestFullscreen/);
     expect(source).toMatch(/wakeLock\.request/);
   });
@@ -156,13 +157,14 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
     expect(source).toMatch(/isFullscreenActive/);
   });
 
-  test('E) /display 모바일 가로 전용 레이아웃 (2026-05-23 PM 단독) — 3분할 + 컨트롤 + 권한 게이팅', () => {
-    // 2026-05-23 신설 사양:
-    //  • 세로 모드 우측 상단 ⛶ 버튼 제거 (모바일 세로에서만)
-    //  • 세로 하단 전체화면 버튼은 subtle ghost 톤 (노란 풀필 X)
-    //  • 가로 모드 진입 시 MobileLandscapeLayout (3분할 + 컨트롤 행)
+  test('E) /display 모바일 가로 전용 레이아웃 (2026-05-23 핫픽스) — 3분할 + 컨트롤 + 드래그바 + 권한 게이팅', () => {
+    // 2026-05-23 핫픽스 사양:
+    //  • CSS rotate fallback 폐기 → orientation lock 실패 시 안내 띠만 노출
+    //  • 가로 모드 진입 시 MobileLandscapeLayout (3분할 + 컨트롤 행 + 드래그 진행바)
     //  • 컨트롤 6종: ⏮/⏸/⏭/−1분/+1분/⏹종료/⛶종료
-    //  • 권한자(canControl)만 컨트롤 노출, 그 외는 READ-ONLY
+    //  • 권한자(canControl)만 컨트롤 노출, 그 외는 로그인 버튼 또는 안내
+    //  • 진행률 바 드래그로 디테일 시간 조절 (LandscapeDraggableProgressBar)
+    //  • 권한 fallback: storeDoc.ownerUid === uid 면 role 미설정이어도 owner 인정
     const sourcePath = join(
       __dirname,
       '..',
@@ -179,12 +181,13 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
     expect(source).toMatch(/MobileLandscapeLayout/);
     expect(source).toMatch(/isMobileLandscape/);
 
-    // ② 컨트롤 핸들러 6종
+    // ② 컨트롤 핸들러 6종 + 드래그 핸들러
     expect(source).toMatch(/handleTogglePause/);
     expect(source).toMatch(/handlePrevLevel/);
     expect(source).toMatch(/handleNextLevel/);
     expect(source).toMatch(/handleAddMinute/);
     expect(source).toMatch(/handleStopSession/);
+    expect(source).toMatch(/handleSetTimeRemaining/);
     // ⛶ 전체화면 종료는 exitFullscreenMode 재활용
     expect(source).toMatch(/onExitFullscreen/);
 
@@ -193,8 +196,9 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
     expect(source).toMatch(/goToLevelInSession\(/);
     expect(source).toMatch(/addSecondsToSession\(/);
     expect(source).toMatch(/stopLiveSession\(/);
+    expect(source).toMatch(/setTimeRemainingInSession\(/);
 
-    // ④ 권한 판정: useAuth + useUserDoc + useStoreDoc + hasRole
+    // ④ 권한 판정: useAuth + useUserDoc + useStoreDoc + hasRole + ownerUid fallback
     expect(source).toMatch(/useAuth\(\)/);
     expect(source).toMatch(/useUserDoc\(/);
     expect(source).toMatch(/useStoreDoc\(/);
@@ -202,20 +206,29 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
     expect(source).toMatch(/hasRole\(userDoc, ['"]store_master['"]\)/);
     expect(source).toMatch(/hasRole\(userDoc, ['"]store_staff['"]\)/);
     expect(source).toMatch(/canControl/);
-    // READ-ONLY fallback 메시지
-    expect(source).toMatch(/READ-ONLY/);
+    // 핫픽스: storeDoc.ownerUid === authedUid 단독 통과 (role-missing fallback)
+    expect(source).toMatch(/storeDoc\?\.ownerUid && storeDoc\.ownerUid === authedUid/);
 
-    // ⑤ 세션 종료 확인 모달 (실수 방지)
+    // ⑤ 진행률 바 드래그 — 가로 전용 컴포넌트 + onCommit 핸들러
+    expect(source).toMatch(/LandscapeDraggableProgressBar/);
+    expect(source).toMatch(/onSetTimeRemaining/);
+    expect(source).toMatch(/onCommit/);
+
+    // ⑥ 세션 종료 확인 모달 (실수 방지)
     expect(source).toMatch(/window\.confirm/);
 
-    // ⑥ 우측 상단 진입 버튼은 데스크탑/대형 TV에서만 (모바일 세로/가로에서 미노출)
+    // ⑦ 우측 상단 진입 버튼은 데스크탑/대형 TV에서만 (모바일 세로/가로에서 미노출)
     //    조건: !isMobilePortrait && !isMobileLandscape
     expect(source).toMatch(/!isMobilePortrait\s*&&\s*!isMobileLandscape/);
 
-    // ⑦ 세로 컴팩트 레이아웃 하단 버튼 — subtle 톤 (노란 풀필 제거)
-    //    이전: 'bg-amber-500/90 ... text-black font-extrabold ... border-amber-300'
-    //    정정: 'bg-white/5 ... border-white/12 ... opacity 0.7'
-    //    'amber' 풀필 클래스가 MobilePortraitLayout 하단 버튼 부근에 더 이상 없어야 한다.
+    // ⑧ 비권한자 안내 — READ-ONLY 텍스트 폐기. 비로그인 시 로그인 버튼, 로그인됐지만
+    //    권한 없으면 안내 텍스트
+    expect(source).toMatch(/매장 사장님이신가요\?/);
+    expect(source).toMatch(/owner 계정으로 로그인하면/);
+    // 이전 "🔒 READ-ONLY · 운영 컨트롤은 매장 관리자만" 라인은 제거되어야
+    expect(source).not.toMatch(/🔒 READ-ONLY · 운영 컨트롤은 매장 관리자만/);
+
+    // ⑨ 세로 컴팩트 레이아웃 하단 버튼 — subtle 톤 (노란 풀필 제거)
     const portraitButtonRegion = source.match(/전체화면 진입 안내 띠[\s\S]*?<\/button>/);
     if (portraitButtonRegion) {
       expect(portraitButtonRegion[0]).not.toMatch(/bg-amber-500/);
