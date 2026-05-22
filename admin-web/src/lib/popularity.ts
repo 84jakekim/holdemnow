@@ -154,17 +154,21 @@ export async function loadPopularStores(
 ): Promise<PopularityResult> {
   const all = await loadActiveStoresWithMetrics();
 
-  // config 정규화 — 단계 배열을 m 단위로 변환, autoExpand OFF면 단일 단계만.
+  // config 정규화 — 첫 단계는 무조건 defaultRadiusKm.
+  // autoExpand ON이면 def보다 큰 expandStepsKm 옵션을 추가 단계로(maxKm 이하만).
+  // autoExpand OFF면 단일 단계.
   const stepsM: readonly number[] = (() => {
     if (!config) return FALLBACK_EXPAND_STEPS_M;
-    const cap = Math.max(config.defaultRadiusKm, config.maxKm);
-    const opts = Array.from(new Set([
-      config.defaultRadiusKm,
-      ...(config.autoExpand ? config.expandStepsKm : []),
-    ]))
-      .filter((v) => v > 0 && v <= cap)
-      .sort((a, b) => a - b);
-    return opts.length > 0 ? opts.map((km) => km * 1000) : FALLBACK_EXPAND_STEPS_M;
+    const def = Math.max(1, config.defaultRadiusKm);
+    const cap = Math.max(def, config.maxKm);
+    const steps: number[] = [def];
+    if (config.autoExpand) {
+      for (const km of config.expandStepsKm) {
+        if (km > def && km <= cap && !steps.includes(km)) steps.push(km);
+      }
+      steps.sort((a, b) => a - b);
+    }
+    return steps.map((km) => km * 1000);
   })();
   const baseRadiusM = stepsM[0];
 
