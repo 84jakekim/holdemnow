@@ -323,23 +323,19 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
                 </div>
               </div>
 
-              {/* 3) URL 직접 입력 (접힘 가능 영역) */}
-              <details className="mt-4 group">
-                <summary className="cursor-pointer text-[11px] font-bold text-gray-500 hover:text-gray-900 select-none">
-                  ▸ URL 직접 입력 (고급)
-                </summary>
-                <div className="mt-2">
-                  <input
-                    value={settings.backgroundImageUrl}
-                    onChange={(e) => update('backgroundImageUrl', e.target.value)}
-                    placeholder="https://..."
-                    className="form-input"
-                  />
-                  <div className="text-[10px] text-gray-400 mt-1">
-                    외부 이미지 링크를 직접 붙여넣기 가능합니다.
-                  </div>
-                </div>
-              </details>
+              {/* 3) URL 직접 입력 */}
+              <div className="mt-4">
+                <FieldLabel
+                  label="🔗 URL 직접 입력"
+                  hint="외부 이미지 링크(인스타·블로그·이미지 호스팅)를 그대로 붙여넣기"
+                />
+                <input
+                  value={settings.backgroundImageUrl}
+                  onChange={(e) => update('backgroundImageUrl', e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  className="form-input"
+                />
+              </div>
 
               {/* 4) 어둡기 슬라이더 (공통) */}
               <div className="mt-4">
@@ -417,20 +413,19 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
         <Section title="🔔 사운드 알림" hint="TV가 켜진 브라우저에서 작동">
           <div className="space-y-2">
             <SoundToggle
-              label="60초 남았을 때 경고 비프"
-              checked={settings.soundWarn60}
-              onChange={(v) => update('soundWarn60', v)}
-            />
-            <SoundToggle
-              label="30초 남았을 때 경고 비프"
+              label='카운트다운 비프 (10초 → 1초 매초 "삐")'
               checked={settings.soundWarn30}
               onChange={(v) => update('soundWarn30', v)}
             />
             <SoundToggle
-              label="레벨 종료(0초) 차임"
-              checked={settings.soundLevelEnd}
-              onChange={(v) => update('soundLevelEnd', v)}
+              label='블라인드업 음성 알림 ("Blind up!" TTS)'
+              checked={settings.soundBlindUp}
+              onChange={(v) => update('soundBlindUp', v)}
             />
+            <div className="text-[10.5px] text-gray-500 mt-1 leading-relaxed pl-1">
+              이전 60초·30초 사전 비프 / 레벨 종료 차임은 정책 변경(2026-05-23)으로 폐기되었습니다.
+              카운트다운은 10초부터 1초까지 매초 한 번 울리고, 0초 직후 곧장 블라인드업 음성이 발화합니다.
+            </div>
           </div>
         </Section>
 
