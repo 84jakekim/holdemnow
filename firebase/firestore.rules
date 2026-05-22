@@ -467,6 +467,16 @@ service cloud.firestore {
       allow create, update, delete: if isPlatformAdmin();
     }
 
+    // ===== 플랫폼 설정 (platformConfig/youtubeCuration 등) =====
+    // 자동 큐레이션 키워드·갯수·실행 시각 설정. Cloud Function curateHotVideos가
+    // 매시 정각 이 doc을 읽고 적용. 본사 어드민이 home-content 페이지에서 수정.
+    // - read: 누구나 (모바일 홈에서 마지막 큐레이션 결과 노출 가능성)
+    // - write: platform_admin만
+    match /platformConfig/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isPlatformAdmin();
+    }
+
     // ===== 홈 콘텐츠 — 광고/유튜브영상/유튜버 (모바일 홈 노출) =====
     // read: 누구나 (모바일 홈 공개 노출).
     // write: platform_admin만 (본사 콘텐츠 관리 페이지).

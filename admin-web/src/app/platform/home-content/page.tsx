@@ -28,7 +28,8 @@ import {
   DEFAULT_CURATION_CONFIG,
   type YoutubeCurationConfig,
 } from '@/lib/curationConfig';
-import Link from 'next/link';
+import { httpsCallable, getFunctions } from 'firebase/functions';
+import { app } from '@/lib/firebase';
 
 // ─── homeContentCounts 동기화 ─────────────────────────────────
 
@@ -459,6 +460,8 @@ function CurationSettingsCard() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runMessage, setRunMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = subscribeCurationConfig(
@@ -500,6 +503,35 @@ function CurationSettingsCard() {
   const handleResetKeywords = () => {
     if (!window.confirm('포함 키워드를 기본값(홀덤·포커·토너먼트·WSOP 등)으로 되돌릴까요?')) return;
     setIncludeText(formatKeywordsText(DEFAULT_CURATION_CONFIG.includeKeywords));
+  };
+
+  const handleRunNow = async () => {
+    if (!window.confirm('지금 즉시 큐레이션을 실행할까요? YouTube Data API 쿼터를 소모합니다.')) return;
+    setRunning(true);
+    setRunMessage(null);
+    setErr(null);
+    try {
+      const functions = getFunctions(app, 'asia-northeast3');
+      const fn = httpsCallable<
+        Record<string, never>,
+        {
+          upserted: number;
+          expiredDeleted: number;
+          durationMs: number;
+          filtered?: { shortsExcluded?: number; keywordExcluded?: number };
+        }
+      >(functions, 'triggerYoutubeCurationNow');
+      const res = await fn({});
+      const d = res.data;
+      setRunMessage(
+        `완료 — 큐레이션 ${d.upserted}개 / 삭제 ${d.expiredDeleted}개 / ` +
+          `쇼츠 ${d.filtered?.shortsExcluded ?? 0} · 키워드 ${d.filtered?.keywordExcluded ?? 0} 제외`,
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRunning(false);
+    }
   };
 
   const lastRunAt = config?.lastRunAt;
@@ -614,26 +646,33 @@ function CurationSettingsCard() {
           </div>
         </div>
 
-        {/* 액션 */}
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <Link
-            href="/platform/videos"
-            className="text-[11.5px] font-bold text-amber-700 hover:text-amber-900 underline"
-          >
-            ⚙️ 고급 설정 + 즉시 실행 →
-          </Link>
-          <div className="flex items-center gap-2">
-            {savedAt != null && Date.now() - savedAt < 4000 && (
-              <span className="text-[11px] text-emerald-700 font-bold">✓ 저장됨</span>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={saving || !loaded}
-              className="px-5 py-2 bg-amber-600 text-white text-[12.5px] font-extrabold rounded-lg hover:bg-amber-700 disabled:opacity-40 transition"
-            >
-              {saving ? '저장 중…' : '저장'}
-            </button>
+        {/* 실행 결과 메시지 */}
+        {runMessage && (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11.5px] text-emerald-800 leading-relaxed">
+            {runMessage}
           </div>
+        )}
+
+        {/* 액션 — 저장 + 즉시 실행 */}
+        <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
+          {savedAt != null && Date.now() - savedAt < 4000 && (
+            <span className="text-[11px] text-emerald-700 font-bold mr-auto">✓ 저장됨</span>
+          )}
+          <button
+            onClick={handleRunNow}
+            disabled={running || saving}
+            className="px-4 py-2 bg-amber-100 text-amber-900 text-[12.5px] font-extrabold rounded-lg border border-amber-300 hover:bg-amber-200 disabled:opacity-40 transition"
+            title="저장된 설정으로 지금 즉시 큐레이션 실행"
+          >
+            {running ? '실행 중…' : '⚡ 지금 즉시 실행'}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !loaded}
+            className="px-5 py-2 bg-amber-600 text-white text-[12.5px] font-extrabold rounded-lg hover:bg-amber-700 disabled:opacity-40 transition"
+          >
+            {saving ? '저장 중…' : '저장'}
+          </button>
         </div>
       </div>
     </div>
