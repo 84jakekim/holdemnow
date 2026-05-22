@@ -14,10 +14,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collectionGroup, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '@/lib/hooks';
-import type { Reservation } from '@/lib/reservations';
+import { subscribeUserReservations, type Reservation } from '@/lib/reservations';
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -38,67 +37,33 @@ export default function ConfirmedReservationBanner() {
   const authState = useAuth();
   const router = useRouter();
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const uid = authState.status === 'authenticated' ? authState.user.uid : null;
 
-  // confirmed 예약 구독 (collectionGroup — authorUid == uid, status == confirmed)
+  // /m/reservations 페이지와 동일한 헬퍼 사용 — 인덱스·rules 흐름 통일.
+  // pending + confirmed만 클라이언트 필터.
   useEffect(() => {
     if (!uid) {
       setReservations([]);
+      setSubscribeError(null);
       return;
     }
-
-    // composite index 회피 — authorUid single where 만 적용, status 클라이언트 필터
-    // (기존 index 'authorUid+createdAt' 재사용. authorUid+status 신규 index 불필요)
-    const q = query(
-      collectionGroup(db, 'reservations'),
-      where('authorUid', '==', uid),
-    );
-
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items = snap.docs
-          .filter((d) => {
-            const s = (d.data() as { status?: string }).status;
-            // pending(신청 대기) + confirmed(확정) 둘 다 banner 노출.
-            // cancelled/rejected/no_show 는 제외.
-            return s === 'pending' || s === 'confirmed';
-          })
-          .map((d) => {
-          const data = d.data() as Record<string, unknown>;
-          const storeIdFromPath = d.ref.parent.parent?.id ?? '';
-          return {
-            id: d.id,
-            storeId: (data.storeId as string) ?? storeIdFromPath,
-            storeName: (data.storeName as string) ?? '',
-            authorUid: (data.authorUid as string) ?? '',
-            authorName: (data.authorName as string) ?? '',
-            authorPhone: (data.authorPhone as string | null | undefined) ?? null,
-            reservedFor: data.reservedFor as Timestamp,
-            partySize: (data.partySize as number) ?? 1,
-            note: (data.note as string | null | undefined) ?? null,
-            participatingGame: (data.participatingGame as string | null | undefined) ?? null,
-            status: ((data.status as string) ?? 'pending') as Reservation['status'],
-            createdAt: data.createdAt as Timestamp,
-            updatedAt: data.updatedAt as Timestamp,
-            respondedAt: (data.respondedAt as Timestamp | null | undefined) ?? null,
-            respondedBy: (data.respondedBy as string | null | undefined) ?? null,
-            responseNote: (data.responseNote as string | null | undefined) ?? null,
-            readByStore: (data.readByStore as boolean | undefined) ?? false,
-            durationMinutes: (data.durationMinutes as number | undefined) ?? 120,
-            confirmedAt: (data.confirmedAt as Timestamp | null | undefined) ?? null,
-          } satisfies Reservation;
-        });
-        setReservations(items);
+    const unsub = subscribeUserReservations(
+      uid,
+      (list) => {
+        const active = list.filter((r) => r.status === 'pending' || r.status === 'confirmed');
+        setReservations(active);
+        setSubscribeError(null);
       },
       (e) => {
+        // silent fail 대신 사용자에게 visible 알림 — 인덱스/권한 문제 디버깅 용이.
         console.warn('[ConfirmedReservationBanner] 구독 오류', e);
+        setSubscribeError(e.message);
       },
     );
-
     return unsub;
   }, [uid]);
 
@@ -114,7 +79,31 @@ export default function ConfirmedReservationBanner() {
   }, []);
 
   const active = reservations.filter((r) => isActive(r, now));
-  if (active.length === 0) return null;
+
+  // 구독 오류는 잠깐 표시 — 인덱스 누락·rules 거부 등의 silent fail 방지.
+  if (active.length === 0) {
+    if (subscribeError) {
+      return (
+        <button
+          onClick={() => router.push('/m/reservations')}
+          className="w-full overflow-hidden text-left"
+          style={{
+            background: 'linear-gradient(90deg, #B91C1C, #DC2626)',
+            height: 32,
+            display: 'flex',
+            alignItems: 'center',
+            paddingLeft: 12,
+            paddingRight: 12,
+          }}
+        >
+          <span className="text-white text-[11.5px] font-semibold truncate">
+            ⚠️ 예약 알림을 불러올 수 없습니다 (탭하여 내 예약 페이지에서 확인)
+          </span>
+        </button>
+      );
+    }
+    return null;
+  }
 
   // pending이 하나라도 있으면 노랑(amber) 톤. 모두 confirmed면 녹색 톤.
   const hasPending = active.some((r) => r.status === 'pending');

@@ -11,7 +11,8 @@
  *  - 사용자 헤더 우측 드롭다운으로 반경 즉시 변경.
  *  - 30km 0건 → 50km → 100km → 전국 자동 확장 (반경 옵션 따라).
  *  - 위치 권한 거부 시 전국 모드 자동 + 헤더에 "📍 위치 켜기" 띠.
- *  - 새 글 N건 플로팅: 사용자가 맨 아래에서 100px 이상 떨어졌을 때 표시.
+ *  - 새 글 도착 시 강제 follow: 잠금 여부 무관하게 무조건 맨 아래로 스크롤
+ *    (2026-05-22 사용자 정정 — "당연히 새 글로 화면이 포커싱"). NEW 배지 폐기.
  *  - 스크롤 위치 sessionStorage 보존.
  *
  * 데이터:
@@ -25,7 +26,7 @@
  *  - Firebase rules: meta/* read public + posts collectionGroup read public 이미 OK.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   subscribeActivePostsAll,
@@ -41,7 +42,6 @@ import { db } from '@/lib/firebase';
 import ChatPostCard from '@/components/mobile/posts/ChatPostCard';
 
 const SCROLL_KEY = '/m/posts:scroll';
-const NEW_BADGE_THRESHOLD = 2;
 const STICKY_BOTTOM_PX = 100;
 const TIME_BUCKET_MS = 30 * 60 * 1000;
 const HQ_FALLBACK: LatLng = { lat: 35.115, lng: 129.0395 }; // 부산역 — 위치 거부 시 거리 기준
@@ -87,7 +87,6 @@ export default function PostsPage() {
   // UI 상태
   const [radiusDropdownOpen, setRadiusDropdownOpen] = useState(false);
   const [lightbox, setLightbox] = useState<{ url: string; all: string[]; idx: number } | null>(null);
-  const [newPostsBadge, setNewPostsBadge] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const lastSeenCountRef = useRef(0);
   const isNearBottomRef = useRef(true);
@@ -262,7 +261,6 @@ export default function PostsPage() {
       }
       const bottomDist = el.scrollHeight - (el.scrollTop + el.clientHeight);
       isNearBottomRef.current = bottomDist <= STICKY_BOTTOM_PX;
-      if (isNearBottomRef.current) setNewPostsBadge(0);
     };
     el.addEventListener('scroll', onScroll, { passive: true });
 
@@ -326,36 +324,29 @@ export default function PostsPage() {
     return () => window.clearInterval(interval);
   }, [loaded, groupedItems.length]);
 
-  // (C) 새 글 도착 — lock 상태면 자동 따라감 (rAF 2겹으로 이미지 layout 후
-  //     scrollHeight 확정 보장), 아니면 NEW 배지로 알림.
+  // (C) 새 글 도착 — 사용자 명시 "당연히 새 글로 화면이 포커싱". 잠금 상태 무시하고
+  //     무조건 맨 아래로 스크롤. (이전엔 사용자 위로 스크롤 시 NEW 배지만 표시했으나,
+  //     2026-05-22 사용자 정정 요청으로 강제 follow로 변경.)
+  //     rAF 2겹으로 이미지 layout 후 scrollHeight 확정 보장.
   useEffect(() => {
     const total = visiblePostsAndExpansion.items.length;
     const last = lastSeenCountRef.current;
     if (total > last) {
-      dbg('new posts arrived', { total, prev: last, locked: isNearBottomRef.current });
-      if (isNearBottomRef.current) {
-        // rAF 2겹 — 첫 frame에 React commit, 두 번째 frame에 layout 확정된 scrollHeight 사용
+      dbg('new posts arrived → force follow', { total, prev: last, locked: isNearBottomRef.current });
+      // 강제 follow — lock 상태 무관
+      requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            const el = scrollRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
-          });
+          const el = scrollRef.current;
+          if (el) {
+            el.scrollTop = el.scrollHeight;
+            isNearBottomRef.current = true;
+          }
         });
-      } else {
-        const delta = total - last;
-        if (delta >= NEW_BADGE_THRESHOLD || newPostsBadge > 0) {
-          setNewPostsBadge((n) => n + delta);
-        }
-      }
+      });
     }
     lastSeenCountRef.current = total;
-  }, [visiblePostsAndExpansion.items.length, newPostsBadge]);
-
-  const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    setNewPostsBadge(0);
-  }, []);
+    // setNewPostsBadge 호출은 이전 정책(NEW 배지) 잔류 — 새 정책에선 미사용.
+  }, [visiblePostsAndExpansion.items.length]);
 
   const onSelectRadius = (km: number) => {
     setSelectedRadius(km);
@@ -532,25 +523,6 @@ export default function PostsPage() {
         )}
         <div style={{ height: 12 }} />
       </div>
-
-      {/* 새 글 N건 플로팅 */}
-      {newPostsBadge >= NEW_BADGE_THRESHOLD && (
-        <button
-          type="button"
-          onClick={scrollToBottom}
-          className="absolute left-1/2 -translate-x-1/2 rounded-full font-bold transition active:scale-95"
-          style={{
-            bottom: 16,
-            padding: '8px 16px',
-            background: 'var(--brand, #FF1F8F)',
-            color: '#fff',
-            fontSize: 12,
-            boxShadow: '0 4px 16px -4px rgba(255,31,143,0.45)',
-          }}
-        >
-          ↓ 새 글 {newPostsBadge}건
-        </button>
-      )}
 
       {/* 라이트박스 */}
       {lightbox && (
