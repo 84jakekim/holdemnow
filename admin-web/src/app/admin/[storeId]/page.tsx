@@ -24,6 +24,7 @@ import { useReservationSoundAlert } from '@/hooks/useReservationSoundAlert';
 import ThemeToggle from '@/components/admin/ThemeToggle';
 import { useTheme } from '@/lib/theme';
 import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
+import { subscribeStoreReservations } from '@/lib/reservations';
 import { changePassword, syncPasswordRecovery, validatePassword } from '@/lib/emailAuth';
 
 const MENUS = [
@@ -55,9 +56,24 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [showPwModal, setShowPwModal] = useState(false);
+  const [unreadReservationCount, setUnreadReservationCount] = useState(0);
   const { pref, change } = useTheme('light-default');
   // 사운드 알림 훅은 early return 전에 호출 — Rules of Hooks
   useReservationSoundAlert(storeId);
+
+  // 읽지 않은 pending 예약 카운트 구독 — 사이드바 '예약 관리' 메뉴 배지
+  useEffect(() => {
+    if (!storeId) return;
+    const unsub = subscribeStoreReservations(
+      storeId,
+      (list) => {
+        const unread = list.filter((r) => r.status === 'pending' && !r.readByStore).length;
+        setUnreadReservationCount(unread);
+      },
+      () => setUnreadReservationCount(0),
+    );
+    return unsub;
+  }, [storeId]);
 
   if (authState.status === 'loading' || store === undefined) {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
@@ -172,6 +188,19 @@ function AdminPageInner({ storeId }: { storeId: string }) {
               >
                 <span>{m.icon}</span>
                 <span>{m.label}</span>
+                {m.id === 'reservations' && unreadReservationCount > 0 && !locked && (
+                  <span
+                    className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10.5px] font-extrabold text-white tabular-nums animate-pulse"
+                    style={{
+                      background: '#FF1F8F',
+                      boxShadow: '0 0 0 1.5px rgba(255,255,255,0.85), 0 2px 6px rgba(255,31,143,0.45)',
+                      letterSpacing: '-0.02em',
+                    }}
+                    aria-label={`읽지 않은 예약 ${unreadReservationCount}건`}
+                  >
+                    {unreadReservationCount > 99 ? '99+' : unreadReservationCount}
+                  </span>
+                )}
                 {locked && (
                   <span className="ml-auto text-[9px]" style={{ color: 'var(--text-3)' }}>🔒</span>
                 )}

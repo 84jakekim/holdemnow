@@ -22,7 +22,7 @@ import {
   type InAppToastPayload,
 } from '@/lib/fcmInAppToast';
 
-const TOAST_DURATION = 4000;
+const TOAST_DURATION = 8000;
 
 export default function InAppToast() {
   const authState = useAuth();
@@ -119,6 +119,22 @@ export default function InAppToast() {
         )}
       </div>
       <span className="text-[11px] opacity-80 flex-shrink-0">보기 →</span>
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          setToast(null);
+          if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+          }
+        }}
+        role="button"
+        aria-label="알림 닫기"
+        className="ml-1 flex-shrink-0 w-6 h-6 inline-flex items-center justify-center rounded-full opacity-80 hover:opacity-100"
+        style={{ background: 'rgba(255,255,255,0.18)' }}
+      >
+        ×
+      </span>
       <style jsx>{`
         @keyframes toast-slide-down {
           from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
