@@ -8,6 +8,15 @@
  *  - 8초마다 가장 위 카드가 위로 사라지고, 하단에서 새 카드가 올라옴 (채팅방 톤).
  *  - 본문/이미지 X — 풀 내용은 채팅방(/m/posts) / 매장 상세에서.
  *
+ * Phase H++ 정정 (2026-05-22, PM 단독) — 새 글 슬롯 위치 반전:
+ *  - 사용자 호소: "새 글은 밑에서 올라와야 한다. 맨 위에 나타나면 안 된다."
+ *  - 기존: 최신 글(rel=0) → top slot에 fade-in → 잘못됨.
+ *  - 변경: 최신 글(rel=0) → **bottom slot**에 fade-in → 위로 한 칸씩 shift →
+ *    최상단(rel=VISIBLE_SLOTS-1)에 도달 후 그 다음 shift에서 위로 사라짐.
+ *  - 슬롯 매핑: translateY = (VISIBLE_SLOTS - 1 - rel) * SLOT_STRIDE
+ *  - 위로 사라지는 카드(rel == VISIBLE_SLOTS): translateY = -SLOT_STRIDE
+ *  - 카운터는 그대로 (최신 글이 1번이므로 "1–3 / 8" 의미는 유지).
+ *
  * Phase G(이전) 정책 — 그대로 유지:
  *  - 거리: 본사 meta/feedConfig.defaultRadiusKm 적용. 위치 거부 → 전국 fallback.
  *  - 디폴트 반경 0건 → 자동 확장 라더 (radiusOptions 기준).
@@ -226,12 +235,17 @@ export default function DailyPostsCarousel() {
     }
   }, [visiblePosts.length, activeIdx]);
 
-  // 다음 카드로 이동 (자동/수동 공용) — wrap-around
+  // 다음 카드로 이동 (자동/수동 공용) — wrap-around.
+  // Phase H++ 정정: 위로 흐르는 모션이므로 activeIdx를 -1 방향으로 진행.
+  // activeIdx는 현재 bottom slot에 보이는 글의 인덱스 (0 = 최신).
+  // shift 후 bottom에 더 오래된 글(idx+1)이 진입 → 단, 모듈로 처리상 i-1로 감소.
+  // (rel = (idx - activeIdx + total) % total. activeIdx가 1 감소하면 모든 카드의
+  //  rel이 +1 → 한 슬롯 위로 올라가는 모션.)
   const goNext = useCallback(() => {
     setActiveIdx((i) => {
       const total = visiblePosts.length;
       if (total <= VISIBLE_SLOTS) return i; // 모두 보이면 shift 의미 없음
-      return (i + 1) % total;
+      return (i - 1 + total) % total;
     });
   }, [visiblePosts.length]);
 
@@ -287,9 +301,10 @@ export default function DailyPostsCarousel() {
   if (loaded && visiblePosts.length === 0 && pinned.length === 0) return null;
 
   const total = visiblePosts.length;
-  // 보이는 3장 slot의 현재 위치 (1-based for counter)
-  const counterStart = total > 0 ? activeIdx + 1 : 0;
-  const counterEnd = total > 0 ? Math.min(activeIdx + VISIBLE_SLOTS, total) : 0;
+  // 카운터 — bottom slot에 보이는 글의 1-based 인덱스. (Phase H++ 정정:
+  // 슬롯 매핑이 반전되어 "최신부터 N번째" 형태 표시가 더 직관적.
+  // activeIdx=0 → "1 / 8" (bottom에 최신 글))
+  const counterNumber = total > 0 ? activeIdx + 1 : 0;
 
   return (
     <section aria-label="오늘의 매장 소식" className="pt-4 pb-1">
@@ -332,10 +347,13 @@ export default function DailyPostsCarousel() {
             {visiblePosts.map((p, idx) => {
               // 모듈로 기반 상대 위치: activeIdx 기준으로 어느 slot에 위치하는가
               const rel = ((idx - activeIdx) % total + total) % total;
-              // rel 값: 0 = top, 1 = middle, 2 = bottom, 3 = 아래 대기, ...
-              // 화면에 보이는 건 rel 0/1/2 (VISIBLE_SLOTS=3)
-              // rel == total-1 (직전)는 위로 사라지는 카드
-              const isAbove = rel === total - 1 && total > VISIBLE_SLOTS;
+              // rel 값의 의미 (Phase H++ 정정 — 새 글은 bottom slot에서 fade-in):
+              //   rel = 0           → bottom slot (최신 글이 여기서 올라옴)
+              //   rel = 1           → middle slot
+              //   rel = VISIBLE_SLOTS-1 (=2) → top slot (다음 shift에 사라질 카드)
+              //   rel = VISIBLE_SLOTS (=3)   → 위로 사라지는 카드 (직전 top)
+              //   rel ≥ VISIBLE_SLOTS+1      → 화면 밖 아래 대기
+              const isAbove = rel === VISIBLE_SLOTS && total > VISIBLE_SLOTS;
               const isVisible = rel < VISIBLE_SLOTS;
 
               let translateY: number;
@@ -346,7 +364,8 @@ export default function DailyPostsCarousel() {
                 opacity = 0;
                 pointerEvents = 'none';
               } else if (isVisible) {
-                translateY = rel * SLOT_STRIDE;
+                // 최신 글(rel=0)을 bottom slot에 배치, 위로 갈수록 작은 translateY.
+                translateY = (VISIBLE_SLOTS - 1 - rel) * SLOT_STRIDE;
                 opacity = 1;
                 pointerEvents = 'auto';
               } else {
@@ -383,7 +402,8 @@ export default function DailyPostsCarousel() {
             })}
           </div>
 
-          {/* 진행 카운터 — 점 인디케이터 금지 정책에 따라 카운터 사용 */}
+          {/* 진행 카운터 — 점 인디케이터 금지 정책에 따라 카운터 사용.
+              Phase H++ 정정: bottom slot 글의 단일 인덱스. */}
           {total > VISIBLE_SLOTS && (
             <div
               className="mt-2 flex items-center justify-end gap-1 text-[11px] font-bold"
@@ -391,7 +411,7 @@ export default function DailyPostsCarousel() {
               aria-live="polite"
             >
               <span style={{ color: 'var(--text-1)' }}>
-                {counterStart}–{counterEnd}
+                {counterNumber}
               </span>
               <span style={{ opacity: 0.5 }}>/</span>
               <span>{total}</span>
