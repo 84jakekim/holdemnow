@@ -108,7 +108,7 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
     );
     const source = readFileSync(sourcePath, 'utf-8');
 
-    // ① orientation lock API 호출
+    // ① orientation lock API 호출 (enterFullscreenMode 안에서)
     expect(source).toMatch(/orientation\.lock\(['"]landscape['"]\)/);
     // ② CSS rotate fallback (needsCssRotate 상태)
     expect(source).toMatch(/needsCssRotate/);
@@ -119,5 +119,40 @@ test.describe.serial('🔒 계정 분리 + 📺 TV 가로 모드 (2026-05-22 핫
     // ④ fullscreen + wakeLock 통합 호출 (기존 동작 유지)
     expect(source).toMatch(/requestFullscreen|webkitRequestFullscreen/);
     expect(source).toMatch(/wakeLock\.request/);
+  });
+
+  test('D) /display 정정 사양 (2026-05-22 PM 단독) — 자동 가로 강제 X, 버튼 트리거 + 세로 컴팩트', () => {
+    // 5bcc1b8 race 핫픽스 사양:
+    //  • 기본 진입 = 세로 모드 (자동 가로 강제 X)
+    //  • "전체화면" 버튼 클릭 시에만 가로 진입
+    //  • 모바일 세로 컴팩트 레이아웃 (MobilePortraitLayout)
+    //  • fullscreenchange exit 시 자연 복귀
+    const sourcePath = join(
+      __dirname,
+      '..',
+      'src',
+      'app',
+      'display',
+      '[storeId]',
+      '[slotNum]',
+      'page.tsx',
+    );
+    const source = readFileSync(sourcePath, 'utf-8');
+
+    // ① enterFullscreenMode/exitFullscreenMode 핸들러 분리 (사용자 명시적 클릭만)
+    expect(source).toMatch(/enterFullscreenMode/);
+    expect(source).toMatch(/exitFullscreenMode/);
+    // ② 모바일 세로 컴팩트 레이아웃 컴포넌트
+    expect(source).toMatch(/MobilePortraitLayout/);
+    expect(source).toMatch(/isMobilePortrait/);
+    // ③ "전체화면" 버튼 텍스트
+    expect(source).toMatch(/전체화면/);
+    // ④ 자동 가로 강제 제거 — tryActivate 안에서 requestLandscapeSafe 호출 X
+    expect(source).not.toMatch(/requestLandscapeSafe\(\)/);
+    // ⑤ fullscreenchange + webkitfullscreenchange 둘 다 처리 (iOS Safari)
+    expect(source).toMatch(/fullscreenchange/);
+    expect(source).toMatch(/webkitfullscreenchange/);
+    // ⑥ isFullscreenActive 상태로 진입/종료 버튼 토글
+    expect(source).toMatch(/isFullscreenActive/);
   });
 });

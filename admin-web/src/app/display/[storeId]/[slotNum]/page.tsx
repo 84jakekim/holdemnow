@@ -76,16 +76,19 @@ export default function DisplayPage({
   // 절대 시각(levelEndsAt) 기반 카운트다운
   const sec = useLiveCountdown(session ?? null);
 
-  // ─── 사운드 활성화 + 자동 풀스크린 + Wake Lock (Phase 3 — 2026-05-21) ───
-  // 매장 사장님 요구: "화면 터치로 전체화면" — F11 누를 필요 없이 한 번 터치로
-  // 풀스크린 + 사운드 unlock + 화면 절전 방지(wakeLock)까지 한 번에 활성화.
-  //
-  // 동작:
-  //  ① audio unlock (autoplay 정책 우회 — 기존 동작 유지)
-  //  ② document.documentElement.requestFullscreen() — TV 브라우저 전체화면
-  //  ③ navigator.wakeLock.request('screen') — 매장 TV는 몇 시간 켜놔야 하므로 화면 꺼짐 방지
-  //
-  // 모두 best-effort. 실패해도 화면은 정상 동작.
+  // ─── 사운드 활성화 + Wake Lock (모바일 최적화 재설계 — 2026-05-22 PM 단독) ───
+  // 정정 사양 (사용자 외출 모드 긴급 보고):
+  //  ⚠️ 이전 5bcc1b8에서 "첫 터치 시 자동 가로 강제"가 race 발생 → 가로 → 다시 세로로
+  //     돌아오는 버그가 있었음. 또한 자동 강제는 사용자 의도에 반함 (모바일에서
+  //     세로로 정보 확인만 하려는 경우도 있음).
+  //  ✅ 새 동작:
+  //     ① 첫 터치 = audio unlock 만. fullscreen/orientation은 X.
+  //     ② "전체화면" 버튼이 화면 우상단에 노출 — 사용자가 명시적으로 누를 때만
+  //        fullscreen + orientation lock('landscape') + wakeLock 묶음 진입.
+  //     ③ 세로 모드 = 모바일 폭(≤768px) 전용 컴팩트 레이아웃으로 자동 전환.
+  //        타이머/블라인드/NEXT 모두 세로 stack, 폰트는 화면에 맞춰 자동 축소.
+  //     ④ 가로 모드 진입 후 race 차단: needsCssRotate=true 상태에선 orientation
+  //        재시도 안 함. fullscreenchange가 false로 떨어질 때만 자연 종료.
   const [audioReady, setAudioReady] = useState<boolean>(false);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
@@ -113,122 +116,166 @@ export default function DisplayPage({
     };
   }, []);
 
-  // ─── 모바일 가로 모드 강제 (2026-05-22 신설) ─────────────────
-  // 사장님 요구: "TV 송출을 모바일에서 실행하면 화면이 세로로 출력돼서 타이머가
-  // 제대로 안 보임. 자동으로 옆으로 넓은 화면이 나타나서 사이즈에 최적화되어야 함.
-  // 매장 핸드폰을 TV에 HDMI로 연결해서 화면공유 하기 때문."
-  //
-  // 전략 (3단 fallback):
-  //   ① screen.orientation.lock('landscape') — Chrome/Edge Android (PWA + fullscreen 전제)
-  //   ② CSS `transform: rotate(90deg)` — iOS Safari 등 lock API 미지원
-  //   ③ 둘 다 실패해도 폰트는 vw 기반이라 동작은 함
-  //
-  // 트리거 시점은 사용자 제스처(터치) 내에서. 권한 거부/미지원은 silent fallback.
+  // ─── 모바일 화면 모드 (2026-05-22 정정 PM 단독) ─────────────────
+  // 정정 사양:
+  //  • 기본 진입 = 세로 모드 (자동 가로 강제 X)
+  //  • 모바일 폭(≤768px) 감지 시 isMobilePortrait=true → 컴팩트 세로 레이아웃
+  //  • "전체화면" 버튼 클릭 → fullscreen + orientation lock + wakeLock 진입
+  //  • fullscreenchange exit 시 자동 해제 + 세로로 자연 복귀
+  //  • race 차단: orientation은 enterFullscreenMode 안에서만 호출, 자동 X
   const [needsCssRotate, setNeedsCssRotate] = useState(false);
+  const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  const [isMobilePortrait, setIsMobilePortrait] = useState(false);
 
+  // 모바일 폭 + 세로 화면 감지 — 첫 진입 + resize 시 갱신.
+  // 가로(landscape)로 들어가면 자동으로 false → 가로 전용 레이아웃으로 전환.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      // 모바일 폭(<=768px) 이고 세로(높이>폭) 일 때만 컴팩트 레이아웃
+      setIsMobilePortrait(w <= 768 && h > w);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
+
+  // 첫 진입 — audio unlock 자동 적용 (이전에 unlock 했다면). fullscreen/orientation은 X.
   useEffect(() => {
     let unlockedBefore = false;
     try {
       unlockedBefore = localStorage.getItem('holdemnow:tvAudioUnlocked') === '1';
     } catch {}
-
     if (unlockedBefore) {
       unlockAudio();
       setAudioReady(true);
     }
+  }, []);
 
-    const requestFullscreenSafe = async () => {
-      const el = document.documentElement as HTMLElement & {
-        webkitRequestFullscreen?: () => Promise<void>;
-        msRequestFullscreen?: () => Promise<void>;
-      };
-      try {
-        if (document.fullscreenElement) return;
-        if (el.requestFullscreen) await el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-        else if (el.msRequestFullscreen) await el.msRequestFullscreen();
-      } catch {
-        // 사용자 제스처가 아니거나 브라우저가 거부한 경우 무시
-      }
-    };
-
-    const requestWakeLockSafe = async () => {
-      try {
-        const nav = navigator as Navigator & { wakeLock?: WakeLock };
-        if (nav.wakeLock?.request && wakeLockRef.current == null) {
-          wakeLockRef.current = await nav.wakeLock.request('screen');
-          wakeLockRef.current.addEventListener('release', () => {
-            wakeLockRef.current = null;
-          });
-        }
-      } catch {
-        // Wake Lock API 미지원 또는 권한 거부
-      }
-    };
-
-    // 가로 모드 강제 — orientation lock API 우선, 실패 시 CSS rotate fallback
-    const requestLandscapeSafe = async () => {
-      try {
-        // 모바일 폭(touch 디바이스 + 세로 화면)일 때만 시도
-        const isPortrait = window.innerHeight > window.innerWidth;
-        const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-        if (!isPortrait || !isTouch) return;
-
-        // ① Screen Orientation API — Chrome Android (PWA / fullscreen 전제)
-        const scr = screen as Screen & {
-          orientation?: ScreenOrientation & { lock?: (o: string) => Promise<void> };
-        };
-        if (scr.orientation?.lock) {
-          try {
-            await scr.orientation.lock('landscape');
-            return; // 성공 — CSS rotate 불필요
-          } catch {
-            // iOS Safari 등 — fullscreen 활성화 안 되면 실패. CSS fallback으로.
-          }
-        }
-        // ② CSS rotate fallback — orientation lock 실패 시
-        setNeedsCssRotate(true);
-      } catch {
-        setNeedsCssRotate(true);
-      }
-    };
-
-    const tryActivate = () => {
+  // 사운드 unlock 핸들러 — 화면 어디든 첫 터치 시 자동. fullscreen은 트리거 X.
+  useEffect(() => {
+    if (audioReady) return;
+    const unlock = () => {
       unlockAudio();
       setAudioReady(true);
       try {
         localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
       } catch {}
-      // 사용자 제스처 내에서만 fullscreen/wakeLock/orientation 요청 가능
-      // fullscreen 먼저 — orientation lock은 fullscreen 활성화된 후에야 작동(Chrome 사양)
-      requestFullscreenSafe().then(() => {
-        requestLandscapeSafe();
-      });
-      requestWakeLockSafe();
     };
-    window.addEventListener('click', tryActivate, { once: true });
-    window.addEventListener('touchstart', tryActivate, { once: true });
-    window.addEventListener('keydown', tryActivate, { once: true });
+    window.addEventListener('click', unlock, { once: true });
+    window.addEventListener('touchstart', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [audioReady]);
 
-    // fullscreen 해제 시 orientation unlock + CSS rotate 해제
+  // fullscreenchange — exit 시 orientation unlock + CSS rotate 해제 + state sync
+  useEffect(() => {
     const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
+      const isActive = !!document.fullscreenElement;
+      setIsFullscreenActive(isActive);
+      if (!isActive) {
+        // exit — orientation/CSS rotate 모두 해제하여 세로로 자연 복귀
         try {
-          const scr = screen as Screen & { orientation?: ScreenOrientation & { unlock?: () => void } };
+          const scr = screen as Screen & {
+            orientation?: ScreenOrientation & { unlock?: () => void };
+          };
           scr.orientation?.unlock?.();
         } catch {}
         setNeedsCssRotate(false);
       }
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
-
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange as EventListener);
     return () => {
-      window.removeEventListener('click', tryActivate);
-      window.removeEventListener('touchstart', tryActivate);
-      window.removeEventListener('keydown', tryActivate);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange as EventListener);
     };
   }, []);
+
+  // ─── 전체화면(가로) 진입 핸들러 — 사용자 명시적 클릭으로만 호출 ─────────────
+  // 사용자 제스처 내에서 실행되어야 fullscreen + orientation 모두 권한 통과.
+  // race 차단 전략:
+  //  ① fullscreen 먼저 await — fullscreen 활성화된 후에야 orientation lock 가능
+  //  ② orientation lock 성공 시 needsCssRotate 미사용
+  //  ③ 실패해도 fullscreen 자체는 유지 → wakeLock 활성으로 화면 꺼짐 방지
+  const enterFullscreenMode = async () => {
+    // 사운드도 같이 unlock (혹시 첫 클릭이라면)
+    if (!audioReady) {
+      unlockAudio();
+      setAudioReady(true);
+      try {
+        localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
+      } catch {}
+    }
+
+    // ① fullscreen 진입
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void>;
+      msRequestFullscreen?: () => Promise<void>;
+    };
+    try {
+      if (!document.fullscreenElement) {
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+        else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+      }
+    } catch {
+      // fullscreen 거부 — orientation lock도 보통 실패하므로 CSS rotate fallback
+    }
+
+    // ② orientation lock — 모바일 세로일 때만 가로 강제
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    let orientationLocked = false;
+    if (isPortrait && isTouch) {
+      try {
+        const scr = screen as Screen & {
+          orientation?: ScreenOrientation & { lock?: (o: string) => Promise<void> };
+        };
+        if (scr.orientation?.lock) {
+          await scr.orientation.lock('landscape');
+          orientationLocked = true;
+        }
+      } catch {
+        // iOS Safari 등 — orientation lock 미지원 또는 거부
+      }
+      // orientation lock 실패 시 CSS rotate fallback
+      if (!orientationLocked) {
+        setNeedsCssRotate(true);
+      }
+    }
+
+    // ③ wakeLock — 화면 꺼짐 방지
+    try {
+      const nav = navigator as Navigator & { wakeLock?: WakeLock };
+      if (nav.wakeLock?.request && wakeLockRef.current == null) {
+        wakeLockRef.current = await nav.wakeLock.request('screen');
+        wakeLockRef.current.addEventListener('release', () => {
+          wakeLockRef.current = null;
+        });
+      }
+    } catch {
+      // Wake Lock API 미지원
+    }
+  };
+
+  // 전체화면 종료 — 사용자가 명시적으로 누를 때 + ESC 자동 처리
+  const exitFullscreenMode = async () => {
+    try {
+      if (document.exitFullscreen) await document.exitFullscreen();
+    } catch {}
+    // orientation/CSS rotate 해제는 onFullscreenChange가 자동 처리
+  };
 
   // 매장 설정 보강: 명시적 false가 아니면 기본 true. 사장님이 설정 UI를 모를 수도 있으므로
   // TV에서는 카운트다운/블라인드업 사운드가 기본 작동해야 함. soundWarn60만 기본 false.
@@ -455,8 +502,30 @@ export default function DisplayPage({
         </div>
       )}
 
-      {/* 중앙 */}
-      {!session || session.status === 'completed' ? (
+      {/* ─── 모바일 세로 컴팩트 레이아웃 (2026-05-22 PM 단독 신설) ───
+          isMobilePortrait=true 일 때 본문을 컴팩트 버전으로 교체.
+          가로 진입 시(isMobilePortrait=false) 자동으로 기존 풀 레이아웃 복귀.
+          모바일 폭(<=768px) + 세로 화면 한정. */}
+      {isMobilePortrait && session && session.status !== 'completed' ? (
+        <MobilePortraitLayout
+          session={session}
+          sec={sec}
+          paused={paused}
+          isRunning={isRunning}
+          isCurrentBreak={isCurrentBreak}
+          lowTime={lowTime ?? false}
+          veryLow={veryLow ?? false}
+          currentDur={currentDur}
+          progress={progress}
+          nextBlind={nextBlind}
+          lateRegDisplay={lateRegDisplay}
+          lateClosed={lateClosed}
+          lateMin={lateMin}
+          heroTitle={heroTitle}
+          display={display}
+          onEnterFullscreen={enterFullscreenMode}
+        />
+      ) : !session || session.status === 'completed' ? (
         <div className="relative flex-1 flex flex-col items-center justify-center">
           <div
             className="text-7xl font-extrabold mb-6"
@@ -693,17 +762,56 @@ export default function DisplayPage({
         </div>
       </div>
 
-      {/* F11 안내 */}
-      {showHint && (
+      {/* 풀스크린 안내 — 모바일/데스크탑 따로. 모바일에선 컴팩트 레이아웃에 이미 큰 버튼 있어 미노출 */}
+      {showHint && !isMobilePortrait && !isFullscreenActive && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur text-white px-5 py-3 rounded-xl text-xs flex items-center gap-3 z-30">
-          <span>💡 F11 풀스크린 · 화면을 한 번 클릭하면 사운드 활성화</span>
+          <span>💡 우측 상단 <span className="text-amber-300 font-bold">⛶ 전체화면</span> 버튼 · 또는 F11</span>
           <button onClick={() => setShowHint(false)} className="text-white/60 hover:text-white">
             ✕
           </button>
         </div>
       )}
 
-      {/* 사운드 테스트 버튼 — 운영자가 사운드 작동 확인용. audioReady 후 우상단 작게 */}
+      {/* 전체화면 진입/종료 버튼 — PM 단독 정정 핵심 (2026-05-22)
+          • 사용자가 명시적으로 클릭할 때만 fullscreen + landscape + wakeLock 진입
+          • 가로 모드 안 race 차단 (자동 강제 X)
+          • 모바일 세로에서는 큰 사이즈로 강조, 가로/데스크탑은 작게
+      */}
+      {audioReady && !isFullscreenActive && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            enterFullscreenMode();
+          }}
+          className={`fixed top-3 right-3 bg-amber-500/90 hover:bg-amber-400 text-black font-extrabold rounded-lg backdrop-blur z-30 border-2 border-amber-300 shadow-lg flex items-center gap-2 transition-all active:scale-95 ${
+            isMobilePortrait ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
+          }`}
+          title="전체화면 + 가로 모드 진입"
+          aria-label="전체화면 진입"
+        >
+          <span className="text-base">⛶</span>
+          <span>전체화면</span>
+        </button>
+      )}
+
+      {audioReady && isFullscreenActive && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            exitFullscreenMode();
+          }}
+          className="fixed top-3 right-3 bg-white/10 hover:bg-white/25 text-white text-xs font-bold px-3 py-2 rounded-lg backdrop-blur z-30 border border-white/30 flex items-center gap-2"
+          title="전체화면 종료 (ESC)"
+          aria-label="전체화면 종료"
+        >
+          <span>✕</span>
+          <span>종료</span>
+        </button>
+      )}
+
+      {/* 사운드 테스트 버튼 — 운영자가 사운드 작동 확인용. 좌상단 시계 옆 */}
       {audioReady && (
         <button
           type="button"
@@ -711,10 +819,10 @@ export default function DisplayPage({
             e.stopPropagation();
             playBlindUp();
           }}
-          className="fixed top-3 right-3 bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 text-xs font-bold px-3 py-2 rounded-lg backdrop-blur z-30 border border-amber-400/40"
+          className="fixed top-3 left-3 bg-white/10 hover:bg-white/25 text-white/80 text-[11px] font-bold px-2.5 py-1.5 rounded-lg backdrop-blur z-30 border border-white/20"
           title="블라인드업 사운드 테스트"
         >
-          🔊 사운드 테스트
+          🔊 테스트
         </button>
       )}
 
@@ -745,12 +853,13 @@ export default function DisplayPage({
             <div className="text-7xl mb-5">🔊</div>
             <div className="text-2xl font-extrabold mb-3">TV 송출 시작</div>
             <div className="text-sm text-gray-300 mb-5 leading-relaxed">
-              화면을 터치하면 풀스크린 + 가로 모드 +<br />
-              사운드 + 화면 절전 방지가 동시에 켜집니다.
+              화면을 터치하면 사운드가 활성화됩니다.<br />
+              세로/가로 전환은 우측 상단 <span className="text-amber-300 font-bold">전체화면</span> 버튼으로.
             </div>
             <div className="text-[12px] text-gray-400 mb-6 leading-relaxed">
-              📱 모바일 → TV HDMI 연결 송출 시<br />
-              자동으로 가로(landscape)로 회전합니다.
+              📱 모바일은 기본 세로 레이아웃으로 표시.<br />
+              가로(landscape) 풀스크린은 사용자가 명시적으로 전환합니다.<br />
+              <span className="text-amber-300/70">기본값은 가로 강제 X — race 차단</span>
             </div>
             <div className="text-amber-400 text-base font-bold animate-pulse">
               화면 아무 곳이나 터치
@@ -758,6 +867,278 @@ export default function DisplayPage({
           </div>
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * 모바일 세로 컴팩트 레이아웃 — 2026-05-22 PM 단독 신설.
+ *
+ * 모바일 폭(<=768px) + 세로 화면 한정. 사용자가 핸드폰만 들고 봐도
+ * 타이머/블라인드/NEXT/사이드 정보가 모두 한 화면에 들어오도록.
+ *
+ * 레이아웃:
+ *   ┌─────────────────────────┐
+ *   │ STATE 뱃지 (LIVE/PAUSED)│
+ *   │ LEVEL 표시              │
+ *   │                         │
+ *   │   00:00 (거대 타이머)   │
+ *   │   ▰▰▰░░░░░ (진행바)     │
+ *   │                         │
+ *   │ SB / BB / ANTE          │
+ *   │                         │
+ *   │ ─────────────────────   │
+ *   │ ▶ NEXT 다음 블라인드    │
+ *   │ ─────────────────────   │
+ *   │ PLAYERS · LATE REG      │
+ *   │                         │
+ *   │ [⛶ 전체화면 가로 모드]  │
+ *   └─────────────────────────┘
+ */
+function MobilePortraitLayout({
+  session,
+  sec,
+  paused,
+  isRunning,
+  isCurrentBreak,
+  lowTime,
+  veryLow,
+  currentDur,
+  progress,
+  nextBlind,
+  lateRegDisplay,
+  lateClosed,
+  lateMin,
+  heroTitle,
+  display,
+  onEnterFullscreen,
+}: {
+  session: LiveSession;
+  sec: number;
+  paused: boolean;
+  isRunning: boolean;
+  isCurrentBreak: boolean;
+  lowTime: boolean;
+  veryLow: boolean;
+  currentDur: number;
+  progress: number;
+  nextBlind: LiveSession['blindStructure'][number] | undefined;
+  lateRegDisplay: string;
+  lateClosed: boolean;
+  lateMin: number;
+  heroTitle: string;
+  display: TimerDisplaySettings;
+  onEnterFullscreen: () => void;
+}) {
+  return (
+    <div className="relative flex-1 flex flex-col px-4 pb-4">
+      {/* 상단: 상태 뱃지 + 토너 타이틀 + 레벨 */}
+      <div className="flex flex-col items-center gap-2 mt-3">
+        <div className="flex items-center gap-2">
+          {paused ? (
+            <span className="font-extrabold tracking-[0.25em] text-xs" style={{ color: '#FFD166' }}>
+              ⏸ PAUSED
+            </span>
+          ) : isCurrentBreak ? (
+            <span className="font-extrabold tracking-[0.25em] text-xs" style={{ color: '#FFD166' }}>
+              ☕ BREAK
+            </span>
+          ) : (
+            <>
+              <span
+                className="w-2.5 h-2.5 rounded-full animate-pulse"
+                style={{ background: display.accentColor }}
+              />
+              <span
+                className="font-extrabold tracking-[0.25em] text-xs"
+                style={{ color: display.accentColor }}
+              >
+                LIVE
+              </span>
+            </>
+          )}
+        </div>
+        <div
+          className="text-[10px] tracking-widest text-center max-w-full truncate px-2"
+          style={{ color: display.textColor, opacity: 0.85 }}
+        >
+          {heroTitle}
+        </div>
+        <div className="text-[9px] tracking-[0.3em]" style={{ color: display.textColor, opacity: 0.7 }}>
+          {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
+        </div>
+      </div>
+
+      {/* 거대 타이머 — 화면 폭의 18~22vw 정도 */}
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+        <div
+          className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
+          style={{
+            fontSize: `clamp(72px, 22vw, 140px)`,
+            letterSpacing: '-0.05em',
+            color: paused
+              ? '#A8A8A8'
+              : lowTime
+              ? display.accentColor
+              : isCurrentBreak
+              ? '#FFD166'
+              : display.timerColor,
+            transition: 'color 0.2s',
+          }}
+        >
+          {fmtTime(sec)}
+        </div>
+
+        {/* 진행바 — 컴팩트 */}
+        {(isRunning || paused) && currentDur > 0 && (
+          <div className="mt-3 w-full max-w-xs">
+            <div className="relative h-1.5 bg-white/15 rounded-full overflow-hidden">
+              <div
+                className="h-full transition-all"
+                style={{
+                  width: `${progress * 100}%`,
+                  background: lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 블라인드 */}
+        {!isCurrentBreak && (
+          <div className="mt-5 text-center">
+            <div className="text-[9px] tracking-[0.3em] mb-1.5" style={{ color: display.textColor, opacity: 0.6 }}>
+              BLINDS
+            </div>
+            <div
+              className="font-mono font-extrabold"
+              style={{
+                fontSize: 'clamp(28px, 8vw, 44px)',
+                color: display.blindsColor,
+              }}
+            >
+              {session.smallBlind.toLocaleString()} / {session.bigBlind.toLocaleString()}
+            </div>
+            {session.ante > 0 && (
+              <div
+                className="font-mono text-xs mt-1"
+                style={{ color: display.textColor, opacity: 0.6 }}
+              >
+                Ante {session.ante.toLocaleString()}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* NEXT 박스 — 컴팩트 한 줄 */}
+      {nextBlind && (
+        <div
+          className="mt-4 rounded-xl px-3 py-2 border backdrop-blur-sm"
+          style={{
+            background: 'rgba(0,0,0,0.45)',
+            borderColor: nextBlind.isBreak ? '#FFD166' : `${display.accentColor}66`,
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div
+              className="text-[9px] font-extrabold tracking-[0.3em]"
+              style={{ color: nextBlind.isBreak ? '#FFD166' : display.accentColor }}
+            >
+              ▶ NEXT
+            </div>
+            {nextBlind.isBreak ? (
+              <div
+                className="font-extrabold text-right"
+                style={{
+                  color: '#FFD166',
+                  fontSize: '15px',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-2">
+                <div
+                  className="text-[10px] tracking-[0.2em] font-extrabold opacity-70"
+                  style={{ color: display.textColor }}
+                >
+                  LV {nextBlind.level}
+                </div>
+                <div
+                  className="font-mono font-extrabold tabular-nums leading-none"
+                  style={{
+                    fontSize: '17px',
+                    letterSpacing: '-0.02em',
+                    color: display.blindsColor,
+                  }}
+                >
+                  {nextBlind.sb.toLocaleString()}
+                  <span style={{ color: display.textColor, opacity: 0.4 }} className="mx-1">
+                    /
+                  </span>
+                  {nextBlind.bb.toLocaleString()}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 사이드 정보 — 2열 grid: PLAYERS / LATE REG */}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div
+          className="rounded-xl px-3 py-2.5 text-center border"
+          style={{ background: 'rgba(0,0,0,0.35)', borderColor: 'rgba(255,255,255,0.1)' }}
+        >
+          <div className="text-[9px] tracking-[0.25em] mb-1" style={{ color: display.textColor, opacity: 0.6 }}>
+            PLAYERS
+          </div>
+          <div
+            className="font-mono font-extrabold text-xl"
+            style={{ color: display.textColor }}
+          >
+            {session.playersRemaining}/{session.totalPlayers}
+          </div>
+          <div className="text-[10px] mt-0.5" style={{ color: display.textColor, opacity: 0.55 }}>
+            {session.tablesRemaining}테이블
+          </div>
+        </div>
+        <div
+          className="rounded-xl px-3 py-2.5 text-center border"
+          style={{ background: 'rgba(0,0,0,0.35)', borderColor: 'rgba(255,255,255,0.1)' }}
+        >
+          <div className="text-[9px] tracking-[0.25em] mb-1" style={{ color: display.textColor, opacity: 0.6 }}>
+            LATE REG
+          </div>
+          <div
+            className="font-mono font-extrabold text-xl"
+            style={{
+              color: !lateClosed && lateMin <= 5 ? display.accentColor : display.textColor,
+            }}
+          >
+            {lateRegDisplay}
+          </div>
+          <div className="text-[10px] mt-0.5" style={{ color: display.textColor, opacity: 0.55 }}>
+            {lateClosed ? '' : '남음'}
+          </div>
+        </div>
+      </div>
+
+      {/* 전체화면 진입 안내 띠 — 모바일 세로 한정. 사용자에게 가로 모드 옵션 안내 */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEnterFullscreen();
+        }}
+        className="mt-3 w-full bg-amber-500/90 hover:bg-amber-400 active:scale-[0.98] text-black font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 shadow-lg border-2 border-amber-300 transition-all"
+        aria-label="전체화면 + 가로 모드 진입"
+      >
+        <span className="text-lg">⛶</span>
+        <span className="text-sm">전체화면 (가로) 진입</span>
+      </button>
     </div>
   );
 }
