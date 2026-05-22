@@ -3,13 +3,13 @@
 /**
  * ConfirmedReservationBanner
  *
- * 사용자 앱 홈 상단 녹색 마퀴 띠.
- * - 인증 사용자 자신의 confirmed 예약 중 아직 유효한 것만 표시
- *   (reservedFor + durationMinutes*60s > now)
- * - 우→좌 CSS 마퀴 12s 무한 반복
- * - 60초마다 만료 체크, active 0개면 null 반환
- * - prefers-reduced-motion: 정적 표시
- * - 클릭 시 매장 상세로 이동
+ * 사용자 앱 홈 상단 예약 알림 마퀴 띠.
+ * - 사용자가 예약 신청(pending) 직후부터 매퀴 표시 — 노랑 톤(확인 대기)
+ * - 매장이 확정하면 녹색 톤으로 자동 전환
+ * - 인증 사용자 자신의 예약 중 reservedFor + duration 지나지 않은 것만 표시
+ * - 60초마다 만료 체크, active 0개면 null
+ * - 우→좌 CSS 마퀴 18s 무한 반복, prefers-reduced-motion: 정적 표시
+ * - 클릭 시 내 예약 목록(/m/reservations)로 이동
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -61,7 +61,12 @@ export default function ConfirmedReservationBanner() {
       q,
       (snap) => {
         const items = snap.docs
-          .filter((d) => (d.data() as { status?: string }).status === 'confirmed')
+          .filter((d) => {
+            const s = (d.data() as { status?: string }).status;
+            // pending(신청 대기) + confirmed(확정) 둘 다 banner 노출.
+            // cancelled/rejected/no_show 는 제외.
+            return s === 'pending' || s === 'confirmed';
+          })
           .map((d) => {
           const data = d.data() as Record<string, unknown>;
           const storeIdFromPath = d.ref.parent.parent?.id ?? '';
@@ -76,7 +81,7 @@ export default function ConfirmedReservationBanner() {
             partySize: (data.partySize as number) ?? 1,
             note: (data.note as string | null | undefined) ?? null,
             participatingGame: (data.participatingGame as string | null | undefined) ?? null,
-            status: 'confirmed' as const,
+            status: ((data.status as string) ?? 'pending') as Reservation['status'],
             createdAt: data.createdAt as Timestamp,
             updatedAt: data.updatedAt as Timestamp,
             respondedAt: (data.respondedAt as Timestamp | null | undefined) ?? null,
@@ -110,25 +115,33 @@ export default function ConfirmedReservationBanner() {
   const active = reservations.filter((r) => isActive(r, now));
   if (active.length === 0) return null;
 
-  // 마퀴 내용 생성
+  // pending이 하나라도 있으면 노랑(amber) 톤. 모두 confirmed면 녹색 톤.
+  const hasPending = active.some((r) => r.status === 'pending');
+  const background = hasPending
+    ? 'linear-gradient(90deg, #D97706, #F59E0B, #FBBF24)'
+    : 'linear-gradient(90deg, #059669, #10B981, #34D399)';
+
+  // 상태별 메시지
   const marqueeText = active
-    .map(
-      (r) =>
-        `🎉 ${r.storeName} ${formatKSTShort(r.reservedFor)} 예약 확정 · 인원 ${r.partySize}명 · 도착 시 입장 안내드립니다`,
-    )
+    .map((r) => {
+      const when = formatKSTShort(r.reservedFor);
+      const people = `${r.partySize}명`;
+      if (r.status === 'pending') {
+        return `✋ ${r.storeName} ${when} 예약 신청 · ${people} · 매장 확인을 기다리는 중`;
+      }
+      return `🎉 ${r.storeName} ${when} 예약 확정 · ${people} · 도착 시 입장 안내드립니다`;
+    })
     .join('   ·   ');
 
-  // 여러 예약 있을 때 첫 번째 클릭 대상
-  const primaryStoreId = active[0].storeId;
-
+  // 클릭 시 내 예약 목록으로 (여러 예약 한 곳에서 확인 가능)
   return (
     <>
       <button
-        onClick={() => router.push(`/m/store/${primaryStoreId}`)}
-        aria-label="예약 확정 — 매장 상세로 이동"
+        onClick={() => router.push('/m/reservations')}
+        aria-label={hasPending ? '예약 확인 대기 — 내 예약 보기' : '예약 확정 — 내 예약 보기'}
         className="w-full overflow-hidden"
         style={{
-          background: 'linear-gradient(90deg, #059669, #10B981, #34D399)',
+          background,
           height: 36,
           display: 'flex',
           alignItems: 'center',
