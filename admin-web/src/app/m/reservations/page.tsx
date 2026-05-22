@@ -465,12 +465,29 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
               {busy ? '취소 중…' : '❌ 예약 취소'}
             </ActionButton>
           )}
+          {/* 취소 불가(confirmed 임박) — 사용자가 '취소 버튼 왜 없지' 혼란 방지로
+           * disabled 안내 버튼을 노출 + 사유 표시. 방문 1시간 전 부터는 매장 문의 필요. */}
+          {!canCancel && !isPastOrEnded && (
+            <ActionButton
+              onClick={() => alert('방문 1시간 전부터는 직접 취소할 수 없어요.\n매장에 전화로 변경을 요청해 주세요.')}
+              variant="disabled"
+            >
+              ⏰ 취소 불가 · 매장 문의
+            </ActionButton>
+          )}
           {isPastOrEnded && (
             <ActionButton href={`/m/store/${reservation.storeId}`} variant="primary">
               🔁 재예약
             </ActionButton>
           )}
         </div>
+
+        {/* 취소 불가 안내 문구 — 액션 행 아래 작은 도움말 */}
+        {!canCancel && !isPastOrEnded && (
+          <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
+            방문 1시간 전부터는 직접 취소가 불가해요. 변경이 필요하면 위 <b>📞 전화</b> 버튼으로 매장에 알려주세요.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -508,7 +525,7 @@ function ActionButton({
   onClick?: () => void;
   href?: string;
   disabled?: boolean;
-  variant: 'primary' | 'subtle' | 'danger';
+  variant: 'primary' | 'subtle' | 'danger' | 'disabled';
 }) {
   const style: React.CSSProperties =
     variant === 'primary'
@@ -523,11 +540,18 @@ function ActionButton({
             color: '#B91C1C',
             border: '1px solid rgba(229,62,62,0.25)',
           }
-        : {
-            background: 'var(--surface-2)',
-            color: 'var(--text-2)',
-            border: '1px solid var(--border)',
-          };
+        : variant === 'disabled'
+          ? {
+              background: 'var(--surface-3)',
+              color: 'var(--text-3)',
+              border: '1px dashed var(--border)',
+              opacity: 0.85,
+            }
+          : {
+              background: 'var(--surface-2)',
+              color: 'var(--text-2)',
+              border: '1px solid var(--border)',
+            };
   const cls = 'px-3 py-1.5 rounded-lg text-[12px] font-extrabold transition active:scale-95 disabled:opacity-40 whitespace-nowrap';
   if (href) {
     return (
