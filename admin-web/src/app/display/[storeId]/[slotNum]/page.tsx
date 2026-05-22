@@ -22,7 +22,7 @@ import {
   subscribeTimerDisplay,
   buildBackgroundCss,
 } from '@/lib/timerDisplay';
-import { playCountdownBeep, playFinalBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
+import { playCountdownBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
 import {
   computeAutoITM,
   computePayoutsFromStructure,
@@ -310,32 +310,21 @@ export default function DisplayPage({
   const prevSecRef = useRef<number>(sec);
   const prevLevelRef = useRef<number | undefined>(session?.currentLevel);
 
-  // 사운드 트리거 — 사장님 사양: 10초부터 매초 비프 (10,9,...,2), 1초/0초 final beep.
+  // 사운드 트리거 (2026-05-23 정책 정정):
+  //  · 60초·30초 사전 비프 제거 — 사장님 의견 "필요 없음"
+  //  · 카운트다운 매초 비프: sec 10 → 1 (10회)
+  //  · 0초 final beep도 제거 — 곧이은 레벨전환 TTS('Blind up!')가 종료 신호 대체
+  // soundWarn60Effective / soundLevelEndEffective는 미사용 (옵션 토글 UI는 별도 정리 필요).
   useEffect(() => {
     const prev = prevSecRef.current;
     if (session?.status === 'running' && audioReady) {
-      // 60초 — 옵션이 명시적으로 켜졌을 때만 1회
-      if (soundWarn60Effective && prev > 60 && sec <= 60) playCountdownBeep();
-      // 30초 1회 (옵션)
-      if (soundWarn30Effective && prev > 30 && sec <= 30) playCountdownBeep();
-      // 10초부터 매초 카운트다운 비프 (sec: 10,9,8,...,2)
-      if (soundWarn30Effective && prev !== sec && sec >= 2 && sec <= 10) {
+      // 10초~1초 매초 1회 비프
+      if (soundWarn30Effective && prev !== sec && sec >= 1 && sec <= 10) {
         playCountdownBeep();
       }
-      // 1초 final beep
-      if (soundLevelEndEffective && prev !== sec && sec === 1) playFinalBeep();
-      // 0초 도달 — 레벨 끝 final beep
-      if (soundLevelEndEffective && prev > 0 && sec <= 0) playFinalBeep();
     }
     prevSecRef.current = sec;
-  }, [
-    sec,
-    session?.status,
-    audioReady,
-    soundWarn60Effective,
-    soundWarn30Effective,
-    soundLevelEndEffective,
-  ]);
+  }, [sec, session?.status, audioReady, soundWarn30Effective]);
 
   // 레벨 전환 시 블라인드업 차임 — 레벨이 + 방향으로 변경됐을 때만
   useEffect(() => {

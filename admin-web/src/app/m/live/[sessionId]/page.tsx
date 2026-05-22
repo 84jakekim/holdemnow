@@ -25,7 +25,6 @@ import { bumpStoreMetric } from '@/lib/analytics';
 import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
 import {
   playCountdownBeep,
-  playFinalBeep,
   playBlindUp,
   unlockAudio,
 } from '@/lib/sounds';
@@ -152,22 +151,15 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     prevLevelRef.current = session?.currentLevel ?? null;
   }, [session?.currentLevel]);
 
-  // 사운드 트리거 — 사양: 10초부터 매초 비프 (10,9,...,2), 1초 final, 0초 final.
+  // 사운드 트리거 (2026-05-23 정책): 10초~1초 매초 비프(10회), 0초는 곧 레벨전환
+  // TTS('Blind up!')가 발생하므로 별도 final beep 없음. 60·30초 사전 비프도 폐기.
   useEffect(() => {
     if (!soundOn) return;
     if (!session || session.status !== 'running') return;
-
     const prevSec = prevSecRef.current;
     if (prevSec == null) return;
-
-    if (prevSec !== sec) {
-      if (sec === 0) {
-        playFinalBeep();
-      } else if (sec === 1) {
-        playFinalBeep();
-      } else if (sec >= 2 && sec <= 10) {
-        playCountdownBeep();
-      }
+    if (prevSec !== sec && sec >= 1 && sec <= 10) {
+      playCountdownBeep();
     }
   }, [sec, soundOn, session]);
 

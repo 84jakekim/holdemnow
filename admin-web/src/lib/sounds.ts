@@ -86,19 +86,28 @@ export function playFinalBeep(): void {
   }
 }
 
-/** 블라인드업! 알림 — 세 톤 상승 (C5→E5→G5). */
+/**
+ * 블라인드업! 알림 — TTS 음성 ("Blind up!!").
+ * 사장 요청(2026-05-23): 톤 차임 대신 명확한 음성으로 전달.
+ *
+ * Web Speech API SpeechSynthesisUtterance 사용. iOS/Android 모던 브라우저 지원.
+ * 미지원/거부 시 silent (앱은 멈추지 않음).
+ */
 export function playBlindUp(): void {
-  const ctx = getCtx();
-  if (!ctx) return;
-  tryResume(ctx);
-
+  if (typeof window === 'undefined') return;
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
   try {
-    const now = ctx.currentTime;
-    playNote(ctx, 523, now, 0.18); // C5
-    playNote(ctx, 659, now + 0.15, 0.25); // E5
-    playNote(ctx, 784, now + 0.3, 0.35); // G5
+    // 진행 중 발화 취소 — 빠른 연속 레벨업 시 누적 방지
+    synth.cancel();
+    const utter = new SpeechSynthesisUtterance('Blind up!');
+    utter.lang = 'en-US';
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    synth.speak(utter);
   } catch {
-    /* ignore */
+    /* ignore — TTS 실패는 무시 */
   }
 }
 
