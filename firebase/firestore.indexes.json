@@ -246,6 +246,22 @@
       ]
     },
     {
+      "collectionGroup": "reservations",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "authorUid", "order": "ASCENDING" },
+        { "fieldPath": "reservedFor", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reservations",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "authorUid", "order": "ASCENDING" },
+        { "fieldPath": "reservedFor", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "platformCampaigns",
       "queryScope": "COLLECTION",
       "fields": [

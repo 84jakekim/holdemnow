@@ -148,10 +148,16 @@ service cloud.firestore {
           && request.resource.data.partySize <= 20
           && request.resource.data.status == 'pending';
         allow update: if isSignedIn() && (
-          // 예약자 본인: status='cancelled' 로만 취소 가능
+          // 예약자 본인: status='cancelled' 로만 취소 가능.
+          // pending(매장 확인 전)은 즉시 취소 OK.
+          // confirmed/그 외 상태에서는 reservedFor 1시간 전까지만 취소 가능.
           (resource.data.authorUid == request.auth.uid
-            && request.resource.data.status == 'cancelled')
-          // 매장 owner/member: 운영 상태·readByStore·confirmedAt 갱신 가능
+            && request.resource.data.status == 'cancelled'
+            && (
+              resource.data.status == 'pending'
+              || resource.data.reservedFor.toMillis() - request.time.toMillis() >= 60 * 60 * 1000
+            ))
+          // 매장 owner/member: 운영 상태·readByStore·confirmedAt 갱신 가능 (시간 제약 없음)
           || isStoreOwner(storeId)
           || isStoreMember(storeId)
           || isPlatformAdmin()
