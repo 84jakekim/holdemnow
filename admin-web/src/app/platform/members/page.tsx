@@ -332,8 +332,8 @@ function MembersPageInner() {
           {filteredAdmins.length === 0 ? (
             <EmptyState label="본사 어드민 계정이 없습니다" />
           ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm" style={{ minWidth: 420 }}>
                 <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 tracking-wider">
                   <tr>
                     <th className="text-left p-3">어드민</th>
@@ -432,8 +432,8 @@ function MembersPageInner() {
           {filteredPlayers.length === 0 ? (
             <EmptyState label="일반 사용자가 없습니다" />
           ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm" style={{ minWidth: 420 }}>
                 <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 tracking-wider">
                   <tr>
                     <th className="text-left p-3">사용자</th>

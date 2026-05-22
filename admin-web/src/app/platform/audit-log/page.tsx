@@ -194,8 +194,8 @@ export default function AuditLogPage() {
           <div className="text-sm font-bold text-gray-700">조건에 맞는 감사 로그가 없습니다</div>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+          <table className="w-full text-sm" style={{ minWidth: 600 }}>
             <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 tracking-wider uppercase">
               <tr>
                 <th className="text-left p-3">시각</th>

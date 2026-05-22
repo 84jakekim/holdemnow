@@ -291,10 +291,10 @@ export default function PlatformModerationKeywordsPage() {
                   </span>
                 </div>
                 <div
-                  className="rounded-lg overflow-hidden"
+                  className="rounded-lg overflow-x-auto"
                   style={{ border: '1px solid var(--border)' }}
                 >
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm" style={{ minWidth: 520 }}>
                     <thead>
                       <tr style={{ background: 'var(--surface-2)' }}>
                         <th className="text-left px-3 py-2 font-bold" style={{ color: 'var(--text-3)', fontSize: 11 }}>단어</th>

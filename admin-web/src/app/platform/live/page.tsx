@@ -127,8 +127,8 @@ export default function PlatformLivePage() {
         </button>
       </div>
 
-      {/* 요약 */}
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      {/* 요약 — 모바일 2열, sm+ 5열 */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 mb-6">
         <Summary label="총 LIVE" value={totalCount} highlight />
         <Summary label="대기" value={totalReady} color="blue" />
         <Summary label="진행 중" value={totalRunning} color="green" />
@@ -296,9 +296,9 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
   };
 
   return (
-    <div className={`px-5 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50 ${isFinishing ? 'animate-pulse bg-orange-50' : ''}`}>
-      {/* 매장 + 토너 — 4열 */}
-      <div className="col-span-4 min-w-0">
+    <div className={`px-4 sm:px-5 py-4 flex flex-col gap-3 sm:grid sm:grid-cols-12 sm:gap-4 sm:items-center hover:bg-gray-50 ${isFinishing ? 'animate-pulse bg-orange-50' : ''}`}>
+      {/* 매장 + 토너 — 모바일 full, sm+ 4열 */}
+      <div className="sm:col-span-4 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           {isFinishing ? (
             <span className="text-[10px] font-extrabold tracking-wider text-orange-700">
@@ -324,8 +324,8 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
         )}
       </div>
 
-      {/* 핵심 지표 — 5열 */}
-      <div className="col-span-5 grid grid-cols-4 gap-2 text-center">
+      {/* 핵심 지표 — 모바일 4열 / sm+ col-span-5 */}
+      <div className="sm:col-span-5 grid grid-cols-4 gap-2 text-center">
         <div>
           <div className="text-[9px] font-bold text-gray-500 tracking-wider">남은시간</div>
           <div className={`font-mono text-base font-extrabold ${sec <= 60 && isRunning ? 'text-red-500' : isPaused ? 'text-amber-700' : 'text-gray-900'}`}>
@@ -350,8 +350,8 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
         </div>
       </div>
 
-      {/* 컨트롤 — 3열 */}
-      <div className="col-span-3 flex flex-wrap gap-1 justify-end">
+      {/* 컨트롤 — 모바일 full / sm+ col-span-3 */}
+      <div className="sm:col-span-3 flex flex-wrap gap-1.5 justify-start sm:justify-end">
         {isReady ? (
           <>
             <button
