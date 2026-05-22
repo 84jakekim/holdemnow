@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { PinnedPost } from '@/lib/posts';
+import BlockedContentNotice from '@/components/mobile/BlockedContentNotice';
 
 export default function NoticeDetailPage({
   params,
@@ -59,6 +60,18 @@ export default function NoticeDetailPage({
           매장찾기로 돌아가기
         </Link>
       </main>
+    );
+  }
+
+  // 비활성 공지(active=false) — 일반 사용자 직접 URL 진입 방어 (모더레이션과 운영 비활성 모두 포함)
+  if (post.active === false) {
+    return (
+      <BlockedContentNotice
+        title="더 이상 노출되지 않는 공지입니다"
+        description="본사가 공지를 비활성화했거나 종료되었습니다."
+        backHref="/m"
+        backLabel="홈으로"
+      />
     );
   }
 

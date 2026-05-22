@@ -673,7 +673,7 @@ function ProfileLifecycleCard({
   onToggleStatus,
   onDelete,
 }: {
-  status: 'active' | 'closed' | 'expired';
+  status: 'active' | 'closed' | 'expired' | 'hidden';
   busy: boolean;
   onToggleStatus: () => void;
   onDelete: () => void;

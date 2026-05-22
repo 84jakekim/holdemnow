@@ -12,6 +12,7 @@ import {
   formatRelativeTime,
   subscribeUsedListing,
 } from '@/lib/community';
+import BlockedContentNotice from '@/components/mobile/BlockedContentNotice';
 
 /* ============================================================
  * /m/community/used/[id] — 중고거래 상세
@@ -56,6 +57,18 @@ export default function UsedDetailPage({ params }: { params: Promise<{ id: strin
           돌아가기
         </button>
       </div>
+    );
+  }
+
+  // 모더레이션 차단(hidden) — 일반 사용자 직접 URL 진입 방어
+  if (item.status === 'hidden') {
+    return (
+      <BlockedContentNotice
+        title="더 이상 노출되지 않는 매물입니다"
+        description="작성자가 내렸거나 본사 모더레이션으로 차단되었습니다."
+        backHref="/m/community/used"
+        backLabel="중고거래 목록으로"
+      />
     );
   }
 

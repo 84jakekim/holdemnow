@@ -16,6 +16,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { StorePost } from '@/lib/posts';
 import { bumpStoreMetric } from '@/lib/analytics';
+import BlockedContentNotice from '@/components/mobile/BlockedContentNotice';
 
 export default function StorePostDetailPage({
   params,
@@ -70,6 +71,18 @@ export default function StorePostDetailPage({
   const isExpired = expMs > 0 && expMs <= now;
   const isHidden = post.status === 'hidden';
   const isInactive = isExpired || isHidden;
+
+  // 모더레이션 차단된 글은 본문 대신 안내 페이지로 — 일반 사용자 직접 URL 진입 방어.
+  if (isHidden) {
+    return (
+      <BlockedContentNotice
+        title="더 이상 노출되지 않는 소식입니다"
+        description="작성자가 내렸거나 본사 모더레이션으로 차단되었습니다."
+        backHref="/m/find"
+        backLabel="매장찾기로"
+      />
+    );
+  }
 
   const openCta = () => post.ctaUrl && window.open(post.ctaUrl, '_blank', 'noopener,noreferrer');
 

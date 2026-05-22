@@ -48,7 +48,7 @@ export interface WageInfo {
 
 export type ShiftType = 'weekday' | 'weekend' | 'fulltime' | 'parttime';
 
-export type CommunityItemStatus = 'active' | 'closed' | 'expired';
+export type CommunityItemStatus = 'active' | 'closed' | 'expired' | 'hidden';
 
 /** Firestore: community/{itemId} */
 export interface CommunityItem {

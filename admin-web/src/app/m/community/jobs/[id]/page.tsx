@@ -11,6 +11,7 @@ import {
   formatRelativeTime,
   subscribeJobItem,
 } from '@/lib/community';
+import BlockedContentNotice from '@/components/mobile/BlockedContentNotice';
 
 /* ============================================================
  * /m/community/jobs/[id] — 구인 상세
@@ -50,6 +51,18 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           돌아가기
         </button>
       </div>
+    );
+  }
+
+  // 모더레이션 차단(hidden) — 일반 사용자 직접 URL 진입 방어
+  if (job.status === 'hidden') {
+    return (
+      <BlockedContentNotice
+        title="더 이상 노출되지 않는 공고입니다"
+        description="작성자가 내렸거나 본사 모더레이션으로 차단되었습니다."
+        backHref="/m/community/jobs"
+        backLabel="구인 목록으로"
+      />
     );
   }
 

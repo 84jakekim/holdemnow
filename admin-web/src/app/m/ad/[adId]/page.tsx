@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { HomeAd } from '@/lib/homeContent';
+import BlockedContentNotice from '@/components/mobile/BlockedContentNotice';
 
 export default function AdDetailPage({
   params,
@@ -78,6 +79,18 @@ export default function AdDetailPage({
   const endMs = ad.endAt?.toMillis() ?? Infinity;
   const isInRange = now >= startMs && now <= endMs;
   const isInactive = !ad.isActive || !isInRange;
+
+  // 비활성 / 기간 종료 광고 — 일반 사용자 직접 URL 진입 방어
+  if (isInactive) {
+    return (
+      <BlockedContentNotice
+        title="종료된 광고입니다"
+        description="본사가 광고를 종료했거나 노출 기간이 지났습니다."
+        backHref="/m"
+        backLabel="홈으로"
+      />
+    );
+  }
 
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 40 }}>
