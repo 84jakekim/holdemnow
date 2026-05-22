@@ -87,66 +87,34 @@ export function playFinalBeep(): void {
 }
 
 /**
- * 블라인드업! 알림 — 게임풍 fanfare 차임 + TTS "Blind up!" 결합.
- * 사장 요청(2026-05-23 정정): 톤은 익사이팅하게, 속도는 좀 늦춰서 또렷이.
+ * 블라인드업! 알림 — TTS "Blind up!" 즉시 발화.
  *
- * 흐름:
- *   1. 사각파 fanfare C5→E5→G5→C6 (0.32초, 게임 레벨업 느낌)
- *   2. 0.42초 후 TTS "Blind up!" (rate 0.85 / pitch 1.45 — 흥분된 톤)
+ * 사장 요청(2026-05-23 재정정): "10·9·8·...·2·1·Blind up!" 흐름.
+ * fanfare 차임은 0초 도달 후 TTS까지의 지연(880ms)을 만들어 흐름이 끊김 →
+ * fanfare 완전 제거, TTS 즉시 발화. 카운트다운 비프 마지막(1초)과
+ * TTS 사이 지연은 거의 0초.
  *
- * Web Audio API (fanfare) + Web Speech API (TTS) 결합.
- * 미지원/거부 시 일부만 재생되어도 흐름은 계속.
+ * 음성 톤은 흥분된 게임풍 유지:
+ *   - pitch 1.4 (높은 톤, 흥분된 느낌)
+ *   - rate 1.05 (살짝 빠른 속도 — 즉각적·게임풍)
+ *
+ * 미지원 환경 (SpeechSynthesis 없음) silent.
  */
 export function playBlindUp(): void {
   if (typeof window === 'undefined') return;
-
-  // 1) 게임풍 fanfare — 사각파 4음 상승
-  const ctx = getCtx();
-  if (ctx) {
-    tryResume(ctx);
-    try {
-      const start = ctx.currentTime;
-      playGameNote(ctx, 523, start + 0.0, 0.10);  // C5
-      playGameNote(ctx, 659, start + 0.08, 0.10); // E5
-      playGameNote(ctx, 784, start + 0.16, 0.10); // G5
-      playGameNote(ctx, 1047, start + 0.24, 0.22); // C6 — 길게 강조
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // 2) TTS — fanfare 직후 발화
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
-  setTimeout(() => {
-    try {
-      synth.cancel();
-      const utter = new SpeechSynthesisUtterance('Blind up!');
-      utter.lang = 'en-US';
-      utter.rate = 0.85;   // 좀 천천히 또렷하게
-      utter.pitch = 1.45;  // 흥분된 높은 톤
-      utter.volume = 1.0;
-      synth.speak(utter);
-    } catch {
-      /* ignore */
-    }
-  }, 420);
-}
-
-/** 게임 레벨업 느낌의 사각파 노트. envelope 짧고 또렷. */
-function playGameNote(ctx: AudioContext, freq: number, startAt: number, duration: number): void {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'square'; // sine보다 게임풍 — 게임 SFX 톤
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0, startAt);
-  // 게임 SFX 톤 — 빠른 attack + 짧은 decay
-  gain.gain.linearRampToValueAtTime(0.55, startAt + 0.008);
-  gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(startAt);
-  osc.stop(startAt + duration + 0.05);
+  try {
+    synth.cancel(); // 연속 레벨업 시 누적 차단
+    const utter = new SpeechSynthesisUtterance('Blind up!');
+    utter.lang = 'en-US';
+    utter.rate = 1.05;
+    utter.pitch = 1.4;
+    utter.volume = 1.0;
+    synth.speak(utter);
+  } catch {
+    /* ignore */
+  }
 }
 
 
