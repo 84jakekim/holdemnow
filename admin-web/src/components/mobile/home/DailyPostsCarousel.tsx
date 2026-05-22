@@ -24,7 +24,9 @@
  *  - shift = activeIdx 1 증가 → 슬롯 -1 으로 일제히 translateY(-1칸).
  *
  * 데이터:
- *  - loadActivePostsAll: collectionGroup('posts'), 활성 글 fetch
+ *  - subscribeActivePostsAll: collectionGroup('posts'), 활성 글 실시간 구독 (onSnapshot).
+ *    채팅방(/m/posts)과 동일 소스를 사용해, 매장이 새 글을 올리면 새로고침 없이 즉시 반영됨.
+ *    채팅방은 ASC(말풍선 시간순)이지만, 홈은 최신 글이 위로 노출되도록 클라이언트 측에서 DESC 재정렬.
  *  - subscribeActivePinnedPosts: 본사 pinned 띠 (기존 유지)
  *  - subscribeFeedConfig: 본사 디폴트 반경 (채팅방과 동일)
  *  - stores collection(status='active') 1회 fetch → 좌표 map (in-memory)
@@ -39,7 +41,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  loadActivePostsAll,
+  subscribeActivePostsAll,
   subscribeActivePinnedPosts,
   type StorePost,
   type PinnedPost,
@@ -89,19 +91,23 @@ export default function DailyPostsCarousel() {
   const autoRoundsRef = useRef(0);
   const userInteractedRef = useRef(false);
 
-  // 1) posts fetch (최신 50건 → MAX_POSTS로 제한은 거리 필터 뒤에서)
+  // 1) posts 실시간 구독 (onSnapshot) — 매장이 새 글 올리면 새로고침 없이 즉시 반영.
+  //    채팅방(/m/posts)과 동일 소스 사용. ASC로 들어오므로 홈 노출용 DESC로 재정렬.
   useEffect(() => {
-    let cancelled = false;
-    loadActivePostsAll()
-      .then((items) => {
-        if (cancelled) return;
-        setPosts(items);
+    const unsub = subscribeActivePostsAll(
+      (items) => {
+        // 채팅방은 시간순(ASC), 홈은 최신순(DESC)로 노출
+        const sorted = [...items].sort((a, b) => {
+          const am = a.createdAt?.toMillis?.() ?? 0;
+          const bm = b.createdAt?.toMillis?.() ?? 0;
+          return bm - am;
+        });
+        setPosts(sorted);
         setLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => { cancelled = true; };
+      },
+      () => setLoaded(true),
+    );
+    return () => unsub();
   }, []);
 
   // 2) pinned subscribe
