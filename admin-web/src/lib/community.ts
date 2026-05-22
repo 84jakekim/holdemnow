@@ -272,9 +272,12 @@ export function subscribeActiveJobs(
   onChange: (items: JobOffer[]) => void,
   onError: (e: Error) => void,
 ) {
+  // 보안: status='active'만 조회 — hidden/closed 상태 글이 모바일에 노출되지 않게.
+  // 자동 신고(flagCount >= 3)로 hidden 처리된 글도 여기서 차단됨.
   const q = query(
     collection(db, COMMUNITY),
     where('type', '==', 'jobOffer'),
+    where('status', '==', 'active'),
     orderBy('createdAt', 'desc'),
     limit(50),
   );
@@ -285,7 +288,7 @@ export function subscribeActiveJobs(
       const items = snap.docs
         .map((d) => fromDoc(d.id, d.data()) as JobOffer)
         .filter((j) => {
-          if (j.status === 'closed') return false;
+          // 만료 글 클라이언트 차단 (서버 인덱스 비용 절감)
           if (j.expiresAt && new Date(j.expiresAt).getTime() <= now) return false;
           return true;
         });
