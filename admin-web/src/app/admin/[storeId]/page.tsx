@@ -104,6 +104,14 @@ function AdminPageInner({ storeId }: { storeId: string }) {
     };
   }, [drawerOpen]);
 
+  // 어드민 모바일 입력 줌-방지 globals.css 셀렉터용 body 마킹
+  useEffect(() => {
+    document.body.setAttribute('data-route', '/admin');
+    return () => {
+      document.body.removeAttribute('data-route');
+    };
+  }, []);
+
   if (authState.status === 'loading' || store === undefined) {
     return <main className="min-h-screen flex items-center justify-center text-sm text-gray-500">로딩 중…</main>;
   }

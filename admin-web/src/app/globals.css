@@ -631,3 +631,40 @@ html[data-theme="dark"] .tabbar-glass {
 }
 .admin-accent { color: var(--brand); }
 .admin-accent-bg { background: var(--brand); }
+
+/* ───────────────────────────────────────────────────────────
+ * Admin Mobile Utilities (Sprint M5, 2026-05-22)
+ * - iOS Safari 자동 줌 방지: input/textarea/select 폰트 16px 이상
+ * - 어드민 모달이 모바일에서 화면 끝까지 닿지 않도록 안전 영역 보장
+ * - 터치 최소 44px (Apple HIG) 헬퍼 클래스
+ * - 어드민 페이지(/admin/* /platform/*)에만 적용 — 사용자 앱(/m/*) 영향 없음
+ * ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* iOS는 input의 font-size가 16px 미만이면 포커스 시 자동 줌인 발생 */
+  body[data-route^='/admin'] input,
+  body[data-route^='/admin'] textarea,
+  body[data-route^='/admin'] select,
+  body[data-route^='/platform'] input,
+  body[data-route^='/platform'] textarea,
+  body[data-route^='/platform'] select {
+    font-size: 16px !important;
+  }
+}
+
+/* 어드민 터치 친화 버튼 — 최소 44x44 */
+.admin-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 어드민 모바일 모달 시트 — 폭 100vw 옵션 (좁은 화면에서 가독성↑)
+ * 사용: <div className="admin-mobile-sheet"> 모달 외곽 </div>
+ * 데스크탑에선 원래 max-w 유지 */
+@media (max-width: 480px) {
+  .admin-mobile-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    border-radius: 16px !important;
+    margin: 0 8px !important;
+  }
+}

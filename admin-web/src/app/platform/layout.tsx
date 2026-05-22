@@ -162,6 +162,14 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawerOpen]);
 
+  // 어드민 모바일 입력 줌-방지 globals.css 셀렉터용 body 마킹
+  useEffect(() => {
+    document.body.setAttribute('data-route', '/platform');
+    return () => {
+      document.body.removeAttribute('data-route');
+    };
+  }, []);
+
   if (authState.status !== 'authenticated' || userDoc === undefined) {
     return (
       <div
