@@ -177,6 +177,7 @@ service cloud.firestore {
           && request.resource.data.rating <= 5;
         // 본인은 본인 리뷰 update (rating·body·photoUrls 등), 또는 platform_admin이
         // hidden 토글 등 운영 목적으로 update 가능.
+        // 매장 owner/member는 storeReply 필드(답글)만 변경 가능 — 다른 본문 변경 차단.
         allow update: if isSignedIn() && (
           (
             resource.data.authorUid == request.auth.uid
@@ -186,6 +187,14 @@ service cloud.firestore {
             && request.resource.data.rating <= 5
           )
           || isPlatformAdmin()
+          // 매장 owner/member 답글 — storeReply 외 다른 본문(rating·body·authorUid·photoUrls)은
+          // 변경 불가. resource.data.rating/body/authorUid가 그대로 유지될 때만 통과.
+          || (
+            (isStoreOwner(storeId) || isStoreMember(storeId))
+            && resource.data.authorUid == request.resource.data.authorUid
+            && resource.data.rating == request.resource.data.rating
+            && resource.data.body == request.resource.data.body
+          )
         );
         allow delete: if isSignedIn()
           && (resource.data.authorUid == request.auth.uid || isPlatformAdmin());

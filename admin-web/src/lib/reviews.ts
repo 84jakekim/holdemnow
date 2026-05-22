@@ -59,6 +59,10 @@ export interface Review {
   hidden?: boolean;
   hiddenAt?: Timestamp | null;
   hiddenBy?: string | null;
+  /** 매장 owner/member의 답글 (단일). 사용자 리뷰 아래 들여쓰기로 노출. */
+  storeReply?: string | null;
+  storeReplyAt?: Timestamp | null;
+  storeRepliedBy?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -86,6 +90,9 @@ function toReview(id: string, data: Record<string, unknown>, storeIdFallback?: s
     hidden: (data.hidden as boolean | undefined) ?? false,
     hiddenAt: (data.hiddenAt as Timestamp | null | undefined) ?? null,
     hiddenBy: (data.hiddenBy as string | null | undefined) ?? null,
+    storeReply: (data.storeReply as string | null | undefined) ?? null,
+    storeReplyAt: (data.storeReplyAt as Timestamp | null | undefined) ?? null,
+    storeRepliedBy: (data.storeRepliedBy as string | null | undefined) ?? null,
   };
 }
 
@@ -293,6 +300,28 @@ export async function hideReview(storeId: string, reviewId: string): Promise<voi
       hidden: true,
       hiddenAt: serverTimestamp(),
       hiddenBy: uid,
+    },
+    { merge: true },
+  );
+}
+
+/**
+ * 매장 답글 달기 — 매장 owner/member가 사용자 리뷰에 단일 답글 추가.
+ * 빈 문자열 전달 시 답글 삭제.
+ */
+export async function setStoreReplyToReview(
+  storeId: string,
+  reviewId: string,
+  replyText: string,
+): Promise<void> {
+  const uid = auth.currentUser?.uid ?? null;
+  const trimmed = replyText.trim();
+  await setDoc(
+    doc(reviewsCol(storeId), reviewId),
+    {
+      storeReply: trimmed || null,
+      storeReplyAt: trimmed ? serverTimestamp() : null,
+      storeRepliedBy: trimmed ? uid : null,
     },
     { merge: true },
   );

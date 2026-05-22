@@ -1787,6 +1787,34 @@ function ReviewCard({
         </div>
       )}
 
+      {/* 매장 답글 — 인라인 들여쓰기로 노출 (카카오맵 가게 답글 톤) */}
+      {review.storeReply && (
+        <div
+          className="mt-3 ml-4 px-3 py-2.5 rounded-xl"
+          style={{
+            background: 'rgba(255,31,143,0.06)',
+            borderLeft: '2.5px solid rgba(255,31,143,0.45)',
+          }}
+        >
+          <div className="flex items-center gap-1 mb-1">
+            <span className="text-[11px] font-extrabold" style={{ color: 'var(--brand)' }}>
+              ↳ 매장 답글
+            </span>
+            {review.storeReplyAt && (
+              <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>
+                · {formatYmd(review.storeReplyAt.toMillis())}
+              </span>
+            )}
+          </div>
+          <div
+            className="text-[12.5px] leading-relaxed whitespace-pre-wrap"
+            style={{ color: 'var(--text-2)' }}
+          >
+            {review.storeReply}
+          </div>
+        </div>
+      )}
+
       {/* 라이트박스 */}
       {lightboxUrl && (
         <div

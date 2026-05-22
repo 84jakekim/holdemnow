@@ -18,6 +18,7 @@ import JobsPanel from '@/components/admin/JobsPanel';
 import UsedItemsPanel from '@/components/admin/UsedItemsPanel';
 import DealerPoolPanel from '@/components/admin/DealerPoolPanel';
 import ReservationsPanel from '@/components/admin/ReservationsPanel';
+import ReviewsAdminPanel from '@/components/admin/ReviewsAdminPanel';
 import AdminNotificationBell from '@/components/admin/AdminNotificationBell';
 import AdminIdentityBadge from '@/components/admin/AdminIdentityBadge';
 import StorePushPermissionWidget from '@/components/admin/StorePushPermissionWidget';
@@ -38,6 +39,7 @@ const MENUS = [
   { id: 'used', icon: '🛒', label: '중고거래' },
   { id: 'tournaments', icon: '📅', label: '예정 토너' },
   { id: 'reservations', icon: '📅', label: '예약 관리' },
+  { id: 'reviews', icon: '⭐', label: '리뷰 답글' },
   { id: 'store', icon: '🏬', label: '매장 정보' },
   { id: 'ads', icon: '📣', label: '광고' },
   { id: 'stats', icon: '📈', label: '통계' },
@@ -420,10 +422,11 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           {activeMenu === 'used' && <UsedItemsPanel storeId={storeId} storeName={store.name} storePhotoUrl={store.photoUrls?.[0]} />}
           {activeMenu === 'tournaments' && <TournamentsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'reservations' && <ReservationsPanel storeId={storeId} />}
+          {activeMenu === 'reviews' && <ReviewsAdminPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'store' && <StoreInfoPanel storeId={storeId} />}
           {activeMenu === 'ads' && <AdsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'stats' && <StatsPanel storeId={storeId} />}
-          {!['dashboard', 'tournament', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'reservations', 'store', 'ads', 'stats'].includes(activeMenu) && (
+          {!['dashboard', 'tournament', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'reservations', 'reviews', 'store', 'ads', 'stats'].includes(activeMenu) && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />
           )}
         </div>
