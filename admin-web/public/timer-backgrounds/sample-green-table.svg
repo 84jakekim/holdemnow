@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="feltVignette" cx="50%" cy="50%" r="80%">
+      <stop offset="0%" stop-color="#1a5641"/>
+      <stop offset="55%" stop-color="#0e3d2c"/>
+      <stop offset="100%" stop-color="#051b13"/>
+    </radialGradient>
+    <pattern id="felt" width="3" height="3" patternUnits="userSpaceOnUse">
+      <rect width="3" height="3" fill="none"/>
+      <circle cx="1.5" cy="1.5" r="0.4" fill="rgba(255,255,255,0.02)"/>
+    </pattern>
+    <linearGradient id="brass" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c79a3c"/>
+      <stop offset="100%" stop-color="#7a5a1a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#feltVignette)"/>
+  <rect width="1920" height="1080" fill="url(#felt)"/>
+  <!-- table oval ring (subtle, suggests poker felt rail) -->
+  <ellipse cx="960" cy="540" rx="900" ry="430" fill="none" stroke="rgba(199,154,60,0.12)" stroke-width="2"/>
+  <ellipse cx="960" cy="540" rx="830" ry="380" fill="none" stroke="rgba(199,154,60,0.08)" stroke-width="1"/>
+  <!-- chip stacks at corners (low-key) -->
+  <g opacity="0.15" fill="url(#brass)">
+    <circle cx="180" cy="900" r="38"/>
+    <circle cx="180" cy="868" r="38"/>
+    <circle cx="180" cy="836" r="38"/>
+    <circle cx="1740" cy="900" r="38"/>
+    <circle cx="1740" cy="868" r="38"/>
+    <circle cx="1740" cy="836" r="38"/>
+  </g>
+</svg>

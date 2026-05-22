@@ -14,6 +14,15 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(5);
     }
 
+    // 매장 TV 타이머 배경 이미지 (5MB)
+    // 경로: stores/{storeId}/timerBackgrounds/{filename}
+    // - 인증된 사용자면 업로드 가능 (어드민 페이지 자체가 owner/staff gating)
+    // - 누구나 read (TV /display/{storeId}/{slot} 풀스크린 송출 대상)
+    match /stores/{storeId}/timerBackgrounds/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
     match /series/{seriesId}/{file=**} {
       allow read: if true;
       allow write: if isSignedIn() && isImage() && maxSize(5);

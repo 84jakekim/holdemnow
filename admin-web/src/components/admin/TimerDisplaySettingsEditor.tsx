@@ -8,13 +8,16 @@
  * 업로드는 URL 직접 입력 (Firebase Storage 업로드는 추후).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type TimerDisplaySettings,
   DEFAULT_TIMER_DISPLAY,
   subscribeTimerDisplay,
   saveTimerDisplay,
   buildBackgroundCss,
+  uploadTimerBackground,
+  SAMPLE_TIMER_BACKGROUNDS,
+  MAX_TIMER_BACKGROUND_BYTES,
 } from '@/lib/timerDisplay';
 
 interface Props {
@@ -94,6 +97,11 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 배경 이미지 업로드 상태 (2026-05-23)
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
+
   useEffect(() => {
     const unsub = subscribeTimerDisplay(
       storeId,
@@ -113,6 +121,54 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
 
   const applyPreset = (p: Partial<TimerDisplaySettings>) => {
     setSettings((prev) => ({ ...prev, ...p }));
+    setDirty(true);
+  };
+
+  // 파일 업로드 → Firebase Storage → URL 자동 set + 배경 타입 image로 전환
+  const handleFilePick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 같은 파일 다시 선택 가능하게
+    if (!file) return;
+    if (file.size > MAX_TIMER_BACKGROUND_BYTES) {
+      setError('이미지는 5MB 이하만 업로드 가능합니다.');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setError('이미지 파일만 업로드 가능합니다 (jpg, png, webp).');
+      return;
+    }
+    setError(null);
+    setUploading(true);
+    setUploadProgress('업로드 중…');
+    try {
+      const url = await uploadTimerBackground(storeId, file);
+      setSettings((prev) => ({
+        ...prev,
+        backgroundType: 'image',
+        backgroundImageUrl: url,
+      }));
+      setDirty(true);
+      setUploadProgress('업로드 완료 — "변경사항 저장"을 눌러 TV에 적용하세요');
+      window.setTimeout(() => setUploadProgress(''), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setUploadProgress('');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const applySample = (url: string, overlay: number) => {
+    setSettings((prev) => ({
+      ...prev,
+      backgroundType: 'image',
+      backgroundImageUrl: url,
+      overlayOpacity: overlay,
+    }));
     setDirty(true);
   };
 
@@ -197,14 +253,96 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           )}
           {settings.backgroundType === 'image' && (
             <>
-              <FieldLabel label="이미지 URL" hint="https://... 또는 매장 사진 직접 링크" />
-              <input
-                value={settings.backgroundImageUrl}
-                onChange={(e) => update('backgroundImageUrl', e.target.value)}
-                placeholder="https://..."
-                className="form-input"
+              {/* 1) 파일 업로드 (PC/모바일 공통) */}
+              <FieldLabel
+                label="📷 내 사진에서 업로드"
+                hint="PC 파일 또는 휴대폰 갤러리·카메라 · 최대 5MB · jpg/png/webp"
               />
-              <div className="mt-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                onClick={handleFilePick}
+                disabled={uploading}
+                className="w-full py-3 rounded-lg border-2 border-dashed border-gray-300 hover:border-black hover:bg-gray-50 text-sm font-bold text-gray-700 disabled:opacity-50 transition-colors"
+              >
+                {uploading ? '📤 업로드 중…' : '📁 파일 선택하기'}
+              </button>
+              {uploadProgress && (
+                <div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5">
+                  {uploadProgress}
+                </div>
+              )}
+
+              {/* 2) 샘플 배경 갤러리 */}
+              <div className="mt-4">
+                <FieldLabel
+                  label="🎨 샘플 배경"
+                  hint="클릭하면 바로 적용 — 직접 사진을 올리지 않아도 OK"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  {SAMPLE_TIMER_BACKGROUNDS.map((s) => {
+                    const isActive = settings.backgroundImageUrl === s.url;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => applySample(s.url, s.recommendedOverlay)}
+                        className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                          isActive
+                            ? 'border-black ring-2 ring-black ring-offset-1'
+                            : 'border-gray-200 hover:border-gray-400'
+                        }`}
+                      >
+                        <div
+                          className="aspect-video w-full bg-gray-900"
+                          style={{
+                            backgroundImage: `url("${s.url}")`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                          }}
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-left">
+                          <div className="text-[10px] font-bold text-white truncate">
+                            {s.emoji} {s.label}
+                          </div>
+                        </div>
+                        {isActive && (
+                          <div className="absolute top-1 right-1 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                            ✓ 선택
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3) URL 직접 입력 (접힘 가능 영역) */}
+              <details className="mt-4 group">
+                <summary className="cursor-pointer text-[11px] font-bold text-gray-500 hover:text-gray-900 select-none">
+                  ▸ URL 직접 입력 (고급)
+                </summary>
+                <div className="mt-2">
+                  <input
+                    value={settings.backgroundImageUrl}
+                    onChange={(e) => update('backgroundImageUrl', e.target.value)}
+                    placeholder="https://..."
+                    className="form-input"
+                  />
+                  <div className="text-[10px] text-gray-400 mt-1">
+                    외부 이미지 링크를 직접 붙여넣기 가능합니다.
+                  </div>
+                </div>
+              </details>
+
+              {/* 4) 어둡기 슬라이더 (공통) */}
+              <div className="mt-4">
                 <FieldLabel label={`배경 어둡기 ${Math.round(settings.overlayOpacity * 100)}%`} />
                 <input
                   type="range"

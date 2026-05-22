@@ -23,7 +23,13 @@ import {
   serverTimestamp,
   getDoc,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import {
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from 'firebase/storage';
+import { db, storage } from './firebase';
 import { stripUndefined } from './firestoreUtil';
 
 export type BackgroundType = 'solid' | 'gradient' | 'image';
@@ -253,3 +259,88 @@ export function buildBackgroundCss(s: TimerDisplaySettings): string {
   }
   return s.backgroundColor || '#0A0A0A';
 }
+
+// ─────────────────────────────────────────────────────────────
+// 배경 이미지 업로드 (2026-05-23 추가)
+// ─────────────────────────────────────────────────────────────
+
+/** 타이머 배경 이미지 업로드 최대 용량 (5MB). */
+export const MAX_TIMER_BACKGROUND_BYTES = 5 * 1024 * 1024;
+
+/**
+ * 매장 TV 배경 이미지 업로드.
+ * 경로: stores/{storeId}/timerBackgrounds/{timestamp}.{ext}
+ * 반환: Firebase Storage download URL — backgroundImageUrl에 그대로 setting 가능.
+ *
+ * - PC: <input type="file">
+ * - 모바일: <input type="file" accept="image/*" capture/galary>
+ * - 5MB 초과 / 이미지 외 type은 즉시 throw.
+ */
+export async function uploadTimerBackground(
+  storeId: string,
+  file: File,
+): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('이미지 파일만 업로드 가능합니다 (jpg, png, webp 등)');
+  }
+  if (file.size > MAX_TIMER_BACKGROUND_BYTES) {
+    throw new Error('이미지는 5MB 이하만 업로드 가능합니다');
+  }
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 7);
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg';
+  const path = `stores/${storeId}/timerBackgrounds/${ts}_${rand}.${safeExt}`;
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, file, { contentType: file.type });
+  return await getDownloadURL(fileRef);
+}
+
+/** Storage URL로 배경 이미지 삭제 (선택). 실패는 무시. */
+export async function deleteTimerBackgroundByUrl(url: string): Promise<void> {
+  try {
+    await deleteObject(storageRef(storage, url));
+  } catch {
+    // ignore — 이미 지워졌거나 외부 URL일 수 있음
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 샘플 배경 이미지 (2026-05-23 추가)
+// 정적 SVG (admin-web/public/timer-backgrounds/sample-{1,2,3}.svg)
+// — 네트워크 라운드트립 없이 즉시 로드 + 가로 모드 대응 + 라이센스 안전.
+// ─────────────────────────────────────────────────────────────
+
+export interface SampleBackground {
+  id: string;
+  label: string;
+  emoji: string;
+  /** 절대 경로 — Next public/ 정적 자산. backgroundImageUrl에 그대로 set. */
+  url: string;
+  /** 매칭되는 overlay 권장 값 (이미지 위에 까는 어둠 0~1). */
+  recommendedOverlay: number;
+}
+
+export const SAMPLE_TIMER_BACKGROUNDS: SampleBackground[] = [
+  {
+    id: 'casino-dark',
+    label: '카지노 클래식',
+    emoji: '🎰',
+    url: '/timer-backgrounds/sample-casino-dark.svg',
+    recommendedOverlay: 0.35,
+  },
+  {
+    id: 'green-table',
+    label: '포커 그린',
+    emoji: '🃏',
+    url: '/timer-backgrounds/sample-green-table.svg',
+    recommendedOverlay: 0.4,
+  },
+  {
+    id: 'hot-pink',
+    label: '핫핑크',
+    emoji: '💗',
+    url: '/timer-backgrounds/sample-hot-pink.svg',
+    recommendedOverlay: 0.45,
+  },
+];
