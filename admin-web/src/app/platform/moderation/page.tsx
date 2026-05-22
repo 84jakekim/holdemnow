@@ -32,8 +32,10 @@ import {
 } from 'firebase/firestore';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
+import { logAdminAction } from '@/lib/auditLog';
 
-type Tab = 'posts' | 'jobs' | 'dealers' | 'used';
+type Tab = 'posts' | 'jobs' | 'dealers' | 'used' | 'reviews';
+type SortBy = 'createdAt' | 'flagCount';
 
 interface PostRow {
   id: string;
@@ -58,6 +60,21 @@ interface CommunityRow {
   storeId?: string;
   authorUid: string;
   status: 'active' | 'closed' | 'expired' | 'hidden' | string;
+  flagCount?: number;
+  createdAt?: Timestamp;
+}
+
+interface ReviewRow {
+  id: string;
+  storeId: string;
+  storeName?: string;
+  authorUid: string;
+  authorDisplayName?: string;
+  rating?: number;
+  body?: string;
+  photoUrls?: string[];
+  hidden?: boolean;
+  flagCount?: number;
   createdAt?: Timestamp;
 }
 
@@ -66,6 +83,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'jobs', label: '구인', icon: '💼' },
   { id: 'dealers', label: '딜러 프로필', icon: '🃏' },
   { id: 'used', label: '중고거래', icon: '🛒' },
+  { id: 'reviews', label: '리뷰', icon: '⭐' },
 ];
 
 export default function ModerationPage() {
@@ -77,11 +95,12 @@ export default function ModerationPage() {
         <h1 className="text-2xl font-extrabold text-gray-900">모더레이션</h1>
         <p className="text-sm text-gray-500 mt-1">
           매장·사용자가 작성한 모든 게시물을 한 곳에서 점검·차단합니다.
-          리뷰는{' '}
+          신고 누적(flagCount) 기준 정렬로 위험 글을 먼저 확인하세요.
+          상세 신고 흐름은{' '}
           <Link href="/platform/reviews" className="text-pink-600 font-bold hover:underline">
             리뷰 관리
           </Link>{' '}
-          페이지로.
+          페이지에도 별도 도구 제공.
         </p>
       </div>
 
@@ -107,6 +126,7 @@ export default function ModerationPage() {
       {tab === 'jobs' && <CommunityTab type="jobOffer" />}
       {tab === 'dealers' && <CommunityTab type="dealerProfile" />}
       {tab === 'used' && <CommunityTab type="usedListing" />}
+      {tab === 'reviews' && <ReviewsTab />}
     </div>
   );
 }
@@ -118,6 +138,7 @@ export default function ModerationPage() {
 function PostsTab() {
   const [items, setItems] = useState<PostRow[]>([]);
   const [filter, setFilter] = useState<'all' | 'published' | 'hidden' | 'expired'>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('createdAt');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -140,7 +161,7 @@ function PostsTab() {
 
   const now = Date.now();
   const filtered = useMemo(() => {
-    return items.filter((p) => {
+    const arr = items.filter((p) => {
       const expMs = p.expiresAt?.toMillis() ?? 0;
       const isExpired = expMs > 0 && expMs <= now;
       if (filter === 'published' && (p.status !== 'published' || isExpired)) return false;
@@ -153,7 +174,16 @@ function PostsTab() {
       }
       return true;
     });
-  }, [items, filter, search, now]);
+    if (sortBy === 'flagCount') {
+      return [...arr].sort((a, b) => {
+        const fa = (a as PostRow & { flagCount?: number }).flagCount ?? 0;
+        const fb = (b as PostRow & { flagCount?: number }).flagCount ?? 0;
+        if (fa !== fb) return fb - fa;
+        return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0);
+      });
+    }
+    return arr;
+  }, [items, filter, sortBy, search, now]);
 
   const togglePost = async (p: PostRow) => {
     const next = p.status === 'hidden' ? 'published' : 'hidden';
@@ -161,6 +191,11 @@ function PostsTab() {
       await updateDoc(doc(db, 'stores', p.storeId, 'posts', p.id), {
         status: next,
         moderatedAt: serverTimestamp(),
+      });
+      void logAdminAction({
+        action: next === 'hidden' ? 'hide' : 'restore',
+        targetPath: `stores/${p.storeId}/posts/${p.id}`,
+        targetType: 'post',
       });
     } catch (e) {
       alert(`상태 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
@@ -171,6 +206,11 @@ function PostsTab() {
     if (!window.confirm('이 글을 완전히 삭제할까요? 첨부 이미지는 별도 정리됩니다.')) return;
     try {
       await deleteDoc(doc(db, 'stores', p.storeId, 'posts', p.id));
+      void logAdminAction({
+        action: 'delete',
+        targetPath: `stores/${p.storeId}/posts/${p.id}`,
+        targetType: 'post',
+      });
     } catch (e) {
       alert(`삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -191,6 +231,8 @@ function PostsTab() {
         onSearch={setSearch}
         placeholder="매장명/본문/태그 검색"
         count={filtered.length}
+        sortBy={sortBy}
+        onSortBy={setSortBy}
       />
 
       {err && <ErrorBanner msg={err} />}
@@ -202,6 +244,7 @@ function PostsTab() {
             const expMs = p.expiresAt?.toMillis() ?? 0;
             const isExpired = expMs > 0 && expMs <= now;
             const isHidden = p.status === 'hidden';
+            const flagCount = (p as PostRow & { flagCount?: number }).flagCount ?? 0;
             return (
               <ModerationCard
                 key={`${p.storeId}-${p.id}`}
@@ -210,6 +253,7 @@ function PostsTab() {
                   isExpired ? { label: '만료', tone: 'gray' } :
                   { label: '게시 중', tone: 'green' }
                 }
+                flagCount={flagCount}
                 title={p.storeName ?? '(매장명 없음)'}
                 subtitle={p.eventTags?.length ? `#${p.eventTags.join(' #')}` : undefined}
                 body={p.body}
@@ -237,6 +281,7 @@ function PostsTab() {
 function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedListing' }) {
   const [items, setItems] = useState<CommunityRow[]>([]);
   const [filter, setFilter] = useState<'all' | 'active' | 'hidden' | 'closed'>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('createdAt');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -259,7 +304,7 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
   }, [type]);
 
   const filtered = useMemo(() => {
-    return items.filter((c) => {
+    const arr = items.filter((c) => {
       if (filter === 'active' && c.status !== 'active') return false;
       if (filter === 'hidden' && c.status !== 'hidden') return false;
       if (filter === 'closed' && !(c.status === 'closed' || c.status === 'expired')) return false;
@@ -270,7 +315,17 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
       }
       return true;
     });
-  }, [items, filter, search]);
+    if (sortBy === 'flagCount') {
+      return [...arr].sort((a, b) => {
+        if ((a.flagCount ?? 0) !== (b.flagCount ?? 0)) return (b.flagCount ?? 0) - (a.flagCount ?? 0);
+        return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0);
+      });
+    }
+    return arr;
+  }, [items, filter, sortBy, search]);
+
+  const targetTypeOf = (t: typeof type): 'community' | 'dealer' =>
+    t === 'dealerProfile' ? 'dealer' : 'community';
 
   const toggleStatus = async (c: CommunityRow) => {
     const next = c.status === 'hidden' ? 'active' : 'hidden';
@@ -278,6 +333,11 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
       await updateDoc(doc(db, 'community', c.id), {
         status: next,
         moderatedAt: serverTimestamp(),
+      });
+      void logAdminAction({
+        action: next === 'hidden' ? 'hide' : 'restore',
+        targetPath: `community/${c.id}`,
+        targetType: targetTypeOf(type),
       });
     } catch (e) {
       alert(`상태 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
@@ -288,6 +348,11 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
     if (!window.confirm('이 게시글을 완전히 삭제할까요? 되돌릴 수 없습니다.')) return;
     try {
       await deleteDoc(doc(db, 'community', c.id));
+      void logAdminAction({
+        action: 'delete',
+        targetPath: `community/${c.id}`,
+        targetType: targetTypeOf(type),
+      });
     } catch (e) {
       alert(`삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -310,6 +375,8 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
         onSearch={setSearch}
         placeholder={`${typeLabel} 검색 (제목/본문/작성자/매장)`}
         count={filtered.length}
+        sortBy={sortBy}
+        onSortBy={setSortBy}
       />
 
       {err && <ErrorBanner msg={err} />}
@@ -330,6 +397,7 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
               <ModerationCard
                 key={c.id}
                 badge={{ label, tone }}
+                flagCount={c.flagCount ?? 0}
                 title={c.title ?? c.displayName ?? '(제목 없음)'}
                 subtitle={
                   type === 'jobOffer' ? c.storeName :
@@ -358,6 +426,137 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
 }
 
 /* ─────────────────────────────────────────────────────────────
+ * 리뷰 탭 — collectionGroup('reviews') 전체, hidden 토글 + 삭제
+ * (별도 /platform/reviews 페이지의 신고 통계는 그대로 유지)
+ * ─────────────────────────────────────────────────────────────*/
+
+function ReviewsTab() {
+  const [items, setItems] = useState<ReviewRow[]>([]);
+  const [filter, setFilter] = useState<'all' | 'visible' | 'hidden'>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('createdAt');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = query(collectionGroup(db, 'reviews'), orderBy('createdAt', 'desc'), limit(200));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs.map((d) => {
+          const storeId = d.ref.parent.parent?.id ?? '';
+          return { id: d.id, storeId, ...(d.data() as Omit<ReviewRow, 'id' | 'storeId'>) };
+        });
+        setItems(rows);
+        setLoading(false);
+      },
+      (e) => { setErr(e.message); setLoading(false); },
+    );
+  }, []);
+
+  const filtered = useMemo(() => {
+    const arr = items.filter((r) => {
+      if (filter === 'visible' && r.hidden === true) return false;
+      if (filter === 'hidden' && r.hidden !== true) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        const text = `${r.storeName ?? ''} ${r.body ?? ''} ${r.authorDisplayName ?? ''}`.toLowerCase();
+        if (!text.includes(s)) return false;
+      }
+      return true;
+    });
+    if (sortBy === 'flagCount') {
+      return [...arr].sort((a, b) => {
+        if ((a.flagCount ?? 0) !== (b.flagCount ?? 0)) return (b.flagCount ?? 0) - (a.flagCount ?? 0);
+        return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0);
+      });
+    }
+    return arr;
+  }, [items, filter, sortBy, search]);
+
+  const toggleHidden = async (r: ReviewRow) => {
+    const next = !r.hidden;
+    try {
+      await updateDoc(doc(db, 'stores', r.storeId, 'reviews', r.id), {
+        hidden: next,
+        moderatedAt: serverTimestamp(),
+      });
+      void logAdminAction({
+        action: next ? 'hide' : 'restore',
+        targetPath: `stores/${r.storeId}/reviews/${r.id}`,
+        targetType: 'review',
+      });
+    } catch (e) {
+      alert(`상태 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const removeReview = async (r: ReviewRow) => {
+    if (!window.confirm('이 리뷰를 완전히 삭제할까요? 매장 평점은 자동 재계산됩니다.')) return;
+    try {
+      await deleteDoc(doc(db, 'stores', r.storeId, 'reviews', r.id));
+      void logAdminAction({
+        action: 'delete',
+        targetPath: `stores/${r.storeId}/reviews/${r.id}`,
+        targetType: 'review',
+      });
+    } catch (e) {
+      alert(`삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  return (
+    <div>
+      <FilterBar
+        filter={filter}
+        onFilter={(f) => setFilter(f as typeof filter)}
+        options={[
+          { id: 'all', label: '전체' },
+          { id: 'visible', label: '노출' },
+          { id: 'hidden', label: '숨김' },
+        ]}
+        search={search}
+        onSearch={setSearch}
+        placeholder="매장명/본문/작성자 검색"
+        count={filtered.length}
+        sortBy={sortBy}
+        onSortBy={setSortBy}
+      />
+
+      {err && <ErrorBanner msg={err} />}
+      {loading ? <LoadingRow /> : filtered.length === 0 ? (
+        <EmptyState label="해당 조건의 리뷰가 없습니다" />
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((r) => {
+            const isHidden = r.hidden === true;
+            const ratingStr = typeof r.rating === 'number' ? '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating) : '';
+            return (
+              <ModerationCard
+                key={`${r.storeId}-${r.id}`}
+                badge={{ label: isHidden ? '숨김' : '노출', tone: isHidden ? 'gray' : 'green' }}
+                flagCount={r.flagCount ?? 0}
+                title={r.storeName ?? '(매장명 없음)'}
+                subtitle={`${ratingStr} · ${r.authorDisplayName ?? '익명'}`}
+                body={r.body}
+                imageUrl={r.photoUrls?.[0]}
+                createdAt={r.createdAt}
+                authorUid={r.authorUid}
+                links={r.storeId ? [{ href: `/admin/${r.storeId}`, label: '매장 어드민' }] : []}
+                actions={[
+                  { label: isHidden ? '복구' : '숨김', onClick: () => toggleHidden(r), variant: isHidden ? 'primary' : 'subtle' },
+                  { label: '삭제', onClick: () => removeReview(r), variant: 'danger' },
+                ]}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
  * 공통 컴포넌트
  * ─────────────────────────────────────────────────────────────*/
 
@@ -369,6 +568,8 @@ function FilterBar({
   onSearch,
   placeholder,
   count,
+  sortBy,
+  onSortBy,
 }: {
   filter: string;
   onFilter: (f: string) => void;
@@ -377,6 +578,8 @@ function FilterBar({
   onSearch: (s: string) => void;
   placeholder: string;
   count: number;
+  sortBy: SortBy;
+  onSortBy: (s: SortBy) => void;
 }) {
   return (
     <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -401,13 +604,23 @@ function FilterBar({
         placeholder={placeholder}
         className="flex-1 max-w-sm px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
       />
-      <span className="text-xs text-gray-500 font-mono ml-auto">{count}건</span>
+      <select
+        value={sortBy}
+        onChange={(e) => onSortBy(e.target.value as SortBy)}
+        className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-white"
+        title="정렬 기준"
+      >
+        <option value="createdAt">최신순</option>
+        <option value="flagCount">🚩 신고 많은 순</option>
+      </select>
+      <span className="text-xs text-gray-500 font-mono">{count}건</span>
     </div>
   );
 }
 
 function ModerationCard({
   badge,
+  flagCount,
   title,
   subtitle,
   body,
@@ -418,6 +631,7 @@ function ModerationCard({
   actions,
 }: {
   badge: { label: string; tone: 'green' | 'gray' | 'red' | 'amber' };
+  flagCount?: number;
   title: string;
   subtitle?: string;
   body?: string;
@@ -447,6 +661,18 @@ function ModerationCard({
           <span className={`text-[10px] font-extrabold tracking-wider px-1.5 py-0.5 rounded ${badgeColor}`}>
             {badge.label}
           </span>
+          {flagCount != null && flagCount > 0 && (
+            <span
+              className="text-[10px] font-extrabold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
+              style={{
+                background: flagCount >= 3 ? '#FECACA' : '#FED7AA',
+                color: flagCount >= 3 ? '#991B1B' : '#9A3412',
+              }}
+              title={`신고 ${flagCount}건${flagCount >= 3 ? ' (자동 숨김 임계 도달)' : ''}`}
+            >
+              🚩 {flagCount}
+            </span>
+          )}
           <span className="font-bold text-gray-900 truncate">{title}</span>
           {subtitle && (
             <span className="text-[11px] text-gray-500 truncate">{subtitle}</span>
