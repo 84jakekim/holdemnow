@@ -686,7 +686,7 @@ function SessionControlPanel({
       {/* 🎫 실시간 토너 컨트롤 — 2026-05-23 신설.
           사용자 정책: "인원과 리바인 바이인 스타팅칩은 매일·하루에도 두세번 변경되므로
           템플릿이 아니라 토너 운영 > 타이머에서 실시간 컨트롤". */}
-      <SessionTournamentControlBox session={session} />
+      <SessionTournamentControlBox session={session} storeId={storeId} display={display} />
 
       {/* 정보 박스 — 잔여 인원/등록 마감만 표시. PRIZE POOL은 위 컨트롤 박스에 통합. */}
       <div className="grid grid-cols-2 gap-2">
@@ -1595,7 +1595,15 @@ function InfoBox({ label, value, warn }: { label: string; value: string; warn?: 
 //
 // 모든 mutator는 updateSessionTournamentMeta를 거쳐 prizePool과 totalPlayers를
 // 함께 1샷 patchSession write. TV 디스플레이는 onSnapshot으로 5초 안에 갱신.
-function SessionTournamentControlBox({ session }: { session: LiveSession }) {
+function SessionTournamentControlBox({
+  session,
+  storeId,
+  display,
+}: {
+  session: LiveSession;
+  storeId: string;
+  display: TimerDisplaySettings;
+}) {
   const ps = resolvePayoutStructure(session.payoutStructure);
   const entries = resolveCurrentEntries(session);
   const rebuys = resolveRebuysCount(session);
@@ -1605,7 +1613,10 @@ function SessionTournamentControlBox({ session }: { session: LiveSession }) {
   const startingStack = session.startingStack ?? 0;
   const prizePoolWon = session.prizePool ?? 0;
   const unit = session.prizeDisplayUnit ?? 'ticket';
-  const showPP = session.showPrizePool !== false;
+  // 화면 노출 토글 — 매장 prefs(timerDisplay) 우선, 누락 시 session.showPrizePool fallback.
+  // showStructure는 prefs에만 존재 (LiveSession에 박을 필요 없음, 실시간 토글이 핵심).
+  const showPP = display.showPrizePool !== false && session.showPrizePool !== false;
+  const showStruct = display.showStructure !== false;
 
   // 입력 잠금 상태 (Firestore write 중) — 더블 클릭 방지
   const [busy, setBusy] = useState(false);
@@ -1710,7 +1721,90 @@ function SessionTournamentControlBox({ session }: { session: LiveSession }) {
           </div>
         </div>
       </div>
+
+      {/* 📺 TV 화면 노출 옵션 — 2026-05-23 신설.
+          사용자 정책: "이모든 옵션은 토너운영페이지에서 설정하되 타이머에 실시간 반영.
+                       화면 우측 프라이즈풀(선택), 좌측 스트럭쳐(선택, 현재 레벨 강조)."
+          저장 → onSnapshot으로 TV에 5초 안 자동 반영. */}
+      <div
+        className="rounded-lg p-2"
+        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+      >
+        <div className="text-[10px] font-extrabold tracking-wider mb-2" style={{ color: 'var(--text-2)' }}>
+          📺 TV 화면 노출 옵션
+        </div>
+        <div className="space-y-1.5">
+          <DisplayToggleRow
+            icon="💰"
+            label="우측 PRIZE POOL"
+            sub="자동 계산값 표시"
+            checked={showPP}
+            onChange={(v) => {
+              saveTimerDisplay(storeId, { showPrizePool: v }).catch((e) => {
+                // eslint-disable-next-line no-console
+                console.error('[showPrizePool toggle] save failed', e);
+              });
+            }}
+          />
+          <DisplayToggleRow
+            icon="📋"
+            label="좌측 스트럭쳐"
+            sub="현재 레벨 강조 · 자동 스크롤"
+            checked={showStruct}
+            onChange={(v) => {
+              saveTimerDisplay(storeId, { showStructure: v }).catch((e) => {
+                // eslint-disable-next-line no-console
+                console.error('[showStructure toggle] save failed', e);
+              });
+            }}
+          />
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** TV 화면 노출 토글 한 줄 — 컴팩트 톤. */
+function DisplayToggleRow({
+  icon,
+  label,
+  sub,
+  checked,
+  onChange,
+}: {
+  icon: string;
+  label: string;
+  sub?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="w-4 h-4 accent-emerald-600"
+      />
+      <span className="text-sm leading-none">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[11px] font-extrabold leading-tight" style={{ color: 'var(--text-1)' }}>
+          {label}
+        </div>
+        {sub && (
+          <div className="text-[9px] leading-tight mt-0.5" style={{ color: 'var(--text-3)' }}>
+            {sub}
+          </div>
+        )}
+      </div>
+      <span
+        className={`text-[9px] font-extrabold tracking-wider px-1.5 py-0.5 rounded ${
+          checked ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+        }`}
+      >
+        {checked ? 'ON' : 'OFF'}
+      </span>
+    </label>
   );
 }
 

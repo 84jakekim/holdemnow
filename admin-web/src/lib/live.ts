@@ -8,6 +8,7 @@ import {
   deleteDoc,
   getDoc,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   query,
@@ -535,10 +536,16 @@ export function recomputeSessionPrizePool(s: LiveSession, overrides?: {
 /**
  * 인원/리바인/바이인/스타팅칩 통합 mutator.
  * 변경된 값으로 prizePool을 즉시 재계산하고 단일 patchSession write로 반영.
- * playersRemaining은 currentEntries 증감과 무관 — 별도 ✕ 탈락 버튼이 차감.
+ *
+ * ⚠️ 2026-05-23 PM 정정 (사용자 보고: 리바인은 기존 플레이어가 다시 바인을 하는 것):
+ *   - 리바인은 **인원수에 영향을 주지 않음**. 단지 prizePool에만 +buyIn.
+ *   - 인원수(currentEntries) 변경만 totalPlayers에 반영. 리바인 변경은 totalPlayers 무관.
+ *   - playersRemaining은 사장이 별도 ✕ 탈락 버튼으로만 감소. 리바인 시 변동 X.
  *
  * @example incrementRebuys: updateSessionTournamentMeta(s, { rebuysDelta: 1 })
+ *          → currentEntries 그대로, totalPlayers 그대로, prizePool만 +buyIn×payoutPercent%
  * @example setEntries: updateSessionTournamentMeta(s, { currentEntries: 25 })
+ *          → currentEntries=25, totalPlayers=25, playersRemaining 자동 clamp, prizePool 재계산
  */
 export async function updateSessionTournamentMeta(
   s: LiveSession,
@@ -573,20 +580,26 @@ export async function updateSessionTournamentMeta(
     rebuysCount: newRebuys,
   });
 
-  // playersRemaining은 currentEntries를 초과할 수 없음 — 인원 감소 시 자동 clamp.
-  // 단, 인원 증가 시 playersRemaining은 그대로 유지(이미 탈락한 인원이 부활하면 안 됨).
-  const newPlayersRemaining = Math.min(s.playersRemaining, newEntries) || (newEntries > 0 ? Math.min(s.playersRemaining || newEntries, newEntries) : 0);
+  // 인원 변경 여부 — true일 때만 totalPlayers/playersRemaining/tablesRemaining 영향.
+  // 리바인만 변경된 경우엔 인원수 관련 필드는 모두 그대로.
+  const entriesChanged = newEntries !== curEntries;
 
   const updates: Partial<LiveSession> = {
     currentEntries: newEntries,
     rebuysCount: newRebuys,
-    totalPlayers: newEntries, // 백워드 호환: 기존 코드(/m/*, display 등)는 totalPlayers를 본다.
     buyIn: newBuyIn,
     startingStack: newStartingStack,
     prizePool: newPrizePool,
-    playersRemaining: newPlayersRemaining,
-    tablesRemaining: Math.max(1, Math.ceil(newEntries / 8)),
   };
+
+  if (entriesChanged) {
+    // playersRemaining은 currentEntries를 초과할 수 없음 — 인원 감소 시 자동 clamp.
+    // 인원 증가 시 playersRemaining은 그대로 유지(이미 탈락한 인원이 부활하면 안 됨).
+    const newPlayersRemaining = Math.max(0, Math.min(s.playersRemaining ?? newEntries, newEntries));
+    updates.totalPlayers = newEntries; // 백워드 호환: 기존 코드(/m/*, display 등)는 totalPlayers를 본다.
+    updates.playersRemaining = newPlayersRemaining;
+    updates.tablesRemaining = Math.max(1, Math.ceil(newEntries / 8));
+  }
 
   await patchSession(s.id, updates);
 }

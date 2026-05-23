@@ -115,6 +115,31 @@ export interface TimerDisplaySettings {
    *  타입 정의/필드/UI/디스플레이 mount 모두 제거. 레거시 데이터의
    *  prizeDistributionLayout 키는 resolveTimerDisplay에서 자동으로 무시된다
    *  (호환 처리만, 코드 의존 0). */
+
+  /** ─── 화면 노출 토글 — 2026-05-23 신설 ────────────────────────
+   *  사용자 정책: "화면 우측에는 프라이즈풀 표시(선택사항으로),
+   *               좌측에는 스트럭쳐 표시(선택사항으로 하며, 현재레벨은 강조).
+   *               이모든 옵션은 토너운영페이지에서 설정하되 타이머에 실시간 반영."
+   *
+   *  - showPrizePool: TV 우측 stat 카드 PRIZE POOL 노출 여부.
+   *                   기존엔 LiveSession.showPrizePool로 시작 시점 스냅샷이 박혀있었으나
+   *                   2026-05-23부터 매장 prefs로 통합 (실시간 토글 위해).
+   *                   ※ 디스플레이 page는 prefs(display.showPrizePool) 우선 → session.showPrizePool fallback.
+   *  - showStructure: TV 좌측 블라인드 스트럭쳐 패널 노출 여부.
+   *                   현재 레벨 강조(배경+테두리+bold), 완료 레벨 페이드, break 레벨 amber.
+   *                   기본 true. 누락 시 true 추론 (resolveDisplayToggle).
+   *  두 토글은 TournamentControlCenter > SessionTournamentControlBox에서 직접 조작 →
+   *  saveTimerDisplay로 즉시 저장 → onSnapshot으로 TV에 5초 안 반영. */
+  showPrizePool: boolean;
+  showStructure: boolean;
+}
+
+/** 디스플레이 prefs용 boolean resolver — 명시적 false만 false. 누락/undefined/true 모두 true.
+ *  templates.ts의 resolveShowPrizePool과 의미적으로 동일하지만, 양쪽 모듈이 독립적으로
+ *  자기 prefs를 처리하도록 분리해서 두는 게 import 순환 방지에 안전.
+ *  매장 prefs의 showPrizePool / showStructure 양쪽 모두에 사용. */
+export function resolveDisplayToggle(v: boolean | undefined | null): boolean {
+  return v !== false;
 }
 
 export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
@@ -161,6 +186,10 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
   timerScale: 1.0,
   blindsScale: 1.0,
   statsScale: 1.0,
+
+  // 화면 노출 토글 — 2026-05-23 신설. 디폴트 모두 true (기존 동작 유지).
+  showPrizePool: true,
+  showStructure: true,
 };
 
 /** ─── 다중 프리셋 저장 (Phase 2) ─────────────────────────────────

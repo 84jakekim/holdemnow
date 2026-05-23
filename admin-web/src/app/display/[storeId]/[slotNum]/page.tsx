@@ -701,6 +701,18 @@ export default function DisplayPage({
         </div>
       ) : (
         <div className="relative flex-1 flex flex-col justify-center items-center pb-10">
+          {/* 좌측 스트럭쳐 패널 — 데스크탑/대형 TV 한정. fixed로 띄워서 중앙 정렬 영향 X.
+              showStructure=false면 mount 안 함. 사용자가 토너 운영 페이지에서 토글. */}
+          {display.showStructure !== false && (
+            <div className="fixed left-6 top-1/2 -translate-y-1/2 z-10 hidden lg:block">
+              <BlindStructurePanel
+                structure={structure}
+                currentLevel={session.currentLevel}
+                display={display}
+                variant="desktop"
+              />
+            </div>
+          )}
           {/* LIVE / PAUSED / BREAK */}
           <div className="flex items-center gap-3 mb-2">
             {paused ? (
@@ -823,7 +835,9 @@ export default function DisplayPage({
               2026-05-23: session.showPrizePool=false면 PRIZE POOL 카드 자체 숨김 →
               PLAYERS / LATE REG 2-col로 자동 전환. (사용자 정책 — 선택사항) */}
           {(() => {
-            const showPrize = session.showPrizePool !== false;
+            // 2026-05-23 PM: prefs 우선 + session fallback. prefs.showPrizePool=false면 항상 숨김.
+            // session.showPrizePool은 시작 시점 스냅샷 (호환용).
+            const showPrize = display.showPrizePool !== false && session.showPrizePool !== false;
             return (
               <div
                 className={`mt-10 grid gap-10 max-w-5xl ${
@@ -1319,6 +1333,23 @@ function MobilePortraitLayout({
           </div>
         )}
       </div>
+
+      {/* 좌측 스트럭쳐 패널 — 세로 모드에서는 NEXT 위에 collapsed 스트럭쳐.
+          showStructure=true일 때만 mount. session에서 structure 추출. */}
+      {display.showStructure !== false && (
+        <div className="mt-3">
+          <BlindStructurePanel
+            structure={
+              session.blindStructureLocked && session.blindStructureLocked.length > 0
+                ? session.blindStructureLocked
+                : session.blindStructure
+            }
+            currentLevel={session.currentLevel}
+            display={display}
+            variant="portrait"
+          />
+        </div>
+      )}
 
       {/* NEXT 박스 — 컴팩트 한 줄 */}
       {nextBlind && (
@@ -1819,8 +1850,10 @@ function MobileLandscapeLayout({
               )}
             </div>
           )}
-          {/* NEXT 박스 — 컴팩트 */}
-          {nextBlind && (
+          {/* NEXT 박스 — 컴팩트.
+              showStructure=true일 때는 NEXT를 숨기고 스트럭쳐 패널로 대체 (정보 중복 + 공간 절약).
+              showStructure=false일 때만 NEXT 박스 노출. */}
+          {nextBlind && display.showStructure === false && (
             <div
               className="rounded-lg px-2 py-1.5 border mt-1"
               style={{
@@ -1845,6 +1878,23 @@ function MobileLandscapeLayout({
                   {nextBlind.bb.toLocaleString()}
                 </div>
               )}
+            </div>
+          )}
+          {/* 좌측 컬럼 미니 스트럭쳐 패널 (가로 모드 전용).
+              현재 레벨 자동 스크롤. flex-1으로 남은 세로 공간 가득 채워서 스크롤 노출.
+              showStructure=true일 때만 mount. */}
+          {display.showStructure !== false && (
+            <div className="mt-1 flex-1 min-h-0">
+              <BlindStructurePanel
+                structure={
+                  session.blindStructureLocked && session.blindStructureLocked.length > 0
+                    ? session.blindStructureLocked
+                    : session.blindStructure
+                }
+                currentLevel={session.currentLevel}
+                display={display}
+                variant="landscape"
+              />
             </div>
           )}
         </div>
@@ -1908,7 +1958,8 @@ function MobileLandscapeLayout({
             }
             color={display.textColor}
           />
-          {session.showPrizePool !== false && (
+          {/* 2026-05-23 PM: prefs 우선 + session fallback. 둘 다 통과해야 노출. */}
+          {display.showPrizePool !== false && session.showPrizePool !== false && (
             <CompactStat
               label="PRIZE POOL"
               value={
@@ -2205,6 +2256,180 @@ function CompactStat({
           {sub}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * BlindStructurePanel — 2026-05-23 PM 단독 신설.
+ *
+ * 사용자 요구:
+ *   "좌측에는 스트럭쳐 표시(선택사항으로 하며, 현재레벨은 강조)"
+ *   "이모든 옵션은 토너운영페이지에서 설정하되 타이머에 실시간 반영되도록 해야한다.
+ *    또한 핸드폰 가로모드,세로모드 모두 최적화되어야한다. (중요)"
+ *
+ * 디자인:
+ *   ┌──────────────────────────┐
+ *   │ 📋 스트럭쳐               │
+ *   ├──────────────────────────┤
+ *   │ ✓ Lv 1   100 / 200       │ ← 완료 (opacity 0.45)
+ *   │ ▶ Lv 2   200 / 400       │ ← 현재 (배경+테두리+bold+scale 1.04)
+ *   │   Lv 3   300 / 600       │ ← 미래 (일반)
+ *   │ ☕ 휴식 10분               │ ← break (amber 톤)
+ *   └──────────────────────────┘
+ *
+ * 자동 스크롤: 현재 레벨이 항상 viewport 가운데 (scrollIntoView with 'center').
+ * Size variant: 'desktop' | 'landscape' | 'portrait' — 폰트/간격/높이 자동 조절.
+ * Empty handling: structure 비면 null 반환 (mount 안 함).
+ */
+function BlindStructurePanel({
+  structure,
+  currentLevel,
+  display,
+  variant,
+}: {
+  structure: { level: number; sb: number; bb: number; ante: number; durationSec: number; isBreak?: boolean }[] | undefined;
+  currentLevel: number;
+  display: TimerDisplaySettings;
+  variant: 'desktop' | 'landscape' | 'portrait';
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const currentRowRef = useRef<HTMLDivElement>(null);
+
+  // 자동 스크롤 — currentLevel 변경 시 currentRow가 viewport 가운데 오도록
+  useEffect(() => {
+    if (!scrollRef.current || !currentRowRef.current) return;
+    try {
+      currentRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    } catch {
+      // scrollIntoView smooth 미지원 환경 fallback
+      const cont = scrollRef.current;
+      const row = currentRowRef.current;
+      const target = row.offsetTop - cont.clientHeight / 2 + row.clientHeight / 2;
+      cont.scrollTop = Math.max(0, target);
+    }
+  }, [currentLevel, structure?.length]);
+
+  if (!structure || structure.length === 0) return null;
+
+  // variant별 사이즈/패딩 결정
+  const headerSize =
+    variant === 'desktop' ? 'text-xs px-3 py-2' : variant === 'landscape' ? 'text-[10px] px-2 py-1.5' : 'text-[10px] px-2 py-1';
+  const rowSize =
+    variant === 'desktop' ? 'px-3 py-1.5 text-sm' : variant === 'landscape' ? 'px-2 py-1 text-[11px]' : 'px-2 py-1 text-[11px]';
+  const maxHeight =
+    variant === 'desktop' ? '70vh' : variant === 'landscape' ? '100%' : '38vh';
+  const panelWidth =
+    variant === 'desktop' ? 240 : variant === 'landscape' ? '100%' : '100%';
+  const accent = display.accentColor;
+  const blinds = display.blindsColor;
+  const fg = display.textColor;
+
+  return (
+    <div
+      className="rounded-xl border backdrop-blur-sm overflow-hidden flex flex-col"
+      style={{
+        background: 'rgba(0,0,0,0.55)',
+        borderColor: 'rgba(255,255,255,0.12)',
+        width: panelWidth,
+        maxHeight,
+        minHeight: variant === 'desktop' ? 200 : 0,
+      }}
+      aria-label="블라인드 스트럭쳐"
+    >
+      {/* 헤더 */}
+      <div
+        className={`${headerSize} font-extrabold tracking-[0.2em] border-b flex-shrink-0`}
+        style={{
+          borderColor: 'rgba(255,255,255,0.1)',
+          color: fg,
+          background: 'rgba(0,0,0,0.35)',
+        }}
+      >
+        📋 STRUCTURE
+      </div>
+      {/* 스크롤 컨테이너 */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(255,255,255,0.2) transparent',
+        }}
+      >
+        {structure.map((lvl) => {
+          const isCurrent = lvl.level === currentLevel;
+          const isPast = lvl.level < currentLevel;
+          const isBreak = lvl.isBreak === true;
+          // break은 amber. 현재면 배경 강조, 과거면 페이드, 미래면 일반.
+          const rowBg = isCurrent
+            ? isBreak
+              ? 'rgba(245,158,11,0.30)'
+              : `${accent}33`
+            : 'transparent';
+          const rowBorder = isCurrent
+            ? isBreak
+              ? '2px solid #FFD166'
+              : `2px solid ${accent}`
+            : '2px solid transparent';
+          const rowColor = isPast ? fg : isCurrent ? '#FFFFFF' : fg;
+          const rowOpacity = isPast ? 0.45 : 1;
+          const rowFontWeight = isCurrent ? 800 : 600;
+          const transform = isCurrent ? 'scale(1.02)' : 'scale(1)';
+          const marker = isCurrent ? '▶' : isPast ? '✓' : isBreak ? '☕' : '';
+          const markerColor = isCurrent ? accent : isPast ? '#10B981' : isBreak ? '#FFD166' : fg;
+          return (
+            <div
+              key={`${lvl.level}-${lvl.isBreak ? 'br' : 'lv'}`}
+              ref={isCurrent ? currentRowRef : undefined}
+              className={`${rowSize} font-mono flex items-center gap-2 transition-all`}
+              style={{
+                background: rowBg,
+                border: rowBorder,
+                color: rowColor,
+                opacity: rowOpacity,
+                fontWeight: rowFontWeight,
+                transform,
+                transformOrigin: 'left center',
+                margin: '2px 4px',
+                borderRadius: 6,
+              }}
+            >
+              <span
+                className="w-3 text-center text-xs"
+                style={{ color: markerColor, opacity: isCurrent ? 1 : 0.85 }}
+                aria-hidden
+              >
+                {marker}
+              </span>
+              {isBreak ? (
+                <>
+                  <span className="font-extrabold" style={{ color: '#FFD166' }}>
+                    휴식
+                  </span>
+                  <span style={{ opacity: 0.7, marginLeft: 'auto' }}>
+                    {Math.round(lvl.durationSec / 60)}분
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-bold tabular-nums" style={{ minWidth: 38, opacity: 0.85 }}>
+                    Lv {lvl.level}
+                  </span>
+                  <span
+                    className="tabular-nums"
+                    style={{ color: isCurrent ? blinds : blinds, opacity: isCurrent ? 1 : 0.9, marginLeft: 'auto' }}
+                  >
+                    {lvl.sb.toLocaleString()}
+                    <span style={{ opacity: 0.4 }}>/</span>
+                    {lvl.bb.toLocaleString()}
+                  </span>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
