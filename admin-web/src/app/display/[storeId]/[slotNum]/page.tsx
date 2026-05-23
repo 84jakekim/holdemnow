@@ -302,8 +302,11 @@ export default function DisplayPage({
   const soundLevelEndEffective = display.soundLevelEnd !== false;
   const soundBlindUpEffective = display.soundBlindUp !== false;
 
-  // sec 변화 추적 ref — 사운드 useEffect와 분리해서 항상 최신값 유지
-  const prevSecRef = useRef<number>(sec);
+  // sec 변화 추적 ref — null로 시작 (2026-05-23 fix). 이전엔 sec 직접 할당으로
+  // 초기화되어 첫 sec=0 도달 시 prev===sec이라 'prev > 0' 가드가 부정확하게 통과.
+  // null이면 첫 비교는 'prev !== sec' true (비프 발사), 'prev > 0' false (blindUp skip).
+  // 이후 매 tick마다 정상 비교.
+  const prevSecRef = useRef<number | null>(null);
   const prevLevelRef = useRef<number | undefined>(session?.currentLevel);
 
   // 블라인드업 중복 차단 — sec=0 즉시 호출 + 서버 currentLevel 변경 호출 둘 다
@@ -318,13 +321,13 @@ export default function DisplayPage({
   useEffect(() => {
     const prev = prevSecRef.current;
     if (session?.status === 'running' && audioReady) {
-      // 10초~1초 매초 1회 비프
-      if (soundWarn30Effective && prev !== sec && sec >= 1 && sec <= 10) {
+      // 10초~1초 매초 1회 비프. prev !== sec로 매 tick 비교.
+      if (soundWarn30Effective && prev !== null && prev !== sec && sec >= 1 && sec <= 10) {
         playCountdownBeep();
       }
-      // sec=0 도달 즉시 blindUp (cron 대기 X). 마지막 레벨이거나 break면
-      // currentLevel 변경이 없으므로 cycleKey 동일 → 백업 effect에서 차단.
-      if (soundBlindUpEffective && prev > 0 && sec === 0 && session?.id) {
+      // sec=0 도달 즉시 blindUp (cron 대기 X). prev가 1 이상에서 0으로 떨어진 순간.
+      // 첫 mount 시 prev=null이면 skip — 백업 effect(레벨 변경)가 처리.
+      if (soundBlindUpEffective && prev !== null && prev > 0 && sec === 0 && session?.id) {
         const lv = session.currentLevel ?? -1;
         const cycleKey = `lv${lv}-${session.id}`;
         if (blindUpFiredCycleRef.current !== cycleKey) {
@@ -1087,7 +1090,7 @@ export default function DisplayPage({
               localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
             } catch {}
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
           aria-label="사운드 활성화"
         >
           <div className="text-center text-white p-10 rounded-3xl bg-gray-900/95 border-2 border-amber-400 shadow-2xl max-w-md mx-6"

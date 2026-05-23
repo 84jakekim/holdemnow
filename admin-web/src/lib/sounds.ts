@@ -87,34 +87,76 @@ export function playFinalBeep(): void {
 }
 
 /**
- * 블라인드업! 알림 — TTS "Blind up!" 즉시 발화.
+ * 블라인드 업! 알림 — 오락기 톤 차임(2음 상승) + 한국어 TTS "블라인드 업!".
  *
- * 사장 요청(2026-05-23 재정정): "10·9·8·...·2·1·Blind up!" 흐름.
- * fanfare 차임은 0초 도달 후 TTS까지의 지연(880ms)을 만들어 흐름이 끊김 →
- * fanfare 완전 제거, TTS 즉시 발화. 카운트다운 비프 마지막(1초)과
- * TTS 사이 지연은 거의 0초.
+ * 사장 요청(2026-05-23 정정3):
+ *  · 한국 사장이 알아듣게 한국어로
+ *  · 오락기처럼 명확·흥분된 톤
+ *  · 카운트다운 비프 직후 즉시 발사
  *
- * 음성 톤은 흥분된 게임풍 유지:
- *   - pitch 1.4 (높은 톤, 흥분된 느낌)
- *   - rate 1.05 (살짝 빠른 속도 — 즉각적·게임풍)
+ * 흐름:
+ *   t=0ms      : 차임 시작 (C5 → G5, sine, gain 0.6, 0.3초)
+ *   t=120ms    : 한국어 TTS "블라인드 업!" 발화 (rate 0.95 / pitch 1.5)
  *
- * 미지원 환경 (SpeechSynthesis 없음) silent.
+ * 차임은 카운트다운 마지막 비프와 자연스럽게 이어지면서 청각 주의를 끌고,
+ * TTS는 100ms만 늦춰 양쪽 사운드가 겹치지 않도록 분리.
+ *
+ * 한국어 보이스 fallback:
+ *  1. ko-KR 보이스 사용 가능 → 그 보이스 선택
+ *  2. 사용 불가 → lang='ko-KR'만 지정 (브라우저 기본)
+ *  3. 둘 다 실패 → silent (차임만 발사)
  */
 export function playBlindUp(): void {
   if (typeof window === 'undefined') return;
+
+  // 1) 오락기 차임 prefix (C5 → G5 상승 2음, sine + gain 0.6)
+  const ctx = getCtx();
+  if (ctx) {
+    tryResume(ctx);
+    try {
+      const t0 = ctx.currentTime;
+      playArcadeNote(ctx, 523, t0, 0.16);          // C5
+      playArcadeNote(ctx, 784, t0 + 0.13, 0.20);   // G5 (길게 강조)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 2) 한국어 TTS — 120ms 후 발화 (차임과 분리)
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
-  try {
-    synth.cancel(); // 연속 레벨업 시 누적 차단
-    const utter = new SpeechSynthesisUtterance('Blind up!');
-    utter.lang = 'en-US';
-    utter.rate = 1.05;
-    utter.pitch = 1.4;
-    utter.volume = 1.0;
-    synth.speak(utter);
-  } catch {
-    /* ignore */
-  }
+  setTimeout(() => {
+    try {
+      synth.cancel();
+      const utter = new SpeechSynthesisUtterance('블라인드 업!');
+      utter.lang = 'ko-KR';
+      utter.rate = 0.95;
+      utter.pitch = 1.5;
+      utter.volume = 1.0;
+      // 한국어 보이스 명시 선택 — 일부 브라우저는 lang만으론 ko-KR 보이스 못 찾음
+      const voices = synth.getVoices();
+      const ko = voices.find((v) => v.lang === 'ko-KR') ?? voices.find((v) => v.lang.startsWith('ko'));
+      if (ko) utter.voice = ko;
+      synth.speak(utter);
+    } catch {
+      /* ignore — silent fallback */
+    }
+  }, 120);
+}
+
+/** 오락기 톤 차임 — sine wave + 빠른 attack + 자연 decay. */
+function playArcadeNote(ctx: AudioContext, freq: number, startAt: number, duration: number): void {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, startAt);
+  gain.gain.linearRampToValueAtTime(0.6, startAt + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(startAt);
+  osc.stop(startAt + duration + 0.05);
 }
 
 
