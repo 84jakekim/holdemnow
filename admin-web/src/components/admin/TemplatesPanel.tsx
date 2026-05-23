@@ -541,8 +541,8 @@ function TemplateEditor({
               </span>
             </div>
             <div className="text-[10px] text-gray-400 mt-1 font-mono leading-relaxed">
-              🔄 바이인 × 인원 × <b>{form.payoutStructure?.payoutPercent ?? 90}%</b> (만원 단위 내림)
-              <br />← 아래 <b>💰 상금 비율</b>에서 직접 변경
+              🔄 바이인 × 인원(디폴트) × <b>{form.payoutStructure?.payoutPercent ?? 90}%</b> (만원 단위 내림)
+              <br />← 실제 PRIZE POOL은 LIVE 시작 후 <b>토너 운영 &gt; 타이머</b>에서 사장이 조절한 인원·리바인 기반 재계산
             </div>
           </Field>
         </div>
@@ -596,44 +596,8 @@ function TemplateEditor({
           </div>
         </div>
 
+        {/* 늦은 등록 마감 레벨 — 템플릿의 필수 운영값 (블라인드 구조와 함께 변동 적음) */}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="바이인 (T · 1T=1만원)">
-            <div className="relative">
-              <input
-                type="number"
-                min={1}
-                step={1}
-                className="form-input font-mono pr-7"
-                value={buyInTickets}
-                onChange={(e) => update('buyIn', ticketsToWon(parseInt(e.target.value) || 0))}
-              />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
-                T
-              </span>
-            </div>
-            <div className="text-[10px] text-gray-400 mt-1 font-mono">
-              ≈ {fmtPrizeDisplay(form.buyIn, form.prizeDisplayUnit ?? 'ticket') || '—'}
-            </div>
-          </Field>
-          <Field label="인원">
-            <input
-              type="number"
-              className="form-input font-mono"
-              value={form.totalPlayers}
-              onChange={(e) => update('totalPlayers', parseInt(e.target.value) || 0)}
-            />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="시작 칩">
-            <input
-              type="number"
-              className="form-input font-mono"
-              value={form.startingStack}
-              onChange={(e) => update('startingStack', parseInt(e.target.value) || 0)}
-            />
-          </Field>
           <Field label="늦은 등록 마감 레벨">
             <input
               type="number"
@@ -645,6 +609,60 @@ function TemplateEditor({
             />
           </Field>
         </div>
+
+        {/* 💼 디폴트 값 (LIVE 시작 시 매장에서 실시간 조절) — 2026-05-23 강등.
+            사용자 정책: "인원·리바인·바이인·스타팅칩은 매일·하루에도 두세번 변경되므로
+            템플릿편집에 있을 메뉴가 아니라 토너 운영 > 타이머에서 실시간 컨트롤". */}
+        <details className="bg-gray-50 border border-gray-200 rounded-xl p-3.5">
+          <summary className="cursor-pointer text-xs font-extrabold text-gray-700 select-none">
+            💼 디폴트 값 — LIVE 시작 시 초기값 (펼쳐서 편집)
+          </summary>
+          <div className="text-[11px] text-gray-600 mt-2 mb-3 leading-relaxed bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            ⚠️ <b>인원·바이인·스타팅칩은 LIVE 시작 후 매장 사장님이 토너 운영 &gt; 타이머에서
+            실시간 조절</b>합니다. 여기 값은 LIVE를 시작할 때 자동으로 채워지는 초기값일 뿐입니다.
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="바이인 (T · 1T=1만원)">
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="form-input font-mono pr-7"
+                  value={buyInTickets}
+                  onChange={(e) => update('buyIn', ticketsToWon(parseInt(e.target.value) || 0))}
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400 pointer-events-none">
+                  T
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-400 mt-1 font-mono">
+                ≈ {fmtPrizeDisplay(form.buyIn, form.prizeDisplayUnit ?? 'ticket') || '—'}
+              </div>
+            </Field>
+            <Field label="인원 (디폴트)">
+              <input
+                type="number"
+                className="form-input font-mono"
+                value={form.totalPlayers}
+                onChange={(e) => update('totalPlayers', parseInt(e.target.value) || 0)}
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <Field label="시작 칩 (디폴트)">
+              <input
+                type="number"
+                className="form-input font-mono"
+                value={form.startingStack}
+                onChange={(e) => update('startingStack', parseInt(e.target.value) || 0)}
+              />
+            </Field>
+            <div />
+          </div>
+        </details>
 
         {/* 앤티 on/off 토글 + 앤티 적용 방식 (Phase 4 — 2026-05-21) */}
         <div className="bg-white border-[1.5px] border-gray-200 rounded-xl px-3.5 py-3 space-y-3">

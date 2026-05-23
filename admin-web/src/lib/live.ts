@@ -43,6 +43,16 @@ export interface LiveSession {
   totalPlayers: number;
   blindStructure: BlindLevel[];
   lateRegEndLevel: number;
+  /** 실제 등록 인원(엔트리 수). 사장이 토너 운영 > 타이머에서 실시간 조절.
+   *  탈락 차감 X (그건 playersRemaining). prizePool 계산의 기준.
+   *  누락 시 totalPlayers fallback (백워드 호환). 2026-05-23 신설. */
+  currentEntries?: number;
+  /** 리바인 총 횟수. 사장이 +1/-1 버튼으로 조절.
+   *  prizePool = (currentEntries + rebuysCount) × buyIn × payoutPercent / 100.
+   *  누락 시 0 fallback. 2026-05-23 신설. */
+  rebuysCount?: number;
+  /** 스타팅칩 — LiveSession 레벨에서 사장이 실시간 변경 가능. 누락 시 템플릿 값 fallback. 2026-05-23 신설. */
+  startingStack?: number;
   // 진행 상태
   status: LiveStatus;
   currentLevel: number;
@@ -452,6 +462,10 @@ export async function startLiveSession(
     ante: first.ante,
     playersRemaining: template.totalPlayers,
     tablesRemaining: Math.max(1, Math.ceil(template.totalPlayers / 8)),
+    // 2026-05-23 신설 — LIVE 시작 시 템플릿 값으로 초기화. 사장이 토너 운영 > 타이머에서 실시간 조절.
+    currentEntries: template.totalPlayers,
+    rebuysCount: 0,
+    startingStack: template.startingStack,
     // 상금풀 = 위 finalPrizePool. 매장 어드민/매장 TV 디스플레이에서만 표시되며
     // 사용자 모바일 앱(/m/*)에는 어떤 상금 필드도 렌더링하지 않음 (UI 레이어에서 분리).
     prizePool: finalPrizePool,
@@ -475,6 +489,106 @@ export async function patchSession(sessionId: string, updates: Partial<LiveSessi
     ...updates,
     updatedAt: serverTimestamp(),
   }));
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// 2026-05-23: 토너 운영 > 타이머 실시간 컨트롤 — 인원/리바인/바이인/스타팅칩
+// ──────────────────────────────────────────────────────────────────────
+
+/** 세션의 현재 entry 수 (currentEntries 우선, 누락 시 totalPlayers fallback). */
+export function resolveCurrentEntries(s: Pick<LiveSession, 'currentEntries' | 'totalPlayers'>): number {
+  if (typeof s.currentEntries === 'number' && s.currentEntries >= 0) return s.currentEntries;
+  return Math.max(0, s.totalPlayers ?? 0);
+}
+
+/** 세션의 리바인 수 (없으면 0). */
+export function resolveRebuysCount(s: Pick<LiveSession, 'rebuysCount'>): number {
+  return typeof s.rebuysCount === 'number' && s.rebuysCount >= 0 ? s.rebuysCount : 0;
+}
+
+/** 총 prize-eligible entries = currentEntries + rebuysCount. */
+export function resolveTotalEntries(s: Pick<LiveSession, 'currentEntries' | 'totalPlayers' | 'rebuysCount'>): number {
+  return resolveCurrentEntries(s) + resolveRebuysCount(s);
+}
+
+/**
+ * 세션의 자동 prizePool 재계산 — 매장 사장 정책 (2026-05-23).
+ *   prizePool = (currentEntries + rebuysCount) × buyIn × payoutPercent / 100
+ *  + 만원 단위 내림 (computeAutoPrizePool과 동일 룰).
+ *
+ * payoutPercent는 시작 시점에 스냅샷된 session.payoutStructure에서 추출.
+ * 누락 시 90% 디폴트.
+ */
+export function recomputeSessionPrizePool(s: LiveSession, overrides?: {
+  buyIn?: number;
+  currentEntries?: number;
+  rebuysCount?: number;
+}): number {
+  const bi = overrides?.buyIn ?? s.buyIn ?? 0;
+  const entries = overrides?.currentEntries ?? resolveCurrentEntries(s);
+  const rebuys = overrides?.rebuysCount ?? resolveRebuysCount(s);
+  const total = entries + rebuys;
+  const ps = resolvePayoutStructure(s.payoutStructure);
+  return computeAutoPrizePool(bi, total, ps.payoutPercent);
+}
+
+/**
+ * 인원/리바인/바이인/스타팅칩 통합 mutator.
+ * 변경된 값으로 prizePool을 즉시 재계산하고 단일 patchSession write로 반영.
+ * playersRemaining은 currentEntries 증감과 무관 — 별도 ✕ 탈락 버튼이 차감.
+ *
+ * @example incrementRebuys: updateSessionTournamentMeta(s, { rebuysDelta: 1 })
+ * @example setEntries: updateSessionTournamentMeta(s, { currentEntries: 25 })
+ */
+export async function updateSessionTournamentMeta(
+  s: LiveSession,
+  patch: {
+    buyIn?: number;
+    currentEntries?: number;
+    entriesDelta?: number;
+    rebuysCount?: number;
+    rebuysDelta?: number;
+    startingStack?: number;
+  },
+) {
+  const curEntries = resolveCurrentEntries(s);
+  const curRebuys = resolveRebuysCount(s);
+
+  let newEntries = patch.currentEntries ?? curEntries;
+  if (typeof patch.entriesDelta === 'number') newEntries = curEntries + patch.entriesDelta;
+  newEntries = Math.max(0, Math.floor(newEntries));
+
+  let newRebuys = patch.rebuysCount ?? curRebuys;
+  if (typeof patch.rebuysDelta === 'number') newRebuys = curRebuys + patch.rebuysDelta;
+  newRebuys = Math.max(0, Math.floor(newRebuys));
+
+  const newBuyIn = typeof patch.buyIn === 'number' ? Math.max(0, Math.floor(patch.buyIn)) : s.buyIn;
+  const newStartingStack = typeof patch.startingStack === 'number'
+    ? Math.max(0, Math.floor(patch.startingStack))
+    : s.startingStack;
+
+  const newPrizePool = recomputeSessionPrizePool(s, {
+    buyIn: newBuyIn,
+    currentEntries: newEntries,
+    rebuysCount: newRebuys,
+  });
+
+  // playersRemaining은 currentEntries를 초과할 수 없음 — 인원 감소 시 자동 clamp.
+  // 단, 인원 증가 시 playersRemaining은 그대로 유지(이미 탈락한 인원이 부활하면 안 됨).
+  const newPlayersRemaining = Math.min(s.playersRemaining, newEntries) || (newEntries > 0 ? Math.min(s.playersRemaining || newEntries, newEntries) : 0);
+
+  const updates: Partial<LiveSession> = {
+    currentEntries: newEntries,
+    rebuysCount: newRebuys,
+    totalPlayers: newEntries, // 백워드 호환: 기존 코드(/m/*, display 등)는 totalPlayers를 본다.
+    buyIn: newBuyIn,
+    startingStack: newStartingStack,
+    prizePool: newPrizePool,
+    playersRemaining: newPlayersRemaining,
+    tablesRemaining: Math.max(1, Math.ceil(newEntries / 8)),
+  };
+
+  await patchSession(s.id, updates);
 }
 
 /**

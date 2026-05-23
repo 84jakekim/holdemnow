@@ -460,17 +460,17 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           />
           <div className="mt-3" />
           <FieldLabel
-            label="💰 화면 우측 PRIZE POOL 표시값 (매장 TV 전용)"
-            hint='예: "티켓 30장" · "상금 100만" · "GTD 300만 · 우승 100만". 비워두면 자동 계산값(바이인×인원×비율) 사용. 사용자 앱에는 노출되지 않음.'
+            label="💰 PRIZE POOL — 어디서 설정하나요?"
+            hint="2026-05-23부터 PRIZE POOL은 토너 운영 > 타이머에서 사장이 직접 변경하는 인원·리바인·바이인을 기반으로 자동 계산됩니다."
           />
-          <input
-            value={settings.prizeOverride}
-            onChange={(e) => update('prizeOverride', e.target.value)}
-            placeholder="예: 티켓 30장 / GTD 300만"
-            className="form-input"
-          />
-          <div className="text-[10px] text-amber-700 mt-1 leading-relaxed bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-            💡 이 값이 TV 우측 <b>PRIZE POOL</b> 카드에 그대로 표시됩니다. 토너 운영 컨트롤에는 영향 없음.
+          <div className="text-[11px] leading-relaxed rounded-lg px-3 py-2.5 space-y-1.5"
+               style={{ background: 'rgba(16,185,129,0.08)', color: '#065F46', border: '1px solid rgba(16,185,129,0.30)' }}>
+            <div className="font-bold">📐 자동 계산식</div>
+            <div className="font-mono text-[10.5px]">
+              PRIZE POOL = (인원 + 리바인) × 바이인 × payoutPercent%
+            </div>
+            <div>매장 사장님은 <b>토너 운영 &gt; 타이머</b> 페이지의 🎫 토너 정보 박스에서 인원·리바인·바이인을 실시간 조절하면 됩니다. TV 화면에는 5초 이내 자동 반영됩니다.</div>
+            <div>표시 단위(만원/T)와 노출 여부(💰 토글)는 토너 템플릿에서 설정합니다.</div>
           </div>
           <div className="mt-3" />
           <FieldLabel label="스폰서 / 후원 줄" />
@@ -744,10 +744,7 @@ function TimerPreview({ settings }: { settings: TimerDisplaySettings }) {
           {/* 미니 통계 */}
           <div className="flex gap-6 mt-3 text-center" style={{ color: settings.textColor }}>
             <Stat label="PLAYERS" value="18/24" />
-            <Stat
-              label="PRIZE POOL"
-              value={settings.prizeOverride || '₩240만'}
-            />
+            <Stat label="PRIZE POOL" value="108T" />
             <Stat label="NEXT" value="LV5 · 400/800" />
           </div>
         </div>

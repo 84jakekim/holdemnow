@@ -37,6 +37,10 @@ import {
   FINISHING_GRACE_SEC,
   computeFinishingGraceSec,
   computeReadyExpirySec,
+  resolveCurrentEntries,
+  resolveRebuysCount,
+  resolveTotalEntries,
+  updateSessionTournamentMeta,
 } from '@/lib/live';
 import {
   type TournamentTemplate,
@@ -45,6 +49,10 @@ import {
   fmtBuyIn,
   fmtPrizeDisplay,
   posterStyleFor,
+  resolvePayoutStructure,
+  wonToTickets,
+  ticketsToWon,
+  TICKET_WON,
 } from '@/lib/templates';
 import {
   type DisplaySlot,
@@ -675,12 +683,16 @@ function SessionControlPanel({
         </button>
       </div>
 
-      {/* 정보 박스 */}
-      <div className="grid grid-cols-3 gap-2">
-        <InfoBox label="잔여 인원" value={`${session.playersRemaining}/${session.totalPlayers}`} />
+      {/* 🎫 실시간 토너 컨트롤 — 2026-05-23 신설.
+          사용자 정책: "인원과 리바인 바이인 스타팅칩은 매일·하루에도 두세번 변경되므로
+          템플릿이 아니라 토너 운영 > 타이머에서 실시간 컨트롤". */}
+      <SessionTournamentControlBox session={session} />
+
+      {/* 정보 박스 — 잔여 인원/등록 마감만 표시. PRIZE POOL은 위 컨트롤 박스에 통합. */}
+      <div className="grid grid-cols-2 gap-2">
         <InfoBox
-          label="상금 풀"
-          value={fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket') || '—'}
+          label="잔여 인원"
+          value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
         />
         {(() => {
           const isClosed = session.lateRegClosed || session.currentLevel > session.lateRegEndLevel;
@@ -1561,6 +1573,279 @@ function InfoBox({ label, value, warn }: { label: string; value: string; warn?: 
       <div className="font-mono text-sm font-extrabold" style={{ color: warn ? '#EF4444' : 'var(--text-1)' }}>
         {value}
       </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// 🎫 실시간 토너 컨트롤 박스 — 2026-05-23 신설
+// =====================================================================
+// 사용자 요구: "인원과 게임참가비를 타이머 페이지에서 설정. 리바인 버튼으로 +1하면
+// 프라이즈금액이 상향계산. 인원·리바인·바이인·스타팅칩은 매일·하루에도 두세번
+// 변경되므로 실시간 컨트롤 가능한 페이지(토너운영>타이머)에서 컨트롤한다."
+//
+// 동작:
+//   - 인원수 [-] [number] [+]    : 실제 등록 entry. playersRemaining과는 별개.
+//   - 리바인 [-] [number] [+]    : 누적 리바인 수. prizePool에 즉시 반영.
+//   - 바이인 (T)                  : 1T=1만원. 변경 시 prizePool 즉시 재계산.
+//   - 스타팅칩                    : 표시용. prizePool 계산엔 영향 없음.
+//   - 💰 자동 계산식:
+//        (인원+리바인) × 바이인 × payoutPercent%
+//        = X T (Y만원, 만원 단위 내림)
+//
+// 모든 mutator는 updateSessionTournamentMeta를 거쳐 prizePool과 totalPlayers를
+// 함께 1샷 patchSession write. TV 디스플레이는 onSnapshot으로 5초 안에 갱신.
+function SessionTournamentControlBox({ session }: { session: LiveSession }) {
+  const ps = resolvePayoutStructure(session.payoutStructure);
+  const entries = resolveCurrentEntries(session);
+  const rebuys = resolveRebuysCount(session);
+  const total = entries + rebuys;
+  const buyInT = wonToTickets(session.buyIn);
+  const buyInWon = session.buyIn ?? 0;
+  const startingStack = session.startingStack ?? 0;
+  const prizePoolWon = session.prizePool ?? 0;
+  const unit = session.prizeDisplayUnit ?? 'ticket';
+  const showPP = session.showPrizePool !== false;
+
+  // 입력 잠금 상태 (Firestore write 중) — 더블 클릭 방지
+  const [busy, setBusy] = useState(false);
+
+  const safe = async (fn: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    try { await fn(); } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[SessionTournamentControlBox] update failed', e);
+      alert(`업데이트 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-xl p-3 space-y-2.5"
+      style={{ background: 'var(--surface-1)', border: '1.5px solid var(--border)' }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-extrabold tracking-wider" style={{ color: 'var(--text-1)' }}>
+          🎫 토너 정보 — 실시간 조절
+        </div>
+        <div className="text-[9px]" style={{ color: 'var(--text-3)' }}>
+          변경 즉시 TV 반영
+        </div>
+      </div>
+
+      {/* 인원 / 리바인 */}
+      <div className="grid grid-cols-2 gap-2">
+        <StepperRow
+          label="인원수"
+          value={entries}
+          unit="명"
+          onMinus={() => safe(() => updateSessionTournamentMeta(session, { entriesDelta: -1 }))}
+          onPlus={() => safe(() => updateSessionTournamentMeta(session, { entriesDelta: +1 }))}
+          onSet={(v) => safe(() => updateSessionTournamentMeta(session, { currentEntries: v }))}
+          minusDisabled={busy || entries <= 0}
+          plusDisabled={busy}
+        />
+        <StepperRow
+          label="리바인"
+          value={rebuys}
+          unit="회"
+          onMinus={() => safe(() => updateSessionTournamentMeta(session, { rebuysDelta: -1 }))}
+          onPlus={() => safe(() => updateSessionTournamentMeta(session, { rebuysDelta: +1 }))}
+          onSet={(v) => safe(() => updateSessionTournamentMeta(session, { rebuysCount: v }))}
+          minusDisabled={busy || rebuys <= 0}
+          plusDisabled={busy}
+          accent="#FF1F8F"
+        />
+      </div>
+
+      {/* 바이인 / 스타팅칩 */}
+      <div className="grid grid-cols-2 gap-2">
+        <NumericRow
+          label="바이인"
+          value={buyInT}
+          unit="T"
+          step={1}
+          min={0}
+          onSet={(v) => safe(() => updateSessionTournamentMeta(session, { buyIn: ticketsToWon(v) }))}
+          disabled={busy}
+          hint={buyInWon ? `${Math.round(buyInWon / 10000).toLocaleString()}만원` : ''}
+        />
+        <NumericRow
+          label="스타팅칩"
+          value={startingStack}
+          unit=""
+          step={1000}
+          min={0}
+          onSet={(v) => safe(() => updateSessionTournamentMeta(session, { startingStack: v }))}
+          disabled={busy}
+          hint={startingStack ? `${startingStack.toLocaleString()}` : ''}
+        />
+      </div>
+
+      {/* 💰 자동 계산된 PRIZE POOL */}
+      <div
+        className="rounded-lg p-2.5"
+        style={{
+          background: showPP ? 'rgba(16,185,129,0.08)' : 'var(--surface-2)',
+          border: `1px solid ${showPP ? 'rgba(16,185,129,0.30)' : 'var(--border)'}`,
+        }}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-[10px] font-extrabold tracking-wider" style={{ color: showPP ? '#047857' : 'var(--text-3)' }}>
+            💰 PRIZE POOL {!showPP && '(TV 노출 OFF)'}
+          </div>
+          <div className="text-[9px] font-mono" style={{ color: 'var(--text-3)' }}>
+            ({entries}+{rebuys}) × {buyInT}T × {ps.payoutPercent}%
+          </div>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="font-mono text-xl font-extrabold" style={{ color: showPP ? '#065F46' : 'var(--text-2)' }}>
+            {fmtPrizeDisplay(prizePoolWon, unit) || '—'}
+          </div>
+          <div className="text-[10px] font-mono" style={{ color: 'var(--text-3)' }}>
+            총 {total}엔트리 · {(buyInWon / TICKET_WON * total).toLocaleString()}T
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StepperRow({
+  label,
+  value,
+  unit,
+  onMinus,
+  onPlus,
+  onSet,
+  minusDisabled,
+  plusDisabled,
+  accent,
+}: {
+  label: string;
+  value: number;
+  unit: string;
+  onMinus: () => void;
+  onPlus: () => void;
+  onSet: (v: number) => void;
+  minusDisabled?: boolean;
+  plusDisabled?: boolean;
+  accent?: string;
+}) {
+  return (
+    <div
+      className="rounded-lg p-2"
+      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+    >
+      <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: accent ?? 'var(--text-2)' }}>
+        {label}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={onMinus}
+          disabled={minusDisabled}
+          className="w-8 h-8 rounded-md font-bold text-base disabled:opacity-30"
+          style={{ background: 'var(--surface-1)', color: 'var(--text-1)', border: '1.5px solid var(--border)' }}
+          aria-label={`${label} 1 감소`}
+        >−</button>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (Number.isFinite(v) && v >= 0) onSet(v);
+          }}
+          className="flex-1 text-center font-mono text-base font-extrabold rounded px-1 py-1.5"
+          style={{
+            background: 'var(--surface-1)',
+            color: accent ?? 'var(--text-1)',
+            border: '1.5px solid var(--border)',
+            minWidth: 0,
+          }}
+        />
+        <button
+          onClick={onPlus}
+          disabled={plusDisabled}
+          className="w-8 h-8 rounded-md font-bold text-base text-white disabled:opacity-30"
+          style={{ background: accent ?? '#111' }}
+          aria-label={`${label} 1 증가`}
+        >+</button>
+      </div>
+      {unit && (
+        <div className="text-[9px] text-right mt-0.5" style={{ color: 'var(--text-3)' }}>{unit}</div>
+      )}
+    </div>
+  );
+}
+
+function NumericRow({
+  label,
+  value,
+  unit,
+  step,
+  min,
+  onSet,
+  disabled,
+  hint,
+}: {
+  label: string;
+  value: number;
+  unit: string;
+  step: number;
+  min: number;
+  onSet: (v: number) => void;
+  disabled?: boolean;
+  hint?: string;
+}) {
+  const [local, setLocal] = useState<string>(String(value));
+  // 외부 값 변경 시 동기화 (다른 사장/탭에서 변경된 경우)
+  useEffect(() => { setLocal(String(value)); }, [value]);
+  return (
+    <div
+      className="rounded-lg p-2"
+      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+    >
+      <div className="flex items-baseline justify-between mb-1">
+        <div className="text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-2)' }}>
+          {label}
+        </div>
+        {unit && <div className="text-[9px] font-bold" style={{ color: 'var(--text-3)' }}>{unit}</div>}
+      </div>
+      <input
+        type="number"
+        inputMode="numeric"
+        step={step}
+        min={min}
+        value={local}
+        disabled={disabled}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => {
+          const v = parseInt(local, 10);
+          if (Number.isFinite(v) && v >= min) {
+            if (v !== value) onSet(v);
+          } else {
+            setLocal(String(value));
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+        }}
+        className="w-full text-center font-mono text-base font-extrabold rounded px-1 py-1.5"
+        style={{
+          background: 'var(--surface-1)',
+          color: 'var(--text-1)',
+          border: '1.5px solid var(--border)',
+        }}
+      />
+      {hint && (
+        <div className="text-[9px] text-right mt-0.5 font-mono" style={{ color: 'var(--text-3)' }}>
+          {hint}
+        </div>
+      )}
     </div>
   );
 }

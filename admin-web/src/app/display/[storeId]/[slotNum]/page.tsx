@@ -15,6 +15,8 @@ import {
   goToLevelInSession,
   addSecondsToSession,
   stopLiveSession,
+  resolveRebuysCount,
+  resolveTotalEntries,
 } from '@/lib/live';
 import {
   type TimerDisplaySettings,
@@ -614,8 +616,8 @@ export default function DisplayPage({
 
       {/* 상금 분배표(우측 사이드)는 2026-05-23 정정으로 완전 제거.
           사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘."
-          PRIZE POOL 표시값은 display.prizeOverride(매장 어드민 화면 설정에서 직접 입력) 또는
-          본문 stats 카드의 fmtPrizeDisplay(session.prizePool)로 통일. */}
+          PRIZE POOL 표시값은 session.prizePool(토너 운영 > 타이머에서 인원·리바인·바이인 변경 시
+          자동 재계산됨)을 fmtPrizeDisplay로 표시. prizeOverride 우선 로직은 2026-05-23 폐기. */}
 
       {/* 동기화 끊김 배너 */}
       {showStale && (
@@ -830,8 +832,12 @@ export default function DisplayPage({
               >
                 <Stat
                   label="PLAYERS"
-                  value={`${session.playersRemaining}/${session.totalPlayers}`}
-                  sub={`${session.tablesRemaining}테이블`}
+                  value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
+                  sub={
+                    resolveRebuysCount(session) > 0
+                      ? `${session.tablesRemaining}테이블 · 리바인 ${resolveRebuysCount(session)}`
+                      : `${session.tablesRemaining}테이블`
+                  }
                   color={display.textColor}
                   scale={display.statsScale ?? 1}
                 />
@@ -839,9 +845,11 @@ export default function DisplayPage({
                   <Stat
                     label="PRIZE POOL"
                     value={
-                      display.prizeOverride && display.prizeOverride.trim().length > 0
-                        ? display.prizeOverride
-                        : session.prizePool > 0
+                      // 2026-05-23: prizeOverride 우선 로직 폐기.
+                      // 사용자 정책: 항상 자동 계산값(participants × buyIn × payoutPercent) 표시.
+                      // session.prizePool은 토너 운영 > 타이머에서 사장이 인원·리바인·바이인을
+                      // 변경할 때마다 updateSessionTournamentMeta로 즉시 재계산됨.
+                      session.prizePool > 0
                         ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
                         : '—'
                     }
@@ -1380,10 +1388,12 @@ function MobilePortraitLayout({
             className="font-mono font-extrabold text-xl"
             style={{ color: display.textColor }}
           >
-            {session.playersRemaining}/{session.totalPlayers}
+            {session.playersRemaining}/{resolveTotalEntries(session)}
           </div>
           <div className="text-[10px] mt-0.5" style={{ color: display.textColor, opacity: 0.55 }}>
-            {session.tablesRemaining}테이블
+            {resolveRebuysCount(session) > 0
+              ? `${session.tablesRemaining}테이블 · 리바인 ${resolveRebuysCount(session)}`
+              : `${session.tablesRemaining}테이블`}
           </div>
         </div>
         <div
@@ -1609,8 +1619,9 @@ function Stat({
 /**
  * PrizeDistributionPanel — 2026-05-23 정정으로 완전 제거.
  * 사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘."
- * PRIZE POOL 표시값은 display.prizeOverride (매장 어드민 화면 설정에서 직접 입력) 또는
- * 본문 stats 카드의 fmtPrizeDisplay(session.prizePool)로 통일.
+ * PRIZE POOL 표시값은 session.prizePool (토너 운영 > 타이머에서 사장이 실시간 변경한 인원·리바인·바이인
+ * 기반 자동 재계산값)을 fmtPrizeDisplay로 표시. prizeOverride 우선 로직은 2026-05-23 폐기 —
+ * placeholder "티켓 30장"이 의도치 않게 표시되던 버그가 원인.
  *
  * 데이터 모델(session.payoutStructure / computePayoutsFromStructure / computePayoutAmounts
  * / resolvePayoutStructure)은 그대로 유지 — 추후 다른 화면에서 재사용 가능.
@@ -1889,17 +1900,20 @@ function MobileLandscapeLayout({
         <div className="flex flex-col justify-center gap-2 min-w-0">
           <CompactStat
             label="PLAYERS"
-            value={`${session.playersRemaining}/${session.totalPlayers}`}
-            sub={`${session.tablesRemaining}테이블`}
+            value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
+            sub={
+              resolveRebuysCount(session) > 0
+                ? `${session.tablesRemaining}테이블 · 리바인 ${resolveRebuysCount(session)}`
+                : `${session.tablesRemaining}테이블`
+            }
             color={display.textColor}
           />
           {session.showPrizePool !== false && (
             <CompactStat
               label="PRIZE POOL"
               value={
-                display.prizeOverride && display.prizeOverride.trim().length > 0
-                  ? display.prizeOverride
-                  : session.prizePool > 0
+                // 2026-05-23: prizeOverride 폐기 — 항상 자동 계산값 표시.
+                session.prizePool > 0
                   ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
                   : '—'
               }
