@@ -6,7 +6,9 @@
  * 마스킹 ON 시: 휴대폰 중간 4자리 마스킹, 이메일 앞 1자리+도메인만 표시.
  */
 
-import ExcelJS from 'exceljs';
+// ExcelJS는 ~240KB(gzip) — 초기 번들에서 제외하기 위해 dynamic import만 사용.
+// 타입은 type-only로 가져와 런타임 비용 0.
+import type ExcelJS from 'exceljs';
 
 // =====================================================================
 // 타입
@@ -144,7 +146,10 @@ function applyHeaderStyle(row: ExcelJS.Row) {
 export async function exportMembersToXlsx(opts: ExportMembersOpts): Promise<Blob> {
   const { tab, users = [], stores = [], organizers = [], masking } = opts;
 
-  const wb = new ExcelJS.Workbook();
+  // ExcelJS 동적 로드 — 본사 어드민 export 클릭 시점에만 청크 다운로드 (~240KB).
+  // 일반 사용자(/m/*) 페이지엔 절대 포함 안 됨.
+  const ExcelJSMod = (await import('exceljs')).default;
+  const wb = new ExcelJSMod.Workbook();
   wb.creator = 'Pink Rabbit 본사';
   wb.created = new Date();
 

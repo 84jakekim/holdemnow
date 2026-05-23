@@ -481,7 +481,7 @@ function MapMode() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => setLocationDenied(true),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
@@ -1258,7 +1258,7 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => setUserLocation(null),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
@@ -1339,7 +1339,7 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => setUserLocation(null),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
@@ -1419,7 +1419,7 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 30_000 },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
