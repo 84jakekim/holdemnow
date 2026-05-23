@@ -1661,7 +1661,7 @@ function SessionTournamentControlBox({
       {/* 인원 / 리바인 */}
       <div className="grid grid-cols-2 gap-2">
         <StepperRow
-          label="인원수"
+          label="인원수 (등록)"
           value={entries}
           unit="명"
           onMinus={() => safe(() => updateSessionTournamentMeta(session, { entriesDelta: -1 }))}
@@ -1680,6 +1680,22 @@ function SessionTournamentControlBox({
           minusDisabled={busy || rebuys <= 0}
           plusDisabled={busy}
           accent="#FF1F8F"
+        />
+      </div>
+
+      {/* 잔여 인원 — 2026-05-24 신설. 사장이 탈락 처리 시 −1.
+          clamp: [0, currentEntries]. tablesRemaining 자동 재계산. prizePool 무영향. */}
+      <div className="grid grid-cols-1">
+        <StepperRow
+          label={`잔여 인원 (현재 / 등록 ${entries}명)`}
+          value={Math.max(0, Math.min(session.playersRemaining ?? entries, entries))}
+          unit="명"
+          onMinus={() => safe(() => updateSessionTournamentMeta(session, { playersRemainingDelta: -1 }))}
+          onPlus={() => safe(() => updateSessionTournamentMeta(session, { playersRemainingDelta: +1 }))}
+          onSet={(v) => safe(() => updateSessionTournamentMeta(session, { playersRemaining: v }))}
+          minusDisabled={busy || (session.playersRemaining ?? entries) <= 0}
+          plusDisabled={busy || (session.playersRemaining ?? entries) >= entries}
+          accent="#0EA5E9"
         />
       </div>
 
@@ -1707,7 +1723,8 @@ function SessionTournamentControlBox({
         />
       </div>
 
-      {/* 💰 자동 계산된 PRIZE POOL */}
+      {/* 💰 자동 계산된 PRIZE POOL — 2026-05-24: payoutPercent inline input 부착.
+          공식: (인원+리바인) × 바이인T × N% → 사장이 N을 직접 변경하면 prizePool 즉시 재계산. */}
       <div
         className="rounded-lg p-2.5"
         style={{
@@ -1715,12 +1732,18 @@ function SessionTournamentControlBox({
           border: `1px solid ${showPP ? 'rgba(16,185,129,0.30)' : 'var(--border)'}`,
         }}
       >
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-1 gap-2">
           <div className="text-[10px] font-extrabold tracking-wider" style={{ color: showPP ? '#047857' : 'var(--text-3)' }}>
             💰 PRIZE POOL {!showPP && '(TV 노출 OFF)'}
           </div>
-          <div className="text-[9px] font-mono" style={{ color: 'var(--text-3)' }}>
-            ({entries}+{rebuys}) × {buyInT}T × {ps.payoutPercent}%
+          <div className="text-[10px] font-mono flex items-center gap-1" style={{ color: 'var(--text-2)' }}>
+            <span style={{ color: 'var(--text-3)' }}>({entries}+{rebuys}) × {buyInT}T ×</span>
+            <PayoutPercentInline
+              value={ps.payoutPercent}
+              disabled={busy}
+              onCommit={(pct) => safe(() => updateSessionTournamentMeta(session, { payoutPercent: pct }))}
+            />
+            <span style={{ color: 'var(--text-3)' }}>%</span>
           </div>
         </div>
         <div className="flex items-baseline justify-between gap-2">
@@ -2122,6 +2145,60 @@ function StepperRow({
         <div className="text-[9px] text-right mt-0.5" style={{ color: 'var(--text-3)' }}>{unit}</div>
       )}
     </div>
+  );
+}
+
+/** PRIZE POOL 공식 inline에 박히는 미니 % input — 2026-05-24.
+ *  사용자 요구: "PRIZE POOL (20+0) × 5T × 60% 표기 부분에서 실시간 % 변경".
+ *  - 폭 36px 컴팩트. onBlur/Enter 커밋. clamp 0~100.
+ *  - 외부 value 변동(다른 탭/세션 동기화) 시 자동 sync.
+ */
+function PayoutPercentInline({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number;
+  disabled?: boolean;
+  onCommit: (pct: number) => void;
+}) {
+  const [local, setLocal] = useState<string>(String(value));
+  useEffect(() => { setLocal(String(value)); }, [value]);
+  const commit = () => {
+    const v = parseInt(local, 10);
+    if (Number.isFinite(v)) {
+      const clamped = Math.max(0, Math.min(100, v));
+      if (clamped !== value) onCommit(clamped);
+      setLocal(String(clamped));
+    } else {
+      setLocal(String(value));
+    }
+  };
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={0}
+      max={100}
+      step={1}
+      value={local}
+      disabled={disabled}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+      }}
+      onFocus={(e) => e.currentTarget.select()}
+      aria-label="시상 비율 %"
+      className="text-center font-mono font-extrabold rounded px-1 py-0.5"
+      style={{
+        width: 40,
+        background: 'var(--surface-1)',
+        color: '#047857',
+        border: '1.5px solid rgba(16,185,129,0.45)',
+        fontSize: 11,
+      }}
+    />
   );
 }
 

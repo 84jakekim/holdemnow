@@ -545,7 +545,7 @@ export function recomputeSessionPrizePool(s: LiveSession, overrides?: {
 }
 
 /**
- * 인원/리바인/바이인/스타팅칩 통합 mutator.
+ * 인원/리바인/바이인/스타팅칩/잔여인원/시상비율 통합 mutator.
  * 변경된 값으로 prizePool을 즉시 재계산하고 단일 patchSession write로 반영.
  *
  * ⚠️ 2026-05-23 PM 정정 (사용자 보고: 리바인은 기존 플레이어가 다시 바인을 하는 것):
@@ -553,10 +553,20 @@ export function recomputeSessionPrizePool(s: LiveSession, overrides?: {
  *   - 인원수(currentEntries) 변경만 totalPlayers에 반영. 리바인 변경은 totalPlayers 무관.
  *   - playersRemaining은 사장이 별도 ✕ 탈락 버튼으로만 감소. 리바인 시 변동 X.
  *
+ * ⚠️ 2026-05-24 확장:
+ *   - playersRemaining/playersRemainingDelta — 잔여 인원 실시간 컨트롤 (사장이 탈락 처리).
+ *     currentEntries 초과 불가, 0 미만 불가. tablesRemaining 자동 재계산 (8명/테이블).
+ *   - payoutPercent — session.payoutStructure 스냅샷의 시상 비율 % 실시간 변경.
+ *     0~100 clamp. prizePool 즉시 재계산.
+ *
  * @example incrementRebuys: updateSessionTournamentMeta(s, { rebuysDelta: 1 })
  *          → currentEntries 그대로, totalPlayers 그대로, prizePool만 +buyIn×payoutPercent%
  * @example setEntries: updateSessionTournamentMeta(s, { currentEntries: 25 })
  *          → currentEntries=25, totalPlayers=25, playersRemaining 자동 clamp, prizePool 재계산
+ * @example eliminate: updateSessionTournamentMeta(s, { playersRemainingDelta: -1 })
+ *          → playersRemaining -=1, tablesRemaining 재계산, prizePool 무영향
+ * @example setPayoutPercent: updateSessionTournamentMeta(s, { payoutPercent: 60 })
+ *          → session.payoutStructure.payoutPercent=60, prizePool 재계산 (60% 적용)
  */
 export async function updateSessionTournamentMeta(
   s: LiveSession,
@@ -567,10 +577,14 @@ export async function updateSessionTournamentMeta(
     rebuysCount?: number;
     rebuysDelta?: number;
     startingStack?: number;
+    playersRemaining?: number;
+    playersRemainingDelta?: number;
+    payoutPercent?: number;
   },
 ) {
   const curEntries = resolveCurrentEntries(s);
   const curRebuys = resolveRebuysCount(s);
+  const curPlayersRemaining = Math.max(0, s.playersRemaining ?? curEntries);
 
   let newEntries = patch.currentEntries ?? curEntries;
   if (typeof patch.entriesDelta === 'number') newEntries = curEntries + patch.entriesDelta;
@@ -585,7 +599,21 @@ export async function updateSessionTournamentMeta(
     ? Math.max(0, Math.floor(patch.startingStack))
     : s.startingStack;
 
-  const newPrizePool = recomputeSessionPrizePool(s, {
+  // payoutPercent 실시간 변경 — session.payoutStructure 스냅샷 갱신.
+  // resolvePayoutStructure 통해 누락 필드 안전 보강.
+  const hasPayoutPercentPatch = typeof patch.payoutPercent === 'number';
+  const clampedPct = hasPayoutPercentPatch
+    ? Math.max(0, Math.min(100, Math.round(patch.payoutPercent!)))
+    : undefined;
+  const newPayoutStructure = hasPayoutPercentPatch
+    ? { ...resolvePayoutStructure(s.payoutStructure), payoutPercent: clampedPct! }
+    : undefined;
+
+  // recompute 위해 임시 세션 객체 — payoutStructure 갱신 반영
+  const sessionForCompute: LiveSession = newPayoutStructure
+    ? { ...s, payoutStructure: newPayoutStructure }
+    : s;
+  const newPrizePool = recomputeSessionPrizePool(sessionForCompute, {
     buyIn: newBuyIn,
     currentEntries: newEntries,
     rebuysCount: newRebuys,
@@ -595,6 +623,18 @@ export async function updateSessionTournamentMeta(
   // 리바인만 변경된 경우엔 인원수 관련 필드는 모두 그대로.
   const entriesChanged = newEntries !== curEntries;
 
+  // 잔여 인원 실시간 컨트롤
+  let newPlayersRemaining: number | undefined;
+  if (typeof patch.playersRemaining === 'number' || typeof patch.playersRemainingDelta === 'number') {
+    let pr = typeof patch.playersRemaining === 'number' ? patch.playersRemaining : curPlayersRemaining;
+    if (typeof patch.playersRemainingDelta === 'number') pr = curPlayersRemaining + patch.playersRemainingDelta;
+    // clamp: [0, newEntries] — currentEntries 초과 불가, 음수 불가.
+    newPlayersRemaining = Math.max(0, Math.min(Math.floor(pr), newEntries));
+  } else if (entriesChanged) {
+    // 인원 감소 시 자동 clamp. 인원 증가 시 그대로 유지 (탈락자 부활 방지).
+    newPlayersRemaining = Math.max(0, Math.min(curPlayersRemaining, newEntries));
+  }
+
   const updates: Partial<LiveSession> = {
     currentEntries: newEntries,
     rebuysCount: newRebuys,
@@ -603,12 +643,20 @@ export async function updateSessionTournamentMeta(
     prizePool: newPrizePool,
   };
 
+  if (newPayoutStructure) {
+    updates.payoutStructure = newPayoutStructure;
+  }
+
   if (entriesChanged) {
-    // playersRemaining은 currentEntries를 초과할 수 없음 — 인원 감소 시 자동 clamp.
-    // 인원 증가 시 playersRemaining은 그대로 유지(이미 탈락한 인원이 부활하면 안 됨).
-    const newPlayersRemaining = Math.max(0, Math.min(s.playersRemaining ?? newEntries, newEntries));
     updates.totalPlayers = newEntries; // 백워드 호환: 기존 코드(/m/*, display 등)는 totalPlayers를 본다.
+  }
+
+  if (typeof newPlayersRemaining === 'number') {
     updates.playersRemaining = newPlayersRemaining;
+    // tablesRemaining = ceil(playersRemaining / 8). 잔여 0이면 1로 (display divide-by-zero 방지).
+    updates.tablesRemaining = Math.max(1, Math.ceil(Math.max(1, newPlayersRemaining) / 8));
+  } else if (entriesChanged) {
+    // 인원만 변경되고 playersRemaining patch 없는 경우 — 기존 잔여로 tablesRemaining 재계산.
     updates.tablesRemaining = Math.max(1, Math.ceil(newEntries / 8));
   }
 
