@@ -1009,30 +1009,66 @@ function TvCastingPane({
                   </button>
                 </div>
               </div>
-              <div className="flex gap-1 mt-1.5">
-                {selected ? (
-                  isSelectedAssigned ? (
-                    <button
-                      onClick={() => handleSetSession(s.slotNum, null)}
-                      className="flex-1 text-[10px] font-bold rounded px-2 py-1.5"
-                      style={{ background: 'rgba(239,68,68,0.10)', color: '#B91C1C', border: '1px solid rgba(239,68,68,0.30)' }}
-                    >
-                      이 TV 비우기
-                    </button>
+
+              {/* 세션 매핑 드롭다운 — 2026-05-23 부활
+                  중앙 selectedSessionId와 무관하게 슬롯별로 직접 매핑 가능.
+                  메뉴를 왔다갔다하지 않고 우측 TV 송출 탭에서 즉시 매핑/변경. */}
+              <div className="mt-2">
+                <div className="text-[9px] font-bold tracking-wider mb-1" style={{ color: 'var(--text-3)' }}>
+                  📡 송출할 세션
+                </div>
+                <select
+                  value={s.sessionId ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    handleSetSession(s.slotNum, v === '' ? null : v);
+                  }}
+                  className="w-full text-[11px] font-bold rounded px-2 py-1.5"
+                  style={{
+                    background: 'var(--surface-1)',
+                    color: matched ? '#EF4444' : 'var(--text-2)',
+                    border: matched ? '1.5px solid rgba(239,68,68,0.40)' : '1px solid var(--border)',
+                    appearance: 'auto',
+                  }}
+                >
+                  <option value="">— 비어있음 —</option>
+                  {sessions.length === 0 ? (
+                    <option value="" disabled>실행 중인 세션이 없습니다</option>
                   ) : (
-                    <button
-                      onClick={() => handleSetSession(s.slotNum, selected.id)}
-                      className="flex-1 text-[10px] font-bold rounded px-2 py-1.5"
-                      style={{ background: '#FF1F8F', color: '#fff' }}
-                    >
-                      선택된 세션 송출
-                    </button>
-                  )
-                ) : (
-                  <div className="flex-1 text-[10px] text-center py-1.5" style={{ color: 'var(--text-3)' }}>
-                    중앙에서 세션 선택
-                  </div>
-                )}
+                    sessions.map((ss) => {
+                      const statusLabel =
+                        ss.status === 'ready' ? '● READY' :
+                        ss.status === 'paused' ? '⏸ PAUSED' :
+                        '● LIVE';
+                      return (
+                        <option key={ss.id} value={ss.id}>
+                          {statusLabel}  {ss.tournamentName}
+                        </option>
+                      );
+                    })
+                  )}
+                </select>
+              </div>
+
+              <div className="flex gap-1 mt-1.5">
+                {selected && !isSelectedAssigned ? (
+                  <button
+                    onClick={() => handleSetSession(s.slotNum, selected.id)}
+                    className="flex-1 text-[10px] font-bold rounded px-2 py-1.5"
+                    style={{ background: '#FF1F8F', color: '#fff' }}
+                    title="좌측 리스트에서 선택한 세션을 이 슬롯에 즉시 매핑"
+                  >
+                    ⚡ 좌측 선택 세션 송출
+                  </button>
+                ) : selected && isSelectedAssigned ? (
+                  <button
+                    onClick={() => handleSetSession(s.slotNum, null)}
+                    className="flex-1 text-[10px] font-bold rounded px-2 py-1.5"
+                    style={{ background: 'rgba(239,68,68,0.10)', color: '#B91C1C', border: '1px solid rgba(239,68,68,0.30)' }}
+                  >
+                    이 TV 비우기
+                  </button>
+                ) : null}
                 <button
                   onClick={() => {
                     const name = window.prompt('TV 이름', s.name ?? `${s.slotNum}번 TV`);
@@ -1040,6 +1076,7 @@ function TvCastingPane({
                   }}
                   className="text-[10px] font-bold rounded px-2 py-1.5"
                   style={{ background: 'var(--surface-1)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
+                  title="TV 이름 바꾸기"
                 >
                   ✎
                 </button>
@@ -1047,6 +1084,7 @@ function TvCastingPane({
                   onClick={() => { if (window.confirm(`${s.slotNum}번 TV 삭제?`)) handleRemove(s.slotNum); }}
                   className="text-[10px] font-bold rounded px-2 py-1.5"
                   style={{ background: 'var(--surface-1)', color: '#B91C1C', border: '1px solid var(--border)' }}
+                  title="TV 슬롯 삭제"
                 >
                   ✕
                 </button>
@@ -1057,7 +1095,8 @@ function TvCastingPane({
       )}
       <div className="text-[10px] leading-relaxed mt-2 p-2 rounded"
            style={{ color: 'var(--text-2)', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.20)' }}>
-        💡 매장 TV 브라우저로 슬롯 URL을 열고 화면 한 번 터치 → 자동 풀스크린 + 사운드 활성화.
+        💡 각 TV 슬롯의 <b>드롭다운</b>으로 송출할 세션을 직접 매핑할 수 있어요.
+        매장 TV 브라우저로 슬롯 URL을 열고 화면 한 번 터치 → 자동 풀스크린 + 사운드 활성화.
       </div>
     </div>
   );

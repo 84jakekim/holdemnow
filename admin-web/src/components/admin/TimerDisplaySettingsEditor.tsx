@@ -366,12 +366,18 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
         {/* 텍스트 3줄 — 2026-05-23 신규 (게임타이틀 · 참고사항 · 하단 마퀴) */}
         <Section
           title="📝 화면 텍스트 3줄"
-          hint="TV에 띄울 자유 텍스트 3줄 — 각각 글자 크기·색·스타일 조절 가능 · 이모지 자유"
+          hint="TV에 띄울 자유 텍스트 3줄 — 각 줄이 화면 어디에 노출되는지 미리보기 다이어그램 확인"
         >
+          {/* 전체 위치 가이드 — 한눈에 보이는 다이어그램 */}
+          <PositionDiagramAll />
+
+          <div className="h-3" />
+
           {/* 첫째 줄 — 게임 타이틀 */}
           <TextLineEditor
-            badge="🎯 첫째 줄"
-            subtitle="게임 타이틀 — 화면 중앙 상단"
+            badge="🎯 첫째 줄 — 게임 타이틀"
+            subtitle="TV 화면 정중앙 상단 · 가장 큰 헤드라인"
+            positionDiagram={<PositionDiagram active="title" />}
             placeholder="예) 🎰 6/15 정기 토너 100K"
             text={settings.titleText}
             fontSize={settings.titleFontSize}
@@ -389,8 +395,9 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
 
           {/* 둘째 줄 — 게임 참고사항 */}
           <TextLineEditor
-            badge="📋 둘째 줄"
-            subtitle="게임 참고사항 — 타이틀 바로 아래"
+            badge="📋 둘째 줄 — 게임 참고사항"
+            subtitle="타이틀 바로 아래 · 보조 정보 (중간 크기)"
+            positionDiagram={<PositionDiagram active="note" />}
             placeholder="예) 리바이 3회까지 · 18:30 디너 제공"
             text={settings.noteText}
             fontSize={settings.noteFontSize}
@@ -408,8 +415,9 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
 
           {/* 셋째 줄 — 하단 마퀴 */}
           <TextLineEditor
-            badge="📢 셋째 줄"
-            subtitle="화면 하단 — 우→좌 자동 스와이프 (뉴스 띠)"
+            badge="📢 셋째 줄 — 하단 마퀴 (뉴스 띠)"
+            subtitle="화면 맨 아래 풀폭 띠 · 우→좌 무한 스와이프"
+            positionDiagram={<PositionDiagram active="marquee" />}
             placeholder="예) 📢 오늘 8시 시작 · 좌석 한정 · 디너 18:30"
             text={settings.marqueeText}
             fontSize={settings.marqueeFontSize}
@@ -807,10 +815,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 /**
  * TextLineEditor — 텍스트 한 줄 + 폰트 크기/색/스타일 컨트롤 묶음.
  * 3개 줄(타이틀/참고사항/마퀴) 모두 동일한 UI 구조를 재사용.
+ * 2026-05-23: positionDiagram(미니 위치 다이어그램) 추가로 "어디에 노출"이 한눈에.
  */
 function TextLineEditor({
   badge,
   subtitle,
+  positionDiagram,
   placeholder,
   text,
   fontSize,
@@ -826,6 +836,7 @@ function TextLineEditor({
 }: {
   badge: string;
   subtitle: string;
+  positionDiagram?: React.ReactNode;
   placeholder: string;
   text: string;
   fontSize: number;
@@ -848,9 +859,13 @@ function TextLineEditor({
 
   return (
     <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[11px] font-extrabold text-gray-900 tracking-wide">{badge}</span>
-        <span className="text-[10px] text-gray-500">{subtitle}</span>
+      {/* 헤더 — 배지 + 부제 + 위치 다이어그램 (좌:정보, 우:다이어그램) */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-extrabold text-gray-900 tracking-wide">{badge}</div>
+          <div className="text-[10px] text-gray-500 mt-0.5 leading-tight">{subtitle}</div>
+        </div>
+        {positionDiagram}
       </div>
       <input
         value={text}
@@ -911,6 +926,192 @@ function TextLineEditor({
         </div>
       </div>
       {extra}
+    </div>
+  );
+}
+
+/**
+ * PositionDiagram — TV 화면 (16:9 미니 카드) 위에 현재 텍스트 줄이 어디에 노출되는지
+ * 핑크 박스로 표시. 사장님이 "이 텍스트가 어디 박히는지" 한눈에 확인.
+ *
+ * - title  → 상단 1/3 영역 풀폭
+ * - note   → 상단 1/3 ~ 중앙 사이
+ * - marquee → 하단 좁은 띠 풀폭
+ */
+function PositionDiagram({ active }: { active: 'title' | 'note' | 'marquee' }) {
+  const HIGHLIGHT = '#FF1F8F';
+  const GHOST = 'rgba(255,255,255,0.10)';
+  const isTitle = active === 'title';
+  const isNote = active === 'note';
+  const isMarquee = active === 'marquee';
+  return (
+    <div
+      title={`TV 화면에서 이 영역에 노출됩니다`}
+      style={{
+        width: 96,
+        aspectRatio: '16 / 9',
+        background: 'linear-gradient(135deg,#0A0A0A 0%,#1A1A2E 100%)',
+        borderRadius: 6,
+        position: 'relative',
+        flexShrink: 0,
+        overflow: 'hidden',
+        border: '1.5px solid #111',
+      }}
+    >
+      {/* title slot — 상단 22% */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '12%',
+          left: '8%',
+          right: '8%',
+          height: '14%',
+          borderRadius: 2,
+          background: isTitle ? HIGHLIGHT : GHOST,
+          boxShadow: isTitle ? `0 0 6px ${HIGHLIGHT}` : undefined,
+        }}
+      />
+      {/* note slot — 상단 30% */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '30%',
+          left: '14%',
+          right: '14%',
+          height: '8%',
+          borderRadius: 2,
+          background: isNote ? HIGHLIGHT : GHOST,
+          boxShadow: isNote ? `0 0 6px ${HIGHLIGHT}` : undefined,
+        }}
+      />
+      {/* timer placeholder — 항상 회색 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '46%',
+          left: '24%',
+          right: '24%',
+          height: '24%',
+          borderRadius: 2,
+          background: 'rgba(255,255,255,0.05)',
+        }}
+      />
+      {/* marquee slot — 하단 띠 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: '4%',
+          height: '12%',
+          background: isMarquee ? HIGHLIGHT : GHOST,
+          boxShadow: isMarquee ? `0 0 6px ${HIGHLIGHT}` : undefined,
+        }}
+      />
+      {/* 깜빡이 효과 — 활성 영역만 */}
+      <style jsx>{`
+        div[style*="${HIGHLIGHT}"] {
+          animation: pos-pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes pos-pulse {
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0.55; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/**
+ * PositionDiagramAll — 3줄이 모두 어디 노출되는지 한 장의 가이드.
+ * Section 상단에 한 번 노출해서 전체 구도 인지.
+ */
+function PositionDiagramAll() {
+  return (
+    <div className="border border-gray-200 rounded-lg p-3 bg-gradient-to-br from-gray-50 to-white">
+      <div className="text-[10.5px] font-extrabold text-gray-900 mb-2 tracking-wide">
+        🖥️ 전체 위치 미리보기 — 각 줄이 TV 어디에 노출되는지
+      </div>
+      <div className="flex items-center gap-3">
+        <div
+          style={{
+            width: 180,
+            aspectRatio: '16 / 9',
+            background: 'linear-gradient(135deg,#0A0A0A 0%,#1A1A2E 100%)',
+            borderRadius: 8,
+            position: 'relative',
+            flexShrink: 0,
+            overflow: 'hidden',
+            border: '2px solid #111',
+          }}
+        >
+          {/* title */}
+          <div
+            style={{
+              position: 'absolute', top: '12%', left: '8%', right: '8%', height: '14%',
+              borderRadius: 3, background: '#FF1F8F', boxShadow: '0 0 6px #FF1F8F',
+            }}
+          />
+          <div style={{
+            position: 'absolute', top: '7%', right: '10%',
+            fontSize: 8, color: '#FF1F8F', fontWeight: 800,
+          }}>🎯 1</div>
+
+          {/* note */}
+          <div
+            style={{
+              position: 'absolute', top: '30%', left: '14%', right: '14%', height: '8%',
+              borderRadius: 2, background: '#3B82F6', boxShadow: '0 0 6px #3B82F6',
+            }}
+          />
+          <div style={{
+            position: 'absolute', top: '28%', right: '16%',
+            fontSize: 8, color: '#3B82F6', fontWeight: 800,
+          }}>📋 2</div>
+
+          {/* timer ghost */}
+          <div
+            style={{
+              position: 'absolute', top: '46%', left: '24%', right: '24%', height: '24%',
+              borderRadius: 2, background: 'rgba(255,255,255,0.05)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 9, color: 'rgba(255,255,255,0.30)', fontWeight: 800,
+              letterSpacing: '0.1em',
+            }}
+          >
+            18:30
+          </div>
+
+          {/* marquee */}
+          <div
+            style={{
+              position: 'absolute', left: 0, right: 0, bottom: '4%', height: '12%',
+              background: '#10B981', boxShadow: '0 0 6px #10B981',
+            }}
+          />
+          <div style={{
+            position: 'absolute', bottom: '17%', right: '8%',
+            fontSize: 8, color: '#10B981', fontWeight: 800,
+          }}>📢 3</div>
+        </div>
+        <div className="flex-1 min-w-0 text-[10px] leading-relaxed space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span style={{ width: 10, height: 10, background: '#FF1F8F', borderRadius: 2 }} />
+            <span className="font-bold text-gray-900">🎯 1. 게임 타이틀</span>
+            <span className="text-gray-500">— 정중앙 상단, 가장 크게</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span style={{ width: 10, height: 10, background: '#3B82F6', borderRadius: 2 }} />
+            <span className="font-bold text-gray-900">📋 2. 참고사항</span>
+            <span className="text-gray-500">— 타이틀 바로 아래</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span style={{ width: 10, height: 10, background: '#10B981', borderRadius: 2 }} />
+            <span className="font-bold text-gray-900">📢 3. 마퀴</span>
+            <span className="text-gray-500">— 하단 띠, 우→좌 스와이프</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

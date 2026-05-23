@@ -155,17 +155,20 @@ test.describe('🎬 토너 운영 — 통합 컨트롤 센터', () => {
   });
 
   // ─── 시나리오 5: 🎨 화면 설정 / 🖥️ 미리보기 / 📺 TV 송출 탭 전환 ─────────
+  // 2026-05-23 갱신: "💰 상금 분배표 노출" 섹션은 da8aa88에서 폐기.
+  // 대신 (1) 색·배경 기본 섹션 (2) 📺 TV 송출 탭의 세션 매핑 드롭다운(2026-05-23 부활) 확인.
   test('5) 🎨 화면 설정 / 🖥️ 미리보기 / 📺 TV 송출 탭 전환', async () => {
     await sharedPage.getByRole('button', { name: /🎨 화면 설정/ }).click();
     await expect(sharedPage.getByText('🖼️ 배경')).toBeVisible({ timeout: 5_000 });
-    await expect(sharedPage.getByText('🎨 컬러')).toBeVisible();
-    await expect(sharedPage.getByText('💰 상금 분배표 노출')).toBeVisible();
+    await expect(sharedPage.getByText(/컬러/).first()).toBeVisible();
 
     await sharedPage.getByRole('button', { name: /🖥️ 미리보기/ }).click();
     await sharedPage.waitForTimeout(500);
 
     await sharedPage.getByRole('button', { name: /📺 TV 송출/ }).click();
     await sharedPage.waitForTimeout(300);
+    // TV 송출 탭 mount 확인 — "+ TV 추가" 버튼이 항상 보여야 함
+    await expect(sharedPage.getByRole('button', { name: /\+ TV 추가/ })).toBeVisible();
   });
 
   // ─── 시나리오 6: 타이머 중도종료 회귀 검증 (3차 핫픽스 핵심) ───────────────
