@@ -1383,22 +1383,9 @@ function MobilePortraitLayout({
         )}
       </div>
 
-      {/* 좌측 스트럭쳐 패널 — 세로 모드에서는 NEXT 위에 collapsed 스트럭쳐.
-          showStructure=true일 때만 mount. session에서 structure 추출. */}
-      {display.showStructure !== false && (
-        <div className="mt-3">
-          <BlindStructurePanel
-            structure={
-              session.blindStructureLocked && session.blindStructureLocked.length > 0
-                ? session.blindStructureLocked
-                : session.blindStructure
-            }
-            currentLevel={session.currentLevel}
-            display={display}
-            variant="portrait"
-          />
-        </div>
-      )}
+      {/* 좌측 스트럭쳐 패널 — 2026-05-23 정정: 세로 모드에선 mount 안 함.
+          사용자 명시: "세로모드에서는 보이지 않아도된다."
+          가로 모드(MobileLandscapeLayout) + 데스크탑에서만 10레벨 스트럭쳐 노출. */}
 
       {/* NEXT 박스 — 컴팩트 한 줄 */}
       {nextBlind && (
@@ -1455,10 +1442,10 @@ function MobilePortraitLayout({
         </div>
       )}
 
-      {/* 사이드 정보 — 모바일 세로. PRIZE POOL 모드 분기:
-            hidden  : PLAYERS / LATE REG 2열
-            total   : PLAYERS / PRIZE POOL / LATE REG 3열
-            distribution : 위 3열 + 분배표 (PRIZE POOL 카드 아래) */}
+      {/* 사이드 정보 — 2026-05-23 PM 정정: 모바일 세로 최적화.
+          기존: 맨 하단 3열 grid + 분배표 별도 → 모바일 폭 360~430px에서 어색.
+          정정: PRIZE POOL 거대 단일 카드 (그라데이션 + 큰 폰트) + PLAYERS/LATE 컴팩트 2열.
+                distribution 모드는 PRIZE POOL 카드 안에 상위 3등 가로 스크롤. */}
       {(() => {
         const mode: PrizePoolMode = resolvePrizePoolMode(display.prizePoolMode, display.showPrizePool);
         const showPrize = mode !== 'hidden';
@@ -1466,9 +1453,84 @@ function MobilePortraitLayout({
         const ps = resolvePayoutStructure(session.payoutStructure);
         const payouts = mode === 'distribution' ? computePayoutsFromStructure(ps, resolveTotalEntries(session)) : [];
         const amounts = mode === 'distribution' ? computePayoutAmounts(session.prizePool ?? 0, payouts) : [];
+        const accent = display.accentColor;
         return (
           <>
-            <div className={`mt-3 grid gap-2 ${showPrize ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {/* PRIZE POOL 거대 카드 — 세로 모드 전용 (showPrize일 때만) */}
+            {showPrize && (
+              <div
+                className="mt-3 rounded-xl px-4 py-3 border backdrop-blur-sm relative overflow-hidden"
+                style={{
+                  background: `linear-gradient(135deg, ${accent}1A 0%, rgba(0,0,0,0.55) 60%)`,
+                  borderColor: `${accent}40`,
+                }}
+                aria-label="프라이즈 풀"
+              >
+                {/* 라벨 */}
+                <div
+                  className="text-[10px] tracking-[0.3em] font-extrabold mb-1 flex items-center gap-1.5"
+                  style={{ color: accent, opacity: 0.95 }}
+                >
+                  <span>💰</span>
+                  <span>PRIZE POOL</span>
+                </div>
+                {/* 거대 금액 */}
+                <div
+                  className="font-mono font-extrabold tabular-nums leading-none"
+                  style={{
+                    fontSize: 'clamp(26px, 8vw, 38px)',
+                    color: display.textColor,
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
+                </div>
+                {/* 분배표 — distribution 모드만 (상위 3등, 그 외 +N등 더) */}
+                {mode === 'distribution' && amounts.length > 0 && (
+                  <div
+                    className="mt-2.5 pt-2.5 flex items-stretch gap-1.5 border-t"
+                    style={{ borderColor: 'rgba(255,255,255,0.1)' }}
+                  >
+                    {amounts.slice(0, 3).map((a) => (
+                      <div
+                        key={a.rank}
+                        className="flex-1 rounded-md px-2 py-1.5 text-center"
+                        style={{
+                          background: 'rgba(0,0,0,0.35)',
+                          border: `1px solid ${accent}22`,
+                        }}
+                      >
+                        <div
+                          className="text-[9px] font-extrabold tracking-[0.15em] opacity-75"
+                          style={{ color: display.textColor }}
+                        >
+                          {a.rank}등
+                        </div>
+                        <div
+                          className="font-mono font-extrabold tabular-nums leading-tight mt-0.5"
+                          style={{
+                            color: display.blindsColor,
+                            fontSize: 'clamp(11px, 3.2vw, 14px)',
+                          }}
+                        >
+                          {fmtPrizeDisplay(a.amount, unit) || '—'}
+                        </div>
+                      </div>
+                    ))}
+                    {amounts.length > 3 && (
+                      <div
+                        className="self-center text-[9px] font-bold opacity-60 pl-1"
+                        style={{ color: display.textColor }}
+                      >
+                        +{amounts.length - 3}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* PLAYERS + LATE REG — 2열 컴팩트 */}
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <CompactStat
                 label="PLAYERS"
                 value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
@@ -1479,14 +1541,6 @@ function MobilePortraitLayout({
                 }
                 color={display.textColor}
               />
-              {showPrize && (
-                <CompactStat
-                  label="PRIZE POOL"
-                  value={session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
-                  sub=""
-                  color={display.textColor}
-                />
-              )}
               <CompactStat
                 label="LATE REG"
                 value={lateRegDisplay}
@@ -1496,42 +1550,6 @@ function MobilePortraitLayout({
                 accentColor={display.accentColor}
               />
             </div>
-            {/* 분배표 — distribution 모드에서만 (모바일 세로에선 한 줄당 2등씩 2열) */}
-            {mode === 'distribution' && amounts.length > 0 && (
-              <div
-                className="mt-2 rounded-lg px-2.5 py-2 border backdrop-blur-sm"
-                style={{
-                  background: 'rgba(0,0,0,0.45)',
-                  borderColor: 'rgba(255,255,255,0.1)',
-                }}
-              >
-                <div
-                  className="text-[8px] tracking-[0.25em] mb-1 font-extrabold opacity-70"
-                  style={{ color: display.textColor }}
-                >
-                  💰 DISTRIBUTION
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                  {amounts.slice(0, 6).map((a) => (
-                    <div
-                      key={a.rank}
-                      className="text-[10px] font-mono flex justify-between leading-tight"
-                      style={{ color: display.textColor }}
-                    >
-                      <span className="font-bold">{a.rank}등</span>
-                      <span style={{ color: display.blindsColor }}>
-                        {fmtPrizeDisplay(a.amount, unit) || '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {amounts.length > 6 && (
-                  <div className="text-[8px] mt-0.5 opacity-50" style={{ color: display.textColor }}>
-                    +{amounts.length - 6}등 더
-                  </div>
-                )}
-              </div>
-            )}
           </>
         );
       })()}
@@ -1834,10 +1852,11 @@ function MobileLandscapeLayout({
 
   return (
     <div className="relative flex-1 flex flex-col px-3 pt-2 pb-2 min-h-0">
-      {/* 본문 3분할 grid — 좌 25% / 중 50% / 우 25% */}
+      {/* 본문 3분할 grid — 2026-05-23 정정: 우측 PRIZE POOL 거대 패널 위해 우측 폭 확장
+          좌 0.85fr / 중 2fr / 우 1.4fr (좌 ~21% / 중 ~50% / 우 ~29%) */}
       <div
         className="flex-1 grid items-stretch gap-3 min-h-0"
-        style={{ gridTemplateColumns: '1fr 2fr 1fr' }}
+        style={{ gridTemplateColumns: '0.85fr 2fr 1.4fr' }}
       >
         {/* ─── 좌: 토너 정보 ─── */}
         <div className="flex flex-col justify-center gap-2 min-w-0">
@@ -2033,66 +2052,128 @@ function MobileLandscapeLayout({
           )}
         </div>
 
-        {/* ─── 우: 보조 정보 — 2026-05-23 정정: prizePoolMode 3 모드 분기 ─── */}
+        {/* ─── 우: 2026-05-23 PM 정정 — PRIZE POOL 거대 사이드 패널.
+              기존: PLAYERS / PRIZE POOL / LATE REG 3단 CompactStat (시인성 ↓, 중앙 침범)
+              정정: 우측 컬럼 전체를 PRIZE POOL 거대 카드 + 상단에 PLAYERS·LATE 컴팩트 1줄
+                    - 그라데이션 배경(accentColor)
+                    - 거대 폰트 (16~22vw)
+                    - distribution 모드면 카드 안에 상위 6등 표 정렬
+                    - showPrize=false면 PLAYERS/LATE만 큰 카드 2개 ─── */}
         <div className="flex flex-col justify-center gap-2 min-w-0">
-          <CompactStat
-            label="PLAYERS"
-            value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
-            sub={
-              resolveRebuysCount(session) > 0
-                ? `${session.tablesRemaining}테이블 · 리바인 ${resolveRebuysCount(session)}`
-                : `${session.tablesRemaining}테이블`
-            }
-            color={display.textColor}
-          />
           {(() => {
             const mode: PrizePoolMode = resolvePrizePoolMode(display.prizePoolMode, display.showPrizePool);
-            if (mode === 'hidden') return null;
+            const showPrize = mode !== 'hidden';
             const unit = session.prizeDisplayUnit ?? 'ticket';
             const ps = resolvePayoutStructure(session.payoutStructure);
             const payouts = mode === 'distribution' ? computePayoutsFromStructure(ps, resolveTotalEntries(session)) : [];
             const amounts = mode === 'distribution' ? computePayoutAmounts(session.prizePool ?? 0, payouts) : [];
+            const accent = display.accentColor;
             return (
               <>
-                <CompactStat
-                  label="PRIZE POOL"
-                  value={
-                    session.prizePool > 0
-                      ? fmtPrizeDisplay(session.prizePool, unit)
-                      : '—'
-                  }
-                  sub=""
-                  color={display.textColor}
-                />
-                {mode === 'distribution' && amounts.length > 0 && (
+                {/* 상단: PLAYERS + LATE REG 컴팩트 2열 — PRIZE POOL에 자리 양보 */}
+                <div className="grid grid-cols-2 gap-2 flex-shrink-0">
+                  <CompactStat
+                    label="PLAYERS"
+                    value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
+                    sub={
+                      resolveRebuysCount(session) > 0
+                        ? `${session.tablesRemaining}T · 리바인 ${resolveRebuysCount(session)}`
+                        : `${session.tablesRemaining}T`
+                    }
+                    color={display.textColor}
+                  />
+                  <CompactStat
+                    label="LATE REG"
+                    value={lateRegDisplay}
+                    sub={lateClosed ? '' : '남음'}
+                    color={display.textColor}
+                    highlight={!lateClosed && lateMin <= 5}
+                    accentColor={display.accentColor}
+                  />
+                </div>
+
+                {/* PRIZE POOL 거대 사이드 패널 — showPrize일 때만 */}
+                {showPrize && (
                   <div
-                    className="rounded-lg px-2 py-1.5 border backdrop-blur-sm"
+                    className="flex-1 rounded-2xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0"
                     style={{
-                      background: 'rgba(0,0,0,0.45)',
-                      borderColor: 'rgba(255,255,255,0.10)',
+                      background: `linear-gradient(135deg, ${accent}22 0%, rgba(0,0,0,0.6) 70%)`,
+                      borderColor: `${accent}50`,
+                      boxShadow: `0 0 24px ${accent}1A inset`,
                     }}
+                    aria-label="프라이즈 풀"
                   >
+                    {/* 라벨 */}
                     <div
-                      className="text-[8px] tracking-[0.25em] mb-0.5 font-extrabold opacity-70"
-                      style={{ color: display.textColor }}
+                      className="text-[10px] tracking-[0.32em] font-extrabold flex items-center gap-1.5 flex-shrink-0"
+                      style={{ color: accent, opacity: 0.95 }}
                     >
-                      💰 DISTRIBUTION
+                      <span>💰</span>
+                      <span>PRIZE POOL</span>
                     </div>
-                    {amounts.slice(0, 5).map((a) => (
+                    {/* 거대 금액 */}
+                    <div
+                      className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
+                      style={{
+                        fontSize: 'clamp(30px, 5vw, 56px)',
+                        color: display.textColor,
+                        letterSpacing: '-0.03em',
+                        textShadow: `0 2px 12px ${accent}55`,
+                      }}
+                    >
+                      {session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
+                    </div>
+                    {/* 분배표 — distribution 모드만 (가로 모드 우측 패널: 상위 6등 표 형태) */}
+                    {mode === 'distribution' && amounts.length > 0 && (
                       <div
-                        key={a.rank}
-                        className="text-[10px] font-mono flex justify-between leading-tight"
-                        style={{ color: display.textColor }}
+                        className="mt-3 pt-2.5 border-t flex-1 min-h-0 overflow-hidden flex flex-col"
+                        style={{ borderColor: 'rgba(255,255,255,0.12)' }}
                       >
-                        <span className="font-bold">{a.rank}등</span>
-                        <span style={{ color: display.blindsColor }}>
-                          {fmtPrizeDisplay(a.amount, unit) || '—'}
-                        </span>
-                      </div>
-                    ))}
-                    {amounts.length > 5 && (
-                      <div className="text-[8px] mt-0.5 opacity-50" style={{ color: display.textColor }}>
-                        +{amounts.length - 5}등 더
+                        <div
+                          className="text-[9px] tracking-[0.25em] font-extrabold opacity-65 mb-1.5 flex-shrink-0"
+                          style={{ color: display.textColor }}
+                        >
+                          DISTRIBUTION
+                        </div>
+                        <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-0.5">
+                          {amounts.slice(0, 6).map((a) => (
+                            <div
+                              key={a.rank}
+                              className="font-mono flex items-baseline justify-between rounded px-1.5 py-0.5"
+                              style={{
+                                color: display.textColor,
+                                background: a.rank === 1 ? `${accent}18` : 'transparent',
+                              }}
+                            >
+                              <span
+                                className="font-extrabold tabular-nums"
+                                style={{
+                                  fontSize: 'clamp(11px, 1.4vw, 14px)',
+                                  color: a.rank === 1 ? accent : display.textColor,
+                                }}
+                              >
+                                {a.rank}등
+                              </span>
+                              <span
+                                className="tabular-nums font-bold"
+                                style={{
+                                  fontSize: 'clamp(11px, 1.5vw, 15px)',
+                                  color: display.blindsColor,
+                                }}
+                              >
+                                {fmtPrizeDisplay(a.amount, unit) || '—'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        {amounts.length > 6 && (
+                          <div
+                            className="text-[9px] mt-1 opacity-55 flex-shrink-0"
+                            style={{ color: display.textColor }}
+                          >
+                            +{amounts.length - 6}등 더
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2100,14 +2181,6 @@ function MobileLandscapeLayout({
               </>
             );
           })()}
-          <CompactStat
-            label="LATE REG"
-            value={lateRegDisplay}
-            sub={lateClosed ? '' : '남음'}
-            color={display.textColor}
-            highlight={!lateClosed && lateMin <= 5}
-            accentColor={display.accentColor}
-          />
         </div>
       </div>
 
@@ -2389,30 +2462,33 @@ function CompactStat({
 }
 
 /**
- * BlindStructurePanel — 2026-05-23 PM 정정.
+ * BlindStructurePanel — 2026-05-23 PM 정정 (10레벨 확장 + 사이즈 키움).
  *
  * 사용자 정정 (2026-05-23):
- *   "스트럭쳐가 현재는 약 15레벨정도의 스트럭쳐가 나타나는데 5레벨정도만 나타나면된다.
- *    스크롤도 필요없어. 5레벨정도만 잘보이게 타이머 화면과 잘어울리는 스타일로."
+ *   "화면의 좌측 스트럭쳐 표시를 10개로 늘려주고 사이즈를 조금더 키우면 좋겠어.
+ *    세로모드에서는 보이지 않아도된다."
  *
- *   → 노출 범위: 현재 -1, 현재, +1, +2, +3 (정확히 5줄, 단 break도 한 줄로 계산)
- *   → overflow hidden 강제, scrollIntoView 폐기, max-height fit-content
+ *   → 노출 범위: 현재 -2, 현재, +1 ~ +7 (정확히 10줄, break도 한 줄로 계산)
+ *   → overflow hidden 강제, 스크롤 없음
+ *   → 폰트/패딩 키움 (가독성 우선)
+ *   → portrait variant는 호출부에서 mount 제외
  *
  * 디자인:
  *   ┌──────────────────────────┐
- *   │ 📋 STRUCTURE              │ ← 헤더 (컴팩트)
+ *   │ 📋 STRUCTURE              │ ← 헤더 (조금 큼)
  *   ├──────────────────────────┤
- *   │ ✓ Lv 4   200 / 400        │ ← 직전 (페이드)
- *   │ ▶ Lv 5   300 / 600        │ ← 현재 (배경+테두리+bold)
+ *   │ ✓ Lv 3   100 / 200        │ ← -2 (페이드)
+ *   │ ✓ Lv 4   200 / 400        │ ← -1 (페이드)
+ *   │ ▶ Lv 5   300 / 600        │ ← 현재 (배경+테두리+bold+scale)
  *   │   Lv 6   500 / 1000       │ ← 다음
- *   │   Lv 7   800 / 1600       │ ← 다음
- *   │ ☕ 휴식 10분                │ ← break
+ *   │   ...                      │
+ *   │   Lv 12  4000 / 8000      │ ← +7
  *   └──────────────────────────┘
  *
- * Size variant: 'desktop' | 'landscape' | 'portrait' — 폰트/간격 자동 조절.
+ * Size variant: 'desktop' | 'landscape' — 폰트/간격 자동 조절.
  * Empty handling: structure 비면 null 반환 (mount 안 함).
  */
-const VISIBLE_LEVELS_AROUND_CURRENT = 5; // 직전 1 + 현재 1 + 다음 3
+const VISIBLE_LEVELS_AROUND_CURRENT = 10; // 직전 2 + 현재 1 + 다음 7
 
 function BlindStructurePanel({
   structure,
@@ -2423,31 +2499,31 @@ function BlindStructurePanel({
   structure: { level: number; sb: number; bb: number; ante: number; durationSec: number; isBreak?: boolean }[] | undefined;
   currentLevel: number;
   display: TimerDisplaySettings;
-  variant: 'desktop' | 'landscape' | 'portrait';
+  variant: 'desktop' | 'landscape';
 }) {
   if (!structure || structure.length === 0) return null;
 
-  // 5레벨 슬라이딩 윈도우 계산 — 현재 -1, 현재, +1, +2, +3.
-  // current가 index 0이면 [0, 1, 2, 3, 4] / current가 마지막이면 [-4, -3, -2, -1, 0] 위치 조정.
+  // 10레벨 슬라이딩 윈도우 계산 — 현재 -2, 현재, +1 ~ +7.
+  // current가 index 0이면 [0..9] / current가 마지막이면 마지막 10개 위치 조정.
   const currentIdx = structure.findIndex((lv) => lv.level === currentLevel);
   // currentLevel이 못 찾으면 첫 인덱스 fallback
   const cIdx = currentIdx >= 0 ? currentIdx : 0;
-  // start = cIdx - 1, end = cIdx + 4 (총 5개) — 경계 clamp
-  let start = Math.max(0, cIdx - 1);
+  // start = cIdx - 2, end = cIdx + 8 (총 10개) — 경계 clamp
+  let start = Math.max(0, cIdx - 2);
   let end = Math.min(structure.length, start + VISIBLE_LEVELS_AROUND_CURRENT);
-  // end가 끝까지 못 채우면 start 앞으로 당김 (5개 유지)
+  // end가 끝까지 못 채우면 start 앞으로 당김 (10개 유지)
   if (end - start < VISIBLE_LEVELS_AROUND_CURRENT && start > 0) {
     start = Math.max(0, end - VISIBLE_LEVELS_AROUND_CURRENT);
   }
   const visible = structure.slice(start, end);
 
-  // variant별 사이즈/패딩 결정
+  // variant별 사이즈/패딩 결정 — 사용자 정정: 사이즈 키움
   const headerSize =
-    variant === 'desktop' ? 'text-xs px-3 py-2' : variant === 'landscape' ? 'text-[10px] px-2 py-1.5' : 'text-[10px] px-2 py-1';
+    variant === 'desktop' ? 'text-sm px-4 py-2.5' : 'text-xs px-2.5 py-2';
   const rowSize =
-    variant === 'desktop' ? 'px-3 py-1.5 text-sm' : variant === 'landscape' ? 'px-2 py-1 text-[11px]' : 'px-2 py-1 text-[11px]';
+    variant === 'desktop' ? 'px-3 py-2 text-base' : 'px-2.5 py-1.5 text-[13px]';
   const panelWidth =
-    variant === 'desktop' ? 240 : variant === 'landscape' ? '100%' : '100%';
+    variant === 'desktop' ? 280 : '100%';
   const accent = display.accentColor;
   const blinds = display.blindsColor;
   const fg = display.textColor;
@@ -2460,20 +2536,26 @@ function BlindStructurePanel({
         borderColor: 'rgba(255,255,255,0.12)',
         width: panelWidth,
       }}
-      aria-label="블라인드 스트럭쳐 (5레벨)"
+      aria-label="블라인드 스트럭쳐 (10레벨)"
     >
       {/* 헤더 */}
       <div
-        className={`${headerSize} font-extrabold tracking-[0.2em] border-b flex-shrink-0`}
+        className={`${headerSize} font-extrabold tracking-[0.2em] border-b flex-shrink-0 flex items-center justify-between`}
         style={{
           borderColor: 'rgba(255,255,255,0.1)',
           color: fg,
           background: 'rgba(0,0,0,0.35)',
         }}
       >
-        📋 STRUCTURE
+        <span>📋 STRUCTURE</span>
+        <span
+          className="tabular-nums opacity-60"
+          style={{ fontSize: variant === 'desktop' ? 11 : 9, letterSpacing: '0.1em' }}
+        >
+          Lv {currentLevel} / {structure.length}
+        </span>
       </div>
-      {/* 컴팩트 5레벨 — 스크롤 없음 (사용자 정정: "스크롤도 필요없어") */}
+      {/* 컴팩트 10레벨 — 스크롤 없음 */}
       <div className="overflow-hidden">
         {visible.map((lvl) => {
           const isCurrent = lvl.level === currentLevel;
@@ -2508,13 +2590,18 @@ function BlindStructurePanel({
                 fontWeight: rowFontWeight,
                 transform,
                 transformOrigin: 'left center',
-                margin: '2px 4px',
-                borderRadius: 6,
+                margin: '3px 5px',
+                borderRadius: 8,
               }}
             >
               <span
-                className="w-3 text-center text-xs"
-                style={{ color: markerColor, opacity: isCurrent ? 1 : 0.85 }}
+                className="text-center"
+                style={{
+                  color: markerColor,
+                  opacity: isCurrent ? 1 : 0.85,
+                  width: variant === 'desktop' ? 16 : 14,
+                  fontSize: variant === 'desktop' ? 14 : 12,
+                }}
                 aria-hidden
               >
                 {marker}
@@ -2530,12 +2617,22 @@ function BlindStructurePanel({
                 </>
               ) : (
                 <>
-                  <span className="font-bold tabular-nums" style={{ minWidth: 38, opacity: 0.85 }}>
+                  <span
+                    className="font-bold tabular-nums"
+                    style={{
+                      minWidth: variant === 'desktop' ? 46 : 40,
+                      opacity: 0.85,
+                    }}
+                  >
                     Lv {lvl.level}
                   </span>
                   <span
                     className="tabular-nums"
-                    style={{ color: isCurrent ? blinds : blinds, opacity: isCurrent ? 1 : 0.9, marginLeft: 'auto' }}
+                    style={{
+                      color: blinds,
+                      opacity: isCurrent ? 1 : 0.9,
+                      marginLeft: 'auto',
+                    }}
                   >
                     {lvl.sb.toLocaleString()}
                     <span style={{ opacity: 0.4 }}>/</span>
