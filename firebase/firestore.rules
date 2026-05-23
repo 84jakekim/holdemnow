@@ -217,10 +217,33 @@ service cloud.firestore {
           || get(/databases/$(database)/documents/stores/$(request.resource.data.storeId)).data.get('isDemo', false) == true
         );
       // platform_admin은 본사 모니터링 페이지에서 전국 LIVE를 직접 제어 가능 (긴급 정지·종료·시간 조정).
+      // 2026-05-23: 인증된 일반 사용자도 advanceLevelIfDue transaction을 위해 제한적 update 허용 —
+      //   currentLevel이 정확히 +1 증가 + status='running' 유지 + nextLevelAt 도래 시점이어야 함.
+      //   이 케이스만 클라(시청자) advance를 허용하고, 그 외엔 owner/member/platform_admin만 가능.
+      //   또는 finishingAt 박는 마지막 레벨 케이스 — currentLevel 동일 + finishingAt 설정.
       allow update: if isSignedIn()
-        && (isStoreOwner(resource.data.storeId)
-            || isStoreMember(resource.data.storeId)
-            || isPlatformAdmin());
+        && (
+          // 기존 권한자 — 자유 update
+          isStoreOwner(resource.data.storeId)
+          || isStoreMember(resource.data.storeId)
+          || isPlatformAdmin()
+          // 일반 사용자 — advanceLevelIfDue transaction만 허용
+          || (
+            resource.data.status == 'running'
+            && request.resource.data.status == 'running'
+            && resource.data.get('nextLevelAt', null) != null
+            && request.time >= resource.data.nextLevelAt
+            && (
+              // 케이스 A: 다음 레벨로 +1
+              (request.resource.data.currentLevel == resource.data.currentLevel + 1
+                && request.resource.data.get('finishingAt', null) == resource.data.get('finishingAt', null))
+              // 케이스 B: 마지막 레벨 finishingAt 박기 (currentLevel 동일 + finishingAt newly set)
+              || (request.resource.data.currentLevel == resource.data.currentLevel
+                && resource.data.get('finishingAt', null) == null
+                && request.resource.data.get('finishingAt', null) != null)
+            )
+          )
+        );
       allow delete: if isSignedIn()
         && (isStoreOwner(resource.data.storeId)
             || isStoreMember(resource.data.storeId)

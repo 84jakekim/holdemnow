@@ -19,6 +19,7 @@ import {
   fmtTime,
   computeLateRegMinutes,
   useLiveCountdown,
+  advanceLevelIfDue,
 } from '@/lib/live';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric } from '@/lib/analytics';
@@ -169,6 +170,8 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
         if (blindUpFiredCycleRef.current !== cycleKey) {
           blindUpFiredCycleRef.current = cycleKey;
           playBlindUp();
+          // 클라 transaction으로 서버 currentLevel 즉시 advance — cron 대기 제거.
+          void advanceLevelIfDue(session.id, lv).catch(() => {});
         }
       }
     }

@@ -102,6 +102,15 @@ export interface LiveSession {
    *  사장이 도중에 템플릿 토글을 바꿔도 진행 중 세션엔 영향 없음.
    *  매장 TV 우측 stat의 PRIZE POOL 카드 노출 여부. 없으면 true (기존 호환). */
   showPrizePool?: boolean;
+  /** 다음 레벨이 시작될 예정 절대 시각 — 2026-05-23.
+   *  LIVE 첫 시작 / 매 레벨 advance / pause→resume 시점에 갱신.
+   *  클라가 sec=0 도달 시 advanceLevelIfDue로 transaction 진행. 서버 cron은 이 시각이
+   *  지난 세션을 catch-up. 마지막 레벨이면 null (autoStopFinishedSessions 영역).
+   *
+   *  결정 근거: 기존 cron 1분 평균 30초 지연 → 사운드 발사가 30초 늦음. 클라가 직접
+   *  transaction으로 doc을 advance하면 즉시 currentLevel 변경 → onSnapshot 리스너가
+   *  바로 다음 레벨 TTS 발사. cron은 fallback. */
+  nextLevelAt?: Timestamp | null;
 }
 
 /** 마지막 레벨 종료 후 자동 정리까지의 그레이스(초). */
@@ -458,6 +467,8 @@ export async function startLiveSession(
     currentLevel: first.level,
     levelSecondsLeft: first.durationSec,
     levelEndsAt: null,
+    // 2026-05-23 nextLevelAt 도입 — ready 상태에선 null. togglePauseSession이 ready→running 전환 시 박음.
+    nextLevelAt: null,
     smallBlind: first.sb,
     bigBlind: first.bb,
     ante: first.ante,
@@ -637,6 +648,8 @@ export async function togglePauseSession(s: LiveSession, currentSecondsLeft: num
       pausedAt: null,
       levelSecondsLeft: currentSecondsLeft,
       levelEndsAt: deadlineFromNow(currentSecondsLeft),
+      // 2026-05-23 첫 시작 시 다음 레벨 시각 = 첫 레벨 duration 후
+      nextLevelAt: deadlineFromNow(currentSecondsLeft),
       startedAt: serverTimestamp(),
     });
     return;
@@ -652,6 +665,8 @@ export async function togglePauseSession(s: LiveSession, currentSecondsLeft: num
       totalPausedMs: (s.totalPausedMs ?? 0) + additionalPaused,
       levelSecondsLeft: currentSecondsLeft,
       levelEndsAt: deadlineFromNow(currentSecondsLeft),
+      // 2026-05-23 resume 시 다음 레벨 시각도 재계산 (paused 동안 흐른 시간 보정)
+      nextLevelAt: deadlineFromNow(currentSecondsLeft),
     });
     return;
   }
@@ -662,6 +677,8 @@ export async function togglePauseSession(s: LiveSession, currentSecondsLeft: num
     pausedAt: serverTimestamp() as unknown as Timestamp,
     levelSecondsLeft: currentSecondsLeft,
     levelEndsAt: null,
+    // paused 동안엔 nextLevelAt 의미 없음 — null로 둬서 cron이 잘못 advance하지 않게.
+    nextLevelAt: null,
   });
 }
 
@@ -723,11 +740,102 @@ export async function goToLevelInSession(
     ante: target.ante,
     levelSecondsLeft: target.durationSec,
     levelEndsAt: s.status === 'running' ? deadlineFromNow(target.durationSec) : null,
+    // 2026-05-23 점프 시 nextLevelAt도 타겟 레벨 끝나는 시각으로 갱신
+    nextLevelAt: s.status === 'running' ? deadlineFromNow(target.durationSec) : null,
     // Deterministic timeline 재정렬 — 핵심 fix
     totalStartedAt: newTotalStartedTs,
     // blindStructureLocked가 비어있으면 지금 박아준다 (이후 일관성 보장)
     ...(hasTimeline ? {} : { blindStructureLocked: structure }),
   });
+}
+
+/**
+ * 2026-05-23 — 클라이언트 측 즉시 레벨 진행 transaction.
+ *
+ * 배경: 기존엔 cron(1분 주기, 평균 30초 지연)이 currentLevel을 올렸기 때문에
+ *   sec=0 도달 후 다음 레벨 TTS/사운드가 평균 30초 늦게 발사됨.
+ *   클라가 직접 transaction으로 doc을 advance하면 즉시 onSnapshot 리스너가 트리거되어
+ *   다음 레벨로 화면 + 사운드가 동시에 넘어감.
+ *
+ * 동시성: runTransaction으로 atomically 검증·증가.
+ *   - currentLevel === expectedLevel (다른 클라/cron이 이미 처리했으면 skip)
+ *   - nextLevelAt이 이미 도래 (도래 안 했으면 skip)
+ *   - 마지막 레벨이면 finishingAt 박음, currentLevel은 그대로 유지
+ *     (autoStopFinishedSessions cron이 그레이스 후 정리)
+ *   - 마지막이 아니면 currentLevel += 1, nextLevelAt = now + 다음 레벨 durationSec
+ *
+ * 보안: firestore.rules에서 `request.resource.data.currentLevel == resource.data.currentLevel + 1`
+ *   강제 — 임의 사용자가 임의 레벨로 점프 불가능.
+ *
+ * @returns advance에 성공했으면 true. 이미 다른 주체가 처리/조건 미충족이면 false.
+ */
+export async function advanceLevelIfDue(
+  sessionId: string,
+  expectedLevel: number,
+): Promise<boolean> {
+  const ref = doc(liveSessionsCol(), sessionId);
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return false;
+      const data = snap.data() as Omit<LiveSession, 'id'>;
+
+      // 조건 1: 다른 주체가 이미 advance했으면 skip
+      if (data.currentLevel !== expectedLevel) return false;
+
+      // 조건 2: 진행 중인 세션이어야 함
+      if (data.status !== 'running') return false;
+
+      // 조건 3: 이미 finishing이면 skip
+      if (data.finishingAt) return false;
+
+      // 조건 4: nextLevelAt이 도래해야 함 (없으면 timeline 기반 fallback)
+      const now = Date.now();
+      const nextMs = data.nextLevelAt?.toMillis?.();
+      if (typeof nextMs === 'number' && nextMs > now) return false;
+
+      // structure에서 expectedLevel과 다음 레벨 찾기
+      const structure = (data.blindStructureLocked && data.blindStructureLocked.length > 0)
+        ? data.blindStructureLocked
+        : data.blindStructure;
+      if (!structure || structure.length === 0) return false;
+
+      const idx = structure.findIndex((l) => l.level === expectedLevel);
+      if (idx < 0) return false;
+
+      // 마지막 레벨이면 finishingAt만 박음 (currentLevel은 유지 — autoStopFinishedSessions가 정리)
+      if (idx === structure.length - 1) {
+        tx.update(ref, {
+          finishingAt: serverTimestamp(),
+          levelSecondsLeft: 0,
+          levelEndsAt: null,
+          nextLevelAt: null,
+          updatedAt: serverTimestamp(),
+        });
+        return true;
+      }
+
+      // 다음 레벨로 advance
+      const next = structure[idx + 1];
+      tx.update(ref, {
+        currentLevel: next.level,
+        smallBlind: next.sb,
+        bigBlind: next.bb,
+        ante: next.ante,
+        levelSecondsLeft: next.durationSec,
+        levelEndsAt: Timestamp.fromMillis(now + next.durationSec * 1000),
+        nextLevelAt: Timestamp.fromMillis(now + next.durationSec * 1000),
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    });
+  } catch (e) {
+    // 동시성 충돌 / 권한 / 네트워크 — 모두 false로 보고 호출자는 다음 tick에서 재시도하지 않음
+    // (다음 tick에선 currentLevel이 이미 expectedLevel과 다를 것이므로 skip된다)
+    // eslint-disable-next-line no-console
+    console.warn(`[advanceLevelIfDue] tx failed sessionId=${sessionId} expected=${expectedLevel}`, e);
+    return false;
+  }
 }
 
 /**

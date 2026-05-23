@@ -17,6 +17,7 @@ import {
   stopLiveSession,
   resolveRebuysCount,
   resolveTotalEntries,
+  advanceLevelIfDue,
 } from '@/lib/live';
 import {
   type TimerDisplaySettings,
@@ -333,6 +334,9 @@ export default function DisplayPage({
         if (blindUpFiredCycleRef.current !== cycleKey) {
           blindUpFiredCycleRef.current = cycleKey;
           playBlindUp();
+          // 서버 currentLevel을 클라 transaction으로 즉시 +1 — autoAdvanceLevel cron
+          // (1분 주기) 의존 제거. 권한·동시성 충돌 시 false 반환, cron이 fallback 처리.
+          void advanceLevelIfDue(session.id, lv).catch(() => {});
         }
       }
     }
