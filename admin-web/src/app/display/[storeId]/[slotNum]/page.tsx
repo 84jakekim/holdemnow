@@ -787,36 +787,51 @@ export default function DisplayPage({
             {isCurrentBreak ? `BREAK · ${currentLevelObj?.level ?? ''}레벨` : `LEVEL ${session.currentLevel}`}
           </div>
 
-          {/* 거대 카운트다운 — display.timerScale로 매장 환경별 폰트 배율 (Phase 3) */}
-          <div
-            className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
-            style={{
-              fontSize: `clamp(${150 * (display.timerScale ?? 1)}px, ${18 * (display.timerScale ?? 1)}vw, ${280 * (display.timerScale ?? 1)}px)`,
-              letterSpacing: '-0.05em',
-              color: paused
-                ? '#A8A8A8'
-                : lowTime
-                ? display.accentColor
-                : isCurrentBreak
-                ? '#FFD166'
-                : display.timerColor,
-              transition: 'color 0.2s',
-            }}
-          >
-            {fmtTime(sec)}
-          </div>
+          {/* 거대 카운트다운 + 진행률 바 + 자막 — 동일 폭 컨테이너로 묶음 (자막 폭=타이머 폭).
+              2026-05-24 PM 자막 정책: 셋째 줄 marqueeText를 타이머 바로 아래에 좌→우로 흐름.
+              화면 전체 폭 X, 타이머 폭만. (inline-flex로 타이머 폭에 컨테이너 폭이 fit) */}
+          <div className="inline-flex flex-col items-stretch">
+            <div
+              className={`font-mono font-extrabold leading-none transition-colors text-center ${veryLow ? 'animate-pulse' : ''}`}
+              style={{
+                fontSize: `clamp(${150 * (display.timerScale ?? 1)}px, ${18 * (display.timerScale ?? 1)}vw, ${280 * (display.timerScale ?? 1)}px)`,
+                letterSpacing: '-0.05em',
+                color: paused
+                  ? '#A8A8A8'
+                  : lowTime
+                  ? display.accentColor
+                  : isCurrentBreak
+                  ? '#FFD166'
+                  : display.timerColor,
+                transition: 'color 0.2s',
+              }}
+            >
+              {fmtTime(sec)}
+            </div>
 
-          {/* 진행률 바 — 드래그로 시간 조절 (running/paused) */}
-          {(isRunning || paused) && currentDur > 0 && (
-            <DisplayDraggableProgressBar
-              session={session}
-              currentSeconds={sec}
-              currentDur={currentDur}
-              progress={progress}
-              barColor={lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor}
-              textColor={display.textColor}
-            />
-          )}
+            {/* 진행률 바 — 드래그로 시간 조절 (running/paused) */}
+            {(isRunning || paused) && currentDur > 0 && (
+              <DisplayDraggableProgressBar
+                session={session}
+                currentSeconds={sec}
+                currentDur={currentDur}
+                progress={progress}
+                barColor={lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor}
+                textColor={display.textColor}
+              />
+            )}
+
+            {/* 셋째 줄 — 자막 공지 (좌→우, 타이머 폭만). marqueeText 있을 때만 mount. */}
+            {display.marqueeText && display.marqueeText.trim().length > 0 && (
+              <TimerWidthMarquee
+                text={display.marqueeText}
+                color={display.marqueeColor}
+                fontSize={display.marqueeFontSize}
+                styleVariant={display.marqueeStyle}
+                speedSec={display.marqueeSpeedSec}
+              />
+            )}
+          </div>
 
           {/* 블라인드 (break 아닐 때만 표시) */}
           {!isCurrentBreak && (
@@ -1314,7 +1329,8 @@ function MobilePortraitLayout({
           {fmtTime(sec)}
         </div>
 
-        {/* 진행바 — 컴팩트 */}
+        {/* 진행바 + 자막 — 동일 폭 컨테이너 (max-w-xs).
+            2026-05-24 PM: 자막은 진행바 아래에 좌→우 흐름, 컨테이너 폭만. */}
         {(isRunning || paused) && currentDur > 0 && (
           <div className="mt-3 w-full max-w-xs">
             <div className="relative h-1.5 bg-white/15 rounded-full overflow-hidden">
@@ -1326,6 +1342,27 @@ function MobilePortraitLayout({
                 }}
               />
             </div>
+            {display.marqueeText && display.marqueeText.trim().length > 0 && (
+              <TimerWidthMarquee
+                text={display.marqueeText}
+                color={display.marqueeColor}
+                fontSize={Math.min(display.marqueeFontSize, 14)}
+                styleVariant={display.marqueeStyle}
+                speedSec={display.marqueeSpeedSec}
+              />
+            )}
+          </div>
+        )}
+        {/* 진행바가 없을 때(ready/완료) 도 자막은 보여줘야 함 — 좁은 폭으로 별도 mount */}
+        {!(isRunning || paused) && display.marqueeText && display.marqueeText.trim().length > 0 && (
+          <div className="mt-3 w-full max-w-xs">
+            <TimerWidthMarquee
+              text={display.marqueeText}
+              color={display.marqueeColor}
+              fontSize={Math.min(display.marqueeFontSize, 14)}
+              styleVariant={display.marqueeStyle}
+              speedSec={display.marqueeSpeedSec}
+            />
           </div>
         )}
 
@@ -1956,7 +1993,8 @@ function MobileLandscapeLayout({
             {fmtTime(sec)}
           </div>
           {/* 진행바 — 가로 전용 (사용자 요구: 드래그로 디테일 시간 조절).
-              canControl=true 일 때만 드래그 가능. 비권한자는 표시만. */}
+              canControl=true 일 때만 드래그 가능. 비권한자는 표시만.
+              2026-05-24 PM: 진행바 아래에 셋째 줄 자막 mount (중앙 컬럼 폭만, 좌→우). */}
           {(isRunning || paused) && currentDur > 0 && (
             <div className="mt-4 w-full max-w-2xl px-4">
               {canControl ? (
@@ -1985,6 +2023,27 @@ function MobileLandscapeLayout({
                   <span>{fmtTime(currentLevelObj.durationSec)}</span>
                 </div>
               )}
+              {display.marqueeText && display.marqueeText.trim().length > 0 && (
+                <TimerWidthMarquee
+                  text={display.marqueeText}
+                  color={display.marqueeColor}
+                  fontSize={Math.min(display.marqueeFontSize, 18)}
+                  styleVariant={display.marqueeStyle}
+                  speedSec={display.marqueeSpeedSec}
+                />
+              )}
+            </div>
+          )}
+          {/* 진행바가 없는 ready/완료 상태에서도 자막은 보여줘야 함 */}
+          {!(isRunning || paused) && display.marqueeText && display.marqueeText.trim().length > 0 && (
+            <div className="mt-4 w-full max-w-2xl px-4">
+              <TimerWidthMarquee
+                text={display.marqueeText}
+                color={display.marqueeColor}
+                fontSize={Math.min(display.marqueeFontSize, 18)}
+                styleVariant={display.marqueeStyle}
+                speedSec={display.marqueeSpeedSec}
+              />
             </div>
           )}
         </div>
@@ -2675,5 +2734,75 @@ function CtrlButton({
         </span>
       )}
     </button>
+  );
+}
+
+/**
+ * TimerWidthMarquee — 셋째 줄 자막 공지 (2026-05-24 PM 정책 부활).
+ *
+ * 위치/폭/방향 (사용자 명시):
+ *   - 위치: 타이머 컨테이너 바로 아래 (중앙 하단)
+ *   - 폭: 부모 컨테이너 폭 = 타이머 폭 (width: 100%). 화면 전체 폭 X.
+ *   - 방향: 좌→우 (텍스트가 좌측 밖에서 들어와 우측 밖으로 빠져나감).
+ *           translateX(-100%) → translateX(100%) keyframe.
+ *
+ * 사용자 옵션: text/color/fontSize/style/speedSec 모두 매장 prefs에서 직접 조작.
+ * 빈 텍스트는 호출 측에서 mount 자체를 막아야 함 (이 컴포넌트는 항상 mount 가정).
+ */
+function TimerWidthMarquee({
+  text,
+  color,
+  fontSize,
+  styleVariant,
+  speedSec,
+}: {
+  text: string;
+  color: string;
+  fontSize: number;
+  styleVariant: 'normal' | 'bold' | 'italic' | 'bold-italic';
+  speedSec: number;
+}) {
+  const bold = styleVariant.includes('bold');
+  const italic = styleVariant.includes('italic');
+  const safeSpeed = Math.max(5, Math.min(120, speedSec || 30));
+  return (
+    <div
+      className="overflow-hidden whitespace-nowrap mt-3 rounded-md relative"
+      style={{
+        background: 'rgba(0,0,0,0.45)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        padding: '6px 0',
+        width: '100%',
+      }}
+      aria-label="실시간 자막 공지"
+    >
+      <span
+        className="inline-block tv-marquee-ltr"
+        style={{
+          color,
+          fontSize,
+          fontWeight: bold ? 800 : 500,
+          fontStyle: italic ? 'italic' : 'normal',
+          animationDuration: `${safeSpeed}s`,
+          willChange: 'transform',
+          paddingLeft: 12,
+          paddingRight: 12,
+          letterSpacing: '0.01em',
+        }}
+      >
+        {text}
+      </span>
+      <style jsx>{`
+        @keyframes tv-marquee-ltr-scroll {
+          from { transform: translateX(-100%); }
+          to   { transform: translateX(100%); }
+        }
+        .tv-marquee-ltr {
+          animation-name: tv-marquee-ltr-scroll;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+      `}</style>
+    </div>
   );
 }

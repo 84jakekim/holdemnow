@@ -373,12 +373,12 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
 
           <div className="h-3" />
 
-          {/* 첫째 줄 — 게임 타이틀 */}
+          {/* 첫째 줄 — 토너먼트 제목 (상단 중앙) */}
           <TextLineEditor
-            badge="🎯 첫째 줄 — 게임 타이틀"
+            badge="🏆 첫째 줄 — 토너먼트 제목"
             subtitle="TV 화면 정중앙 상단 · 가장 큰 헤드라인"
             positionDiagram={<PositionDiagram active="title" />}
-            placeholder="예) 🎰 6/15 정기 토너 100K"
+            placeholder="예) 🎰 5/24 정기 토너 100K"
             text={settings.titleText}
             fontSize={settings.titleFontSize}
             color={settings.titleColor}
@@ -393,12 +393,12 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
 
           <div className="h-3" />
 
-          {/* 둘째 줄 — 게임 참고사항 */}
+          {/* 둘째 줄 — 토너 설명 (제목 바로 아래) */}
           <TextLineEditor
-            badge="📋 둘째 줄 — 게임 참고사항"
-            subtitle="타이틀 바로 아래 · 보조 정보 (중간 크기)"
+            badge="📝 둘째 줄 — 토너 설명"
+            subtitle="제목 바로 아래 · 부제 (GTD·리바인·휴식 정보)"
             positionDiagram={<PositionDiagram active="note" />}
-            placeholder="예) 리바이 3회까지 · 18:30 디너 제공"
+            placeholder="예) GTD 100만 · 리바인 3회 · 18:30 디너"
             text={settings.noteText}
             fontSize={settings.noteFontSize}
             color={settings.noteColor}
@@ -413,24 +413,45 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
 
           <div className="h-3" />
 
-          {/* 셋째 줄 — 하단 마퀴: 2026-05-24 PM 정정으로 TV 노출 폐기.
-              사용자 정정: "이 마퀴는 없애줘" (세로/가로 모두 마퀴가 화면 구도를 해침 + 중복 표시 버그).
-              에디터 UI는 deprecated 안내 카드로 대체. 데이터 모델은 backward compat 유지. */}
-          <div
-            className="rounded-lg px-3 py-2.5 text-[11px] leading-relaxed border"
-            style={{
-              background: 'rgba(148,163,184,0.10)',
-              color: '#475569',
-              borderColor: 'rgba(148,163,184,0.30)',
-            }}
-            aria-label="하단 마퀴 폐기 안내"
-          >
-            <div className="font-bold mb-1 text-slate-700">📢 셋째 줄 — 하단 마퀴 (폐기)</div>
-            <div>
-              2026-05-24부터 TV 화면 하단 마퀴 띠는 더 이상 표시되지 않습니다. 첫째·둘째 줄
-              (타이틀 / 참고사항)만 노출됩니다. 안내문은 둘째 줄(참고사항)에 작성해 주세요.
-            </div>
-          </div>
+          {/* 셋째 줄 — 실시간 자막 공지 (2026-05-24 PM 재정의로 부활).
+              사용자 정정: "중앙하단에 자막처럼 지나가는 실시간공지글로 설정.
+                            좌에서 우측으로 타이머 숫자 맨우측에서 맨좌측 숫자까지만 지나가는 구간."
+              ⇒ 폭: 타이머 컨테이너 폭만 (화면 전체 X)
+              ⇒ 방향: 좌→우 (translateX -100% → 0, 이전 우→좌와 반대)
+              ⇒ 위치: 진행률 바 아래 (중앙 하단). */}
+          <TextLineEditor
+            badge="📢 셋째 줄 — 자막 공지 (좌→우)"
+            subtitle="중앙 하단 · 타이머 폭 안에서만 좌→우로 흐름 · 비우면 표시 X"
+            positionDiagram={<PositionDiagram active="marquee" />}
+            placeholder="예) 디너 20:00 시작 · 휴식 5분 후"
+            text={settings.marqueeText}
+            fontSize={settings.marqueeFontSize}
+            color={settings.marqueeColor}
+            style={settings.marqueeStyle}
+            onTextChange={(v) => update('marqueeText', v)}
+            onFontSizeChange={(v) => update('marqueeFontSize', v)}
+            onColorChange={(v) => update('marqueeColor', v)}
+            onStyleChange={(v) => update('marqueeStyle', v)}
+            sizeMin={10}
+            sizeMax={32}
+            extra={
+              <div className="mt-3">
+                <FieldLabel
+                  label={`흐름 속도 — 한 바퀴 ${settings.marqueeSpeedSec}초`}
+                  hint="작을수록 빠름 (10초 빠름 ~ 60초 느림). 디폴트 30초."
+                />
+                <input
+                  type="range"
+                  min={10}
+                  max={60}
+                  step={1}
+                  value={settings.marqueeSpeedSec}
+                  onChange={(e) => update('marqueeSpeedSec', Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            }
+          />
         </Section>
 
         {/* 텍스트 — 기타 */}
@@ -709,11 +730,58 @@ function TimerPreview({ settings }: { settings: TimerDisplaySettings }) {
           <div className="text-[9px] tracking-[0.3em] mb-1" style={{ color: settings.textColor, opacity: 0.7 }}>
             LEVEL 4
           </div>
-          <div
-            className="font-mono font-extrabold leading-none"
-            style={{ color: settings.timerColor, fontSize: '56px', letterSpacing: '-0.04em' }}
-          >
-            {mm}:{ss}
+          {/* 타이머 컨테이너 — 자막의 폭 기준이 됨 (inline-block + 자식 자막이 width:100%) */}
+          <div className="inline-flex flex-col items-stretch">
+            <div
+              className="font-mono font-extrabold leading-none text-center"
+              style={{ color: settings.timerColor, fontSize: '56px', letterSpacing: '-0.04em' }}
+            >
+              {mm}:{ss}
+            </div>
+            {/* 진행률 바 — 자막의 폭 기준 */}
+            <div className="mt-1.5 h-1 bg-white/15 rounded-full overflow-hidden">
+              <div
+                className="h-full"
+                style={{ width: '54%', background: settings.blindsColor }}
+              />
+            </div>
+            {/* 셋째 줄 — 자막 (타이머 폭만, 좌→우, 미리보기) */}
+            {settings.marqueeText && (
+              <div
+                className="overflow-hidden whitespace-nowrap mt-1.5 rounded"
+                style={{
+                  background: 'rgba(0,0,0,0.35)',
+                  padding: '3px 0',
+                }}
+              >
+                <span
+                  className="inline-block preview-marquee-ltr"
+                  style={{
+                    color: settings.marqueeColor,
+                    fontSize: Math.min(settings.marqueeFontSize, 12),
+                    fontWeight: settings.marqueeStyle.includes('bold') ? 700 : 400,
+                    fontStyle: settings.marqueeStyle.includes('italic') ? 'italic' : 'normal',
+                    animationDuration: `${settings.marqueeSpeedSec}s`,
+                    willChange: 'transform',
+                    paddingLeft: 8,
+                    paddingRight: 8,
+                  }}
+                >
+                  {settings.marqueeText}
+                </span>
+                <style jsx>{`
+                  @keyframes preview-marquee-ltr-scroll {
+                    from { transform: translateX(-100%); }
+                    to   { transform: translateX(100%); }
+                  }
+                  .preview-marquee-ltr {
+                    animation-name: preview-marquee-ltr-scroll;
+                    animation-timing-function: linear;
+                    animation-iteration-count: infinite;
+                  }
+                `}</style>
+              </div>
+            )}
           </div>
           <div
             className="font-mono font-extrabold mt-2"
@@ -977,14 +1045,15 @@ function PositionDiagram({ active }: { active: 'title' | 'note' | 'marquee' }) {
           background: 'rgba(255,255,255,0.05)',
         }}
       />
-      {/* marquee slot — 하단 띠 */}
+      {/* marquee slot — 타이머 바로 아래, 타이머 폭(left/right 24%) 한정 (2026-05-24 부활) */}
       <div
         style={{
           position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: '4%',
-          height: '12%',
+          left: '24%',
+          right: '24%',
+          top: '72%',
+          height: '8%',
+          borderRadius: 2,
           background: isMarquee ? HIGHLIGHT : GHOST,
           boxShadow: isMarquee ? `0 0 6px ${HIGHLIGHT}` : undefined,
         }}
@@ -1053,7 +1122,7 @@ function PositionDiagramAll() {
           {/* timer ghost */}
           <div
             style={{
-              position: 'absolute', top: '46%', left: '24%', right: '24%', height: '24%',
+              position: 'absolute', top: '46%', left: '24%', right: '24%', height: '20%',
               borderRadius: 2, background: 'rgba(255,255,255,0.05)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 9, color: 'rgba(255,255,255,0.30)', fontWeight: 800,
@@ -1063,20 +1132,36 @@ function PositionDiagramAll() {
             18:30
           </div>
 
-          {/* marquee 영역 — 2026-05-24 정정으로 폐기 (TV 노출 X) */}
+          {/* marquee slot — 2026-05-24 부활. 위치는 타이머 바로 아래 (중앙 하단),
+              폭은 타이머 폭과 동일 (left/right 모두 24%). 화면 전체 폭 X. */}
+          <div
+            style={{
+              position: 'absolute', top: '70%', left: '24%', right: '24%', height: '7%',
+              borderRadius: 2, background: '#10B981', boxShadow: '0 0 6px #10B981',
+              overflow: 'hidden',
+            }}
+          />
+          <div style={{
+            position: 'absolute', top: '70%', right: '15%',
+            fontSize: 8, color: '#10B981', fontWeight: 800,
+          }}>📢 3</div>
         </div>
         <div className="flex-1 min-w-0 text-[10px] leading-relaxed space-y-1">
           <div className="flex items-center gap-1.5">
             <span style={{ width: 10, height: 10, background: '#FF1F8F', borderRadius: 2 }} />
-            <span className="font-bold text-gray-900">🎯 1. 게임 타이틀</span>
+            <span className="font-bold text-gray-900">🏆 1. 토너 제목</span>
             <span className="text-gray-500">— 정중앙 상단, 가장 크게</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span style={{ width: 10, height: 10, background: '#3B82F6', borderRadius: 2 }} />
-            <span className="font-bold text-gray-900">📋 2. 참고사항</span>
-            <span className="text-gray-500">— 타이틀 바로 아래</span>
+            <span className="font-bold text-gray-900">📝 2. 설명</span>
+            <span className="text-gray-500">— 제목 바로 아래</span>
           </div>
-          {/* 📢 3. 마퀴 — 2026-05-24 PM 정정으로 폐기 */}
+          <div className="flex items-center gap-1.5">
+            <span style={{ width: 10, height: 10, background: '#10B981', borderRadius: 2 }} />
+            <span className="font-bold text-gray-900">📢 3. 자막 공지</span>
+            <span className="text-gray-500">— 타이머 하단 · 좌→우 · 타이머 폭만</span>
+          </div>
         </div>
       </div>
     </div>
