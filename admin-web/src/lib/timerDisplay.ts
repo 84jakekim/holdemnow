@@ -34,6 +34,25 @@ import { stripUndefined } from './firestoreUtil';
 
 export type BackgroundType = 'solid' | 'gradient' | 'image';
 
+/**
+ * 우측 PRIZE POOL 표시 모드 — 2026-05-23 PM 단독 신설.
+ *
+ * 사용자 정책:
+ *   "프라이즈풀은 1등부터 아래순위까지 주는 방향도있지만 총 프라이즈풀만 표시되도록 가능해야한다.
+ *    예를들어 10만원 바인 10명참가, 프라이즈 50%적용시, 프라이즈풀 50티켓 표시."
+ *
+ *   3가지 모드:
+ *   - 'hidden': TV 우측 PRIZE POOL 카드 자체 mount 안 함
+ *   - 'total': "💰 PRIZE POOL 50T" 총액만 한 줄 (사용자 예시 — 디폴트)
+ *   - 'distribution': 총액 + 그 아래 분배표 "1등 30T / 2등 15T / 3등 5T"
+ *
+ * Backward compat:
+ *   기존 showPrizePool: boolean → prizePoolMode 미존재 시 resolvePrizePoolMode가 추론
+ *    - true/undefined → 'total'  (기존 동작 유지)
+ *    - false          → 'hidden'
+ */
+export type PrizePoolMode = 'hidden' | 'total' | 'distribution';
+
 export interface TimerDisplaySettings {
   /** 배경 유형 */
   backgroundType: BackgroundType;
@@ -129,9 +148,19 @@ export interface TimerDisplaySettings {
    *                   현재 레벨 강조(배경+테두리+bold), 완료 레벨 페이드, break 레벨 amber.
    *                   기본 true. 누락 시 true 추론 (resolveDisplayToggle).
    *  두 토글은 TournamentControlCenter > SessionTournamentControlBox에서 직접 조작 →
-   *  saveTimerDisplay로 즉시 저장 → onSnapshot으로 TV에 5초 안 반영. */
+   *  saveTimerDisplay로 즉시 저장 → onSnapshot으로 TV에 5초 안 반영.
+   *
+   *  ⚠ 2026-05-23 PM 정정:
+   *   showPrizePool은 deprecated 호환 필드로 남기되, 신규 prizePoolMode가 우선.
+   *   사용자가 라디오 3종(hidden/total/distribution)으로 선택 → 코드는 prizePoolMode만 본다.
+   *   레거시 데이터(showPrizePool만 있는 매장)는 resolvePrizePoolMode가 자동 추론. */
   showPrizePool: boolean;
   showStructure: boolean;
+
+  /** PRIZE POOL 표시 모드 — 2026-05-23 신설.
+   *  hidden / total / distribution.
+   *  누락(레거시) → resolvePrizePoolMode가 showPrizePool 기반 추론 ('total' or 'hidden'). */
+  prizePoolMode: PrizePoolMode;
 }
 
 /** 디스플레이 prefs용 boolean resolver — 명시적 false만 false. 누락/undefined/true 모두 true.
@@ -140,6 +169,26 @@ export interface TimerDisplaySettings {
  *  매장 prefs의 showPrizePool / showStructure 양쪽 모두에 사용. */
 export function resolveDisplayToggle(v: boolean | undefined | null): boolean {
   return v !== false;
+}
+
+/**
+ * PrizePoolMode 정규화 — Phase 2026-05-23.
+ * 우선순위: prizePoolMode > showPrizePool 추론 > 'total' 디폴트.
+ *
+ * 매장에 따른 케이스:
+ *  ① 새 매장 (prizePoolMode='total' 저장됨) → 'total'
+ *  ② 레거시 매장 (prizePoolMode 없음, showPrizePool=true) → 'total'
+ *  ③ 레거시 매장 (prizePoolMode 없음, showPrizePool=false) → 'hidden'
+ *  ④ 완전 신규 (둘 다 없음) → 'total' (디폴트)
+ */
+export function resolvePrizePoolMode(
+  mode: PrizePoolMode | string | undefined | null,
+  legacyShowPrizePool: boolean | undefined | null,
+): PrizePoolMode {
+  if (mode === 'hidden' || mode === 'total' || mode === 'distribution') return mode;
+  // 레거시 호환
+  if (legacyShowPrizePool === false) return 'hidden';
+  return 'total';
 }
 
 export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
@@ -190,6 +239,9 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
   // 화면 노출 토글 — 2026-05-23 신설. 디폴트 모두 true (기존 동작 유지).
   showPrizePool: true,
   showStructure: true,
+
+  // PRIZE POOL 표시 모드 — 2026-05-23 신설. 디폴트 'total' (사용자 예시 케이스).
+  prizePoolMode: 'total',
 };
 
 /** ─── 다중 프리셋 저장 (Phase 2) ─────────────────────────────────
@@ -304,6 +356,12 @@ export function resolveTimerDisplay(
   if ((!merged.marqueeText || merged.marqueeText.trim().length === 0) && merged.announcement) {
     merged.marqueeText = merged.announcement;
   }
+  // prizePoolMode 정규화 — 레거시 데이터(showPrizePool만 있는 매장) 자동 추론.
+  // 2026-05-23 신설. 명시적 mode가 있으면 그대로, 없으면 showPrizePool 기반.
+  merged.prizePoolMode = resolvePrizePoolMode(
+    (rawClean as Record<string, unknown>).prizePoolMode as PrizePoolMode | undefined,
+    (rawClean as Record<string, unknown>).showPrizePool as boolean | undefined,
+  );
   return merged;
 }
 

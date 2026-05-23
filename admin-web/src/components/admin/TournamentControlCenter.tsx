@@ -41,9 +41,12 @@ import {
   resolveRebuysCount,
   resolveTotalEntries,
   updateSessionTournamentMeta,
+  patchSession,
+  recomputeSessionPrizePool,
 } from '@/lib/live';
 import {
   type TournamentTemplate,
+  type PayoutStructure,
   subscribeTemplates,
   updateTemplate,
   fmtBuyIn,
@@ -53,6 +56,10 @@ import {
   wonToTickets,
   ticketsToWon,
   TICKET_WON,
+  computePayoutsFromStructure,
+  computePayoutAmounts,
+  computeAutoItmCount,
+  DISTRIBUTION_LABELS,
 } from '@/lib/templates';
 import {
   type DisplaySlot,
@@ -64,6 +71,7 @@ import {
 } from '@/lib/slots';
 import {
   type TimerDisplaySettings,
+  type PrizePoolMode,
   DEFAULT_TIMER_DISPLAY,
   subscribeTimerDisplay,
   saveTimerDisplay,
@@ -72,6 +80,7 @@ import {
   createTimerDisplayPreset,
   updateTimerDisplayPreset,
   deleteTimerDisplayPreset,
+  resolvePrizePoolMode,
   type TimerDisplayPreset,
 } from '@/lib/timerDisplay';
 import TemplatesPanel from './TemplatesPanel';
@@ -1613,10 +1622,12 @@ function SessionTournamentControlBox({
   const startingStack = session.startingStack ?? 0;
   const prizePoolWon = session.prizePool ?? 0;
   const unit = session.prizeDisplayUnit ?? 'ticket';
-  // 화면 노출 토글 — 매장 prefs(timerDisplay) 우선, 누락 시 session.showPrizePool fallback.
-  // showStructure는 prefs에만 존재 (LiveSession에 박을 필요 없음, 실시간 토글이 핵심).
-  const showPP = display.showPrizePool !== false && session.showPrizePool !== false;
+  // 화면 노출 옵션 — 매장 prefs(timerDisplay)만 본다. session fallback은 폐기됨.
+  // 이유: session.showPrizePool은 시작 시점 스냅샷 → 토글이 실시간 안 됨.
+  // 사용자 요구: "타이머 진행 중에도 체크를 없애면 없어지고, 체크하면 실시간으로 나타나야".
+  const prizeMode: PrizePoolMode = resolvePrizePoolMode(display.prizePoolMode, display.showPrizePool);
   const showStruct = display.showStructure !== false;
+  const showPP = prizeMode !== 'hidden';
 
   // 입력 잠금 상태 (Firestore write 중) — 더블 클릭 방지
   const [busy, setBusy] = useState(false);
@@ -1722,10 +1733,11 @@ function SessionTournamentControlBox({
         </div>
       </div>
 
-      {/* 📺 TV 화면 노출 옵션 — 2026-05-23 신설.
-          사용자 정책: "이모든 옵션은 토너운영페이지에서 설정하되 타이머에 실시간 반영.
-                       화면 우측 프라이즈풀(선택), 좌측 스트럭쳐(선택, 현재 레벨 강조)."
-          저장 → onSnapshot으로 TV에 5초 안 자동 반영. */}
+      {/* 📺 TV 화면 노출 옵션 — 2026-05-23 정정.
+          사용자 정책 (3가지 정정):
+            ① 스트럭쳐 체크는 실시간 반영 (이미 적용)
+            ② 우측 PRIZE POOL: hidden / total / distribution 3 모드
+            ③ 분배 정책 펼침 메뉴로 1~N등 비율 설정 + 실시간 미리보기 */}
       <div
         className="rounded-lg p-2"
         style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
@@ -1733,23 +1745,12 @@ function SessionTournamentControlBox({
         <div className="text-[10px] font-extrabold tracking-wider mb-2" style={{ color: 'var(--text-2)' }}>
           📺 TV 화면 노출 옵션
         </div>
-        <div className="space-y-1.5">
-          <DisplayToggleRow
-            icon="💰"
-            label="우측 PRIZE POOL"
-            sub="자동 계산값 표시"
-            checked={showPP}
-            onChange={(v) => {
-              saveTimerDisplay(storeId, { showPrizePool: v }).catch((e) => {
-                // eslint-disable-next-line no-console
-                console.error('[showPrizePool toggle] save failed', e);
-              });
-            }}
-          />
+        {/* 좌측 스트럭쳐 토글 — 단일 체크박스 */}
+        <div className="mb-2">
           <DisplayToggleRow
             icon="📋"
             label="좌측 스트럭쳐"
-            sub="현재 레벨 강조 · 자동 스크롤"
+            sub="현재 레벨 강조 · 5레벨 컴팩트"
             checked={showStruct}
             onChange={(v) => {
               saveTimerDisplay(storeId, { showStructure: v }).catch((e) => {
@@ -1759,8 +1760,256 @@ function SessionTournamentControlBox({
             }}
           />
         </div>
+        {/* 우측 PRIZE POOL 모드 — 3 라디오 */}
+        <div
+          className="rounded-md p-2 mb-2"
+          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+        >
+          <div className="text-[10px] font-extrabold mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-2)' }}>
+            <span>💰</span><span>우측 PRIZE POOL 모드</span>
+          </div>
+          <PrizePoolModeRadio
+            value={prizeMode}
+            onChange={(mode) => {
+              saveTimerDisplay(storeId, { prizePoolMode: mode }).catch((e) => {
+                // eslint-disable-next-line no-console
+                console.error('[prizePoolMode save] failed', e);
+              });
+            }}
+          />
+        </div>
+        {/* 분배 정책 펼침 메뉴 — distribution 모드일 때만 의미가 있지만 항상 노출.
+            (사장이 미리 분배표 setup 후 mode='distribution'으로 전환할 수 있도록.) */}
+        <PayoutPolicyExpander
+          ps={ps}
+          totalPlayers={total}
+          prizePoolWon={prizePoolWon}
+          unit={unit}
+          disabled={busy}
+          onSave={async (next) => {
+            await safe(async () => {
+              // payoutStructure 변경 시 prizePool도 재계산 (payoutPercent 변동 가능성).
+              const nextSession: LiveSession = { ...session, payoutStructure: next };
+              const newPP = recomputeSessionPrizePool(nextSession);
+              await patchSession(session.id, {
+                payoutStructure: next,
+                prizePool: newPP,
+              });
+            });
+          }}
+        />
       </div>
     </div>
+  );
+}
+
+/** PRIZE POOL 모드 — 3 라디오 (hidden / total / distribution). */
+function PrizePoolModeRadio({
+  value,
+  onChange,
+}: {
+  value: PrizePoolMode;
+  onChange: (mode: PrizePoolMode) => void;
+}) {
+  const options: { id: PrizePoolMode; label: string; sub: string }[] = [
+    { id: 'hidden', label: '숨김', sub: '카드 안 보임' },
+    { id: 'total', label: '총액만', sub: '"PRIZE POOL 50T"' },
+    { id: 'distribution', label: '분배표', sub: '1~N등 표시' },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {options.map((opt) => {
+        const selected = value === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => onChange(opt.id)}
+            className={`text-left rounded-md px-2 py-1.5 border-2 transition-all ${
+              selected ? 'shadow-sm' : 'hover:bg-gray-50'
+            }`}
+            style={{
+              background: selected ? 'rgba(16,185,129,0.10)' : 'var(--surface-2)',
+              borderColor: selected ? 'rgba(16,185,129,0.55)' : 'var(--border)',
+            }}
+          >
+            <div
+              className="text-[11px] font-extrabold"
+              style={{ color: selected ? '#047857' : 'var(--text-1)' }}
+            >
+              {selected ? '●' : '○'} {opt.label}
+            </div>
+            <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+              {opt.sub}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 분배 정책 펼침 메뉴 — <details> 베이스. 시상 등수 + 분배 방식 + 실시간 미리보기. */
+function PayoutPolicyExpander({
+  ps,
+  totalPlayers,
+  prizePoolWon,
+  unit,
+  disabled,
+  onSave,
+}: {
+  ps: PayoutStructure;
+  totalPlayers: number;
+  prizePoolWon: number;
+  unit: 'amount' | 'ticket';
+  disabled?: boolean;
+  onSave: (next: PayoutStructure) => Promise<void>;
+}) {
+  // itmCount 표시값 — 'auto'면 자동 산출값으로 미리보기
+  const resolvedItm =
+    ps.itmCount === 'auto' ? computeAutoItmCount(totalPlayers) : Math.max(1, Math.floor(ps.itmCount));
+  const payouts = computePayoutsFromStructure(ps, totalPlayers);
+  const amounts = computePayoutAmounts(prizePoolWon, payouts);
+
+  const fmtAmt = (won: number): string => {
+    if (!won || won <= 0) return '—';
+    if (unit === 'ticket') {
+      const t = won / 10000;
+      return Number.isInteger(t) ? `${t}T` : `${t.toFixed(1)}T`;
+    }
+    return `${Math.round(won / 10000)}만원`;
+  };
+
+  return (
+    <details
+      className="rounded-md"
+      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+    >
+      <summary
+        className="cursor-pointer select-none px-2 py-1.5 text-[10px] font-extrabold tracking-wider flex items-center justify-between"
+        style={{ color: 'var(--text-2)' }}
+      >
+        <span>🏆 분배 정책 (펼쳐서 설정)</span>
+        <span className="text-[9px] font-mono" style={{ color: 'var(--text-3)' }}>
+          {DISTRIBUTION_LABELS[ps.distribution]} · ITM {resolvedItm}등
+        </span>
+      </summary>
+      <div className="p-2 space-y-2 border-t" style={{ borderColor: 'var(--border)' }}>
+        {/* 시상 등수 */}
+        <div>
+          <div className="text-[9px] font-extrabold mb-1" style={{ color: 'var(--text-2)' }}>
+            시상 등수 (top N)
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onSave({ ...ps, itmCount: 'auto' })}
+              className={`text-[10px] px-2 py-1 rounded border-2 font-bold transition-all ${
+                ps.itmCount === 'auto' ? '' : 'hover:bg-gray-50'
+              }`}
+              style={{
+                background: ps.itmCount === 'auto' ? 'rgba(16,185,129,0.10)' : 'var(--surface-2)',
+                borderColor: ps.itmCount === 'auto' ? 'rgba(16,185,129,0.55)' : 'var(--border)',
+                color: ps.itmCount === 'auto' ? '#047857' : 'var(--text-1)',
+              }}
+            >
+              자동 (인원 15%)
+            </button>
+            {[3, 5, 8, 10].map((n) => (
+              <button
+                key={n}
+                type="button"
+                disabled={disabled}
+                onClick={() => onSave({ ...ps, itmCount: n })}
+                className={`text-[10px] px-2 py-1 rounded border-2 font-bold transition-all ${
+                  ps.itmCount === n ? '' : 'hover:bg-gray-50'
+                }`}
+                style={{
+                  background: ps.itmCount === n ? 'rgba(16,185,129,0.10)' : 'var(--surface-2)',
+                  borderColor: ps.itmCount === n ? 'rgba(16,185,129,0.55)' : 'var(--border)',
+                  color: ps.itmCount === n ? '#047857' : 'var(--text-1)',
+                }}
+              >
+                {n}등
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* 분배 방식 */}
+        <div>
+          <div className="text-[9px] font-extrabold mb-1" style={{ color: 'var(--text-2)' }}>
+            분배 방식
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            {(['top-heavy', 'standard', 'flat', 'custom'] as PayoutStructure['distribution'][]).map((d) => {
+              const selected = ps.distribution === d;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onSave({ ...ps, distribution: d })}
+                  className={`text-[10px] px-2 py-1 rounded border-2 font-bold transition-all ${
+                    selected ? '' : 'hover:bg-gray-50'
+                  }`}
+                  style={{
+                    background: selected ? 'rgba(16,185,129,0.10)' : 'var(--surface-2)',
+                    borderColor: selected ? 'rgba(16,185,129,0.55)' : 'var(--border)',
+                    color: selected ? '#047857' : 'var(--text-1)',
+                    textAlign: 'left',
+                  }}
+                >
+                  {selected ? '●' : '○'} {DISTRIBUTION_LABELS[d]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {/* payoutPercent (시상 비율) */}
+        <div>
+          <div className="text-[9px] font-extrabold mb-1 flex items-center justify-between" style={{ color: 'var(--text-2)' }}>
+            <span>시상 비율 (%)</span>
+            <span className="font-mono" style={{ color: '#047857' }}>{ps.payoutPercent}%</span>
+          </div>
+          <input
+            type="range"
+            min={50}
+            max={100}
+            step={5}
+            value={ps.payoutPercent}
+            disabled={disabled}
+            onChange={(e) => {
+              const v = Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0));
+              onSave({ ...ps, payoutPercent: v });
+            }}
+            className="w-full accent-emerald-600"
+          />
+        </div>
+        {/* 미리보기 */}
+        <div
+          className="rounded-md p-2"
+          style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.25)' }}
+        >
+          <div className="text-[9px] font-extrabold mb-1" style={{ color: '#047857' }}>
+            미리보기 ({totalPlayers}명 기준)
+          </div>
+          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+            {amounts.slice(0, 8).map((a) => (
+              <div key={a.rank} className="text-[10px] font-mono flex justify-between" style={{ color: 'var(--text-1)' }}>
+                <span className="font-bold">{a.rank}등</span>
+                <span style={{ color: '#065F46' }}>{fmtAmt(a.amount)}</span>
+              </div>
+            ))}
+            {amounts.length > 8 && (
+              <div className="text-[9px] col-span-2 mt-0.5" style={{ color: 'var(--text-3)' }}>
+                + {amounts.length - 8}등 추가...
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </details>
   );
 }
 

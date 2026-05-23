@@ -21,12 +21,19 @@ import {
 } from '@/lib/live';
 import {
   type TimerDisplaySettings,
+  type PrizePoolMode,
   DEFAULT_TIMER_DISPLAY,
   subscribeTimerDisplay,
   buildBackgroundCss,
+  resolvePrizePoolMode,
 } from '@/lib/timerDisplay';
 import { playCountdownBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
-import { fmtPrizeDisplay } from '@/lib/templates';
+import {
+  fmtPrizeDisplay,
+  resolvePayoutStructure,
+  computePayoutsFromStructure,
+  computePayoutAmounts,
+} from '@/lib/templates';
 import { useAuth, useUserDoc, useStoreDoc, hasRole } from '@/lib/hooks';
 
 interface StoreData {
@@ -836,15 +843,17 @@ export default function DisplayPage({
             </div>
           )}
 
-          {/* 하단 stats — 매장 TV 운영 화면. PRIZE POOL은 매장 내 노출 전용
-              (사용자 모바일 앱 /m/* 에는 어떤 상금 필드도 렌더링하지 않음).
-              statsScale로 폰트 배율 적용 (Phase 3).
-              2026-05-23: session.showPrizePool=false면 PRIZE POOL 카드 자체 숨김 →
-              PLAYERS / LATE REG 2-col로 자동 전환. (사용자 정책 — 선택사항) */}
+          {/* 하단 stats — 2026-05-23 PM 정정: prizePoolMode 3 모드.
+              사용자 정정: "session.showPrizePool fallback 제거 → prefs(prizePoolMode)만 본다."
+                          "총액만 / 분배표 / 숨김 3 모드 실시간 토글."
+              statsScale로 폰트 배율 적용. */}
           {(() => {
-            // 2026-05-23 PM: prefs 우선 + session fallback. prefs.showPrizePool=false면 항상 숨김.
-            // session.showPrizePool은 시작 시점 스냅샷 (호환용).
-            const showPrize = display.showPrizePool !== false && session.showPrizePool !== false;
+            const mode: PrizePoolMode = resolvePrizePoolMode(display.prizePoolMode, display.showPrizePool);
+            const showPrize = mode !== 'hidden';
+            const unit = session.prizeDisplayUnit ?? 'ticket';
+            const ps = resolvePayoutStructure(session.payoutStructure);
+            const payouts = mode === 'distribution' ? computePayoutsFromStructure(ps, resolveTotalEntries(session)) : [];
+            const amounts = mode === 'distribution' ? computePayoutAmounts(session.prizePool ?? 0, payouts) : [];
             return (
               <div
                 className={`mt-10 grid gap-10 max-w-5xl ${
@@ -863,21 +872,54 @@ export default function DisplayPage({
                   scale={display.statsScale ?? 1}
                 />
                 {showPrize && (
-                  <Stat
-                    label="PRIZE POOL"
-                    value={
-                      // 2026-05-23: prizeOverride 우선 로직 폐기.
-                      // 사용자 정책: 항상 자동 계산값(participants × buyIn × payoutPercent) 표시.
-                      // session.prizePool은 토너 운영 > 타이머에서 사장이 인원·리바인·바이인을
-                      // 변경할 때마다 updateSessionTournamentMeta로 즉시 재계산됨.
-                      session.prizePool > 0
-                        ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
-                        : '—'
-                    }
-                    sub=""
-                    color={display.textColor}
-                    scale={display.statsScale ?? 1}
-                  />
+                  <div className="flex flex-col items-center text-center">
+                    <Stat
+                      label="PRIZE POOL"
+                      value={
+                        session.prizePool > 0
+                          ? fmtPrizeDisplay(session.prizePool, unit)
+                          : '—'
+                      }
+                      sub=""
+                      color={display.textColor}
+                      scale={display.statsScale ?? 1}
+                    />
+                    {/* 분배표 — distribution 모드에서만 추가 mount */}
+                    {mode === 'distribution' && amounts.length > 0 && (
+                      <div
+                        className="mt-3 rounded-lg px-3 py-2 backdrop-blur-sm border"
+                        style={{
+                          background: 'rgba(0,0,0,0.45)',
+                          borderColor: 'rgba(255,255,255,0.1)',
+                          minWidth: 160,
+                        }}
+                      >
+                        <div
+                          className="text-[9px] tracking-[0.25em] mb-1 font-bold opacity-70"
+                          style={{ color: display.textColor }}
+                        >
+                          DISTRIBUTION
+                        </div>
+                        {amounts.slice(0, 5).map((a) => (
+                          <div
+                            key={a.rank}
+                            className="text-xs font-mono flex justify-between gap-3 leading-tight py-0.5"
+                            style={{ color: display.textColor }}
+                          >
+                            <span className="font-bold">{a.rank}등</span>
+                            <span style={{ color: display.blindsColor }}>
+                              {fmtPrizeDisplay(a.amount, unit) || '—'}
+                            </span>
+                          </div>
+                        ))}
+                        {amounts.length > 5 && (
+                          <div className="text-[9px] mt-0.5 opacity-50" style={{ color: display.textColor }}>
+                            +{amounts.length - 5}등 더
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <Stat
                   label="LATE REG"
@@ -1413,48 +1455,86 @@ function MobilePortraitLayout({
         </div>
       )}
 
-      {/* 사이드 정보 — 2열 grid: PLAYERS / LATE REG */}
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div
-          className="rounded-xl px-3 py-2.5 text-center border"
-          style={{ background: 'rgba(0,0,0,0.35)', borderColor: 'rgba(255,255,255,0.1)' }}
-        >
-          <div className="text-[9px] tracking-[0.25em] mb-1" style={{ color: display.textColor, opacity: 0.6 }}>
-            PLAYERS
-          </div>
-          <div
-            className="font-mono font-extrabold text-xl"
-            style={{ color: display.textColor }}
-          >
-            {session.playersRemaining}/{resolveTotalEntries(session)}
-          </div>
-          <div className="text-[10px] mt-0.5" style={{ color: display.textColor, opacity: 0.55 }}>
-            {resolveRebuysCount(session) > 0
-              ? `${session.tablesRemaining}테이블 · 리바인 ${resolveRebuysCount(session)}`
-              : `${session.tablesRemaining}테이블`}
-          </div>
-        </div>
-        <div
-          className="rounded-xl px-3 py-2.5 text-center border"
-          style={{ background: 'rgba(0,0,0,0.35)', borderColor: 'rgba(255,255,255,0.1)' }}
-        >
-          <div className="text-[9px] tracking-[0.25em] mb-1" style={{ color: display.textColor, opacity: 0.6 }}>
-            LATE REG
-          </div>
-          <div
-            className="font-mono font-extrabold text-xl"
-            style={{
-              color: !lateClosed && lateMin <= 5 ? display.accentColor : display.textColor,
-            }}
-          >
-            {lateRegDisplay}
-          </div>
-          <div className="text-[10px] mt-0.5" style={{ color: display.textColor, opacity: 0.55 }}>
-            {lateClosed ? '' : '남음'}
-          </div>
-        </div>
-      </div>
-
+      {/* 사이드 정보 — 모바일 세로. PRIZE POOL 모드 분기:
+            hidden  : PLAYERS / LATE REG 2열
+            total   : PLAYERS / PRIZE POOL / LATE REG 3열
+            distribution : 위 3열 + 분배표 (PRIZE POOL 카드 아래) */}
+      {(() => {
+        const mode: PrizePoolMode = resolvePrizePoolMode(display.prizePoolMode, display.showPrizePool);
+        const showPrize = mode !== 'hidden';
+        const unit = session.prizeDisplayUnit ?? 'ticket';
+        const ps = resolvePayoutStructure(session.payoutStructure);
+        const payouts = mode === 'distribution' ? computePayoutsFromStructure(ps, resolveTotalEntries(session)) : [];
+        const amounts = mode === 'distribution' ? computePayoutAmounts(session.prizePool ?? 0, payouts) : [];
+        return (
+          <>
+            <div className={`mt-3 grid gap-2 ${showPrize ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <CompactStat
+                label="PLAYERS"
+                value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
+                sub={
+                  resolveRebuysCount(session) > 0
+                    ? `${session.tablesRemaining}T · 리바인 ${resolveRebuysCount(session)}`
+                    : `${session.tablesRemaining}테이블`
+                }
+                color={display.textColor}
+              />
+              {showPrize && (
+                <CompactStat
+                  label="PRIZE POOL"
+                  value={session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
+                  sub=""
+                  color={display.textColor}
+                />
+              )}
+              <CompactStat
+                label="LATE REG"
+                value={lateRegDisplay}
+                sub={lateClosed ? '' : '남음'}
+                highlight={!lateClosed && lateMin <= 5}
+                color={display.textColor}
+                accentColor={display.accentColor}
+              />
+            </div>
+            {/* 분배표 — distribution 모드에서만 (모바일 세로에선 한 줄당 2등씩 2열) */}
+            {mode === 'distribution' && amounts.length > 0 && (
+              <div
+                className="mt-2 rounded-lg px-2.5 py-2 border backdrop-blur-sm"
+                style={{
+                  background: 'rgba(0,0,0,0.45)',
+                  borderColor: 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <div
+                  className="text-[8px] tracking-[0.25em] mb-1 font-extrabold opacity-70"
+                  style={{ color: display.textColor }}
+                >
+                  💰 DISTRIBUTION
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                  {amounts.slice(0, 6).map((a) => (
+                    <div
+                      key={a.rank}
+                      className="text-[10px] font-mono flex justify-between leading-tight"
+                      style={{ color: display.textColor }}
+                    >
+                      <span className="font-bold">{a.rank}등</span>
+                      <span style={{ color: display.blindsColor }}>
+                        {fmtPrizeDisplay(a.amount, unit) || '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {amounts.length > 6 && (
+                  <div className="text-[8px] mt-0.5 opacity-50" style={{ color: display.textColor }}>
+                    +{amounts.length - 6}등 더
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
       {/* 셋째 줄 — 하단 마퀴 (모바일 세로) */}
       {display.marqueeText && display.marqueeText.trim().length > 0 && (
         <div
@@ -1953,7 +2033,7 @@ function MobileLandscapeLayout({
           )}
         </div>
 
-        {/* ─── 우: 보조 정보 (2026-05-23: session.showPrizePool=false면 PRIZE POOL 카드 숨김) ─── */}
+        {/* ─── 우: 보조 정보 — 2026-05-23 정정: prizePoolMode 3 모드 분기 ─── */}
         <div className="flex flex-col justify-center gap-2 min-w-0">
           <CompactStat
             label="PLAYERS"
@@ -1965,20 +2045,61 @@ function MobileLandscapeLayout({
             }
             color={display.textColor}
           />
-          {/* 2026-05-23 PM: prefs 우선 + session fallback. 둘 다 통과해야 노출. */}
-          {display.showPrizePool !== false && session.showPrizePool !== false && (
-            <CompactStat
-              label="PRIZE POOL"
-              value={
-                // 2026-05-23: prizeOverride 폐기 — 항상 자동 계산값 표시.
-                session.prizePool > 0
-                  ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
-                  : '—'
-              }
-              sub=""
-              color={display.textColor}
-            />
-          )}
+          {(() => {
+            const mode: PrizePoolMode = resolvePrizePoolMode(display.prizePoolMode, display.showPrizePool);
+            if (mode === 'hidden') return null;
+            const unit = session.prizeDisplayUnit ?? 'ticket';
+            const ps = resolvePayoutStructure(session.payoutStructure);
+            const payouts = mode === 'distribution' ? computePayoutsFromStructure(ps, resolveTotalEntries(session)) : [];
+            const amounts = mode === 'distribution' ? computePayoutAmounts(session.prizePool ?? 0, payouts) : [];
+            return (
+              <>
+                <CompactStat
+                  label="PRIZE POOL"
+                  value={
+                    session.prizePool > 0
+                      ? fmtPrizeDisplay(session.prizePool, unit)
+                      : '—'
+                  }
+                  sub=""
+                  color={display.textColor}
+                />
+                {mode === 'distribution' && amounts.length > 0 && (
+                  <div
+                    className="rounded-lg px-2 py-1.5 border backdrop-blur-sm"
+                    style={{
+                      background: 'rgba(0,0,0,0.45)',
+                      borderColor: 'rgba(255,255,255,0.10)',
+                    }}
+                  >
+                    <div
+                      className="text-[8px] tracking-[0.25em] mb-0.5 font-extrabold opacity-70"
+                      style={{ color: display.textColor }}
+                    >
+                      💰 DISTRIBUTION
+                    </div>
+                    {amounts.slice(0, 5).map((a) => (
+                      <div
+                        key={a.rank}
+                        className="text-[10px] font-mono flex justify-between leading-tight"
+                        style={{ color: display.textColor }}
+                      >
+                        <span className="font-bold">{a.rank}등</span>
+                        <span style={{ color: display.blindsColor }}>
+                          {fmtPrizeDisplay(a.amount, unit) || '—'}
+                        </span>
+                      </div>
+                    ))}
+                    {amounts.length > 5 && (
+                      <div className="text-[8px] mt-0.5 opacity-50" style={{ color: display.textColor }}>
+                        +{amounts.length - 5}등 더
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <CompactStat
             label="LATE REG"
             value={lateRegDisplay}
@@ -2268,27 +2389,31 @@ function CompactStat({
 }
 
 /**
- * BlindStructurePanel — 2026-05-23 PM 단독 신설.
+ * BlindStructurePanel — 2026-05-23 PM 정정.
  *
- * 사용자 요구:
- *   "좌측에는 스트럭쳐 표시(선택사항으로 하며, 현재레벨은 강조)"
- *   "이모든 옵션은 토너운영페이지에서 설정하되 타이머에 실시간 반영되도록 해야한다.
- *    또한 핸드폰 가로모드,세로모드 모두 최적화되어야한다. (중요)"
+ * 사용자 정정 (2026-05-23):
+ *   "스트럭쳐가 현재는 약 15레벨정도의 스트럭쳐가 나타나는데 5레벨정도만 나타나면된다.
+ *    스크롤도 필요없어. 5레벨정도만 잘보이게 타이머 화면과 잘어울리는 스타일로."
+ *
+ *   → 노출 범위: 현재 -1, 현재, +1, +2, +3 (정확히 5줄, 단 break도 한 줄로 계산)
+ *   → overflow hidden 강제, scrollIntoView 폐기, max-height fit-content
  *
  * 디자인:
  *   ┌──────────────────────────┐
- *   │ 📋 스트럭쳐               │
+ *   │ 📋 STRUCTURE              │ ← 헤더 (컴팩트)
  *   ├──────────────────────────┤
- *   │ ✓ Lv 1   100 / 200       │ ← 완료 (opacity 0.45)
- *   │ ▶ Lv 2   200 / 400       │ ← 현재 (배경+테두리+bold+scale 1.04)
- *   │   Lv 3   300 / 600       │ ← 미래 (일반)
- *   │ ☕ 휴식 10분               │ ← break (amber 톤)
+ *   │ ✓ Lv 4   200 / 400        │ ← 직전 (페이드)
+ *   │ ▶ Lv 5   300 / 600        │ ← 현재 (배경+테두리+bold)
+ *   │   Lv 6   500 / 1000       │ ← 다음
+ *   │   Lv 7   800 / 1600       │ ← 다음
+ *   │ ☕ 휴식 10분                │ ← break
  *   └──────────────────────────┘
  *
- * 자동 스크롤: 현재 레벨이 항상 viewport 가운데 (scrollIntoView with 'center').
- * Size variant: 'desktop' | 'landscape' | 'portrait' — 폰트/간격/높이 자동 조절.
+ * Size variant: 'desktop' | 'landscape' | 'portrait' — 폰트/간격 자동 조절.
  * Empty handling: structure 비면 null 반환 (mount 안 함).
  */
+const VISIBLE_LEVELS_AROUND_CURRENT = 5; // 직전 1 + 현재 1 + 다음 3
+
 function BlindStructurePanel({
   structure,
   currentLevel,
@@ -2300,32 +2425,27 @@ function BlindStructurePanel({
   display: TimerDisplaySettings;
   variant: 'desktop' | 'landscape' | 'portrait';
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const currentRowRef = useRef<HTMLDivElement>(null);
-
-  // 자동 스크롤 — currentLevel 변경 시 currentRow가 viewport 가운데 오도록
-  useEffect(() => {
-    if (!scrollRef.current || !currentRowRef.current) return;
-    try {
-      currentRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-    } catch {
-      // scrollIntoView smooth 미지원 환경 fallback
-      const cont = scrollRef.current;
-      const row = currentRowRef.current;
-      const target = row.offsetTop - cont.clientHeight / 2 + row.clientHeight / 2;
-      cont.scrollTop = Math.max(0, target);
-    }
-  }, [currentLevel, structure?.length]);
-
   if (!structure || structure.length === 0) return null;
+
+  // 5레벨 슬라이딩 윈도우 계산 — 현재 -1, 현재, +1, +2, +3.
+  // current가 index 0이면 [0, 1, 2, 3, 4] / current가 마지막이면 [-4, -3, -2, -1, 0] 위치 조정.
+  const currentIdx = structure.findIndex((lv) => lv.level === currentLevel);
+  // currentLevel이 못 찾으면 첫 인덱스 fallback
+  const cIdx = currentIdx >= 0 ? currentIdx : 0;
+  // start = cIdx - 1, end = cIdx + 4 (총 5개) — 경계 clamp
+  let start = Math.max(0, cIdx - 1);
+  let end = Math.min(structure.length, start + VISIBLE_LEVELS_AROUND_CURRENT);
+  // end가 끝까지 못 채우면 start 앞으로 당김 (5개 유지)
+  if (end - start < VISIBLE_LEVELS_AROUND_CURRENT && start > 0) {
+    start = Math.max(0, end - VISIBLE_LEVELS_AROUND_CURRENT);
+  }
+  const visible = structure.slice(start, end);
 
   // variant별 사이즈/패딩 결정
   const headerSize =
     variant === 'desktop' ? 'text-xs px-3 py-2' : variant === 'landscape' ? 'text-[10px] px-2 py-1.5' : 'text-[10px] px-2 py-1';
   const rowSize =
     variant === 'desktop' ? 'px-3 py-1.5 text-sm' : variant === 'landscape' ? 'px-2 py-1 text-[11px]' : 'px-2 py-1 text-[11px]';
-  const maxHeight =
-    variant === 'desktop' ? '70vh' : variant === 'landscape' ? '100%' : '38vh';
   const panelWidth =
     variant === 'desktop' ? 240 : variant === 'landscape' ? '100%' : '100%';
   const accent = display.accentColor;
@@ -2339,10 +2459,8 @@ function BlindStructurePanel({
         background: 'rgba(0,0,0,0.55)',
         borderColor: 'rgba(255,255,255,0.12)',
         width: panelWidth,
-        maxHeight,
-        minHeight: variant === 'desktop' ? 200 : 0,
       }}
-      aria-label="블라인드 스트럭쳐"
+      aria-label="블라인드 스트럭쳐 (5레벨)"
     >
       {/* 헤더 */}
       <div
@@ -2355,16 +2473,9 @@ function BlindStructurePanel({
       >
         📋 STRUCTURE
       </div>
-      {/* 스크롤 컨테이너 */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto"
-        style={{
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(255,255,255,0.2) transparent',
-        }}
-      >
-        {structure.map((lvl) => {
+      {/* 컴팩트 5레벨 — 스크롤 없음 (사용자 정정: "스크롤도 필요없어") */}
+      <div className="overflow-hidden">
+        {visible.map((lvl) => {
           const isCurrent = lvl.level === currentLevel;
           const isPast = lvl.level < currentLevel;
           const isBreak = lvl.isBreak === true;
@@ -2388,7 +2499,6 @@ function BlindStructurePanel({
           return (
             <div
               key={`${lvl.level}-${lvl.isBreak ? 'br' : 'lv'}`}
-              ref={isCurrent ? currentRowRef : undefined}
               className={`${rowSize} font-mono flex items-center gap-2 transition-all`}
               style={{
                 background: rowBg,
