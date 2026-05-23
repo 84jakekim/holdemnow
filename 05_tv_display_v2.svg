@@ -74,9 +74,9 @@
     <text x="65" y="158" fill="#767676" font-size="9" text-anchor="middle">매장 자체 포스터</text>
   </g>
 
-  <!-- HoldemNow 워터마크 (작게) -->
+  <!-- Pink Rabbit 워터마크 (작게) -->
   <g transform="translate(60, 680)" opacity="0.4">
     <circle cx="4" cy="4" r="3" fill="#FF4757"/>
-    <text x="14" y="9" fill="#FFFFFF" font-size="11" font-weight="600">Powered by HoldemNow</text>
+    <text x="14" y="9" fill="#FFFFFF" font-size="11" font-weight="600">Powered by Pink Rabbit</text>
   </g>
 </svg>

@@ -1,4 +1,4 @@
-# HoldemNow Backend (v0.1)
+# Pink Rabbit Backend (v0.1)
 
 NestJS + Prisma + PostgreSQL + Redis 기반 MVP 백엔드.
 
@@ -122,7 +122,7 @@ GET http://localhost:3001/api/live/feed?lat=35.158&lng=129.060
 - [ ] AnalyticsModule — 노출/클릭 카운터 (Redis)
 - [ ] FCM 푸시 — 즐겨찾기 LIVE 시작 알림
 
-자세한 작업은 `../HoldemNow_TodoList_v1.0.md` Phase 2 참고.
+자세한 작업은 `../Pink Rabbit_TodoList_v1.0.md` Phase 2 참고.
 
 ---
 

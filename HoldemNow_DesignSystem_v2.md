@@ -1,4 +1,4 @@
-# HoldemNow 디자인 시스템 v2.0 — "Open Canvas"
+# Pink Rabbit 디자인 시스템 v2.0 — "Open Canvas"
 
 **문서 성격:** v1.0 ("Midnight Felt")의 카지노틱한 디자인을 폐기하고, 야놀자·여기어때 스타일의 콘텐츠 중심 디자인으로 전환.
 
@@ -146,7 +146,7 @@ v1 ("두 장 카드 + LIVE 도트") 폐기. 너무 비주얼이 강하고 카드
 **v2 컨셉:** **빨간 도트 + 워드마크**만.
 
 ```
-● HoldemNow
+● Pink Rabbit
 ```
 
 - 빨간 도트는 LIVE의 메타포 (실시간성)

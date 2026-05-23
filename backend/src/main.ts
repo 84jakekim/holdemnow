@@ -28,8 +28,8 @@ async function bootstrap() {
 
   // Swagger
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('HoldemNow API')
-    .setDescription('HoldemNow MVP API — v0.1')
+    .setTitle('Pink Rabbit API')
+    .setDescription('Pink Rabbit MVP API — v0.1')
     .setVersion('0.1.0')
     .addBearerAuth()
     .build();
@@ -37,7 +37,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(port);
-  Logger.log(`🃏 HoldemNow API → http://localhost:${port}/api`, 'Bootstrap');
+  Logger.log(`🃏 Pink Rabbit API → http://localhost:${port}/api`, 'Bootstrap');
   Logger.log(`📚 Swagger     → http://localhost:${port}/api/docs`, 'Bootstrap');
 }
 bootstrap();

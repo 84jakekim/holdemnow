@@ -1,5 +1,5 @@
-// HoldemNow DB 스키마 (v0.1)
-// 진실의 원천: ../HoldemNow_DB_Schema_v1.0.md
+// Pink Rabbit DB 스키마 (v0.1)
+// 진실의 원천: ../Pink Rabbit_DB_Schema_v1.0.md
 // 프로토타입의 데이터 모델을 코드로 옮긴 것.
 //
 // v0.1 미포함 (M19~M21 + Phase 3+): 광고/결제 테이블, 리뷰 테이블,

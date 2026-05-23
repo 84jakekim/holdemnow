@@ -1,5 +1,5 @@
 /**
- * HoldemNow Cloud Functions 진입점
+ * Pink Rabbit Cloud Functions 진입점
  *
  * 모든 Function을 여기서 export합니다. 그룹별 파일로 분리하면 firebase functions:list 등에서
  * 명확히 구분됩니다.

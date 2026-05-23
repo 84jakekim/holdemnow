@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright E2E config — HoldemNow admin-web
+ * Playwright E2E config — Pink Rabbit admin-web
  *
  * 환경 (PM 결정 2026-05-21):
  *   - 기본: 로컬 dev server (npm run dev) 에 붙음. 실제 Firestore (prod)에 read/write.

@@ -216,7 +216,7 @@ async function fetchVideoIdsFromRss(channelId: string): Promise<string[]> {
     const res = await axios.get<string>(feedUrl, {
       timeout: 8000,
       responseType: 'text',
-      headers: { 'User-Agent': 'Mozilla/5.0 HoldemNow-Curator/1.0' },
+      headers: { 'User-Agent': 'Mozilla/5.0 Pink Rabbit-Curator/1.0' },
     });
     const xml: string = typeof res.data === 'string' ? res.data : String(res.data);
 

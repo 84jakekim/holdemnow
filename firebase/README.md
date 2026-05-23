@@ -1,4 +1,4 @@
-# HoldemNow Firebase Backend (v0.1)
+# Pink Rabbit Firebase Backend (v0.1)
 
 풀 Firebase 스택. Firestore + Auth + Functions + FCM + Storage + Hosting.
 

@@ -1,7 +1,7 @@
 {
   "name": "holdemnow-backend",
   "version": "0.1.0",
-  "description": "HoldemNow MVP 백엔드 — NestJS + Prisma + PostgreSQL + Redis",
+  "description": "Pink Rabbit MVP 백엔드 — NestJS + Prisma + PostgreSQL + Redis",
   "private": true,
   "scripts": {
     "dev": "nest start --watch",

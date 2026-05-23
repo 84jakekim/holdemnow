@@ -11,7 +11,7 @@
   <g transform="translate(20, 56)">
     <!-- 로고 (단순) -->
     <circle cx="6" cy="14" r="5" fill="#E53E3E"/>
-    <text x="20" y="20" fill="#111111" font-size="20" font-weight="800" letter-spacing="-0.5">HoldemNow</text>
+    <text x="20" y="20" fill="#111111" font-size="20" font-weight="800" letter-spacing="-0.5">Pink Rabbit</text>
     
     <!-- 알림 아이콘 -->
     <g transform="translate(330, 8)">

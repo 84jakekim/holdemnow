@@ -9,7 +9,7 @@
     <!-- 로고 (단순) -->
     <g transform="translate(24, 28)">
       <circle cx="6" cy="14" r="5" fill="#E53E3E"/>
-      <text x="20" y="20" fill="#111111" font-size="17" font-weight="800" letter-spacing="-0.5">HoldemNow</text>
+      <text x="20" y="20" fill="#111111" font-size="17" font-weight="800" letter-spacing="-0.5">Pink Rabbit</text>
       <text x="20" y="34" fill="#A8A8A8" font-size="10" font-weight="600" letter-spacing="1.5">ADMIN</text>
     </g>
 

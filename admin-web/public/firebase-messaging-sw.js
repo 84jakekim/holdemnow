@@ -24,7 +24,7 @@ const messaging = firebase.messaging();
 
 // 백그라운드 메시지 (탭 꺼짐/포커스 X) — 직접 알림 표시
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || 'HoldemNow';
+  const title = payload.notification?.title || 'Pink Rabbit';
   const options = {
     body: payload.notification?.body || '',
     icon: '/icon-app.svg',

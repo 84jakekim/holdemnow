@@ -66,7 +66,7 @@ firebase functions:log
 
 1. https://developers.kakao.com 접속 (카카오 계정 로그인)
 2. **내 애플리케이션** → **애플리케이션 추가**
-   - 앱 이름: `HoldemNow`
+   - 앱 이름: `Pink Rabbit`
    - 사업자명: (회사명 또는 본인)
 3. 생성된 앱 → **앱 키** 확인:
    - **REST API 키** (Functions에서 사용)

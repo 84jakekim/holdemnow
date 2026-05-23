@@ -1,7 +1,7 @@
 {
   "name": "holdemnow-functions",
   "version": "0.1.0",
-  "description": "HoldemNow Cloud Functions",
+  "description": "Pink Rabbit Cloud Functions",
   "private": true,
   "main": "lib/index.js",
   "scripts": {
