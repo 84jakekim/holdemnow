@@ -173,43 +173,67 @@ export default function PostsPage() {
   // 거리 필터링 — 결과 + 자동 확장 계산
   // (스크롤 useEffect보다 위에 선언 — visiblePostsAndExpansion.items.length를
   //  dependency로 사용하므로 TDZ 회피를 위해 선언 순서 유지 필수)
+  //
+  // 2026-05-23 hotfix #5 — "채팅방 새 글 안 보임" 근본 fix:
+  //  - 좌표 없는 매장(신규가입 직후 lat/lng 누락) 글이 위치 허용 사용자에게
+  //    영구 차단되던 버그. 좌표 없는 글은 ASC 시간순으로 항상 통과시킴.
+  //  - 좌표 있는 글에 한해 ladder 자동 확장. 모든 단계 0건이면 거리 필터 무시.
+  //  - 채팅방 톤은 ASC(시간순) 유지하므로 정렬은 createdAt 기준 그대로.
   const visiblePostsAndExpansion = useMemo(() => {
     // 사용 가능한 origin
     const origin = userLocation ?? HQ_FALLBACK;
     const baseRadius = selectedRadius ?? cfg.defaultRadiusKm;
 
-    // 999 = 전국 → 전체 통과
+    // 좌표 있는 글 / 없는 글 분리
+    const postsWithCoord = posts.filter((p) => storeCoords.has(p.storeId));
+    const postsNoCoord = posts.filter((p) => !storeCoords.has(p.storeId));
+
+    // 좌표 있는 글에 한해 거리 필터
     const inRadius = (km: number) => {
-      if (km >= 999) return posts;
+      if (km >= 999) return postsWithCoord;
       const meters = km * 1000;
-      return posts.filter((p) => {
-        const c = storeCoords.get(p.storeId);
-        if (!c) return locationDenied; // 좌표 없으면 전국 모드에서만 노출
+      return postsWithCoord.filter((p) => {
+        const c = storeCoords.get(p.storeId)!;
         return haversineMeters(origin, { lat: c.lat, lng: c.lng }) <= meters;
       });
     };
 
-    // 위치 거부 → 전국 자동
+    // ASC(채팅방 톤) 유지하여 머지 후 createdAt 오름차순 재정렬
+    const merge = (within: StorePost[]) => {
+      const merged = [...postsNoCoord, ...within];
+      merged.sort((a, b) => {
+        const am = a.createdAt?.toMillis?.() ?? 0;
+        const bm = b.createdAt?.toMillis?.() ?? 0;
+        return am - bm;
+      });
+      return merged;
+    };
+
+    // 위치 거부 → 전국 자동 (좌표 무관 전체)
     if (locationDenied) {
-      return { items: posts, effectiveRadius: 999, autoExpanded: false };
+      return { items: merge(postsWithCoord), effectiveRadius: 999, autoExpanded: false };
     }
 
     // 단계별 자동 확장 (옵션 정렬, baseRadius 이상 단계만)
     const ladder = Array.from(new Set([baseRadius, ...cfg.radiusOptions])).sort((a, b) => a - b);
-    let lastResult = inRadius(baseRadius);
-    if (lastResult.length > 0) {
-      return { items: lastResult, effectiveRadius: baseRadius, autoExpanded: false };
+    const first = inRadius(baseRadius);
+    if (first.length > 0 || postsNoCoord.length > 0) {
+      // 좌표 없는 글이 있으면 base 단계에서 충분 — 굳이 확장 안내 띄울 필요 없음
+      return { items: merge(first), effectiveRadius: baseRadius, autoExpanded: false };
     }
     for (const km of ladder) {
       if (km <= baseRadius) continue;
       const next = inRadius(km);
       if (next.length > 0) {
-        return { items: next, effectiveRadius: km, autoExpanded: true };
+        return { items: merge(next), effectiveRadius: km, autoExpanded: true };
       }
-      lastResult = next;
     }
-    // 모든 단계 0건
-    return { items: lastResult, effectiveRadius: 999, autoExpanded: ladder[ladder.length - 1] > baseRadius };
+    // 모든 단계 0건 + 좌표 없는 글도 0건 — 최종 fallback: 좌표 있는 글 전체(거리 무시)
+    return {
+      items: merge(postsWithCoord),
+      effectiveRadius: 999,
+      autoExpanded: postsWithCoord.length > 0,
+    };
   }, [posts, storeCoords, userLocation, locationDenied, selectedRadius, cfg]);
 
   // 자동확장 결과를 부수효과로만 기록 (UI 안내용)

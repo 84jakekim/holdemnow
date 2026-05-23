@@ -191,36 +191,59 @@ export default function DailyPostsCarousel() {
     return () => { cancelled = true; };
   }, []);
 
-  // 6) 거리 필터 + 자동 확장 라더 (채팅방 정책 동일)
+  // 6) 거리 필터 + 자동 확장 라더 (채팅방 정책 동일).
+  //
+  // 2026-05-23 hotfix #5 — "홈/채팅방 새 글 안 보임" 근본 fix:
+  //  - 좌표 없는 매장 글(stores doc에 lat/lng 미입력)이 위치 허용 사용자에게
+  //    영구 차단되던 버그. 매장찾기 DailyPostsFeed는 거리 필터가 없어 보였지만,
+  //    홈 카루셀/채팅방은 c=null이면 locationDenied일 때만 노출했음.
+  //  - 출시 초기 매장이 좌표 입력을 빠뜨리는 케이스가 매우 잦음 + 거리 100km로
+  //    cfg.defaultRadiusKm가 잡혀있어도 부산 → 서울 같은 케이스에서 0건이 흔함.
+  //  - 정책: 좌표 없는 글은 **항상 노출**(전국 카테고리 취급). 좌표 있는 글은
+  //    기존 ladder 자동 확장. 마지막 단계(999=전국)에서도 0건이면 좌표 있는 글
+  //    전체 노출(거리 필터 무시) — 매장찾기와 동일 톤.
   const visiblePosts = useMemo(() => {
     if (posts.length === 0) return [] as StorePost[];
 
     const origin = userLocation ?? HQ_FALLBACK;
     const baseRadius = cfg.defaultRadiusKm;
 
+    // 좌표 있는 글 / 없는 글 분리
+    const postsWithCoord = posts.filter((p) => storeCoords.has(p.storeId));
+    const postsNoCoord = posts.filter((p) => !storeCoords.has(p.storeId));
+
+    // 좌표 있는 글에 한해 거리 필터
     const inRadius = (km: number): StorePost[] => {
-      if (km >= 999) return posts;
+      if (km >= 999) return postsWithCoord;
       const meters = km * 1000;
-      return posts.filter((p) => {
-        const c = storeCoords.get(p.storeId);
-        if (!c) return locationDenied; // 좌표 없으면 전국 모드에서만 노출
+      return postsWithCoord.filter((p) => {
+        const c = storeCoords.get(p.storeId)!;
         return haversineMeters(origin, { lat: c.lat, lng: c.lng }) <= meters;
       });
     };
 
-    // 위치 거부 → 전국 자동
-    if (locationDenied) return posts.slice(0, MAX_POSTS);
+    // 좌표 없는 글은 항상 통과 (매장 신규가입 직후 좌표 입력 누락 케이스)
+    const baseAlways = postsNoCoord;
 
-    // 단계별 자동 확장
-    const ladder = Array.from(new Set([baseRadius, ...cfg.radiusOptions])).sort((a, b) => a - b);
-    const first = inRadius(baseRadius);
-    if (first.length > 0) return first.slice(0, MAX_POSTS);
-    for (const km of ladder) {
-      if (km <= baseRadius) continue;
-      const next = inRadius(km);
-      if (next.length > 0) return next.slice(0, MAX_POSTS);
+    // 위치 거부 → 전국 모드 (좌표 무관 전체 노출)
+    if (locationDenied) {
+      return [...baseAlways, ...postsWithCoord].slice(0, MAX_POSTS);
     }
-    return [] as StorePost[];
+
+    // 단계별 자동 확장 — 좌표 있는 글이 0건이면 다음 단계로
+    const ladder = Array.from(new Set([baseRadius, ...cfg.radiusOptions])).sort((a, b) => a - b);
+    let withinRange: StorePost[] = inRadius(baseRadius);
+    if (withinRange.length === 0) {
+      for (const km of ladder) {
+        if (km <= baseRadius) continue;
+        const next = inRadius(km);
+        if (next.length > 0) { withinRange = next; break; }
+      }
+    }
+    // 최종 fallback: 그래도 0건이면 좌표 있는 글 전체 (전국)
+    if (withinRange.length === 0) withinRange = postsWithCoord;
+
+    return [...baseAlways, ...withinRange].slice(0, MAX_POSTS);
   }, [posts, storeCoords, userLocation, locationDenied, cfg]);
 
   // activeIdx가 visiblePosts 범위를 벗어나면 보정
