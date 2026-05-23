@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { JetBrains_Mono, Fraunces } from 'next/font/google';
 import Script from 'next/script';
-import SplashScreen from '@/components/SplashScreen';
 import './globals.css';
 
 const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? '';
@@ -68,7 +67,6 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-sans">
-        <SplashScreen />
         {children}
         {/* Kakao Maps SDK + services + clusterer 라이브러리.
             strategy="afterInteractive" 유지 — beforeInteractive로 바꾸면 Next.js가 head에
