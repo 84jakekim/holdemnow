@@ -413,40 +413,24 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
 
           <div className="h-3" />
 
-          {/* 셋째 줄 — 하단 마퀴 */}
-          <TextLineEditor
-            badge="📢 셋째 줄 — 하단 마퀴 (뉴스 띠)"
-            subtitle="화면 맨 아래 풀폭 띠 · 우→좌 무한 스와이프"
-            positionDiagram={<PositionDiagram active="marquee" />}
-            placeholder="예) 📢 오늘 8시 시작 · 좌석 한정 · 디너 18:30"
-            text={settings.marqueeText}
-            fontSize={settings.marqueeFontSize}
-            color={settings.marqueeColor}
-            style={settings.marqueeStyle}
-            onTextChange={(v) => update('marqueeText', v)}
-            onFontSizeChange={(v) => update('marqueeFontSize', v)}
-            onColorChange={(v) => update('marqueeColor', v)}
-            onStyleChange={(v) => update('marqueeStyle', v)}
-            sizeMin={12}
-            sizeMax={48}
-            extra={
-              <div className="mt-2">
-                <FieldLabel
-                  label={`스와이프 속도 ${settings.marqueeSpeedSec}초 / 1바퀴`}
-                  hint="작을수록 빠름 · 보통 25~35초"
-                />
-                <input
-                  type="range"
-                  min={10}
-                  max={60}
-                  step={1}
-                  value={settings.marqueeSpeedSec}
-                  onChange={(e) => update('marqueeSpeedSec', Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            }
-          />
+          {/* 셋째 줄 — 하단 마퀴: 2026-05-24 PM 정정으로 TV 노출 폐기.
+              사용자 정정: "이 마퀴는 없애줘" (세로/가로 모두 마퀴가 화면 구도를 해침 + 중복 표시 버그).
+              에디터 UI는 deprecated 안내 카드로 대체. 데이터 모델은 backward compat 유지. */}
+          <div
+            className="rounded-lg px-3 py-2.5 text-[11px] leading-relaxed border"
+            style={{
+              background: 'rgba(148,163,184,0.10)',
+              color: '#475569',
+              borderColor: 'rgba(148,163,184,0.30)',
+            }}
+            aria-label="하단 마퀴 폐기 안내"
+          >
+            <div className="font-bold mb-1 text-slate-700">📢 셋째 줄 — 하단 마퀴 (폐기)</div>
+            <div>
+              2026-05-24부터 TV 화면 하단 마퀴 띠는 더 이상 표시되지 않습니다. 첫째·둘째 줄
+              (타이틀 / 참고사항)만 노출됩니다. 안내문은 둘째 줄(참고사항)에 작성해 주세요.
+            </div>
+          </div>
         </Section>
 
         {/* 텍스트 — 기타 */}
@@ -749,8 +733,8 @@ function TimerPreview({ settings }: { settings: TimerDisplaySettings }) {
           </div>
         </div>
 
-        {/* 셋째 줄 — 하단 마퀴 (우→좌 자동 스와이프) */}
-        {(settings.marqueeText || settings.announcement) && (
+        {/* 셋째 줄 — 하단 마퀴: 2026-05-24 PM 정정으로 미리보기 제거 (TV에 실제로 안 띄움). */}
+        {false && (
           <div
             className="overflow-hidden border-t whitespace-nowrap"
             style={{
@@ -1079,17 +1063,7 @@ function PositionDiagramAll() {
             18:30
           </div>
 
-          {/* marquee */}
-          <div
-            style={{
-              position: 'absolute', left: 0, right: 0, bottom: '4%', height: '12%',
-              background: '#10B981', boxShadow: '0 0 6px #10B981',
-            }}
-          />
-          <div style={{
-            position: 'absolute', bottom: '17%', right: '8%',
-            fontSize: 8, color: '#10B981', fontWeight: 800,
-          }}>📢 3</div>
+          {/* marquee 영역 — 2026-05-24 정정으로 폐기 (TV 노출 X) */}
         </div>
         <div className="flex-1 min-w-0 text-[10px] leading-relaxed space-y-1">
           <div className="flex items-center gap-1.5">
@@ -1102,11 +1076,7 @@ function PositionDiagramAll() {
             <span className="font-bold text-gray-900">📋 2. 참고사항</span>
             <span className="text-gray-500">— 타이틀 바로 아래</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span style={{ width: 10, height: 10, background: '#10B981', borderRadius: 2 }} />
-            <span className="font-bold text-gray-900">📢 3. 마퀴</span>
-            <span className="text-gray-500">— 하단 띠, 우→좌 스와이프</span>
-          </div>
+          {/* 📢 3. 마퀴 — 2026-05-24 PM 정정으로 폐기 */}
         </div>
       </div>
     </div>

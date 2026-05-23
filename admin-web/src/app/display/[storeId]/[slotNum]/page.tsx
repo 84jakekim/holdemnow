@@ -574,10 +574,8 @@ export default function DisplayPage({
   const noteText = display.noteText?.trim() ?? '';
   const noteFontWeight = display.noteStyle.includes('bold') ? 700 : 400;
   const noteFontStyle = display.noteStyle.includes('italic') ? 'italic' : 'normal';
-  // 셋째 줄 (마퀴) — backward compat은 resolveTimerDisplay에서 처리됨
-  const marqueeText = display.marqueeText?.trim() ?? '';
-  const marqueeFontWeight = display.marqueeStyle.includes('bold') ? 700 : 400;
-  const marqueeFontStyle = display.marqueeStyle.includes('italic') ? 'italic' : 'normal';
+  // 셋째 줄 (마퀴) — 2026-05-24 PM 정정으로 UI 표시 완전 제거.
+  // 데이터 모델(display.marqueeText 등)은 backward compat 유지하되 모든 layout에서 mount X.
 
   // CSS rotate fallback 폐기 (2026-05-23 핫픽스).
   // 외곽 wrapper transform 제거 — 누워서 보이던 버그(error.jpg) 해결.
@@ -1001,34 +999,9 @@ export default function DisplayPage({
         </div>
       )}
 
-      {/* 셋째 줄 — 하단 마퀴 (우→좌 무한 스와이프, 뉴스 chyron 톤).
-          marqueeText가 비어 있으면 표시 안 함. backward compat: 기존 announcement는
-          resolveTimerDisplay()에서 marqueeText로 자동 마이그레이션됨. */}
-      {marqueeText && session && session.status !== 'completed' && (
-        <div
-          className="relative overflow-hidden border-t whitespace-nowrap"
-          style={{
-            background: 'rgba(0,0,0,0.45)',
-            borderColor: 'rgba(255,255,255,0.1)',
-            padding: '8px 0',
-          }}
-          aria-label={marqueeText}
-        >
-          <span
-            className="inline-block tv-marquee"
-            style={{
-              color: display.marqueeColor,
-              fontSize: `clamp(${Math.max(12, display.marqueeFontSize * 0.7)}px, ${display.marqueeFontSize / 30}vw, ${display.marqueeFontSize * 1.4}px)`,
-              fontWeight: marqueeFontWeight,
-              fontStyle: marqueeFontStyle,
-              animationDuration: `${display.marqueeSpeedSec}s`,
-              willChange: 'transform',
-            }}
-          >
-            {marqueeText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{marqueeText}
-          </span>
-        </div>
-      )}
+      {/* 2026-05-24 PM 정정: 풀 layout 하단 마퀴 완전 제거 (사용자 명시: "이 마퀴는 없애줘").
+          이 마퀴가 isMobilePortrait 조건 없이 항상 mount되어 세로 모드에서 자체 마퀴와 중복 표시됨.
+          데이터 모델(marqueeText 등)은 backward compat 유지하되 모든 layout에서 UI 표시 X. */}
 
       {/* 워터마크 / 스폰서 — 모바일 가로 모드에선 공간 부족하므로 숨김 */}
       {!isMobileLandscape && (
@@ -1553,32 +1526,9 @@ function MobilePortraitLayout({
           </>
         );
       })()}
-      {/* 셋째 줄 — 하단 마퀴 (모바일 세로) */}
-      {display.marqueeText && display.marqueeText.trim().length > 0 && (
-        <div
-          className="mt-3 overflow-hidden border rounded-lg whitespace-nowrap"
-          style={{
-            background: 'rgba(0,0,0,0.5)',
-            borderColor: 'rgba(255,255,255,0.1)',
-            padding: '6px 0',
-          }}
-          aria-label={display.marqueeText}
-        >
-          <span
-            className="inline-block tv-marquee"
-            style={{
-              color: display.marqueeColor,
-              fontSize: `clamp(${Math.max(11, display.marqueeFontSize * 0.55)}px, ${display.marqueeFontSize / 32}vw, ${display.marqueeFontSize}px)`,
-              fontWeight: display.marqueeStyle.includes('bold') ? 700 : 400,
-              fontStyle: display.marqueeStyle.includes('italic') ? 'italic' : 'normal',
-              animationDuration: `${display.marqueeSpeedSec}s`,
-              willChange: 'transform',
-            }}
-          >
-            {display.marqueeText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{display.marqueeText}
-          </span>
-        </div>
-      )}
+      {/* 2026-05-24 PM 정정: 세로 모드 하단 마퀴 완전 제거 (사용자 명시: "이 마퀴는 없애줘").
+          기존: MobilePortraitLayout 내부 마퀴 1개 + 풀 layout 외곽 마퀴 1개 → 중복 표시 버그.
+          데이터 모델은 backward compat 유지하되 UI 표시 X. */}
 
       {/* 전체화면 진입 안내 띠 — 2026-05-23 PM 정정: 타이머 컨셉에 맞게 subtle 톤으로.
           이전: 노란 풀필 → 너무 튐. 정정: 다크 ghost 버튼, 작은 회색 텍스트.
@@ -1852,11 +1802,13 @@ function MobileLandscapeLayout({
 
   return (
     <div className="relative flex-1 flex flex-col px-3 pt-2 pb-2 min-h-0">
-      {/* 본문 3분할 grid — 2026-05-23 정정: 우측 PRIZE POOL 거대 패널 위해 우측 폭 확장
-          좌 0.85fr / 중 2fr / 우 1.4fr (좌 ~21% / 중 ~50% / 우 ~29%) */}
+      {/* 본문 3분할 grid — 2026-05-24 PM 정정: 좌측 STRUCTURE 패널 제거 + 우측 stack 3카드.
+          사용자 정정: "왼쪽에 스트럭쳐 표시는 화면구도와도 맞지 않고있다"
+          → 좌측은 LIVE/LEVEL/BLINDS/NEXT만 (스트럭쳐 패널 mount X)
+          → grid 비율 재조정 (좌 더 좁히고 중앙·우측 확장): 좌 0.8fr / 중 2.4fr / 우 1.4fr */}
       <div
         className="flex-1 grid items-stretch gap-3 min-h-0"
-        style={{ gridTemplateColumns: '0.85fr 2fr 1.4fr' }}
+        style={{ gridTemplateColumns: '0.8fr 2.4fr 1.4fr' }}
       >
         {/* ─── 좌: 토너 정보 ─── */}
         <div className="flex flex-col justify-center gap-2 min-w-0">
@@ -1956,10 +1908,9 @@ function MobileLandscapeLayout({
               )}
             </div>
           )}
-          {/* NEXT 박스 — 컴팩트.
-              showStructure=true일 때는 NEXT를 숨기고 스트럭쳐 패널로 대체 (정보 중복 + 공간 절약).
-              showStructure=false일 때만 NEXT 박스 노출. */}
-          {nextBlind && display.showStructure === false && (
+          {/* NEXT 박스 — 컴팩트. 2026-05-24 PM 정정: 가로 모드 좌측 STRUCTURE 패널 폐기 후
+              NEXT 항상 노출. (이전: showStructure=false일 때만 노출 → 좌측 패널 사라지면 빈자리). */}
+          {nextBlind && (
             <div
               className="rounded-lg px-2 py-1.5 border mt-1"
               style={{
@@ -1986,23 +1937,9 @@ function MobileLandscapeLayout({
               )}
             </div>
           )}
-          {/* 좌측 컬럼 미니 스트럭쳐 패널 (가로 모드 전용).
-              현재 레벨 자동 스크롤. flex-1으로 남은 세로 공간 가득 채워서 스크롤 노출.
-              showStructure=true일 때만 mount. */}
-          {display.showStructure !== false && (
-            <div className="mt-1 flex-1 min-h-0">
-              <BlindStructurePanel
-                structure={
-                  session.blindStructureLocked && session.blindStructureLocked.length > 0
-                    ? session.blindStructureLocked
-                    : session.blindStructure
-                }
-                currentLevel={session.currentLevel}
-                display={display}
-                variant="landscape"
-              />
-            </div>
-          )}
+          {/* 좌측 STRUCTURE 패널 — 2026-05-24 PM 정정으로 가로 모드에서 완전 제거.
+              사용자 명시: "왼쪽에 스트럭쳐 표시는 화면구도와도 맞지 않고있다"
+              스트럭쳐는 데스크탑 풀 layout(fixed left-6 hidden lg:block)에서만 노출. */}
         </div>
 
         {/* ─── 중: 거대 타이머 + 진행바 ─── */}
@@ -2052,13 +1989,12 @@ function MobileLandscapeLayout({
           )}
         </div>
 
-        {/* ─── 우: 2026-05-23 PM 정정 — PRIZE POOL 거대 사이드 패널.
-              기존: PLAYERS / PRIZE POOL / LATE REG 3단 CompactStat (시인성 ↓, 중앙 침범)
-              정정: 우측 컬럼 전체를 PRIZE POOL 거대 카드 + 상단에 PLAYERS·LATE 컴팩트 1줄
-                    - 그라데이션 배경(accentColor)
-                    - 거대 폰트 (16~22vw)
-                    - distribution 모드면 카드 안에 상위 6등 표 정렬
-                    - showPrize=false면 PLAYERS/LATE만 큰 카드 2개 ─── */}
+        {/* ─── 우: 2026-05-24 PM 정정 — 세로 stack 3카드.
+              사용자 정정: "우측에는 플레이어 숫자, 그아래는 레이트레지, 그아래 프라이즈풀이 표시되면되고"
+              위→아래 순서: PLAYERS → LATE REG → PRIZE POOL (showPrize일 때만 PRIZE POOL).
+              세 카드 모두 동일한 톤(다크 + 보더). PRIZE POOL만 accent 그라데이션으로 무게감.
+              distribution 모드: PRIZE POOL 카드 내부 하단에 상위 6등 표.
+              ─── */}
         <div className="flex flex-col justify-center gap-2 min-w-0">
           {(() => {
             const mode: PrizePoolMode = resolvePrizePoolMode(display.prizePoolMode, display.showPrizePool);
@@ -2070,29 +2006,29 @@ function MobileLandscapeLayout({
             const accent = display.accentColor;
             return (
               <>
-                {/* 상단: PLAYERS + LATE REG 컴팩트 2열 — PRIZE POOL에 자리 양보 */}
-                <div className="grid grid-cols-2 gap-2 flex-shrink-0">
-                  <CompactStat
-                    label="PLAYERS"
-                    value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
-                    sub={
-                      resolveRebuysCount(session) > 0
-                        ? `${session.tablesRemaining}T · 리바인 ${resolveRebuysCount(session)}`
-                        : `${session.tablesRemaining}T`
-                    }
-                    color={display.textColor}
-                  />
-                  <CompactStat
-                    label="LATE REG"
-                    value={lateRegDisplay}
-                    sub={lateClosed ? '' : '남음'}
-                    color={display.textColor}
-                    highlight={!lateClosed && lateMin <= 5}
-                    accentColor={display.accentColor}
-                  />
-                </div>
-
-                {/* PRIZE POOL 거대 사이드 패널 — showPrize일 때만 */}
+                {/* 1) PLAYERS — 단독 카드 */}
+                <SideStatCard
+                  label="PLAYERS"
+                  value={`${session.playersRemaining}/${resolveTotalEntries(session)}`}
+                  sub={
+                    resolveRebuysCount(session) > 0
+                      ? `${session.tablesRemaining}T · 리바인 ${resolveRebuysCount(session)}`
+                      : `${session.tablesRemaining}T`
+                  }
+                  color={display.textColor}
+                  borderColor="rgba(255,255,255,0.10)"
+                />
+                {/* 2) LATE REG — 단독 카드 */}
+                <SideStatCard
+                  label="LATE REG"
+                  value={lateRegDisplay}
+                  sub={lateClosed ? '' : '남음'}
+                  color={display.textColor}
+                  highlight={!lateClosed && lateMin <= 5}
+                  accentColor={display.accentColor}
+                  borderColor="rgba(255,255,255,0.10)"
+                />
+                {/* 3) PRIZE POOL — 단독 카드 (showPrize일 때만, accent 그라데이션) */}
                 {showPrize && (
                   <div
                     className="flex-1 rounded-2xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0"
@@ -2103,7 +2039,6 @@ function MobileLandscapeLayout({
                     }}
                     aria-label="프라이즈 풀"
                   >
-                    {/* 라벨 */}
                     <div
                       className="text-[10px] tracking-[0.32em] font-extrabold flex items-center gap-1.5 flex-shrink-0"
                       style={{ color: accent, opacity: 0.95 }}
@@ -2111,11 +2046,10 @@ function MobileLandscapeLayout({
                       <span>💰</span>
                       <span>PRIZE POOL</span>
                     </div>
-                    {/* 거대 금액 */}
                     <div
                       className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
                       style={{
-                        fontSize: 'clamp(30px, 5vw, 56px)',
+                        fontSize: 'clamp(26px, 4.5vw, 48px)',
                         color: display.textColor,
                         letterSpacing: '-0.03em',
                         textShadow: `0 2px 12px ${accent}55`,
@@ -2123,14 +2057,13 @@ function MobileLandscapeLayout({
                     >
                       {session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
                     </div>
-                    {/* 분배표 — distribution 모드만 (가로 모드 우측 패널: 상위 6등 표 형태) */}
                     {mode === 'distribution' && amounts.length > 0 && (
                       <div
-                        className="mt-3 pt-2.5 border-t flex-1 min-h-0 overflow-hidden flex flex-col"
+                        className="mt-2 pt-2 border-t flex-1 min-h-0 overflow-hidden flex flex-col"
                         style={{ borderColor: 'rgba(255,255,255,0.12)' }}
                       >
                         <div
-                          className="text-[9px] tracking-[0.25em] font-extrabold opacity-65 mb-1.5 flex-shrink-0"
+                          className="text-[9px] tracking-[0.25em] font-extrabold opacity-65 mb-1 flex-shrink-0"
                           style={{ color: display.textColor }}
                         >
                           DISTRIBUTION
@@ -2148,7 +2081,7 @@ function MobileLandscapeLayout({
                               <span
                                 className="font-extrabold tabular-nums"
                                 style={{
-                                  fontSize: 'clamp(11px, 1.4vw, 14px)',
+                                  fontSize: 'clamp(10px, 1.3vw, 13px)',
                                   color: a.rank === 1 ? accent : display.textColor,
                                 }}
                               >
@@ -2157,7 +2090,7 @@ function MobileLandscapeLayout({
                               <span
                                 className="tabular-nums font-bold"
                                 style={{
-                                  fontSize: 'clamp(11px, 1.5vw, 15px)',
+                                  fontSize: 'clamp(10px, 1.4vw, 14px)',
                                   color: display.blindsColor,
                                 }}
                               >
@@ -2184,32 +2117,8 @@ function MobileLandscapeLayout({
         </div>
       </div>
 
-      {/* ─── 셋째 줄 — 하단 마퀴 (가로 layout, 컨트롤 행 바로 위) ─── */}
-      {display.marqueeText && display.marqueeText.trim().length > 0 && (
-        <div
-          className="mt-1 overflow-hidden border-t whitespace-nowrap"
-          style={{
-            background: 'rgba(0,0,0,0.55)',
-            borderColor: 'rgba(255,255,255,0.1)',
-            padding: '4px 0',
-          }}
-          aria-label={display.marqueeText}
-        >
-          <span
-            className="inline-block tv-marquee"
-            style={{
-              color: display.marqueeColor,
-              fontSize: `clamp(${Math.max(10, display.marqueeFontSize * 0.5)}px, ${display.marqueeFontSize / 36}vw, ${display.marqueeFontSize * 0.85}px)`,
-              fontWeight: display.marqueeStyle.includes('bold') ? 700 : 400,
-              fontStyle: display.marqueeStyle.includes('italic') ? 'italic' : 'normal',
-              animationDuration: `${display.marqueeSpeedSec}s`,
-              willChange: 'transform',
-            }}
-          >
-            {display.marqueeText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{display.marqueeText}
-          </span>
-        </div>
-      )}
+      {/* 2026-05-24 PM 정정: 하단 마퀴 완전 제거 (사용자 명시: "이 마퀴는 없애줘").
+          데이터 모델(marqueeText/Color/FontSize/Style/SpeedSec)은 backward compat 유지하되 UI 표시 X. */}
 
       {/* ─── 하단 컨트롤 행 — 권한자만 노출 (사용자 요구) ─── */}
       {canControl ? (
@@ -2419,7 +2328,7 @@ function LandscapeDraggableProgressBar({
   );
 }
 
-/** 가로 레이아웃 우측 보조 정보 카드 — 컴팩트 stat 박스 */
+/** 가로 레이아웃 우측 보조 정보 카드 — 컴팩트 stat 박스 (세로/모바일 세로 전용) */
 function CompactStat({
   label,
   value,
@@ -2454,6 +2363,64 @@ function CompactStat({
       </div>
       {sub && (
         <div className="text-[9px] mt-0.5" style={{ color, opacity: 0.55 }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * SideStatCard — 가로 모드 우측 stack 전용 카드 (2026-05-24 PM 정정으로 신설).
+ * 사용자 정정: "우측에는 플레이어 숫자, 그아래는 레이트레지, 그아래 프라이즈풀이 표시되면되고"
+ * 좌측 정렬 라벨 + 큰 값 + 보조 텍스트. PRIZE POOL 카드와 시각적 균형을 위해 padding/폰트 키움.
+ */
+function SideStatCard({
+  label,
+  value,
+  sub,
+  highlight,
+  color,
+  accentColor,
+  borderColor,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  highlight?: boolean;
+  color: string;
+  accentColor?: string;
+  borderColor: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl px-3 py-3 border backdrop-blur-sm flex-shrink-0"
+      style={{
+        background: 'rgba(0,0,0,0.45)',
+        borderColor,
+      }}
+    >
+      <div
+        className="text-[10px] tracking-[0.32em] font-extrabold flex-shrink-0"
+        style={{ color, opacity: 0.6 }}
+      >
+        {label}
+      </div>
+      <div
+        className="font-mono font-extrabold tabular-nums leading-none mt-2"
+        style={{
+          fontSize: 'clamp(22px, 3.8vw, 40px)',
+          letterSpacing: '-0.02em',
+          color: highlight && accentColor ? accentColor : color,
+        }}
+      >
+        {value}
+      </div>
+      {sub && (
+        <div
+          className="text-[10px] mt-1.5"
+          style={{ color, opacity: 0.6 }}
+        >
           {sub}
         </div>
       )}
