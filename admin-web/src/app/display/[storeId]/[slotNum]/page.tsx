@@ -23,13 +23,7 @@ import {
   buildBackgroundCss,
 } from '@/lib/timerDisplay';
 import { playCountdownBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
-import {
-  computeAutoITM,
-  computePayoutsFromStructure,
-  computePayoutAmounts,
-  fmtPrizeDisplay,
-  resolvePayoutStructure,
-} from '@/lib/templates';
+import { fmtPrizeDisplay } from '@/lib/templates';
 import { useAuth, useUserDoc, useStoreDoc, hasRole } from '@/lib/hooks';
 
 interface StoreData {
@@ -618,18 +612,10 @@ export default function DisplayPage({
         </div>
       </div>
 
-      {/* 상금 분배표 — 우측 사이드 단일 (2026-05-23 정정: 좌측 옵션 완전 제거).
-          사용자 정책: "좌측 프라이즈풀은 현재 화면 구성에 맞지 않음으로 완전 제거(사용X) — 우측만 사용. 이또한 선택사항."
-          display.prizeDistributionLayout='right'일 때만 렌더. 'hidden'이면 mount 안 함.
-          레거시 'left' 값은 resolveTimerDisplay에서 'right'으로 자동 마이그레이션됨. */}
-      {session && session.status !== 'completed' &&
-        display.prizeDistributionLayout === 'right' && (
-          <PrizeDistributionPanel
-            session={session}
-            display={display}
-            side="right"
-          />
-        )}
+      {/* 상금 분배표(우측 사이드)는 2026-05-23 정정으로 완전 제거.
+          사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘."
+          PRIZE POOL 표시값은 display.prizeOverride(매장 어드민 화면 설정에서 직접 입력) 또는
+          본문 stats 카드의 fmtPrizeDisplay(session.prizePool)로 통일. */}
 
       {/* 동기화 끊김 배너 */}
       {showStale && (
@@ -1621,89 +1607,14 @@ function Stat({
 }
 
 /**
- * 상금 분배표 — TV 화면 좌/우 사이드에 노출 (Phase 2 + Phase 3).
+ * PrizeDistributionPanel — 2026-05-23 정정으로 완전 제거.
+ * 사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘."
+ * PRIZE POOL 표시값은 display.prizeOverride (매장 어드민 화면 설정에서 직접 입력) 또는
+ * 본문 stats 카드의 fmtPrizeDisplay(session.prizePool)로 통일.
  *
- * 데이터 소스 우선순위:
- *  ① session.payoutStructure (Phase 3 — 사장이 템플릿에 설정한 분배 정책 스냅샷)
- *  ② fallback: totalPlayers 기준 computeAutoITM (Phase 2)
- *
- * prizePool이 0이면 표시 안 함.
- * 위치는 display.prizeDistributionLayout='left'|'right' 결정. 'hidden'이면 렌더 안 함.
+ * 데이터 모델(session.payoutStructure / computePayoutsFromStructure / computePayoutAmounts
+ * / resolvePayoutStructure)은 그대로 유지 — 추후 다른 화면에서 재사용 가능.
  */
-function PrizeDistributionPanel({
-  session,
-  display,
-  side,
-}: {
-  session: LiveSession;
-  display: TimerDisplaySettings;
-  side: 'left' | 'right';
-}) {
-  if (session.prizePool <= 0) return null;
-  // Phase 3 우선: 세션에 박힌 분배 정책 사용. 없으면 Phase 2 auto ITM fallback.
-  // Phase 5 (2026-05-21): resolvePayoutStructure로 레거시 mode='manual' 데이터 안전 정규화.
-  const payouts = session.payoutStructure
-    ? computePayoutsFromStructure(resolvePayoutStructure(session.payoutStructure), session.totalPlayers)
-    : computeAutoITM(session.totalPlayers);
-  // Phase 4: 만원 단위 내림 + 1등 잔여 추가로 합계=prizePool 보장
-  const amountsAll = computePayoutAmounts(session.prizePool, payouts);
-  const rows = payouts.slice(0, 8); // 8등까지만 노출 (그 이상은 화면 공간 부족)
-  // Phase 4: 세션 스냅샷의 표시 단위 사용 (없으면 'ticket')
-  const unit = session.prizeDisplayUnit ?? 'ticket';
-  const prizePoolLabel = fmtPrizeDisplay(session.prizePool, unit) || '—';
-  return (
-    <div
-      className="fixed top-1/2 -translate-y-1/2 z-10 rounded-2xl backdrop-blur-sm border-2"
-      style={{
-        [side]: '24px' as never,
-        background: 'rgba(0,0,0,0.45)',
-        borderColor: `${display.accentColor}66`,
-        minWidth: 200,
-        maxWidth: 260,
-      }}
-    >
-      <div className="px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.10)' }}>
-        <div
-          className="text-[10px] font-extrabold tracking-[0.3em] text-center"
-          style={{ color: display.accentColor }}
-        >
-          💰 PRIZE POOL
-        </div>
-        <div
-          className="font-mono text-lg font-extrabold text-center mt-1"
-          style={{ color: display.blindsColor }}
-        >
-          {prizePoolLabel}
-        </div>
-      </div>
-      <div className="p-2">
-        {rows.map((p, idx) => {
-          const won = amountsAll[idx]?.amount ?? 0;
-          return (
-            <div
-              key={p.rank}
-              className="flex items-center justify-between py-1 px-2 rounded"
-              style={{ color: display.textColor }}
-            >
-              <div className="text-[11px] font-extrabold tracking-wider">
-                {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `${p.rank}등`}
-              </div>
-              <div className="font-mono text-[12px] font-bold">
-                {fmtPrizeDisplay(won, unit) || '—'}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div
-        className="px-3 py-1.5 text-[9px] tracking-widest text-center border-t"
-        style={{ color: display.textColor, opacity: 0.5, borderColor: 'rgba(255,255,255,0.10)' }}
-      >
-        ITM {payouts.length}명 · {session.payoutStructure ? '템플릿 정책' : '자동 계산'}
-      </div>
-    </div>
-  );
-}
 
 /**
  * 모바일/태블릿 가로 전용 레이아웃 — 2026-05-23 PM 단독 신설.

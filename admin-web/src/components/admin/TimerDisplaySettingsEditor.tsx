@@ -452,15 +452,18 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           />
           <div className="mt-3" />
           <FieldLabel
-            label="상금 표기 오버라이드 (매장 TV 전용)"
-            hint="비우면 세션 prizePool 자동 표기. 사용자 앱에는 노출되지 않음."
+            label="💰 화면 우측 PRIZE POOL 표시값 (매장 TV 전용)"
+            hint='예: "티켓 30장" · "상금 100만" · "GTD 300만 · 우승 100만". 비워두면 자동 계산값(바이인×인원×비율) 사용. 사용자 앱에는 노출되지 않음.'
           />
           <input
             value={settings.prizeOverride}
             onChange={(e) => update('prizeOverride', e.target.value)}
-            placeholder="예: GTD 300만 · 우승 100만"
+            placeholder="예: 티켓 30장 / GTD 300만"
             className="form-input"
           />
+          <div className="text-[10px] text-amber-700 mt-1 leading-relaxed bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            💡 이 값이 TV 우측 <b>PRIZE POOL</b> 카드에 그대로 표시됩니다. 토너 운영 컨트롤에는 영향 없음.
+          </div>
           <div className="mt-3" />
           <FieldLabel label="스폰서 / 후원 줄" />
           <input

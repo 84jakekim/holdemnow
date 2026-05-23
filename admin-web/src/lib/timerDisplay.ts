@@ -110,21 +110,11 @@ export interface TimerDisplaySettings {
   blindsScale: number;
   statsScale: number;
 
-  /** ─── 상금 분배표 노출 (Phase 2) ──────────────────────────────
-   *  2026-05-23 정정: 사용자 정책 — "좌측 프라이즈풀은 현재 화면 구성에 맞지 않음으로 완전 제거(사용X)".
-   *  타입은 'right' | 'hidden' 두 가지만. 레거시 'left' 데이터는 normalizePrizeDistributionLayout에서
-   *  자동으로 'right'으로 정규화 (안전 마이그레이션). 'left' 옵션은 UI에서 노출하지 않으며
-   *  좌측 PrizeDistributionPanel은 display 페이지에서 mount하지 않는다. */
-  prizeDistributionLayout: 'right' | 'hidden';
-}
-
-/** 레거시 'left' 값을 'right'으로 안전 정규화 — 2026-05-23. */
-export function normalizePrizeDistributionLayout(
-  v: 'left' | 'right' | 'hidden' | string | undefined,
-): 'right' | 'hidden' {
-  if (v === 'hidden') return 'hidden';
-  // 'left'/'right'/누락/기타 모두 'right'으로 흡수
-  return 'right';
+  /** ─── 상금 분배표 노출 옵션 (2026-05-23 정정으로 완전 폐기) ────
+   *  사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘".
+   *  타입 정의/필드/UI/디스플레이 mount 모두 제거. 레거시 데이터의
+   *  prizeDistributionLayout 키는 resolveTimerDisplay에서 자동으로 무시된다
+   *  (호환 처리만, 코드 의존 0). */
 }
 
 export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
@@ -171,8 +161,6 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
   timerScale: 1.0,
   blindsScale: 1.0,
   statsScale: 1.0,
-
-  prizeDistributionLayout: 'hidden',
 };
 
 /** ─── 다중 프리셋 저장 (Phase 2) ─────────────────────────────────
@@ -276,13 +264,17 @@ function timerDisplayDoc(storeId: string) {
 export function resolveTimerDisplay(
   raw: Partial<TimerDisplaySettings> | null | undefined,
 ): TimerDisplaySettings {
-  const merged: TimerDisplaySettings = { ...DEFAULT_TIMER_DISPLAY, ...(raw ?? {}) };
+  // 2026-05-23: prizeDistributionLayout 필드 완전 폐기. 레거시 데이터의 해당 키는
+  // 명시적으로 drop해서 타입 안전성 + Firestore noise 양쪽 모두 차단.
+  const rawClean = raw ? { ...raw } : {};
+  if ('prizeDistributionLayout' in rawClean) {
+    delete (rawClean as Record<string, unknown>).prizeDistributionLayout;
+  }
+  const merged: TimerDisplaySettings = { ...DEFAULT_TIMER_DISPLAY, ...rawClean };
   // 기존 announcement만 있고 marqueeText가 비어있으면 자동 마이그레이션.
   if ((!merged.marqueeText || merged.marqueeText.trim().length === 0) && merged.announcement) {
     merged.marqueeText = merged.announcement;
   }
-  // 2026-05-23: 레거시 'left' 좌측 분배표 옵션 → 'right'으로 자동 마이그레이션 (사용자 정책 — 좌측 사용 X)
-  merged.prizeDistributionLayout = normalizePrizeDistributionLayout(merged.prizeDistributionLayout);
   return merged;
 }
 

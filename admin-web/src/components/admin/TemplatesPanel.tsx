@@ -519,7 +519,7 @@ function TemplateEditor({
               ≈ {fmtPrizeDisplay(form.guarantee, form.prizeDisplayUnit ?? 'ticket') || '—'} · 매장 내 TV 타이머 전용
             </div>
           </Field>
-          <Field label="상금풀 (T · 1T=1만원)">
+          <Field label="상금풀 (T · 1T=1만원) · 자동 계산">
             <div className="relative">
               <input
                 type="number"
@@ -540,10 +540,60 @@ function TemplateEditor({
                 T
               </span>
             </div>
-            <div className="text-[10px] text-gray-400 mt-1 font-mono">
-              🔄 자동 계산 — 바이인 × 인원 × 90% (만원 단위 자동). 분배 정책은 LIVE 시작 후 토너 컨트롤에서.
+            <div className="text-[10px] text-gray-400 mt-1 font-mono leading-relaxed">
+              🔄 바이인 × 인원 × <b>{form.payoutStructure?.payoutPercent ?? 90}%</b> (만원 단위 내림)
+              <br />← 아래 <b>💰 상금 비율</b>에서 직접 변경
             </div>
           </Field>
+        </div>
+
+        {/* 💰 상금 비율 (payoutPercent) — 2026-05-23 정정 부활.
+            사용자 정정: "'90%는 대체 어디서 나온값인지 알수가없다'".
+            매장이 직접 0~100% 입력 가능. 디폴트 90. PayoutStructureEditor 전체 부활은 안 함 — input 1개만. */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5">
+          <div className="text-xs font-extrabold text-emerald-800 mb-0.5">
+            💰 상금 비율 (선택) — 자동 상금풀의 % 값
+          </div>
+          <div className="text-[10px] text-emerald-700/80 mb-2 leading-relaxed">
+            바이인 × 인원 × <b>이 비율</b> = 자동 상금풀. 보통 매장 운영비(딜러비/장소비)를 뺀{' '}
+            <b>85~95%</b> 사이로 설정. 디폴트 90%.
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative w-24">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                className="form-input font-mono pr-7 text-center text-base font-extrabold"
+                value={form.payoutStructure?.payoutPercent ?? 90}
+                onChange={(e) => {
+                  const raw = parseInt(e.target.value, 10);
+                  const pct = Math.min(100, Math.max(0, Number.isFinite(raw) ? raw : 90));
+                  update('payoutStructure', {
+                    ...(form.payoutStructure ?? DEFAULT_PAYOUT_STRUCTURE),
+                    payoutPercent: pct,
+                  });
+                }}
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] font-extrabold text-emerald-700 pointer-events-none">
+                %
+              </span>
+            </div>
+            <div className="flex-1 text-[11px] text-emerald-900 leading-snug">
+              매장 보존 <b>{100 - (form.payoutStructure?.payoutPercent ?? 90)}%</b> · 상금풀{' '}
+              <b className="font-mono">
+                {wonToTickets(
+                  computeAutoPrizePool(
+                    form.buyIn,
+                    form.totalPlayers,
+                    form.payoutStructure?.payoutPercent ?? 90,
+                  ),
+                )}
+                T
+              </b>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

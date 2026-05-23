@@ -1234,29 +1234,9 @@ function DisplaySettingsPane({
         <ScaleSlider label="통계" value={local.statsScale} onChange={(v) => update('statsScale', v)} />
       </Section>
 
-      {/* 상금 분배표 (Phase 2 — 2026-05-23 정정: 좌측 옵션 완전 제거, 우측 단일) */}
-      <Section title="💰 상금 분배표 (우측 사이드)">
-        <div className="flex gap-1">
-          {(['hidden', 'right'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => update('prizeDistributionLayout', t)}
-              className="flex-1 py-1.5 rounded text-[11px] font-bold"
-              style={{
-                background: local.prizeDistributionLayout === t ? '#111' : 'var(--surface-2)',
-                color: local.prizeDistributionLayout === t ? '#fff' : 'var(--text-1)',
-                border: '1.5px solid var(--border)',
-              }}
-            >
-              {t === 'hidden' ? '숨김' : '우측 ▶ 표시'}
-            </button>
-          ))}
-        </div>
-        <div className="text-[10px] mt-1.5" style={{ color: 'var(--text-2)' }}>
-          템플릿에 payoutStructure가 설정돼 있으면 그걸 사용. 없으면 인원 기준 ITM 자동 계산.
-          <br />🔻 우측 stat의 단순 PRIZE POOL 카드(액수만)는 템플릿의 <b>💰 TV에 프라이즈풀 표시</b> 토글로 별도 제어.
-        </div>
-      </Section>
+      {/* 💰 상금 분배표(우측 사이드) 옵션 — 2026-05-23 정정으로 완전 폐기.
+          사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘."
+          PRIZE POOL 표시값은 화면 설정 → 텍스트 → "💰 화면 우측 PRIZE POOL 표시값"에서 직접 입력. */}
 
       {/* 텍스트 */}
       <Section title="📝 텍스트">
