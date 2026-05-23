@@ -141,37 +141,55 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     window.localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? 'on' : 'off');
   }, [soundOn]);
 
-  // prev sec 추적은 sec가 바뀔 때마다 항상 갱신 (토글 OFF여도 — 안 그러면 ON 토글 시 비프 폭주)
-  useEffect(() => {
-    prevSecRef.current = sec;
-  }, [sec]);
+  // 블라인드업 중복 차단 — 같은 cycle에서 두 번 발사 방지.
+  // 클라 sec=0 즉시 호출 + 서버 currentLevel 변경 호출 둘 다 발사되지 않도록.
+  const blindUpFiredCycleRef = useRef<string>('');
 
-  // prev level 추적도 별도
+  // 사운드 트리거 (2026-05-23 정책): 10초~1초 매초 비프(10회), 0초 도달 직후 즉시
+  // Blind up! TTS (autoAdvanceLevel cron 1분 주기로 인한 10~20초 지연 회피).
+  //
+  // ⚠ prev 갱신을 비프 트리거와 같은 useEffect 마지막에 두는 게 중요. 별도 effect로
+  // 분리하면 React가 같은 dep으로 둘 다 실행하며 prev가 먼저 갱신돼 비교 항상 같음 →
+  // 비프 미발사 (Bug 2026-05-23).
   useEffect(() => {
-    prevLevelRef.current = session?.currentLevel ?? null;
-  }, [session?.currentLevel]);
-
-  // 사운드 트리거 (2026-05-23 정책): 10초~1초 매초 비프(10회), 0초는 곧 레벨전환
-  // TTS('Blind up!')가 발생하므로 별도 final beep 없음. 60·30초 사전 비프도 폐기.
-  useEffect(() => {
-    if (!soundOn) return;
-    if (!session || session.status !== 'running') return;
-    const prevSec = prevSecRef.current;
-    if (prevSec == null) return;
-    if (prevSec !== sec && sec >= 1 && sec <= 10) {
-      playCountdownBeep();
+    if (!session || session.status !== 'running') {
+      prevSecRef.current = sec;
+      return;
     }
+    const prevSec = prevSecRef.current;
+    if (soundOn && prevSec != null) {
+      if (prevSec !== sec && sec >= 1 && sec <= 10) {
+        playCountdownBeep();
+      }
+      // sec=0 도달 즉시 blindUp (서버 cron 대기 X).
+      // 마지막 레벨/break 같은 경우 graceSec != null이라 currentLevel가 안 변경됨 → skip.
+      if (prevSec > 0 && sec === 0) {
+        const lv = session.currentLevel;
+        const cycleKey = `lv${lv}-${session.id}`;
+        if (blindUpFiredCycleRef.current !== cycleKey) {
+          blindUpFiredCycleRef.current = cycleKey;
+          playBlindUp();
+        }
+      }
+    }
+    prevSecRef.current = sec;
   }, [sec, soundOn, session]);
 
-  // 블라인드업 — 레벨이 + 방향으로 변경된 순간 1회. 초기 mount 시엔 prevLevel이 null이라 발동 X.
+  // 블라인드업 백업 — 서버 currentLevel 변경 시점에 1회 (페이지 새로고침 직후 등
+  // 클라가 sec=0을 놓친 경우 대비). 동일 cycle key면 skip.
   useEffect(() => {
     if (!soundOn) return;
     if (!session || session.status !== 'running') return;
     const prevLevel = prevLevelRef.current;
     const currLevel = session.currentLevel;
     if (prevLevel != null && currLevel > prevLevel) {
-      playBlindUp();
+      const cycleKey = `lv${currLevel}-${session.id}`;
+      if (blindUpFiredCycleRef.current !== cycleKey) {
+        blindUpFiredCycleRef.current = cycleKey;
+        playBlindUp();
+      }
     }
+    prevLevelRef.current = currLevel;
   }, [session?.currentLevel, soundOn, session]);
 
   if (session === undefined) {

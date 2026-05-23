@@ -310,11 +310,15 @@ export default function DisplayPage({
   const prevSecRef = useRef<number>(sec);
   const prevLevelRef = useRef<number | undefined>(session?.currentLevel);
 
-  // 사운드 트리거 (2026-05-23 정책 정정):
-  //  · 60초·30초 사전 비프 제거 — 사장님 의견 "필요 없음"
+  // 블라인드업 중복 차단 — sec=0 즉시 호출 + 서버 currentLevel 변경 호출 둘 다
+  // 발사되지 않도록 cycle key로 가드.
+  const blindUpFiredCycleRef = useRef<string>('');
+
+  // 사운드 트리거 (2026-05-23 정책 정정 + 핫픽스):
+  //  · 60·30초 사전 비프 폐기 (사장님 사양)
   //  · 카운트다운 매초 비프: sec 10 → 1 (10회)
-  //  · 0초 final beep도 제거 — 곧이은 레벨전환 TTS('Blind up!')가 종료 신호 대체
-  // soundWarn60Effective / soundLevelEndEffective는 미사용 (옵션 토글 UI는 별도 정리 필요).
+  //  · sec=0 도달 즉시 Blind up! TTS 호출 — autoAdvanceLevel cron이 1분 주기라
+  //    서버 currentLevel update까지 10~20초 지연되던 버그 회피
   useEffect(() => {
     const prev = prevSecRef.current;
     if (session?.status === 'running' && audioReady) {
@@ -322,11 +326,30 @@ export default function DisplayPage({
       if (soundWarn30Effective && prev !== sec && sec >= 1 && sec <= 10) {
         playCountdownBeep();
       }
+      // sec=0 도달 즉시 blindUp (cron 대기 X). 마지막 레벨이거나 break면
+      // currentLevel 변경이 없으므로 cycleKey 동일 → 백업 effect에서 차단.
+      if (soundBlindUpEffective && prev > 0 && sec === 0 && session?.id) {
+        const lv = session.currentLevel ?? -1;
+        const cycleKey = `lv${lv}-${session.id}`;
+        if (blindUpFiredCycleRef.current !== cycleKey) {
+          blindUpFiredCycleRef.current = cycleKey;
+          playBlindUp();
+        }
+      }
     }
     prevSecRef.current = sec;
-  }, [sec, session?.status, audioReady, soundWarn30Effective]);
+  }, [
+    sec,
+    session?.status,
+    session?.id,
+    session?.currentLevel,
+    audioReady,
+    soundWarn30Effective,
+    soundBlindUpEffective,
+  ]);
 
-  // 레벨 전환 시 블라인드업 차임 — 레벨이 + 방향으로 변경됐을 때만
+  // 레벨 전환 백업 — 서버 currentLevel 변경 시점에 1회. 페이지 새로고침 직후나
+  // sec=0을 놓친 경우 대비. 동일 cycle key면 skip.
   useEffect(() => {
     const prevLv = prevLevelRef.current;
     const currLv = session?.currentLevel;
@@ -336,12 +359,17 @@ export default function DisplayPage({
       session?.status === 'running' &&
       prevLv != null &&
       currLv != null &&
-      currLv > prevLv
+      currLv > prevLv &&
+      session?.id
     ) {
-      playBlindUp();
+      const cycleKey = `lv${currLv}-${session.id}`;
+      if (blindUpFiredCycleRef.current !== cycleKey) {
+        blindUpFiredCycleRef.current = cycleKey;
+        playBlindUp();
+      }
     }
     prevLevelRef.current = currLv;
-  }, [session?.currentLevel, session?.status, audioReady, soundBlindUpEffective]);
+  }, [session?.currentLevel, session?.status, session?.id, audioReady, soundBlindUpEffective]);
 
   // ─── 컨트롤 권한 판정 (2026-05-23 PM 핫픽스) ─────────────────
   // 가로 모드 컨트롤 버튼은 매장 owner/staff / platform_admin만 노출.
