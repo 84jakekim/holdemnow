@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react';
 import { db } from './firebase';
 import { stripUndefined } from './firestoreUtil';
 import type { BlindLevel, PayoutStructure, PrizeDisplayUnit, TournamentTemplate } from './templates';
-import { computeAutoPrizePool, resolvePayoutStructure } from './templates';
+import { computeAutoPrizePool, resolvePayoutStructure, resolveShowPrizePool } from './templates';
 
 /**
  * LIVE 세션 상태.
@@ -87,6 +87,10 @@ export interface LiveSession {
    *  사장이 도중에 템플릿 표시 단위를 바꿔도 진행 중 세션엔 영향 없음.
    *  매장 TV·LivePanel·TournamentControlCenter 표기에 사용. 없으면 'ticket' fallback. */
   prizeDisplayUnit?: PrizeDisplayUnit;
+  /** 시작 시점에 고정된 프라이즈풀 노출 스냅샷 — 2026-05-23.
+   *  사장이 도중에 템플릿 토글을 바꿔도 진행 중 세션엔 영향 없음.
+   *  매장 TV 우측 stat의 PRIZE POOL 카드 노출 여부. 없으면 true (기존 호환). */
+  showPrizePool?: boolean;
 }
 
 /** 마지막 레벨 종료 후 자동 정리까지의 그레이스(초). */
@@ -458,6 +462,8 @@ export async function startLiveSession(
   };
   docData.payoutStructure = ps; // 정책 스냅샷 (분배 방식·ITM·custom 비율 등 전부 포함) — Phase 5 항상 부착
   if (template.prizeDisplayUnit) docData.prizeDisplayUnit = template.prizeDisplayUnit; // Phase 4 표시 단위 스냅샷
+  // 2026-05-23: 프라이즈풀 노출 토글 스냅샷 — 시작 시점 정책 고정. 누락 시 true 추론.
+  docData.showPrizePool = resolveShowPrizePool(template.showPrizePool);
   if (storeRegion) docData.storeRegion = storeRegion; // Phase B 광역 키 — region 인덱스 활용
 
   const ref = await addDoc(liveSessionsCol(), stripUndefined(docData));

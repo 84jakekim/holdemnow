@@ -79,6 +79,21 @@ export interface TournamentTemplate {
   /** 상금 표시 단위 — Phase 4 (2026-05-21). 매장 TV·어드민 분배표/프라이즈풀 표기에 사용.
    *  사용자 모바일 앱(/m/*)은 어떤 상금 정보도 표시하지 않으므로 영향 없음. 디폴트 'ticket'. */
   prizeDisplayUnit?: PrizeDisplayUnit;
+  /** 매장 TV 디스플레이에 프라이즈풀(우측 stat 카드)을 노출할지 여부 — 2026-05-23.
+   *  사용자 정책: "프라이즈풀을 화면에 표시할지말지는 선택사항으로 언제든 넣었다 뺏다".
+   *  필수 설정은 name(스트럭쳐 이름)과 blindStructure뿐. showPrizePool 포함 그 외 노출 옵션은 선택.
+   *  - true (디폴트, 기존 데이터 호환): TV 우측 stat에 PRIZE POOL 표시
+   *  - false: PRIZE POOL 카드 자체 숨김 (PLAYERS / LATE REG만 노출)
+   *  사용자 모바일 앱(/m/*)은 어떤 상금도 노출 안 하므로 영향 없음. */
+  showPrizePool?: boolean;
+}
+
+/**
+ * 기존 데이터(showPrizePool 누락)는 true로 추론 — 백워드 호환.
+ * 사용자가 새 토글로 명시적으로 false 저장 시에만 PRIZE POOL 카드 숨김.
+ */
+export function resolveShowPrizePool(v: boolean | undefined): boolean {
+  return v !== false;
 }
 
 /** 상금 분배표 정의. */

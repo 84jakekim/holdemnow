@@ -229,6 +229,8 @@ function TemplateEditor({
   const initialAnteMode: AnteMode = initial?.anteMode ?? 'manual';
   // 기존 데이터에 prizeDisplayUnit 없으면 'ticket' (입력 단위와 일관, 디폴트)
   const initialPrizeUnit: PrizeDisplayUnit = initial?.prizeDisplayUnit ?? 'ticket';
+  // 2026-05-23 — showPrizePool 누락 시 true 추론 (기존 호환). 토글로 언제든 변경 가능.
+  const initialShowPrize: boolean = initial?.showPrizePool !== false;
 
   const [form, setForm] = useState<Omit<TournamentTemplate, 'id'>>(
     initial
@@ -248,6 +250,7 @@ function TemplateEditor({
           // 기존 템플릿에 payoutStructure 없으면 기본값 부착 (UI에서 즉시 편집 가능)
           payoutStructure: initial.payoutStructure ?? { ...DEFAULT_PAYOUT_STRUCTURE },
           prizeDisplayUnit: initialPrizeUnit,
+          showPrizePool: initialShowPrize,
         }
       : {
           name: '',
@@ -264,6 +267,7 @@ function TemplateEditor({
           anteMode: 'manual',
           payoutStructure: { ...DEFAULT_PAYOUT_STRUCTURE },
           prizeDisplayUnit: 'ticket',
+          showPrizePool: true,
         },
   );
   const [saving, setSaving] = useState(false);
@@ -449,9 +453,30 @@ function TemplateEditor({
       )}
 
       <div className="space-y-4">
-        <Field label="토너 제목">
-          <input className="form-input" value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="예: 프리징 90" />
-        </Field>
+        {/* 필수 영역 — 사용자 정책 (2026-05-23):
+            "템플릿에서 필수 설정내용은 이 스트럭쳐이름과 블라인드 구조내용이다."
+            나머지(타입/포스터/게런티/상금풀/바이인/인원/스택/late reg/앤티/표시단위/프라이즈풀 노출)는 선택. */}
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5">
+          <div className="text-[10px] font-extrabold text-rose-700 tracking-wider mb-2">
+            ✱ 필수 — 이 둘만 채우면 저장 가능
+          </div>
+          <Field label="스트럭쳐 이름 *">
+            <input
+              className="form-input"
+              value={form.name}
+              onChange={(e) => update('name', e.target.value)}
+              placeholder="예: 프리징 90 / 정기 디플 / 위클리 100K"
+            />
+            <div className="text-[10px] text-rose-600/80 mt-1 leading-relaxed">
+              💡 이건 <b>토너 제목이 아닌 블라인드 스트럭쳐의 이름</b>입니다. LIVE 시작 시 이 이름으로 세션이 생성돼요.
+              <br />TV에 띄울 대회명은 <b>화면 설정 → 텍스트 3줄</b>에서 자유롭게 입력하세요.
+            </div>
+          </Field>
+        </div>
+
+        <div className="text-[10px] font-bold text-gray-400 tracking-wider pl-1">
+          ⚙️ 선택 옵션 — 매장 TV 노출 방식 (언제든 변경 가능)
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="타입">
@@ -631,6 +656,39 @@ function TemplateEditor({
           )}
         </div>
 
+        {/* 프라이즈풀 노출 토글 — 2026-05-23.
+            사용자 정책: "프라이즈풀을 화면에 표시할지말지는 선택사항으로 언제든 넣었다 뺏다".
+            TV 우측 stat의 PRIZE POOL 카드 노출 여부. OFF면 PLAYERS / LATE REG만 노출. */}
+        <div className="bg-white border-[1.5px] border-gray-200 rounded-xl px-3.5 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-extrabold text-gray-900">💰 TV에 프라이즈풀 표시</div>
+              <div className="text-[11px] text-gray-500 mt-0.5">
+                {form.showPrizePool === false
+                  ? '매장 TV 우측 카드에서 PRIZE POOL 숨김 (PLAYERS · LATE REG만)'
+                  : '매장 TV 우측 카드에 PRIZE POOL 노출 (디폴트)'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => update('showPrizePool', !(form.showPrizePool !== false))}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                form.showPrizePool !== false ? 'bg-gray-900' : 'bg-gray-300'
+              }`}
+              aria-pressed={form.showPrizePool !== false}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  form.showPrizePool !== false ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          <div className="text-[10px] text-gray-400 mt-2 leading-relaxed">
+            💡 사용자 모바일 앱에는 어떤 상금 정보도 표시되지 않습니다. 매장 TV·어드민 전용 토글.
+          </div>
+        </div>
+
         {/* 상금 표시 단위 — Phase 4 (2026-05-21).
             매장 어드민/매장 TV 분배표·프라이즈풀 표기에 사용. 사용자 앱 X. */}
         <div className="bg-white border-[1.5px] border-gray-200 rounded-xl px-3.5 py-3">
@@ -665,11 +723,14 @@ function TemplateEditor({
             토너 컨트롤 센터에서 운영. payoutStructure 필드/computePayoutsFromStructure/
             TV 분배표(PrizeDistributionPanel)는 유지. */}
 
-        {/* 블라인드 구조 */}
-        <div>
+        {/* 블라인드 구조 — 필수 필드 ② (스트럭쳐 이름과 함께 사용자가 반드시 채워야 할 항목) */}
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5">
+          <div className="text-[10px] font-extrabold text-rose-700 tracking-wider mb-2">
+            ✱ 필수 — 블라인드 구조
+          </div>
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] font-bold text-gray-500 tracking-wider">
-              블라인드 구조 ({form.blindStructure.filter((b) => !b.isBreak).length}레벨
+              ({form.blindStructure.filter((b) => !b.isBreak).length}레벨
               {form.blindStructure.some((b) => b.isBreak)
                 ? ` + 휴식 ${form.blindStructure.filter((b) => b.isBreak).length}`
                 : ''}

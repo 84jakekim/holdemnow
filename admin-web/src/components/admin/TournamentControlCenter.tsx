@@ -1234,10 +1234,10 @@ function DisplaySettingsPane({
         <ScaleSlider label="통계" value={local.statsScale} onChange={(v) => update('statsScale', v)} />
       </Section>
 
-      {/* 상금 분배표 (Phase 2) */}
-      <Section title="💰 상금 분배표 노출">
+      {/* 상금 분배표 (Phase 2 — 2026-05-23 정정: 좌측 옵션 완전 제거, 우측 단일) */}
+      <Section title="💰 상금 분배표 (우측 사이드)">
         <div className="flex gap-1">
-          {(['hidden', 'left', 'right'] as const).map((t) => (
+          {(['hidden', 'right'] as const).map((t) => (
             <button
               key={t}
               onClick={() => update('prizeDistributionLayout', t)}
@@ -1248,12 +1248,13 @@ function DisplaySettingsPane({
                 border: '1.5px solid var(--border)',
               }}
             >
-              {t === 'hidden' ? '숨김' : t === 'left' ? '◀ 좌측' : '우측 ▶'}
+              {t === 'hidden' ? '숨김' : '우측 ▶ 표시'}
             </button>
           ))}
         </div>
         <div className="text-[10px] mt-1.5" style={{ color: 'var(--text-2)' }}>
-          템플릿에 prizeDistribution이 설정돼 있으면 그걸 사용. 없으면 인원 기준 ITM 자동 계산.
+          템플릿에 payoutStructure가 설정돼 있으면 그걸 사용. 없으면 인원 기준 ITM 자동 계산.
+          <br />🔻 우측 stat의 단순 PRIZE POOL 카드(액수만)는 템플릿의 <b>💰 TV에 프라이즈풀 표시</b> 토글로 별도 제어.
         </div>
       </Section>
 

@@ -618,13 +618,16 @@ export default function DisplayPage({
         </div>
       </div>
 
-      {/* 상금 분배표 — Phase 2. display.prizeDistributionLayout=='left'/'right' 일 때만 렌더 */}
+      {/* 상금 분배표 — 우측 사이드 단일 (2026-05-23 정정: 좌측 옵션 완전 제거).
+          사용자 정책: "좌측 프라이즈풀은 현재 화면 구성에 맞지 않음으로 완전 제거(사용X) — 우측만 사용. 이또한 선택사항."
+          display.prizeDistributionLayout='right'일 때만 렌더. 'hidden'이면 mount 안 함.
+          레거시 'left' 값은 resolveTimerDisplay에서 'right'으로 자동 마이그레이션됨. */}
       {session && session.status !== 'completed' &&
-        (display.prizeDistributionLayout === 'left' || display.prizeDistributionLayout === 'right') && (
+        display.prizeDistributionLayout === 'right' && (
           <PrizeDistributionPanel
             session={session}
             display={display}
-            side={display.prizeDistributionLayout}
+            side="right"
           />
         )}
 
@@ -828,38 +831,51 @@ export default function DisplayPage({
 
           {/* 하단 stats — 매장 TV 운영 화면. PRIZE POOL은 매장 내 노출 전용
               (사용자 모바일 앱 /m/* 에는 어떤 상금 필드도 렌더링하지 않음).
-              statsScale로 폰트 배율 적용 (Phase 3). */}
-          <div className="mt-10 grid grid-cols-3 gap-10 max-w-5xl">
-            <Stat
-              label="PLAYERS"
-              value={`${session.playersRemaining}/${session.totalPlayers}`}
-              sub={`${session.tablesRemaining}테이블`}
-              color={display.textColor}
-              scale={display.statsScale ?? 1}
-            />
-            <Stat
-              label="PRIZE POOL"
-              value={
-                display.prizeOverride && display.prizeOverride.trim().length > 0
-                  ? display.prizeOverride
-                  : session.prizePool > 0
-                  ? `₩${session.prizePool.toLocaleString()}`
-                  : '—'
-              }
-              sub=""
-              color={display.textColor}
-              scale={display.statsScale ?? 1}
-            />
-            <Stat
-              label="LATE REG"
-              value={lateRegDisplay}
-              sub={lateClosed ? '' : '남음'}
-              highlight={!lateClosed && lateMin <= 5}
-              color={display.textColor}
-              accentColor={display.accentColor}
-              scale={display.statsScale ?? 1}
-            />
-          </div>
+              statsScale로 폰트 배율 적용 (Phase 3).
+              2026-05-23: session.showPrizePool=false면 PRIZE POOL 카드 자체 숨김 →
+              PLAYERS / LATE REG 2-col로 자동 전환. (사용자 정책 — 선택사항) */}
+          {(() => {
+            const showPrize = session.showPrizePool !== false;
+            return (
+              <div
+                className={`mt-10 grid gap-10 max-w-5xl ${
+                  showPrize ? 'grid-cols-3' : 'grid-cols-2'
+                }`}
+              >
+                <Stat
+                  label="PLAYERS"
+                  value={`${session.playersRemaining}/${session.totalPlayers}`}
+                  sub={`${session.tablesRemaining}테이블`}
+                  color={display.textColor}
+                  scale={display.statsScale ?? 1}
+                />
+                {showPrize && (
+                  <Stat
+                    label="PRIZE POOL"
+                    value={
+                      display.prizeOverride && display.prizeOverride.trim().length > 0
+                        ? display.prizeOverride
+                        : session.prizePool > 0
+                        ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
+                        : '—'
+                    }
+                    sub=""
+                    color={display.textColor}
+                    scale={display.statsScale ?? 1}
+                  />
+                )}
+                <Stat
+                  label="LATE REG"
+                  value={lateRegDisplay}
+                  sub={lateClosed ? '' : '남음'}
+                  highlight={!lateClosed && lateMin <= 5}
+                  color={display.textColor}
+                  accentColor={display.accentColor}
+                  scale={display.statsScale ?? 1}
+                />
+              </div>
+            );
+          })()}
 
           {/* 다음 레벨 / 휴식 — 큰 박스로 강조 (관중·플레이어가 즉시 인지) */}
           {nextBlind && (
@@ -1958,7 +1974,7 @@ function MobileLandscapeLayout({
           )}
         </div>
 
-        {/* ─── 우: 보조 정보 ─── */}
+        {/* ─── 우: 보조 정보 (2026-05-23: session.showPrizePool=false면 PRIZE POOL 카드 숨김) ─── */}
         <div className="flex flex-col justify-center gap-2 min-w-0">
           <CompactStat
             label="PLAYERS"
@@ -1966,18 +1982,20 @@ function MobileLandscapeLayout({
             sub={`${session.tablesRemaining}테이블`}
             color={display.textColor}
           />
-          <CompactStat
-            label="PRIZE POOL"
-            value={
-              display.prizeOverride && display.prizeOverride.trim().length > 0
-                ? display.prizeOverride
-                : session.prizePool > 0
-                ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
-                : '—'
-            }
-            sub=""
-            color={display.textColor}
-          />
+          {session.showPrizePool !== false && (
+            <CompactStat
+              label="PRIZE POOL"
+              value={
+                display.prizeOverride && display.prizeOverride.trim().length > 0
+                  ? display.prizeOverride
+                  : session.prizePool > 0
+                  ? fmtPrizeDisplay(session.prizePool, session.prizeDisplayUnit ?? 'ticket')
+                  : '—'
+              }
+              sub=""
+              color={display.textColor}
+            />
+          )}
           <CompactStat
             label="LATE REG"
             value={lateRegDisplay}
