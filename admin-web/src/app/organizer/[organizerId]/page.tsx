@@ -63,8 +63,28 @@ function OrganizerAdminPageInner({ organizerId }: { organizerId: string }) {
       <aside className="w-56 bg-[#1A1A1A] text-white border-r border-gray-800 flex flex-col">
         <div className="p-5 border-b border-gray-800">
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="font-extrabold tracking-tight">Pink Rabbit</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt=""
+              width={28}
+              height={28}
+              style={{ display: 'block', flexShrink: 0, objectFit: 'contain' }}
+            />
+            <span
+              className="font-black tracking-tight"
+              style={{
+                fontSize: 15,
+                letterSpacing: '-0.02em',
+                background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+              }}
+            >
+              Pink Rabbit
+            </span>
           </div>
           <div className="text-[10px] text-amber-400 font-bold tracking-wider">대회사 어드민</div>
         </div>

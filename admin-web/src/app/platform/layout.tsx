@@ -270,15 +270,24 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
         style={{ borderBottom: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-2 mb-1">
-          <span style={{ fontSize: 18 }} aria-hidden>
-            🏢
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt=""
+            width={28}
+            height={28}
+            style={{ display: 'block', flexShrink: 0, objectFit: 'contain' }}
+          />
           <div
             style={{
-              fontWeight: 800,
+              fontWeight: 900,
               fontSize: 15,
               letterSpacing: '-0.02em',
-              color: 'var(--text-1)',
+              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              color: 'transparent',
             }}
           >
             Pink Rabbit

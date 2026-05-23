@@ -176,7 +176,10 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           }}
         >
           <div className="flex items-center gap-2 mb-1">
-            <img src="/logo.svg" alt="Pink Rabbit" width={120} height={20} style={{ display: 'block' }} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="" width={32} height={32} style={{ display: 'block', flexShrink: 0, objectFit: 'contain' }} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="Pink Rabbit" width={110} height={18} style={{ display: 'block' }} />
           </div>
           <div
             className="text-[10px] font-extrabold"
