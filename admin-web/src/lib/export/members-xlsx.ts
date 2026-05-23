@@ -288,5 +288,5 @@ export function getMembersXlsxFilename(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   const yyyymmdd = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
   const hhmm = `${pad(now.getHours())}${pad(now.getMinutes())}`;
-  return `holdemnow-members-${yyyymmdd}-${hhmm}.xlsx`;
+  return `pinkrabbit-members-${yyyymmdd}-${hhmm}.xlsx`;
 }
