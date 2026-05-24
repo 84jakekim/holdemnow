@@ -486,6 +486,74 @@ export const DEFAULT_BREAK_DURATION_SEC = 600;
 /** SB 증분 단위 — "10단위·1단위 블라인드업은 없다" 사용자 정책. */
 export const BLIND_STEP = 100;
 
+// =====================================================================
+// 2026-05-24 사용자 정정 #1: 브레이크는 레벨 번호 X
+// =====================================================================
+// 사용자 원문:
+//   "브레이크 타임은 레벨이 아니기에 레펠표시로 되면 안된다.
+//    예를들어 5레벨 다음 브레이크 타임일경우, 브레이크 타임이 끝나면 6레벨로 넘어가야한다."
+//
+// 디자인 결정 — UI 분리 (데이터 모델은 유지):
+//   - blindStructure의 isBreak=true 행도 sequence id(`level` 필드)를 그대로 유지한다.
+//     이유: existing 코드(LIVE 진행 currentLevel·점프·find·sort·structure 인덱싱) 전체가
+//     `level` 필드를 1-based unique key로 가정한다. 데이터 스키마를 바꾸면 자동 advance,
+//     레벨 점프, deterministic timeline 등 모든 흐름이 깨진다.
+//   - 대신 "사용자에게 보이는 라벨"만 isBreak를 건너뛰며 1, 2, 3, ...로 재계산한다.
+//     예: structure = [L1, L2, L3, L4, L5, BREAK, L6, L7]
+//         displayedLevelNumber: L1→1, L2→2, L3→3, L4→4, L5→5, BREAK→(없음), L6→6, L7→7
+//
+// resolveDisplayedLevel은 structure + 내부 sequence id(`level`)를 받아
+//   {isBreak, displayedNumber, breakDurationSec} 를 반환한다.
+//
+// 사용처:
+//   - admin-web/src/components/admin/TournamentControlCenter.tsx → LEVEL 배지·NEXT
+//   - admin-web/src/app/display/[storeId]/[slotNum]/page.tsx → BlindStructurePanel·NEXT BLIND·LEVEL 배지
+//   - admin-web/src/components/admin/LivePanel.tsx → 매장 어드민 LIVE 표시
+//
+
+/** displayedLevel(브레이크 건너뛴 사용자-facing 번호) 계산.
+ *  반환: 해당 sequence id가 break면 displayedNumber=null. play 레벨이면 1-based 번호.
+ *  structure가 비거나 sequence id가 없으면 null. */
+export function resolveDisplayedLevel(
+  structure: { level: number; isBreak?: boolean; durationSec?: number }[] | undefined,
+  sequenceLevel: number,
+): {
+  isBreak: boolean;
+  displayedNumber: number | null;
+  breakDurationSec: number;
+} {
+  if (!structure || structure.length === 0) {
+    return { isBreak: false, displayedNumber: null, breakDurationSec: 0 };
+  }
+  const target = structure.find((s) => s.level === sequenceLevel);
+  if (!target) return { isBreak: false, displayedNumber: null, breakDurationSec: 0 };
+  if (target.isBreak) {
+    return {
+      isBreak: true,
+      displayedNumber: null,
+      breakDurationSec: Math.max(0, target.durationSec ?? 0),
+    };
+  }
+  // play 레벨 — 자기 자신까지 isBreak=false 인 행 개수
+  let n = 0;
+  for (const row of structure) {
+    if (!row.isBreak) n++;
+    if (row.level === sequenceLevel) break;
+  }
+  return { isBreak: false, displayedNumber: n, breakDurationSec: 0 };
+}
+
+/** play 레벨만 카운트한 총 갯수 (브레이크 제외).
+ *  "현재 5/12레벨" 같은 라벨에 사용. structure 비면 0. */
+export function countPlayLevels(
+  structure: { isBreak?: boolean }[] | undefined,
+): number {
+  if (!structure || structure.length === 0) return 0;
+  let n = 0;
+  for (const row of structure) if (!row.isBreak) n++;
+  return n;
+}
+
 export const POSTER_STYLES = [
   { value: 'poster-dark', label: 'Dark', bg: 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%)', color: '#fff' },
   { value: 'poster-cream', label: 'Cream', bg: 'linear-gradient(135deg, #F0E6D2 0%, #E5D7B8 100%)', color: '#1A1A1A' },

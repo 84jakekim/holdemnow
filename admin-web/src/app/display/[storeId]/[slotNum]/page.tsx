@@ -34,6 +34,8 @@ import {
   resolvePayoutStructure,
   computePayoutsFromStructure,
   computePayoutAmounts,
+  resolveDisplayedLevel,
+  countPlayLevels,
 } from '@/lib/templates';
 import { useAuth, useUserDoc, useStoreDoc, hasRole } from '@/lib/hooks';
 
@@ -539,6 +541,17 @@ export default function DisplayPage({
   const nextBlind = structure?.find((l) => l.level === (session?.currentLevel ?? 0) + 1);
   const isCurrentBreak = currentLevelObj?.isBreak === true;
 
+  // 2026-05-24 정정 #1: 브레이크는 레벨 번호 X. play 레벨만 displayedNumber로 카운트.
+  //   "BREAK 6" / "LEVEL 6 다음 LV 7" 같은 잘못된 표기를 모두 정정.
+  //   현재 break이면 displayedLabel = "BREAK", play이면 "LEVEL N".
+  //   다음 카드 nextDisplayedLabel도 마찬가지.
+  const _curDisp = structure && session ? resolveDisplayedLevel(structure, session.currentLevel) : null;
+  const displayedLevelLabel = isCurrentBreak
+    ? 'BREAK'
+    : `LEVEL ${_curDisp?.displayedNumber ?? session?.currentLevel ?? 1}`;
+  const _nextDisp = structure && nextBlind ? resolveDisplayedLevel(structure, nextBlind.level) : null;
+  const nextDisplayedNumber = _nextDisp?.displayedNumber ?? nextBlind?.level ?? null;
+
   // 현재 레벨 진행률
   const currentDur = currentLevelObj?.durationSec ?? 0;
   const progress = currentDur > 0 ? Math.min(1, Math.max(0, (currentDur - sec) / currentDur)) : 0;
@@ -666,6 +679,8 @@ export default function DisplayPage({
           heroTitle={heroTitle}
           display={display}
           onEnterFullscreen={enterFullscreenMode}
+          displayedLevelLabel={displayedLevelLabel}
+          nextDisplayedNumber={nextDisplayedNumber}
         />
       ) : isMobileLandscape && session && session.status !== 'completed' ? (
         /* ─── 모바일/태블릿 가로 전용 레이아웃 (2026-05-23 PM 단독 신설) ───
@@ -703,6 +718,8 @@ export default function DisplayPage({
           onAddMinute={handleAddMinute}
           onStopSession={handleStopSession}
           onExitFullscreen={exitFullscreenMode}
+          displayedLevelLabel={displayedLevelLabel}
+          nextDisplayedNumber={nextDisplayedNumber}
         />
       ) : !session || session.status === 'completed' ? (
         <div className="relative flex-1 flex flex-col items-center justify-center">
@@ -817,7 +834,7 @@ export default function DisplayPage({
                   fontSize: 'clamp(28px, 3.3vw, 40px)',
                 }}
               >
-                {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
+                {displayedLevelLabel}
               </span>
             </div>
             <div
@@ -1000,7 +1017,7 @@ export default function DisplayPage({
                     className="text-xs tracking-[0.25em] font-extrabold opacity-70"
                     style={{ color: display.textColor }}
                   >
-                    LV {nextBlind.level}
+                    LV {nextDisplayedNumber ?? nextBlind.level}
                   </div>
                   <div
                     className="font-mono font-extrabold tabular-nums leading-none"
@@ -1240,6 +1257,8 @@ function MobilePortraitLayout({
   heroTitle,
   display,
   onEnterFullscreen,
+  displayedLevelLabel,
+  nextDisplayedNumber,
 }: {
   session: LiveSession;
   sec: number;
@@ -1257,6 +1276,9 @@ function MobilePortraitLayout({
   heroTitle: string;
   display: TimerDisplaySettings;
   onEnterFullscreen: () => void;
+  /** 2026-05-24 정정 #1: 브레이크는 레벨 번호 X. play 레벨만 displayedNumber. */
+  displayedLevelLabel: string;
+  nextDisplayedNumber: number | null;
 }) {
   return (
     <div className="relative flex-1 flex flex-col px-4 pb-4">
@@ -1353,7 +1375,7 @@ function MobilePortraitLayout({
               fontSize: 'clamp(22px, 4.5vw, 32px)',
             }}
           >
-            {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
+            {displayedLevelLabel}
           </span>
         </div>
         <div
@@ -1453,7 +1475,8 @@ function MobilePortraitLayout({
                   className="text-[10px] tracking-[0.2em] font-extrabold opacity-70"
                   style={{ color: display.textColor }}
                 >
-                  LV {nextBlind.level}
+                  {/* 2026-05-24 정정 #1: 브레이크 건너뛴 displayedNumber. */}
+                  LV {nextDisplayedNumber ?? nextBlind.level}
                 </div>
                 <div
                   className="font-mono font-extrabold tabular-nums leading-none"
@@ -1824,6 +1847,8 @@ function MobileLandscapeLayout({
   onAddMinute,
   onStopSession,
   onExitFullscreen,
+  displayedLevelLabel,
+  nextDisplayedNumber,
 }: {
   session: LiveSession;
   structure: LiveSession['blindStructure'] | undefined;
@@ -1852,6 +1877,9 @@ function MobileLandscapeLayout({
   onAddMinute: (delta: number) => void;
   onStopSession: () => void;
   onExitFullscreen: () => void;
+  /** 2026-05-24 정정 #1: 브레이크는 레벨 번호 X. play 레벨만 displayedNumber. */
+  displayedLevelLabel: string;
+  nextDisplayedNumber: number | null;
 }) {
   const barColor = lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor;
   const timerColor = paused
@@ -2034,7 +2062,7 @@ function MobileLandscapeLayout({
                         fontSize: `clamp(${16 * sNext}px, ${1.5 * sNext}vw, ${20 * sNext}px)`,
                       }}
                     >
-                      LV {nextBlind.level}
+                      LV {nextDisplayedNumber ?? nextBlind.level}
                     </div>
                     <div
                       className="font-mono font-extrabold mt-1.5"
@@ -2115,7 +2143,7 @@ function MobileLandscapeLayout({
                 fontSize: `clamp(${48 * sLevel}px, ${5.2 * sLevel}vw, ${80 * sLevel}px)`,
               }}
             >
-              {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
+              {displayedLevelLabel}
             </span>
           </div>
           <div
@@ -3049,7 +3077,14 @@ function BlindStructurePanel({
             letterSpacing: '0.1em',
           }}
         >
-          Lv {currentLevel} / {structure.length}
+          {/* 2026-05-24 정정 #1: 브레이크는 레벨 번호 X.
+              현재가 break면 ☕, play면 displayed/play 총수. */}
+          {(() => {
+            const disp = resolveDisplayedLevel(structure, currentLevel);
+            const totalPlay = countPlayLevels(structure);
+            if (disp.isBreak) return `☕ 휴식 / ${totalPlay}`;
+            return `Lv ${disp.displayedNumber ?? currentLevel} / ${totalPlay}`;
+          })()}
         </span>
       </div>
       {/* 컴팩트 10레벨 — 스크롤 없음 */}
@@ -3125,7 +3160,9 @@ function BlindStructurePanel({
                       opacity: 0.9,
                     }}
                   >
-                    Lv {lvl.level}
+                    {/* 2026-05-24 정정 #1: 브레이크는 레벨 번호 X.
+                        play 레벨만 1, 2, 3, ...로 displayedNumber. structure 전체에서 재계산. */}
+                    Lv {resolveDisplayedLevel(structure, lvl.level).displayedNumber ?? lvl.level}
                   </span>
                   {/* 2026-05-24 사용자 정정: 앤티 별도 행/줄바꿈 폐기 — 한 행에 sb/bb · aN.
                       flex-col 제거. 단일 inline 표시. baseline 정렬로 점·a 가독성 확보. */}

@@ -62,6 +62,8 @@ import {
   computeAutoItmCount,
   computePresetPayouts,
   DISTRIBUTION_LABELS,
+  resolveDisplayedLevel,
+  countPlayLevels,
 } from '@/lib/templates';
 import {
   type DisplaySlot,
@@ -516,6 +518,46 @@ function SessionControlPanel({
   const isFinishing = graceSec != null && graceSec > 0;
   const readyLeftSec = isReady ? computeReadyExpirySec(session) : null;
 
+  // ───────────────────────────────────────────────────────────────────
+  // 2026-05-24 사용자 정정 #2: 드래그로 시간 당긴 후 다음 레벨로 자동 안 넘어가는 버그.
+  //
+  // 원인: 기존엔 advanceLevelIfDue를 /display/* (TV)와 /m/live/* (모바일 LIVE) 페이지의
+  //   sec=0 useEffect에서만 호출했다. 사장이 토너 운영 페이지에서 드래그로 시간을
+  //   0초까지 당겨도 그 페이지에는 advanceLevelIfDue 호출이 없어,
+  //   - TV/모바일 LIVE가 켜져있어야 다음 레벨로 advance됨
+  //   - 둘 다 안 켜져있으면 autoAdvanceLevel cron(1분 주기) 대기 → 같은 레벨이 다시
+  //     deadlineFromNow(level.durationSec)로 시작되는 것처럼 보임 (re-display)
+  //
+  // Fix: SessionControlPanel에서도 sec=0 도달 시 advanceLevelIfDue를 호출.
+  //   - 사장이 토너 운영 페이지만 켜놓고 있어도 즉시 다음 레벨로 진행
+  //   - cycle key로 같은 레벨 중복 호출 차단
+  //   - 마지막 레벨이면 advanceLevelIfDue가 finishingAt만 박고 자동 종료 흐름은 위 useEffect가 처리
+  // ───────────────────────────────────────────────────────────────────
+  const advanceFiredCycleRef = useRef<string>('');
+  const prevSecRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = prevSecRef.current;
+    // running 상태에서 prev > 0 → 현재 0으로 떨어진 순간만 발사
+    if (
+      session.status === 'running' &&
+      prev !== null &&
+      prev > 0 &&
+      seconds === 0 &&
+      session.id
+    ) {
+      const lv = session.currentLevel ?? -1;
+      const cycleKey = `lv${lv}-${session.id}`;
+      if (advanceFiredCycleRef.current !== cycleKey) {
+        advanceFiredCycleRef.current = cycleKey;
+        // 동적 import로 advanceLevelIfDue 호출 (TournamentControlCenter는 import 이미 가능)
+        import('@/lib/live').then(({ advanceLevelIfDue }) => {
+          void advanceLevelIfDue(session.id, lv).catch(() => {});
+        }).catch(() => {});
+      }
+    }
+    prevSecRef.current = seconds;
+  }, [seconds, session.status, session.id, session.currentLevel]);
+
   // 마지막 레벨 자동 정리 (sanity guard 포함 — LivePanel과 동일 로직)
   const finishingMs = session.finishingAt?.toMillis?.();
   useEffect(() => {
@@ -561,20 +603,31 @@ function SessionControlPanel({
           border: `1.5px solid ${isFinishing ? '#F97316' : isCurrentBreak ? '#F59E0B' : 'var(--border)'}`,
         }}
       >
+        {/* LEVEL 표시 — 2026-05-24 정정 #1: 브레이크는 레벨 번호 X.
+            resolveDisplayedLevel이 isBreak=true 행은 number=null을 반환 → "☕ 휴식"으로만 표시.
+            play 레벨이면 isBreak를 건너뛴 사용자-facing 번호(1, 2, 3, ...). */}
         <div className="text-[10px] font-bold tracking-widest mb-1" style={{ color: 'var(--text-2)' }}>
           {isFinishing ? (
             <span style={{ color: '#C2410C' }} className="mr-2">⚠ 모든 레벨 종료 · {fmtTime(graceSec ?? 0)}</span>
           ) : isReady ? (
             <span style={{ color: '#059669' }} className="mr-2">● 시작 대기</span>
           ) : null}
-          {isCurrentBreak ? (
-            <span style={{ color: '#C2410C' }}>☕ 휴식 · LV {session.currentLevel}</span>
-          ) : (
-            <>
-              LEVEL {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
-              {session.ante ? ` · ante ${session.ante}` : ''}
-            </>
-          )}
+          {(() => {
+            const disp = resolveDisplayedLevel(structure, session.currentLevel);
+            if (disp.isBreak) {
+              return (
+                <span style={{ color: '#C2410C' }}>
+                  ☕ 휴식 {disp.breakDurationSec ? `· ${Math.round(disp.breakDurationSec / 60)}분` : ''}
+                </span>
+              );
+            }
+            return (
+              <>
+                LEVEL {disp.displayedNumber ?? session.currentLevel} · {session.smallBlind}/{session.bigBlind}
+                {session.ante ? ` · ante ${session.ante}` : ''}
+              </>
+            );
+          })()}
         </div>
         <div
           className="font-mono font-extrabold leading-none transition-colors"
@@ -626,7 +679,8 @@ function SessionControlPanel({
             ) : (
               <div className="flex items-baseline justify-center gap-3 flex-wrap">
                 <div className="text-[10px] font-extrabold tracking-widest" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  Lv {nextBlind.level}
+                  {/* 2026-05-24 정정 #1: NEXT 레벨 번호도 브레이크 건너뛴 displayedNumber로. */}
+                  Lv {resolveDisplayedLevel(structure, nextBlind.level).displayedNumber ?? nextBlind.level}
                 </div>
                 <div className="font-mono font-extrabold tabular-nums" style={{ fontSize: '22px' }}>
                   {nextBlind.sb.toLocaleString()}
@@ -778,8 +832,9 @@ function DraggableProgressBar({
     if (!rect || rect.width === 0) return currentSeconds;
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
     const elapsed = ratio * currentDur;
-    const remaining = Math.max(1, currentDur - elapsed);
-    return Math.max(1, Math.min(currentDur, Math.round(remaining / 5) * 5));
+    const remaining = Math.max(0, currentDur - elapsed);
+    // 2026-05-24 정정 #2: min 1 → 0. 진행바 끝까지 드래그 시 즉시 다음 레벨로 advance.
+    return Math.max(0, Math.min(currentDur, Math.round(remaining / 5) * 5));
   };
 
   const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -1295,19 +1350,63 @@ function DisplaySettingsPane({
           사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘."
           PRIZE POOL 표시값은 화면 설정 → 텍스트 → "💰 화면 우측 PRIZE POOL 표시값"에서 직접 입력. */}
 
-      {/* 텍스트 */}
+      {/*
+       * 텍스트 — 2026-05-24 사용자 정정 #3 대응.
+       *
+       * 사용자 원문: "경기제목설정항목이 보이지 않는다. Ctrl+Shift+R 했는데도 보이지 않음."
+       *
+       * 진단: 직전엔 customTournamentTitle(레거시 단일 줄)만 노출. TV의 첫째 줄(titleText)·
+       *   둘째 줄(noteText)을 토너 운영 페이지에서 직접 편집할 수 없어 사용자는
+       *   "경기제목"이 어디 있는지 못 찾음. TimerDisplaySettingsEditor(별도 페이지)에만
+       *   3줄 에디터가 있었음.
+       *
+       * Fix: 토너 운영 화면 설정 탭에 똑같은 3줄 입력(titleText / noteText) 신설.
+       *   에메랄드 액센트로 "✱ 경기 제목" 명시. 글씨 크기·색·스타일은 다른 페이지에서
+       *   조절 가능 — 이 탭은 텍스트만 빠르게 바꾸는 용도.
+       */}
       <Section title="📝 텍스트">
+        <div className="text-[10px] font-extrabold tracking-wider mb-1.5 px-1"
+             style={{ color: '#047857' }}>
+          ✱ 경기 제목 (TV 정중앙 상단 헤드라인)
+        </div>
+        <input
+          value={local.titleText}
+          onChange={(e) => update('titleText', e.target.value)}
+          placeholder="예) 5/24 정기 토너 100K"
+          className="w-full text-[12.5px] font-extrabold rounded px-2.5 py-2 mb-2"
+          style={{
+            background: 'var(--surface-2)',
+            color: 'var(--text-1)',
+            border: '2px solid rgba(16,185,129,0.55)',
+          }}
+          aria-label="경기 제목 (TV 첫째 줄)"
+        />
+        <div className="text-[10px] tracking-wider mb-1.5 px-1"
+             style={{ color: 'var(--text-3)' }}>
+          📝 부제 (제목 바로 아래 · 선택)
+        </div>
+        <input
+          value={local.noteText}
+          onChange={(e) => update('noteText', e.target.value)}
+          placeholder="예) GTD 100만 · 리바인 3회 · 18:30 디너"
+          className="w-full text-[11px] rounded px-2 py-1.5 mb-2.5"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
+        />
+        <div className="text-[9.5px] mb-1.5 px-1 leading-tight"
+             style={{ color: 'var(--text-3)' }}>
+          ↓ 레거시 대회명·공지·스폰서 (비워두면 위 ✱ 경기 제목이 사용됨)
+        </div>
         <input
           value={local.customTournamentTitle}
           onChange={(e) => update('customTournamentTitle', e.target.value)}
-          placeholder="대회명 (비우면 자동)"
+          placeholder="대회명 (레거시 · 비우면 자동)"
           className="w-full text-[11px] rounded px-2 py-1.5 mb-1.5"
           style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
         />
         <input
           value={local.announcement}
           onChange={(e) => update('announcement', e.target.value)}
-          placeholder="공지 (TV 하단 띠)"
+          placeholder="공지 (사용 안 함 · 호환용)"
           className="w-full text-[11px] rounded px-2 py-1.5 mb-1.5"
           style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
         />
@@ -1885,9 +1984,13 @@ function PayoutPolicyExpander({
   disabled?: boolean;
   onSave: (next: PayoutStructure) => Promise<void>;
 }) {
-  // itmCount 표시값 — 'auto'면 자동 산출값으로 미리보기
-  const resolvedItm =
-    ps.itmCount === 'auto' ? computeAutoItmCount(totalPlayers) : Math.max(1, Math.floor(ps.itmCount));
+  // itmCount 표시값 — 'auto'면 자동 산출값으로 미리보기. 2026-05-24 정정: max 30 cap.
+  const resolvedItm = Math.min(
+    30,
+    ps.itmCount === 'auto'
+      ? computeAutoItmCount(totalPlayers)
+      : Math.max(1, Math.floor(ps.itmCount)),
+  );
   const payouts = computePayoutsFromStructure(ps, totalPlayers);
   const amounts = computePayoutAmounts(prizePoolWon, payouts);
 
@@ -1956,39 +2059,16 @@ function PayoutPolicyExpander({
                 {n}등
               </button>
             ))}
-            {/* 직접 입력 — 1~50등 — auto/3/5/8/10 외 임의값 */}
-            <div className="flex items-center gap-1 ml-1">
-              <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>또는</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={50}
-                disabled={disabled}
-                placeholder="N"
-                value={
-                  typeof ps.itmCount === 'number' && ![3, 5, 8, 10].includes(ps.itmCount)
-                    ? ps.itmCount
-                    : ''
-                }
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === '') return;
-                  const v = parseInt(raw, 10);
-                  if (Number.isFinite(v) && v >= 1 && v <= 50) {
-                    onSave({ ...ps, itmCount: v });
-                  }
-                }}
-                className="w-12 text-[10px] font-mono font-bold text-center rounded border-2 px-1 py-1"
-                style={{
-                  background: 'var(--surface-1)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-1)',
-                }}
-                aria-label="시상 등수 직접 입력 (1~50)"
-              />
-              <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>등</span>
-            </div>
+            {/* 직접 입력 — 1~30등 — auto/3/5/8/10 외 임의값.
+                2026-05-24 정정: 사용자 명시 "최대 30등까지 설정가능".
+                onChange는 input의 raw value를 그대로 setState하지 못하므로 임시 state(rawItm)에
+                담아 사용자가 자유롭게 타이핑한 뒤 blur/Enter 시 commit하도록 변경.
+                onChange만 사용하면 "1"을 지우고 "12"를 입력하는 흐름이 끊겨 잘 작동하지 않는다. */}
+            <ItmCountInput
+              ps={ps}
+              disabled={disabled}
+              onCommit={(v) => onSave({ ...ps, itmCount: v })}
+            />
           </div>
         </div>
         {/* 분배 방식 */}
@@ -2005,12 +2085,15 @@ function PayoutPolicyExpander({
                   type="button"
                   disabled={disabled}
                   onClick={() => {
-                    // custom 진입 시 customPercents 미존재면 standard 프리셋으로 시드
+                    // custom 진입 시 customPercents 미존재면 standard 프리셋으로 시드.
+                    // 2026-05-24 정정: 최대 30등 cap.
                     if (d === 'custom' && (!ps.customPercents || ps.customPercents.length === 0)) {
-                      const itmN =
+                      const itmN = Math.min(
+                        30,
                         ps.itmCount === 'auto'
                           ? computeAutoItmCount(totalPlayers)
-                          : Math.max(1, ps.itmCount);
+                          : Math.max(1, ps.itmCount),
+                      );
                       const seed = computePresetPayouts('standard', itmN).map((p) =>
                         Math.round(p.ratio * 1000) / 10,
                       );
@@ -2094,6 +2177,79 @@ function PayoutPolicyExpander({
 }
 
 /**
+ * ItmCountInput — 시상 등수 직접 입력 박스 (1~30).
+ *
+ * 2026-05-24 사용자 정정 #4 정정 라운드 2:
+ *   "프라이즈풀 수기설정에서 n등 입력칸이 제대로 작동하지 않는다. 최대 30등까지 설정가능해야한다."
+ *
+ * 핵심: 외부 ps.itmCount를 즉시 commit하면 사용자가 "12"를 입력하다가
+ * "1"→commit→"12" 입력 중 input value가 바뀌어 타이핑 끊기는 race를 막기 위해
+ * 로컬 raw string state로 입력 흐름을 격리하고 blur/Enter 시 commit한다.
+ */
+function ItmCountInput({
+  ps,
+  disabled,
+  onCommit,
+}: {
+  ps: PayoutStructure;
+  disabled?: boolean;
+  onCommit: (v: number) => void;
+}) {
+  const currentValue =
+    typeof ps.itmCount === 'number' && ![3, 5, 8, 10].includes(ps.itmCount) ? ps.itmCount : null;
+  const [raw, setRaw] = useState<string>(currentValue != null ? String(currentValue) : '');
+
+  // 외부 ps.itmCount 변경 시 sync (다른 프리셋 버튼을 누르거나 다른 클라이언트가 변경)
+  useEffect(() => {
+    setRaw(currentValue != null ? String(currentValue) : '');
+  }, [currentValue]);
+
+  const commit = () => {
+    const v = parseInt(raw, 10);
+    if (!Number.isFinite(v)) {
+      // 빈 값 또는 NaN — auto로 돌아가지 않고 그대로 무시 (사용자가 빈칸 두면 그대로)
+      setRaw('');
+      return;
+    }
+    const clamped = Math.max(1, Math.min(30, v));
+    onCommit(clamped);
+    setRaw(String(clamped));
+  };
+
+  return (
+    <div className="flex items-center gap-1 ml-1">
+      <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>또는</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={30}
+        disabled={disabled}
+        placeholder="N"
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className="w-14 text-[11px] font-mono font-bold text-center rounded border-2 px-1 py-1"
+        style={{
+          background: 'var(--surface-1)',
+          borderColor: 'var(--border)',
+          color: 'var(--text-1)',
+        }}
+        aria-label="시상 등수 직접 입력 (1~30)"
+      />
+      <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>등 (1~30)</span>
+    </div>
+  );
+}
+
+/**
  * CustomPercentsEditor — distribution='custom'일 때 등수별 % 직접 편집.
  * 2026-05-24 사용자 정정 #4: "수기입력항목이 있지만 설정할수있는 칸이 없다".
  *
@@ -2116,8 +2272,11 @@ function CustomPercentsEditor({
   disabled?: boolean;
   onSave: (next: PayoutStructure) => Promise<void>;
 }) {
-  const itmN =
-    ps.itmCount === 'auto' ? computeAutoItmCount(totalPlayers) : Math.max(1, ps.itmCount);
+  // 2026-05-24 정정 라운드 2: 최대 30등 cap. 사용자 명시 "최대 30등까지 설정가능".
+  const itmN = Math.min(
+    30,
+    ps.itmCount === 'auto' ? computeAutoItmCount(totalPlayers) : Math.max(1, ps.itmCount),
+  );
   // 행 수 = itmN. customPercents가 짧으면 standard 프리셋으로 패딩.
   const current = (() => {
     const arr = (ps.customPercents ?? []).slice(0, itmN);

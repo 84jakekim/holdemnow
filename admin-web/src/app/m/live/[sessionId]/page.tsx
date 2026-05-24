@@ -29,6 +29,7 @@ import {
   playBlindUp,
   unlockAudio,
 } from '@/lib/sounds';
+import { resolveDisplayedLevel } from '@/lib/templates';
 
 const SOUND_STORAGE_KEY = 'holdemnow:liveSoundOn';
 
@@ -281,7 +282,12 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
       </div>
 
       <div className="text-center text-[10px] text-gray-500 tracking-widest pt-4">
-        LEVEL {session.currentLevel}
+        {/* 2026-05-24 정정 #1: 브레이크는 레벨 번호 X. play 레벨만 displayedNumber. */}
+        {(() => {
+          const disp = resolveDisplayedLevel(structureForNext, session.currentLevel);
+          if (disp.isBreak) return '☕ BREAK';
+          return `LEVEL ${disp.displayedNumber ?? session.currentLevel}`;
+        })()}
       </div>
 
       {/* 거대 카운트다운 — 10초 이내 빨강 + pulse */}
@@ -345,7 +351,8 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
             ) : (
               <div className="flex items-baseline justify-center gap-3 flex-wrap">
                 <div className="text-[10px] font-extrabold tracking-widest text-gray-500">
-                  LV {nextBlind.level}
+                  {/* 2026-05-24 정정 #1: displayedNumber로. */}
+                  LV {resolveDisplayedLevel(structureForNext, nextBlind.level).displayedNumber ?? nextBlind.level}
                 </div>
                 <div className="font-mono font-extrabold tabular-nums text-white text-2xl leading-none">
                   {nextBlind.sb.toLocaleString()}

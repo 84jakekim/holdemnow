@@ -13,7 +13,6 @@ import {
   toggleLateRegInSession,
   stopLiveSession,
   selfHealStaleFinishingAt,
-  nextLevelTick,
   computeLateRegMinutes,
   fmtTime,
   useLiveCountdown,
@@ -28,6 +27,7 @@ import {
   posterStyleFor,
   fmtBuyIn,
   fmtPrizeDisplay,
+  resolveDisplayedLevel,
 } from '@/lib/templates';
 
 interface Props {
@@ -198,7 +198,15 @@ function SessionTab({
         {fmtTime(seconds)}
       </div>
       <div className={`text-[10px] mt-0.5 ${active ? 'text-gray-300' : 'text-gray-500'}`}>
-        Lv {session.currentLevel} · {session.playersRemaining}명
+        {/* 2026-05-24 정정 #1: 사이드바 카드도 displayedNumber. */}
+        {(() => {
+          const s = (session.blindStructureLocked && session.blindStructureLocked.length > 0)
+            ? session.blindStructureLocked
+            : session.blindStructure;
+          const d = resolveDisplayedLevel(s, session.currentLevel);
+          const lbl = d.isBreak ? 'BREAK' : `Lv ${d.displayedNumber ?? session.currentLevel}`;
+          return `${lbl} · ${session.playersRemaining}명`;
+        })()}
       </div>
     </button>
   );
@@ -225,21 +233,25 @@ function SessionControls({ session }: { session: LiveSession }) {
   const isFinishing = graceSec != null && graceSec > 0;
   const readyLeftSec = isReady ? computeReadyExpirySec(session) : null;
 
-  // 0 도달 시 자동 다음 레벨 (한 클라이언트만 실행하는 것이 이상적 — v0.1은 first-write-wins).
-  // ready/paused 상태에서는 절대 자동 진행 금지.
-  const advanceLockRef = useRef(false);
+  // 0 도달 시 자동 다음 레벨 — 2026-05-24 정정 #2.
+  // 직전엔 nextLevelTick(session) (no-op deprecated)을 호출해 advance가 안 일어났음.
+  // advanceLevelIfDue를 cycle key로 1회만 발사하도록 변경 — display/[storeId]/[slotNum]과 동일 패턴.
+  const advanceFiredCycleRef = useRef<string>('');
   useEffect(() => {
     if (!isRunning) return;
-    if (seconds > 0) {
-      advanceLockRef.current = false;
-      return;
-    }
-    if (advanceLockRef.current) return;
-    advanceLockRef.current = true;
-    nextLevelTick(session).catch(() => {
-      advanceLockRef.current = false;
+    if (seconds > 0) return;
+    const lv = session.currentLevel ?? -1;
+    const cycleKey = `lv${lv}-${session.id}`;
+    if (advanceFiredCycleRef.current === cycleKey) return;
+    advanceFiredCycleRef.current = cycleKey;
+    import('@/lib/live').then(({ advanceLevelIfDue }) => {
+      void advanceLevelIfDue(session.id, lv).catch(() => {
+        advanceFiredCycleRef.current = '';
+      });
+    }).catch(() => {
+      advanceFiredCycleRef.current = '';
     });
-  }, [seconds, isRunning, session]);
+  }, [seconds, isRunning, session.id, session.currentLevel]);
 
   // 마지막 레벨 종료 후 그레이스 만료 시 자동 stopLiveSession 호출.
   // 매장 사장 클라이언트가 권한을 가지고 있어, 이 페이지가 켜져 있는 동안 정리됨.
@@ -299,14 +311,24 @@ function SessionControls({ session }: { session: LiveSession }) {
           ) : isReady ? (
             <span className="text-emerald-700 mr-2">● 시작 대기</span>
           ) : null}
-          {isCurrentBreak ? (
-            <span className="text-amber-700">☕ 휴식 (BREAK) · LV {session.currentLevel}</span>
-          ) : (
-            <>
-              LEVEL {session.currentLevel} · {session.smallBlind}/{session.bigBlind}
-              {session.ante ? ` · ante ${session.ante}` : ''}
-            </>
-          )}
+          {/* 2026-05-24 정정 #1: 브레이크는 레벨 번호 X. play 레벨만 displayedNumber. */}
+          {(() => {
+            const disp = resolveDisplayedLevel(structure, session.currentLevel);
+            if (disp.isBreak) {
+              return (
+                <span className="text-amber-700">
+                  ☕ 휴식 (BREAK)
+                  {disp.breakDurationSec ? ` · ${Math.round(disp.breakDurationSec / 60)}분` : ''}
+                </span>
+              );
+            }
+            return (
+              <>
+                LEVEL {disp.displayedNumber ?? session.currentLevel} · {session.smallBlind}/{session.bigBlind}
+                {session.ante ? ` · ante ${session.ante}` : ''}
+              </>
+            );
+          })()}
         </div>
         <div
           className={`font-mono font-extrabold leading-none transition-colors ${
@@ -348,7 +370,8 @@ function SessionControls({ session }: { session: LiveSession }) {
             ) : (
               <div className="flex items-baseline justify-center gap-3 flex-wrap">
                 <div className="text-[11px] font-extrabold tracking-widest text-gray-400">
-                  Lv {nextBlind.level}
+                  {/* 2026-05-24 정정 #1: displayedNumber로. */}
+                  Lv {resolveDisplayedLevel(structure, nextBlind.level).displayedNumber ?? nextBlind.level}
                 </div>
                 <div
                   className="font-mono font-extrabold tabular-nums leading-none"
@@ -676,9 +699,9 @@ function DraggableProgressBar({
     if (!rect || rect.width === 0) return currentSeconds;
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
     const elapsed = ratio * currentDur;
-    const remaining = Math.max(1, currentDur - elapsed);
-    // 5초 스냅
-    return Math.max(1, Math.min(currentDur, Math.round(remaining / 5) * 5));
+    const remaining = Math.max(0, currentDur - elapsed);
+    // 5초 스냅. 2026-05-24 정정: min 1 → 0 (드래그 끝까지 = 즉시 다음 레벨).
+    return Math.max(0, Math.min(currentDur, Math.round(remaining / 5) * 5));
   };
 
   const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -826,7 +849,8 @@ function LevelJumpModal({
                   }`}
                 >
                   <div className="text-[9px] font-bold text-gray-500 tracking-widest">
-                    {isBreak ? '☕' : `LV ${lvl.level}`}
+                    {/* 2026-05-24 정정 #1: 점프 모달도 displayedNumber 사용. */}
+                    {isBreak ? '☕' : `LV ${resolveDisplayedLevel(structure, lvl.level).displayedNumber ?? lvl.level}`}
                   </div>
                   <div className="font-mono text-[11px] font-extrabold text-gray-900 tabular-nums">
                     {isBreak ? '휴식' : `${lvl.sb.toLocaleString()}/${lvl.bb.toLocaleString()}`}

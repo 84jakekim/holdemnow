@@ -940,7 +940,18 @@ export async function addSecondsToSession(s: LiveSession, currentSecondsLeft: nu
  * UX: 사용자가 슬라이더/진행바를 드래그하면 newSecondsLeft를 그대로 setTimeRemaining 호출.
  *
  * 구현: addSecondsToSession과 동일 원리. delta = newSec - currentSec 계산 후 timeline shift.
- * 클램프: [1, currentLvlDur] — 마지막 레벨 끝을 넘기는 실수를 원천 차단.
+ * 클램프: [0, currentLvlDur].
+ *
+ * 2026-05-24 사용자 정정 #2: "드래그로 시간을 0까지 당겨도 다음 레벨로 안 넘어가고
+ *   해당 레벨에서 한번더 타이머시간이 시작된다."
+ *   원인: 직전엔 min을 1로 강제해 0이 될 수 없었음. nextLevelAt도 갱신 안 함.
+ *   Fix:
+ *     1) min을 0으로 — 드래그 끝까지 당기면 sec=0 도달 → advanceLevelIfDue 트리거
+ *     2) nextLevelAt도 deadline과 동기화 — cron/클라 advance 둘 다 동일 기준
+ *     3) 사용자가 진행바를 한 번에 끝까지 드래그한 경우(currentSeconds>>1)
+ *        → 즉시 advance가 안 되고 다음 tick에서 발사돼야 함. patchSession 직후
+ *           Firestore onSnapshot이 새 sec=0을 반영 → SessionControlPanel의
+ *           sec=0 useEffect가 advanceLevelIfDue 호출.
  */
 export async function setTimeRemainingInSession(
   s: LiveSession,
@@ -951,13 +962,19 @@ export async function setTimeRemainingInSession(
     ? s.blindStructureLocked
     : s.blindStructure;
   const curLvlDur = structure?.find((l) => l.level === s.currentLevel)?.durationSec || 1200;
-  const clamped = Math.max(1, Math.min(curLvlDur, Math.round(newSecondsLeft)));
+  // 2026-05-24 정정: min 1 → 0. 0까지 드래그 가능. running 중이면 즉시 advance.
+  const clamped = Math.max(0, Math.min(curLvlDur, Math.round(newSecondsLeft)));
   const delta = clamped - currentSecondsLeft;
   if (delta === 0) return;
 
+  const newDeadline = s.status === 'running' ? deadlineFromNow(clamped) : null;
   const updates: Partial<LiveSession> = {
     levelSecondsLeft: clamped,
-    levelEndsAt: s.status === 'running' ? deadlineFromNow(clamped) : null,
+    levelEndsAt: newDeadline,
+    // 2026-05-24 정정: nextLevelAt도 동기화. autoAdvanceLevel cron과 advanceLevelIfDue
+    //   transaction 모두 nextLevelAt을 보고 due 판정한다. 누락하면 cron이 이전 nextLevelAt을
+    //   믿어 advance를 skip → 같은 레벨에서 1분간 대기.
+    nextLevelAt: newDeadline,
   };
 
   // 같은 sanity guard 적용 — addSecondsToSession과 동일 원리
