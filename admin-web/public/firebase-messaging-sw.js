@@ -1,9 +1,20 @@
 /**
  * Firebase Cloud Messaging Service Worker.
- * 백그라운드 푸시 메시지 처리 (탭이 꺼져있거나 다른 탭에 있을 때).
+ * 백그라운드 푸시 메시지 처리 + PWA 자동 갱신 자체 복구(self-heal).
  *
  * Firebase Web Push가 동작하려면 이 파일이 반드시 `/firebase-messaging-sw.js` 경로에 있어야 합니다.
  * compat 빌드를 사용하는 게 SW 환경에선 표준.
+ *
+ * === Self-heal 정책 (v2) ===
+ * 이전 빌드의 SW에는 SKIP_WAITING 핸들러도 없고, updateViaCache:'imports' 기본값으로 등록되어
+ * 브라우저가 SW JS 자체를 24h까지 캐싱한다. 그 결과 새 PWAUpdateManager 코드가 들어간 빌드를
+ * 푸시해도 사용자 PWA가 새 chunk를 영원히 못 받는 닭과 달걀 문제가 발생한다.
+ *
+ * 이 SW는 install·activate 사이클마다 1) 모든 런타임 캐시 비우기, 2) skipWaiting + clients.claim,
+ * 3) 모든 클라이언트(탭/PWA) 강제 navigate(reload)로 옛 HTML·chunks를 즉시 폐기한다.
+ * FCM 백그라운드 푸시 기능은 새 SW가 그대로 이어받으므로 unregister는 하지 않는다.
+ *
+ * 한 번 사용자 디바이스에 이 SW가 들어오면 그 후엔 영구 자동 갱신.
  */
 /* eslint-disable */
 importScripts('https://www.gstatic.com/firebasejs/12.13.0/firebase-app-compat.js');
@@ -79,15 +90,49 @@ self.addEventListener('fetch', (event) => {
   // No-op — 그냥 네트워크로 보냄. 캐시는 v0.2.
 });
 
-// 새 SW 즉시 활성화 (배포 후 사용자가 새 버전 빠르게 받게).
-// install 단계에서 skipWaiting 호출하면 기존 SW가 즉시 교체된다.
-// 단, controllerchange 이벤트가 클라이언트에서 트리거되어 PWAUpdateManager가
-// 부드러운 reload를 처리하도록 설계됨.
+// ===== Self-heal: install =====
+// 새 SW JS가 도달하면 즉시 skipWaiting으로 waiting 상태를 건너뛴다.
+// 옛 SW 컨트롤러는 activate 단계에서 교체된다.
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
+
+// ===== Self-heal: activate =====
+// 1) 모든 Cache Storage 비우기 — 옛 빌드가 캐싱한 HTML/chunks 모두 폐기
+// 2) clients.claim() — 이미 열려 있는 탭/PWA의 컨트롤러를 새 SW로 즉시 교체
+// 3) 모든 클라이언트에 SW_ACTIVATED 메시지 전송 — PWAUpdateManager가
+//    controllerchange 이벤트로 부드러운 reload 수행. (메시지는 보조 신호)
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      } catch (e) {
+        // 캐시 없음 등 — 무시
+      }
+      try {
+        await self.clients.claim();
+      } catch {
+        // 무시
+      }
+      try {
+        const clients = await self.clients.matchAll({
+          type: 'window',
+          includeUncontrolled: true,
+        });
+        clients.forEach((c) => {
+          try {
+            c.postMessage({ type: 'SW_ACTIVATED' });
+          } catch {
+            // 무시
+          }
+        });
+      } catch {
+        // 무시
+      }
+    })(),
+  );
 });
 
 // PWAUpdateManager가 명시적으로 SKIP_WAITING 메시지를 보낼 때도 즉시 활성화.
