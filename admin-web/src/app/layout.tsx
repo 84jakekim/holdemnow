@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { JetBrains_Mono, Fraunces } from 'next/font/google';
 import Script from 'next/script';
+import PWAUpdateManager from '@/components/PWAUpdateManager';
 import './globals.css';
 
 const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? '';
@@ -67,6 +68,11 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-sans">
+        {/* PWA 자동 갱신 매니저 — 모든 경로 공통 보호.
+            매장 사장님이 PWA 재설치 없이도 새 빌드를 자동으로 받게 한다.
+            SW 등록(updateViaCache:'none') + 60초 폴링 + controllerchange 감지 →
+            토스트 + 안전한 시점 reload. 사용자 입력 중이면 idle 될 때까지 대기. */}
+        <PWAUpdateManager />
         {children}
         {/* Kakao Maps SDK + services + clusterer 라이브러리.
             strategy="afterInteractive" 유지 — beforeInteractive로 바꾸면 Next.js가 head에

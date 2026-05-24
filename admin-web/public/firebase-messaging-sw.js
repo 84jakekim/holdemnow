@@ -79,10 +79,22 @@ self.addEventListener('fetch', (event) => {
   // No-op — 그냥 네트워크로 보냄. 캐시는 v0.2.
 });
 
-// 새 SW 즉시 활성화 (배포 후 사용자가 새 버전 빠르게 받게)
+// 새 SW 즉시 활성화 (배포 후 사용자가 새 버전 빠르게 받게).
+// install 단계에서 skipWaiting 호출하면 기존 SW가 즉시 교체된다.
+// 단, controllerchange 이벤트가 클라이언트에서 트리거되어 PWAUpdateManager가
+// 부드러운 reload를 처리하도록 설계됨.
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+// PWAUpdateManager가 명시적으로 SKIP_WAITING 메시지를 보낼 때도 즉시 활성화.
+// (이 SW는 install 시점에 이미 skipWaiting을 호출하므로 사실상 노옵이지만,
+//  표준 패턴을 유지하여 향후 install 시 skipWaiting을 제거할 경우에도 안전.)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

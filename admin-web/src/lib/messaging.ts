@@ -50,11 +50,27 @@ export async function enableNotifications(uid: string): Promise<string | null> {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return null;
 
-  // 2. Service Worker 등록 (Firebase가 알아서 /firebase-messaging-sw.js를 찾음)
+  // 2. Service Worker 등록
+  //    PWAUpdateManager가 root layout에서 이미 /firebase-messaging-sw.js를
+  //    updateViaCache:'none'으로 등록해두므로, 여기서는 그 등록을 재사용한다.
+  //    Firebase의 getToken이 자체적으로 등록을 시도하면 옵션 충돌이 일어날 수 있어
+  //    이미 ready 상태의 registration을 명시적으로 전달.
   const messaging = getMessaging(app);
 
   try {
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    let swRegistration: ServiceWorkerRegistration | undefined;
+    if ('serviceWorker' in navigator) {
+      try {
+        // PWAUpdateManager가 등록한 SW가 ready 될 때까지 대기 (보통 즉시 resolved)
+        swRegistration = await navigator.serviceWorker.ready;
+      } catch {
+        // ready 실패 시 Firebase 기본 동작에 맡김
+      }
+    }
+    const token = await getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      ...(swRegistration ? { serviceWorkerRegistration: swRegistration } : {}),
+    });
     if (!token) return null;
 
     // 3. Firestore에 토큰 저장 — tokenId로 토큰 해시 prefix 사용 (멀티 디바이스 지원)
