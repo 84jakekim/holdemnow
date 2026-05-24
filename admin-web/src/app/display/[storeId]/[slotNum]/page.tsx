@@ -792,30 +792,31 @@ export default function DisplayPage({
               아래 inline-flex 첫 자식으로. */}
 
           {/* 거대 카운트다운 + 진행률 바 + 블라인드 — 2026-05-24 PM 자막 제거.
-              inline-flex 안에 NOW 배지 → 타이머 → 진행바 → 블라인드(중앙) 순. */}
+              inline-flex 안에 LEVEL 거대 카드 → 타이머 → 진행바 → 블라인드(중앙) 순. */}
           <div className="inline-flex flex-col items-center">
-            {/* NOW 배지 — 타이머 바로 위 */}
+            {/* 2026-05-24 사용자 정정: LEVEL 폰트 2.5배 + "LEVEL N" 명확 표기 (NOW 배지 폐기).
+                일관된 톤으로 가로 layout과 동일 디자인 — 데스크탑 거대 카드. */}
             <div
-              className="rounded-full px-3 py-1 mb-3 border flex items-center gap-1.5"
+              className="rounded-2xl px-5 py-2 mb-3 border flex items-center justify-center"
               style={{
                 background: isCurrentBreak
-                  ? 'linear-gradient(135deg, rgba(255,209,102,0.2), rgba(0,0,0,0.5))'
-                  : `linear-gradient(135deg, ${display.accentColor}26, rgba(0,0,0,0.5))`,
-                borderColor: isCurrentBreak ? '#FFD16688' : `${display.accentColor}66`,
+                  ? 'linear-gradient(135deg, rgba(255,209,102,0.22), rgba(0,0,0,0.55))'
+                  : `linear-gradient(135deg, ${display.accentColor}2E, rgba(0,0,0,0.55))`,
+                borderColor: isCurrentBreak ? '#FFD16699' : `${display.accentColor}80`,
+                boxShadow: isCurrentBreak
+                  ? '0 0 18px rgba(255,209,102,0.18) inset'
+                  : `0 0 18px ${display.accentColor}22 inset`,
               }}
+              aria-label={`현재 레벨 ${session.currentLevel}`}
             >
               <span
-                className="font-extrabold tracking-[0.18em] text-xs"
-                style={{ color: isCurrentBreak ? '#FFD166' : display.accentColor }}
+                className="font-extrabold tracking-[0.18em] leading-none"
+                style={{
+                  color: isCurrentBreak ? '#FFD166' : display.textColor,
+                  fontSize: 'clamp(28px, 3.3vw, 40px)',
+                }}
               >
-                ▶ NOW
-              </span>
-              <span className="text-xs opacity-40" style={{ color: display.textColor }}>·</span>
-              <span
-                className="font-extrabold tracking-[0.18em] text-sm"
-                style={{ color: display.textColor }}
-              >
-                {isCurrentBreak ? `BREAK · LV ${session.currentLevel}` : `LV ${session.currentLevel}`}
+                {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
               </span>
             </div>
             <div
@@ -1327,29 +1328,31 @@ function MobilePortraitLayout({
         {/* 2026-05-24 PM 정정 #3: LEVEL 라인 제거. 타이머 위 NOW 배지로 대체 (아래 컨테이너 안). */}
       </div>
 
-      {/* 거대 타이머 — 화면 폭의 18~22vw 정도. NOW 배지가 타이머 바로 위. */}
+      {/* 거대 타이머 — 화면 폭의 18~22vw 정도. LEVEL 거대 카드가 타이머 바로 위. */}
       <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+        {/* 2026-05-24 사용자 정정: 세로 모드도 동일 디자인 — "LEVEL N" 명확 표기.
+            세로 폭 제약상 가로(40px)보다 작게 — clamp(22px, 4.5vw, 32px) (~1.8배). */}
         <div
-          className="rounded-full px-2.5 py-0.5 mb-2 border flex items-center gap-1"
+          className="rounded-2xl px-4 py-1.5 mb-2 border flex items-center justify-center"
           style={{
             background: isCurrentBreak
-              ? 'linear-gradient(135deg, rgba(255,209,102,0.2), rgba(0,0,0,0.5))'
-              : `linear-gradient(135deg, ${display.accentColor}26, rgba(0,0,0,0.5))`,
-            borderColor: isCurrentBreak ? '#FFD16688' : `${display.accentColor}66`,
+              ? 'linear-gradient(135deg, rgba(255,209,102,0.22), rgba(0,0,0,0.55))'
+              : `linear-gradient(135deg, ${display.accentColor}2E, rgba(0,0,0,0.55))`,
+            borderColor: isCurrentBreak ? '#FFD16699' : `${display.accentColor}80`,
+            boxShadow: isCurrentBreak
+              ? '0 0 14px rgba(255,209,102,0.18) inset'
+              : `0 0 14px ${display.accentColor}22 inset`,
           }}
+          aria-label={`현재 레벨 ${session.currentLevel}`}
         >
           <span
-            className="font-extrabold tracking-[0.18em] text-[9px]"
-            style={{ color: isCurrentBreak ? '#FFD166' : display.accentColor }}
+            className="font-extrabold tracking-[0.18em] leading-none"
+            style={{
+              color: isCurrentBreak ? '#FFD166' : display.textColor,
+              fontSize: 'clamp(22px, 4.5vw, 32px)',
+            }}
           >
-            ▶ NOW
-          </span>
-          <span className="text-[9px] opacity-40" style={{ color: display.textColor }}>·</span>
-          <span
-            className="font-extrabold tracking-[0.16em] text-[11px]"
-            style={{ color: display.textColor }}
-          >
-            {isCurrentBreak ? `BREAK · LV ${session.currentLevel}` : `LV ${session.currentLevel}`}
+            {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
           </span>
         </div>
         <div
@@ -1934,110 +1937,120 @@ function MobileLandscapeLayout({
             거대 타이머 바로 위 중앙으로 이동 (아래 중앙 컬럼 참조). */}
       </div>
 
-      {/* 본문 3분할 grid — 2026-05-24 PM 정정 #1~#6 통합.
-          좌: 5레벨 컴팩트 스트럭쳐 + NEXT (BLINDS는 중앙 하단으로 이동)
-          중: LEVEL 카드(타이머 위 작게) + 거대 타이머 + 진행바 + BLINDS(중앙 하단)
-          우: PLAYERS/LATE REG/PRIZE POOL 세로 stack (30~40% 축소)
-          grid: 좌 1fr / 중 2.6fr / 우 1.4fr — 모든 폭에서 동일. */}
+      {/* 본문 3분할 grid — 2026-05-24 사용자 정정 (재).
+          좌: 5레벨 컴팩트 스트럭쳐 (or NEXT — 토글로 양자택일)
+          중: LEVEL 거대 카드(타이머 위 2.5배) + 거대 타이머 + 진행바 + BLINDS(중앙 하단)
+          우: PLAYERS/LATE REG/PRIZE POOL 세로 stack (180px 슬림)
+          grid: 좌 1fr / 중 3.0fr / 우 1.0fr — 우측 슬림화로 중앙 공간 +15%.
+          (직전 1/2.6/1.4 → 1/3.0/1.0) */}
       <div
         className="flex-1 grid items-stretch gap-3 min-h-0"
-        style={{ gridTemplateColumns: '1fr 2.6fr 1.4fr' }}
+        style={{ gridTemplateColumns: '1fr 3fr 1fr' }}
       >
-        {/* ─── 좌: 5레벨 컴팩트 스트럭쳐 + NEXT ─── */}
+        {/* ─── 좌: 스트럭쳐 OR NEXT — 토글로 양자택일 (사용자 정정 #4) ─── */}
+        {/* 2026-05-24 사용자 정정 (스마트 분기):
+            "스트럭쳐표시 on 일경우에는 넥스트 블라인드 표시가 필요없고,
+             스트럭쳐표시가 off 일경우는 넥스트 블라인드 안내카드가 있어야된다."
+            → showStructure === true  : 5레벨 패널 표시 + NEXT mount X (중복 정보 방지)
+            → showStructure === false : 5레벨 패널 X + NEXT 거대 카드 mount (다음 블라인드 가이드)
+            정보 중복 zero. 사용자가 토너 운영 페이지 토글로 즉시 전환. */}
         <div className="flex flex-col justify-center gap-3 min-w-0 min-h-0 overflow-hidden">
-          {/* 2026-05-24 PM 정정 #4: 좌측 5레벨 스트럭쳐 부활 (가로 통합 layout).
-              showStructure 토글 존중. 앤티 있으면 자동으로 ante 행 추가. */}
-          {display.showStructure !== false && (
+          {display.showStructure !== false ? (
+            // [ON] 스트럭쳐 패널 — NEXT는 mount하지 않음 (스트럭쳐가 다음 레벨 포함)
             <BlindStructurePanel
               structure={structure}
               currentLevel={session.currentLevel}
               display={display}
               variant="landscape"
             />
-          )}
-          {/* NEXT 박스 — 중앙 정렬 */}
-          {nextBlind && (
-            <div
-              className="rounded-lg px-2 py-2 border text-center"
-              style={{
-                background: 'rgba(0,0,0,0.45)',
-                borderColor: nextBlind.isBreak ? '#FFD166' : `${display.accentColor}55`,
-              }}
-            >
+          ) : (
+            // [OFF] NEXT 안내 카드만 (스트럭쳐 가려진 상태) — 더 크게 표시
+            nextBlind && (
               <div
-                className="font-extrabold tracking-[0.3em] mb-1"
+                className="rounded-xl px-3 py-4 border text-center"
                 style={{
-                  color: nextBlind.isBreak ? '#FFD166' : display.accentColor,
-                  fontSize: 'clamp(9px, 1vw, 12px)',
+                  background: 'rgba(0,0,0,0.55)',
+                  borderColor: nextBlind.isBreak ? '#FFD166' : `${display.accentColor}66`,
+                  boxShadow: nextBlind.isBreak
+                    ? '0 0 24px rgba(255,209,102,0.15) inset'
+                    : `0 0 24px ${display.accentColor}1A inset`,
                 }}
               >
-                ▶ NEXT
+                <div
+                  className="font-extrabold tracking-[0.3em] mb-2"
+                  style={{
+                    color: nextBlind.isBreak ? '#FFD166' : display.accentColor,
+                    fontSize: 'clamp(11px, 1.2vw, 15px)',
+                  }}
+                >
+                  ▶ NEXT BLIND
+                </div>
+                {nextBlind.isBreak ? (
+                  <div
+                    className="font-extrabold"
+                    style={{ color: '#FFD166', fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+                  >
+                    ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      className="font-mono font-extrabold tracking-wide"
+                      style={{ color: display.textColor, opacity: 0.7, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
+                    >
+                      LV {nextBlind.level}
+                    </div>
+                    <div
+                      className="font-mono font-extrabold mt-1"
+                      style={{ color: display.blindsColor, fontSize: 'clamp(22px, 2.6vw, 36px)', letterSpacing: '-0.02em' }}
+                    >
+                      {nextBlind.sb.toLocaleString()}
+                      <span style={{ color: display.textColor, opacity: 0.4 }} className="mx-1">/</span>
+                      {nextBlind.bb.toLocaleString()}
+                    </div>
+                    {nextBlind.ante > 0 && (
+                      <div
+                        className="font-mono mt-1"
+                        style={{ color: display.textColor, opacity: 0.7, fontSize: 'clamp(11px, 1.1vw, 15px)' }}
+                      >
+                        Ante {nextBlind.ante.toLocaleString()}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-              {nextBlind.isBreak ? (
-                <div
-                  className="font-extrabold"
-                  style={{ color: '#FFD166', fontSize: 'clamp(13px, 1.5vw, 18px)' }}
-                >
-                  ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
-                </div>
-              ) : (
-                <div
-                  className="font-mono font-extrabold"
-                  style={{ color: display.blindsColor, fontSize: 'clamp(14px, 1.6vw, 20px)' }}
-                >
-                  LV {nextBlind.level} · {nextBlind.sb.toLocaleString()}
-                  <span style={{ color: display.textColor, opacity: 0.4 }} className="mx-1">/</span>
-                  {nextBlind.bb.toLocaleString()}
-                </div>
-              )}
-            </div>
+            )
           )}
         </div>
 
         {/* ─── 중: LEVEL 배지 + 거대 타이머 + 진행바 + 중앙 하단 BLINDS ─── */}
         <div className="flex flex-col items-center justify-center min-w-0">
-          {/* 2026-05-24 PM 정정 #3: LEVEL은 거대 타이머 바로 위 중앙에 작은 카드/배지로.
-              사용자 정정: "중앙상단에 레벨 표시는 제목쪽보단 타이머 시간위에 표시되거나
-                            좌측 플라인드 윗쪽으로 표시되는게 깔끔할것같다.
-                            (카드형태로 돋보이게 now 표시를 넣어도되고 안넣어도되고)"
-              ⇒ 작은 배지: ▶ NOW · LV N (또는 BREAK · LV N)
-              ⇒ 배경 그라데이션 + 보더로 카드형. */}
+          {/* 2026-05-24 사용자 정정 (재): "현재레벨표시의 폰트 사이즈를 현재크기의 2.5배로 설정하고
+              level 이라고 명확하게 표시할것."
+              ⇒ NOW 배지/구분점/LV 약어 폐기. 단일 거대 텍스트 "LEVEL N" (또는 "BREAK").
+              ⇒ 폰트 2.5배: clamp(11px, 1.3vw, 16px) → clamp(28px, 3.3vw, 40px)
+              ⇒ tracking 0.18em 유지로 dignified, padding 확장으로 시각적 무게감. */}
           <div
-            className="rounded-full px-3 py-1 mb-2 border flex items-center gap-1.5"
+            className="rounded-2xl px-5 py-2 mb-3 border flex items-center justify-center"
             style={{
               background: isCurrentBreak
-                ? 'linear-gradient(135deg, rgba(255,209,102,0.2), rgba(0,0,0,0.5))'
-                : `linear-gradient(135deg, ${display.accentColor}26, rgba(0,0,0,0.5))`,
-              borderColor: isCurrentBreak ? '#FFD16688' : `${display.accentColor}66`,
+                ? 'linear-gradient(135deg, rgba(255,209,102,0.22), rgba(0,0,0,0.55))'
+                : `linear-gradient(135deg, ${display.accentColor}2E, rgba(0,0,0,0.55))`,
+              borderColor: isCurrentBreak ? '#FFD16699' : `${display.accentColor}80`,
+              boxShadow: isCurrentBreak
+                ? '0 0 18px rgba(255,209,102,0.18) inset'
+                : `0 0 18px ${display.accentColor}22 inset`,
             }}
+            aria-label={`현재 레벨 ${session.currentLevel}`}
           >
             <span
-              className="font-extrabold tracking-[0.18em]"
+              className="font-extrabold tracking-[0.18em] leading-none"
               style={{
-                color: isCurrentBreak ? '#FFD166' : display.accentColor,
-                fontSize: 'clamp(9px, 1vw, 12px)',
+                color: isCurrentBreak ? '#FFD166' : display.textColor,
+                fontSize: 'clamp(28px, 3.3vw, 40px)',
               }}
             >
-              ▶ NOW
-            </span>
-            <span
-              className="font-extrabold tracking-[0.15em]"
-              style={{
-                color: display.textColor,
-                opacity: 0.4,
-                fontSize: 'clamp(9px, 0.9vw, 11px)',
-              }}
-            >
-              ·
-            </span>
-            <span
-              className="font-extrabold tracking-[0.18em]"
-              style={{
-                color: display.textColor,
-                fontSize: 'clamp(11px, 1.3vw, 16px)',
-              }}
-            >
-              {isCurrentBreak ? `BREAK · LV ${session.currentLevel}` : `LV ${session.currentLevel}`}
+              {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
             </span>
           </div>
           <div
@@ -2162,11 +2175,12 @@ function MobileLandscapeLayout({
                     DISTRIBUTION 분배표 행은 라벨좌/금액우 정렬 유지 (사용자 명시). */}
                 {showPrize && (
                   <div
-                    className="flex-1 rounded-xl px-2.5 py-2 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0 text-center"
+                    className="flex-1 rounded-xl px-2.5 py-2 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0 text-center w-full mx-auto"
                     style={{
                       background: `linear-gradient(135deg, ${accent}22 0%, rgba(0,0,0,0.6) 70%)`,
                       borderColor: `${accent}50`,
                       boxShadow: `0 0 24px ${accent}1A inset`,
+                      maxWidth: 180,
                     }}
                     aria-label="프라이즈 풀"
                   >
@@ -2533,19 +2547,17 @@ function SideStatCard({
   accentColor?: string;
   borderColor: string;
 }) {
-  // 2026-05-24 PM 정정 #1 (재정정): 우측 카드 30~40% 축소.
-  //   사용자 정정: "우측 나열되는 카드들의 크기가 비효율적으로 크다. 30~40% 줄여도 될것같은데"
-  //   값 폰트  3.8vw → 2.4vw (-37%) / max 44px → 28px (-36%)
-  //   라벨 폰트 1.1vw → 0.85vw (-23%) / max 14px → 11px (-21%)
-  //   sub 폰트  1.05vw → 0.85vw (-19%) / max 13px → 11px (-15%)
-  //   패딩     py-3 → py-2 (-33%) / px-3 → px-2.5 (-17%)
-  //   gap     mt-2 → mt-1, mt-1.5 → mt-1 (-33~50%)
+  // 2026-05-24 사용자 정정 (재): "우측에 배치되는 플레이어표시,레이트레지,프라이즈풀 카드의 가로폭이 너무 넓다."
+  //   카드 자체 maxWidth 180px 도입 (grid 컬럼 폭이 더 넓어도 카드는 슬림 유지)
+  //   mx-auto로 컬럼 내 중앙 정렬 (시인성 + 균형)
+  //   폰트 값은 직전(9acde8c) 30~40% 축소 유지 — 값 2.4vw / 라벨 0.85vw
   return (
     <div
-      className="rounded-xl px-2.5 py-2 border backdrop-blur-sm flex-shrink-0 text-center"
+      className="rounded-xl px-2.5 py-2 border backdrop-blur-sm flex-shrink-0 text-center w-full mx-auto"
       style={{
         background: 'rgba(0,0,0,0.45)',
         borderColor,
+        maxWidth: 180,
       }}
     >
       <div
@@ -2594,16 +2606,24 @@ function SideStatCard({
  *   → overflow hidden, 스크롤 없음
  *   → portrait variant는 호출부에서 mount 제외
  *
+ * 2026-05-24 사용자 정정 (재):
+ *   "스트럭쳐 폰트 사이즈 업해야되고, 엔티표시시 줄바뀜이 되는데 이런 불필요한 화면구도는 잘못된것을 인지하라."
+ *   "좌측 스트럭쳐 표시의 폰트사이즈를 업하고 시인성을 올려야한다. 불필요하게 줄바뀜이 되는것을 미연에 방지하라."
+ *
+ *   → 폰트 1.5~2배 키움 (시인성 우선)
+ *   → 앤티 별도 행 폐기. **한 행에 `Lv1 100/200 ·a25`** (한 줄)
+ *   → hasAnyAnte 분기는 표시 우선순위만 영향, 줄바꿈 X
+ *
  * 디자인 (앤티 없을 때):                  디자인 (앤티 있을 때):
- *   ┌────────────────┐                   ┌──────────────────┐
- *   │ 📋 STRUCTURE    │                   │ 📋 STRUCTURE      │
- *   ├────────────────┤                   ├──────────────────┤
- *   │ ✓ Lv 4  200/400 │                   │ ✓ Lv 4  200/400   │
- *   │ ▶ Lv 5  300/600 │                   │       ante 100    │
- *   │   Lv 6  500/1k  │                   │ ▶ Lv 5  300/600   │
- *   │   Lv 7  800/1.6k│                   │       ante 200    │
- *   │   Lv 8  1k/2k   │                   │ ...               │
- *   └────────────────┘                   └──────────────────┘
+ *   ┌────────────────┐                   ┌────────────────────┐
+ *   │ 📋 STRUCTURE    │                   │ 📋 STRUCTURE        │
+ *   ├────────────────┤                   ├────────────────────┤
+ *   │ ✓ Lv 4 200/400  │                   │ ✓ Lv 4 200/400 ·a50 │
+ *   │ ▶ Lv 5 300/600  │                   │ ▶ Lv 5 300/600 ·a75 │
+ *   │   Lv 6 500/1k   │                   │   Lv 6 500/1k ·a100 │
+ *   │   Lv 7 800/1.6k │                   │   Lv 7 800/1.6k ·… │
+ *   │   Lv 8 1k/2k    │                   │   Lv 8 1k/2k ·a200  │
+ *   └────────────────┘                   └────────────────────┘
  *
  * Size variant: 'desktop' | 'landscape' — 폰트/간격 자동 조절.
  * Empty handling: structure 비면 null 반환 (mount 안 함).
@@ -2637,13 +2657,17 @@ function BlindStructurePanel({
   // 앤티가 한 행이라도 있으면 앤티 컬럼 표시 (UX 일관성 위해 visible 범위 기준)
   const hasAnyAnte = visible.some((lv) => !lv.isBreak && lv.ante > 0);
 
-  // variant별 사이즈/패딩 결정 — 컴팩트(좌측 컬럼 폭 맞춤)
+  // variant별 사이즈/패딩 결정.
+  // 2026-05-24 사용자 정정: 폰트 1.5~2배 키움 (시인성 우선).
+  //   landscape: text-[11px] → text-[15px] (헤더) / text-[12px] → text-[17px] (행) — ~1.4~1.5배
+  //   desktop:   text-sm → text-base (헤더+행)
+  //   panelWidth landscape 100% 유지 (grid가 컬럼 폭 결정), desktop 240 → 280 확장
   const headerSize =
-    variant === 'desktop' ? 'text-sm px-3 py-2' : 'text-[11px] px-2 py-1.5';
+    variant === 'desktop' ? 'text-base px-3 py-2' : 'text-[15px] px-2.5 py-2';
   const rowSize =
-    variant === 'desktop' ? 'px-2.5 py-1.5 text-sm' : 'px-2 py-1 text-[12px]';
+    variant === 'desktop' ? 'px-3 py-2 text-base' : 'px-2.5 py-1.5 text-[17px]';
   const panelWidth =
-    variant === 'desktop' ? 240 : '100%';
+    variant === 'desktop' ? 280 : '100%';
   const accent = display.accentColor;
   const blinds = display.blindsColor;
   const fg = display.textColor;
@@ -2670,7 +2694,7 @@ function BlindStructurePanel({
         <span>📋 STRUCTURE</span>
         <span
           className="tabular-nums opacity-60"
-          style={{ fontSize: variant === 'desktop' ? 11 : 9, letterSpacing: '0.1em' }}
+          style={{ fontSize: variant === 'desktop' ? 13 : 12, letterSpacing: '0.1em' }}
         >
           Lv {currentLevel} / {structure.length}
         </span>
@@ -2719,8 +2743,8 @@ function BlindStructurePanel({
                 style={{
                   color: markerColor,
                   opacity: isCurrent ? 1 : 0.85,
-                  width: variant === 'desktop' ? 16 : 14,
-                  fontSize: variant === 'desktop' ? 14 : 12,
+                  width: variant === 'desktop' ? 18 : 16,
+                  fontSize: variant === 'desktop' ? 16 : 14,
                 }}
                 aria-hidden
               >
@@ -2740,38 +2764,37 @@ function BlindStructurePanel({
                   <span
                     className="font-bold tabular-nums"
                     style={{
-                      minWidth: variant === 'desktop' ? 38 : 32,
+                      minWidth: variant === 'desktop' ? 42 : 38,
                       opacity: 0.85,
                     }}
                   >
                     Lv {lvl.level}
                   </span>
-                  <div className="flex flex-col items-end" style={{ marginLeft: 'auto' }}>
-                    <span
-                      className="tabular-nums leading-tight"
-                      style={{
-                        color: blinds,
-                        opacity: isCurrent ? 1 : 0.9,
-                      }}
-                    >
+                  {/* 2026-05-24 사용자 정정: 앤티 별도 행/줄바꿈 폐기 — 한 행에 sb/bb · aN.
+                      flex-col 제거. 단일 inline 표시. baseline 정렬로 점·a 가독성 확보. */}
+                  <span
+                    className="tabular-nums leading-tight flex items-baseline gap-1"
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    <span style={{ color: blinds, opacity: isCurrent ? 1 : 0.9 }}>
                       {lvl.sb.toLocaleString()}
                       <span style={{ opacity: 0.4 }}>/</span>
                       {lvl.bb.toLocaleString()}
                     </span>
-                    {hasAnyAnte && (
+                    {hasAnyAnte && lvl.ante > 0 && (
                       <span
-                        className="tabular-nums leading-tight"
+                        className="tabular-nums"
                         style={{
                           color: fg,
-                          opacity: lvl.ante > 0 ? 0.7 : 0.3,
-                          fontSize: variant === 'desktop' ? 10 : 9,
-                          marginTop: 1,
+                          opacity: 0.72,
+                          fontSize: variant === 'desktop' ? '0.78em' : '0.72em',
+                          letterSpacing: '-0.01em',
                         }}
                       >
-                        a{lvl.ante > 0 ? lvl.ante.toLocaleString() : '—'}
+                        ·a{lvl.ante.toLocaleString()}
                       </span>
                     )}
-                  </div>
+                  </span>
                 </>
               )}
             </div>
