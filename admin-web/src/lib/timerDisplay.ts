@@ -122,12 +122,30 @@ export interface TimerDisplaySettings {
   /** 매장 로고 URL (좌상단 작은 배지에 표시) */
   storeLogoUrl: string;
 
-  /** ─── 폰트 사이즈 배율 (Phase 3) ────────────────────────────────
+  /** ─── 폰트 사이즈 배율 (Phase 3 + 2026-05-24 사용자 정정 확장) ────
    *  각 텍스트 영역별 독립 배율. 기본 1.0, 슬라이더 0.7 ~ 1.6.
-   *  CSS clamp 결과 값에 곱해 매장 TV 환경(거리·각도)에 따라 조정. */
+   *  CSS clamp 결과 값에 곱해 매장 TV 환경(거리·각도)에 따라 조정.
+   *
+   *  2026-05-24 사용자 정정:
+   *   "중앙라인에 노출되는 타이머와 블라인드, 게임타이틀, 블라인트표시와
+   *    앤티금액 표시등의 폰트사이증을 자유롭게 실시간 설정할수있어야하고,
+   *    좌측에 표시되는 스트럭처와 넥스트블라인드 표기카드또한, 카드크기를
+   *    조절해서 카드안의 내용을 조검더 꽉찬 폰트사이즈로 표기"
+   *
+   *  ⇒ 기존 3종(timer/blinds/stats) 외에 5종 신규 추가:
+   *     - titleScale     : 중앙 상단 타이틀(heroTitle) 배율
+   *     - levelScale     : "LEVEL N" 거대 배지 배율
+   *     - anteScale      : 중앙 하단 "Ante N" 배율 (blindsScale은 sb/bb 전용)
+   *     - structureScale : 좌측 BlindStructurePanel 행 폰트 배율
+   *     - nextScale      : 좌측 NEXT BLIND 안내 카드(showStructure=off 시) 배율 */
   timerScale: number;
   blindsScale: number;
   statsScale: number;
+  titleScale: number;
+  levelScale: number;
+  anteScale: number;
+  structureScale: number;
+  nextScale: number;
 
   /** ─── 상금 분배표 노출 옵션 (2026-05-23 정정으로 완전 폐기) ────
    *  사용자 정책: "상금분배표(우측사이드) 메뉴는 없애줘".
@@ -161,6 +179,23 @@ export interface TimerDisplaySettings {
    *  hidden / total / distribution.
    *  누락(레거시) → resolvePrizePoolMode가 showPrizePool 기반 추론 ('total' or 'hidden'). */
   prizePoolMode: PrizePoolMode;
+}
+
+/**
+ * 폰트 배율 안전 클램프 (0.5x ~ 2.0x).
+ * 2026-05-24 사용자 정정으로 신설된 5종 신규 배율(title/level/ante/structure/next)과
+ * 기존 3종(timer/blinds/stats) 모두 공통 사용.
+ *
+ * 사용자 정책:
+ *   - 슬라이더 UI: 0.5x ~ 2.0x
+ *   - 디폴트 1.0 (기존 clamp 값을 그대로 사용)
+ *   - 누락/NaN 입력 → 1.0 fallback (TV 화면 깨짐 방지)
+ */
+export const SCALE_MIN = 0.5;
+export const SCALE_MAX = 2.0;
+export function clampScale(v: number | undefined | null): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return 1.0;
+  return Math.min(SCALE_MAX, Math.max(SCALE_MIN, v));
 }
 
 /** 디스플레이 prefs용 boolean resolver — 명시적 false만 false. 누락/undefined/true 모두 true.
@@ -235,6 +270,11 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
   timerScale: 1.0,
   blindsScale: 1.0,
   statsScale: 1.0,
+  titleScale: 1.0,
+  levelScale: 1.0,
+  anteScale: 1.0,
+  structureScale: 1.0,
+  nextScale: 1.0,
 
   // 화면 노출 토글 — 2026-05-23 신설. 디폴트 모두 true (기존 동작 유지).
   showPrizePool: true,

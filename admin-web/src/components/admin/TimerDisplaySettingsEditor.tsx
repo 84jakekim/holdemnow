@@ -18,6 +18,9 @@ import {
   uploadTimerBackground,
   SAMPLE_TIMER_BACKGROUNDS,
   MAX_TIMER_BACKGROUND_BYTES,
+  SCALE_MIN,
+  SCALE_MAX,
+  clampScale,
 } from '@/lib/timerDisplay';
 
 interface Props {
@@ -476,8 +479,108 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           />
         </Section>
 
+        {/*
+         * 폰트 사이즈 미세조정 — 2026-05-24 사용자 정정으로 신설.
+         *
+         * 사용자 정정 (원문):
+         *   "중앙라인에 노출되는 타이머와 블라인드, 게임타이틀, 블라인트표시와 앤티금액
+         *    표시등의 폰트사이증을 자유롭게 실시간 설정할수있어야하고,
+         *    좌측에 표시되는 스트럭처와 넥스트블라인드 표기카드또한, 카드크기를 조절해서
+         *    카드안의 내용을 조검더 꽉찬 폰트사이즈로 표기"
+         *
+         * 8종 슬라이더 (0.5x ~ 2.0x, 디폴트 1.0x):
+         *   [중앙 라인]
+         *     - timer  (타이머 숫자 — mm:ss)
+         *     - level  (LEVEL N 배지)
+         *     - title  (heroTitle, 중앙 상단)
+         *     - blinds (sb/bb 큰 폰트 — 중앙 하단)
+         *     - ante   (Ante N 작은 보조 — 중앙 하단)
+         *   [좌측 컬럼]
+         *     - structure (BlindStructurePanel 행 폰트)
+         *     - next      (NEXT BLIND 안내 카드 — showStructure=off 시)
+         *   [우측 컬럼]
+         *     - stats (SideStatCard 3종 PLAYERS/LATE/PRIZE)
+         *
+         * 실시간 반영 — onSnapshot으로 TV에 5초 이내.
+         */}
+        <Section
+          title="🎚️ 6. 폰트 사이즈 미세조정 (실시간)"
+          hint="TV 화면별 폰트 배율 0.5x ~ 2.0x · 저장 즉시 모든 TV에 반영"
+        >
+          <ScaleGroupHeader title="중앙 라인" subtitle="타이머/제목/블라인드 — 메인 영역" />
+          <ScaleSlider
+            label="⏱️ 타이머 숫자"
+            value={settings.timerScale}
+            onChange={(v) => update('timerScale', v)}
+          />
+          <ScaleSlider
+            label="🎯 LEVEL 배지"
+            value={settings.levelScale}
+            onChange={(v) => update('levelScale', v)}
+          />
+          <ScaleSlider
+            label="🏆 토너 제목"
+            value={settings.titleScale}
+            onChange={(v) => update('titleScale', v)}
+          />
+          <ScaleSlider
+            label="💱 블라인드 (SB/BB)"
+            value={settings.blindsScale}
+            onChange={(v) => update('blindsScale', v)}
+          />
+          <ScaleSlider
+            label="🪙 앤티 (Ante)"
+            value={settings.anteScale}
+            onChange={(v) => update('anteScale', v)}
+          />
+
+          <ScaleGroupHeader title="좌측 컬럼" subtitle="스트럭쳐 · NEXT 안내" />
+          <ScaleSlider
+            label="📋 스트럭쳐 (5레벨)"
+            value={settings.structureScale}
+            onChange={(v) => update('structureScale', v)}
+          />
+          <ScaleSlider
+            label="▶ NEXT BLIND 카드"
+            value={settings.nextScale}
+            onChange={(v) => update('nextScale', v)}
+            hint="스트럭쳐 OFF일 때만 노출"
+          />
+
+          <ScaleGroupHeader title="우측 컬럼" subtitle="PLAYERS / LATE / PRIZE" />
+          <ScaleSlider
+            label="📊 우측 stat 카드"
+            value={settings.statsScale}
+            onChange={(v) => update('statsScale', v)}
+          />
+
+          {/* 한 번에 전체 리셋 */}
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setSettings((p) => ({
+                  ...p,
+                  timerScale: 1.0,
+                  levelScale: 1.0,
+                  titleScale: 1.0,
+                  blindsScale: 1.0,
+                  anteScale: 1.0,
+                  structureScale: 1.0,
+                  nextScale: 1.0,
+                  statsScale: 1.0,
+                }));
+                setDirty(true);
+              }}
+              className="text-[10.5px] font-bold text-gray-600 hover:text-black underline underline-offset-2"
+            >
+              ↺ 모두 1.0x로 초기화
+            </button>
+          </div>
+        </Section>
+
         {/* 사운드 */}
-        <Section title="🔔 6. 사운드 알림" hint="TV가 켜진 브라우저에서 작동">
+        <Section title="🔔 7. 사운드 알림" hint="TV가 켜진 브라우저에서 작동">
           <div className="space-y-2">
             <SoundToggle
               label='카운트다운 비프 (10초 → 1초 매초 "삐")'
@@ -537,6 +640,74 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
         }
         .form-input:focus { border-color: #111; }
       `}</style>
+    </div>
+  );
+}
+
+/**
+ * ScaleSlider — 폰트 배율 슬라이더 (2026-05-24 신설).
+ * 0.5x ~ 2.0x, 0.05 step. 좌측 라벨 + 중앙 슬라이더 + 우측 현재 배율(예: 1.20x).
+ * 클램프는 clampScale로 안전 처리 (NaN/누락 → 1.0).
+ */
+function ScaleSlider({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  hint?: string;
+}) {
+  const safe = clampScale(value);
+  const pct = safe.toFixed(2);
+  const isDefault = Math.abs(safe - 1.0) < 0.001;
+  return (
+    <div className="mb-2.5 last:mb-0">
+      <div className="flex items-baseline justify-between mb-1">
+        <div className="text-[11px] font-bold text-gray-800">{label}</div>
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-[10.5px] font-mono font-extrabold tabular-nums ${
+              isDefault ? 'text-gray-500' : 'text-black'
+            }`}
+          >
+            {pct}x
+          </span>
+          {!isDefault && (
+            <button
+              type="button"
+              onClick={() => onChange(1.0)}
+              className="text-[9px] text-gray-400 hover:text-black px-1.5 py-0.5 rounded hover:bg-gray-100"
+              title="이 항목만 1.0x로"
+            >
+              ↺
+            </button>
+          )}
+        </div>
+      </div>
+      <input
+        type="range"
+        min={SCALE_MIN}
+        max={SCALE_MAX}
+        step={0.05}
+        value={safe}
+        onChange={(e) => onChange(clampScale(Number(e.target.value)))}
+        className="w-full accent-black"
+        aria-label={`${label} 폰트 배율`}
+      />
+      {hint && <div className="text-[9.5px] text-gray-400 mt-0.5 leading-tight">{hint}</div>}
+    </div>
+  );
+}
+
+/** ScaleGroupHeader — 슬라이더 그룹 구분 헤더 (중앙/좌측/우측). */
+function ScaleGroupHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="mb-1.5 mt-3 first:mt-0 flex items-baseline gap-1.5 border-b border-gray-100 pb-1">
+      <span className="text-[10.5px] font-extrabold text-gray-900 tracking-wide">{title}</span>
+      <span className="text-[9.5px] text-gray-400">— {subtitle}</span>
     </div>
   );
 }

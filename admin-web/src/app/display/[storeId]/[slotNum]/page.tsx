@@ -26,6 +26,7 @@ import {
   subscribeTimerDisplay,
   buildBackgroundCss,
   resolvePrizePoolMode,
+  clampScale,
 } from '@/lib/timerDisplay';
 import { playCountdownBeep, playBlindUp, unlockAudio } from '@/lib/sounds';
 import {
@@ -1871,6 +1872,16 @@ function MobileLandscapeLayout({
   const noteBold = display.noteStyle.includes('bold');
   const noteItalic = display.noteStyle.includes('italic');
 
+  // 2026-05-24 사용자 정정: 폰트 사이즈 실시간 배율 (0.5x ~ 2.0x).
+  // 안전 클램프로 NaN/누락 → 1.0 fallback. 모든 중앙/좌측 폰트가 이 배율을 적용.
+  const sTimer = clampScale(display.timerScale);
+  const sLevel = clampScale(display.levelScale);
+  const sTitle = clampScale(display.titleScale);
+  const sBlinds = clampScale(display.blindsScale);
+  const sAnte = clampScale(display.anteScale);
+  const sStructure = clampScale(display.structureScale);
+  const sNext = clampScale(display.nextScale);
+
   return (
     <div className="relative flex-1 flex flex-col px-3 pt-2 pb-2 min-h-0 overflow-hidden">
       {/* ─── 상단 헤더 row — 제목/노트/LEVEL 중앙 정렬 + 거대 폰트 (사용자 정정 #4) ─── */}
@@ -1900,14 +1911,15 @@ function MobileLandscapeLayout({
             </>
           )}
         </div>
-        {/* 제목 (heroTitle) — 거대 중앙 정렬. 사용자: "제목또한 중앙상단에 배치되며 잘보여야한다. 현재는 폰트가 너무 작음" */}
+        {/* 제목 (heroTitle) — 거대 중앙 정렬. 사용자: "제목또한 중앙상단에 배치되며 잘보여야한다. 현재는 폰트가 너무 작음"
+            2026-05-24 사용자 정정: titleScale 배율로 매장이 실시간 미세조정. */}
         <div
           className="text-center truncate max-w-[95%]"
           title={heroTitle}
           style={{
             color: titled ? display.titleColor : display.textColor,
             opacity: titled ? 1 : 0.9,
-            fontSize: 'clamp(20px, 3vw, 38px)',
+            fontSize: `clamp(${20 * sTitle}px, ${3 * sTitle}vw, ${38 * sTitle}px)`,
             fontWeight: titleBold ? 800 : 700,
             fontStyle: titleItalic ? 'italic' : 'normal',
             letterSpacing: '-0.01em',
@@ -1916,13 +1928,13 @@ function MobileLandscapeLayout({
         >
           {heroTitle}
         </div>
-        {/* 노트 (있을 때만) — 중앙 정렬 */}
+        {/* 노트 (있을 때만) — 중앙 정렬. titleScale와 같은 배율을 적용 (부제 — 한 묶음 톤). */}
         {display.noteText && display.noteText.trim().length > 0 && (
           <div
             className="text-center truncate max-w-[90%]"
             style={{
               color: display.noteColor,
-              fontSize: 'clamp(11px, 1.3vw, 18px)',
+              fontSize: `clamp(${11 * sTitle}px, ${1.3 * sTitle}vw, ${18 * sTitle}px)`,
               fontWeight: noteBold ? 700 : 400,
               fontStyle: noteItalic ? 'italic' : 'normal',
               opacity: 0.88,
@@ -1937,15 +1949,17 @@ function MobileLandscapeLayout({
             거대 타이머 바로 위 중앙으로 이동 (아래 중앙 컬럼 참조). */}
       </div>
 
-      {/* 본문 3분할 grid — 2026-05-24 사용자 정정 (재).
-          좌: 5레벨 컴팩트 스트럭쳐 (or NEXT — 토글로 양자택일)
-          중: LEVEL 거대 카드(타이머 위 2.5배) + 거대 타이머 + 진행바 + BLINDS(중앙 하단)
-          우: PLAYERS/LATE REG/PRIZE POOL 세로 stack (180px 슬림)
-          grid: 좌 1fr / 중 3.0fr / 우 1.0fr — 우측 슬림화로 중앙 공간 +15%.
-          (직전 1/2.6/1.4 → 1/3.0/1.0) */}
+      {/* 본문 3분할 grid — 2026-05-24 사용자 정정 (재²).
+          사용자 정정: "좌측에 표시되는 스트럭처와 넥스트블라인드 표기카드또한, 카드크기를
+                       조절해서 카드안의 내용을 조검더 꽉찬 폰트사이즈로 표기하고
+                       해당열에는 위아래 여백이 많은점또한 이 여백을 활용한 필요정보가
+                       표시되면 좋을것같다."
+          ⇒ 좌측 컬럼 폭 확장 (1.0fr → 1.3fr) + 카드 내부 폰트 키움(structureScale 디폴트↑)
+          ⇒ 좌측 컬럼 위아래 여백에 스마트 정보 카드 (⏱ 경과 + 🎯 다음 BREAK) 추가.
+          (직전 1/3/1 → 1.3/2.9/1.0 — 우측 슬림 유지, 중앙은 미세 축소되어도 OK) */}
       <div
         className="flex-1 grid items-stretch gap-3 min-h-0"
-        style={{ gridTemplateColumns: '1fr 3fr 1fr' }}
+        style={{ gridTemplateColumns: '1.3fr 2.9fr 1fr' }}
       >
         {/* ─── 좌: 스트럭쳐 OR NEXT — 토글로 양자택일 (사용자 정정 #4) ─── */}
         {/* 2026-05-24 사용자 정정 (스마트 분기):
@@ -1957,30 +1971,36 @@ function MobileLandscapeLayout({
         <div className="flex flex-col justify-center gap-3 min-w-0 min-h-0 overflow-hidden">
           {display.showStructure !== false ? (
             // [ON] 스트럭쳐 패널 — NEXT는 mount하지 않음 (스트럭쳐가 다음 레벨 포함)
+            // 2026-05-24 사용자 정정: structureScale 배율로 폰트/패딩/폭 동적 조절.
             <BlindStructurePanel
               structure={structure}
               currentLevel={session.currentLevel}
               display={display}
               variant="landscape"
+              scale={sStructure}
             />
           ) : (
-            // [OFF] NEXT 안내 카드만 (스트럭쳐 가려진 상태) — 더 크게 표시
+            // [OFF] NEXT 안내 카드만 (스트럭쳐 가려진 상태)
+            // 2026-05-24 사용자 정정: nextScale 배율로 폰트·패딩 동적.
             nextBlind && (
               <div
-                className="rounded-xl px-3 py-4 border text-center"
+                className="rounded-xl border text-center"
                 style={{
                   background: 'rgba(0,0,0,0.55)',
                   borderColor: nextBlind.isBreak ? '#FFD166' : `${display.accentColor}66`,
                   boxShadow: nextBlind.isBreak
                     ? '0 0 24px rgba(255,209,102,0.15) inset'
                     : `0 0 24px ${display.accentColor}1A inset`,
+                  padding: `${Math.round(16 * Math.pow(sNext, 0.7))}px ${Math.round(
+                    12 * Math.pow(sNext, 0.7),
+                  )}px`,
                 }}
               >
                 <div
                   className="font-extrabold tracking-[0.3em] mb-2"
                   style={{
                     color: nextBlind.isBreak ? '#FFD166' : display.accentColor,
-                    fontSize: 'clamp(11px, 1.2vw, 15px)',
+                    fontSize: `clamp(${11 * sNext}px, ${1.2 * sNext}vw, ${15 * sNext}px)`,
                   }}
                 >
                   ▶ NEXT BLIND
@@ -1988,7 +2008,10 @@ function MobileLandscapeLayout({
                 {nextBlind.isBreak ? (
                   <div
                     className="font-extrabold"
-                    style={{ color: '#FFD166', fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+                    style={{
+                      color: '#FFD166',
+                      fontSize: `clamp(${18 * sNext}px, ${2.2 * sNext}vw, ${28 * sNext}px)`,
+                    }}
                   >
                     ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
                   </div>
@@ -1996,13 +2019,21 @@ function MobileLandscapeLayout({
                   <>
                     <div
                       className="font-mono font-extrabold tracking-wide"
-                      style={{ color: display.textColor, opacity: 0.7, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
+                      style={{
+                        color: display.textColor,
+                        opacity: 0.7,
+                        fontSize: `clamp(${11 * sNext}px, ${1.1 * sNext}vw, ${14 * sNext}px)`,
+                      }}
                     >
                       LV {nextBlind.level}
                     </div>
                     <div
                       className="font-mono font-extrabold mt-1"
-                      style={{ color: display.blindsColor, fontSize: 'clamp(22px, 2.6vw, 36px)', letterSpacing: '-0.02em' }}
+                      style={{
+                        color: display.blindsColor,
+                        fontSize: `clamp(${22 * sNext}px, ${2.6 * sNext}vw, ${36 * sNext}px)`,
+                        letterSpacing: '-0.02em',
+                      }}
                     >
                       {nextBlind.sb.toLocaleString()}
                       <span style={{ color: display.textColor, opacity: 0.4 }} className="mx-1">/</span>
@@ -2011,7 +2042,11 @@ function MobileLandscapeLayout({
                     {nextBlind.ante > 0 && (
                       <div
                         className="font-mono mt-1"
-                        style={{ color: display.textColor, opacity: 0.7, fontSize: 'clamp(11px, 1.1vw, 15px)' }}
+                        style={{
+                          color: display.textColor,
+                          opacity: 0.7,
+                          fontSize: `clamp(${11 * sNext}px, ${1.1 * sNext}vw, ${15 * sNext}px)`,
+                        }}
                       >
                         Ante {nextBlind.ante.toLocaleString()}
                       </div>
@@ -2021,6 +2056,25 @@ function MobileLandscapeLayout({
               </div>
             )
           )}
+
+          {/* ─── 2026-05-24 사용자 정정: 좌측 컬럼 위아래 여백 활용 — 스마트 보조 정보 ───
+               사용자 명시: "해당열에는 위아래 여백이 많은점또한 이 여백을 활용한
+                            필요정보가 표시되면 좋을것같다. 좀 스마트하게 수정해봐."
+
+               선정 정보 (PM 자율 — 중복 회피 + 운영 가치 우선):
+                ⏱ 토너 경과시간 — totalStartedAt 기준 누적 (대회 진행 흐름 한눈에)
+                🎯 다음 BREAK까지 — 휴식 레벨까지 남은 시간(없으면 "휴식 없음")
+                              ※ 우측 LATE REG와 중복 X, 운영자/플레이어 모두 가치 ↑
+
+               그리드 자리: 메인 카드(스트럭쳐 or NEXT) 아래 — 시각 위계 보조.
+               structureScale 배율을 따라가 통일된 톤. */}
+          <LeftSmartInfoStack
+            session={session}
+            structure={structure}
+            sec={sec}
+            display={display}
+            scale={sStructure}
+          />
         </div>
 
         {/* ─── 중: LEVEL 배지 + 거대 타이머 + 진행바 + 중앙 하단 BLINDS ─── */}
@@ -2047,7 +2101,7 @@ function MobileLandscapeLayout({
               className="font-extrabold tracking-[0.18em] leading-none"
               style={{
                 color: isCurrentBreak ? '#FFD166' : display.textColor,
-                fontSize: 'clamp(28px, 3.3vw, 40px)',
+                fontSize: `clamp(${28 * sLevel}px, ${3.3 * sLevel}vw, ${40 * sLevel}px)`,
               }}
             >
               {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
@@ -2056,7 +2110,7 @@ function MobileLandscapeLayout({
           <div
             className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
             style={{
-              fontSize: `clamp(80px, 16vw, 220px)`,
+              fontSize: `clamp(${80 * sTimer}px, ${16 * sTimer}vw, ${220 * sTimer}px)`,
               letterSpacing: '-0.05em',
               color: timerColor,
               transition: 'color 0.2s',
@@ -2106,7 +2160,7 @@ function MobileLandscapeLayout({
               <div
                 className="font-mono font-extrabold leading-none"
                 style={{
-                  fontSize: 'clamp(32px, 5vw, 72px)',
+                  fontSize: `clamp(${32 * sBlinds}px, ${5 * sBlinds}vw, ${72 * sBlinds}px)`,
                   color: display.blindsColor,
                   letterSpacing: '-0.03em',
                 }}
@@ -2121,7 +2175,7 @@ function MobileLandscapeLayout({
                   style={{
                     color: display.textColor,
                     opacity: 0.65,
-                    fontSize: 'clamp(13px, 1.4vw, 20px)',
+                    fontSize: `clamp(${13 * sAnte}px, ${1.4 * sAnte}vw, ${20 * sAnte}px)`,
                   }}
                 >
                   Ante {session.ante.toLocaleString()}
@@ -2594,6 +2648,150 @@ function SideStatCard({
 }
 
 /**
+ * LeftSmartInfoStack — 2026-05-24 사용자 정정으로 신설.
+ *
+ * 가로 layout 좌측 컬럼 — 스트럭쳐(또는 NEXT) 카드 아래 빈 여백에 노출되는
+ * 스마트 보조 정보 2종 stack.
+ *
+ *  ⏱ 토너 경과 — totalStartedAt 기준 누적 시간 (대회 진행 흐름)
+ *  🎯 다음 BREAK — 휴식 레벨까지 (현재 레벨 sec + 이후 정규 레벨 dur 합산)
+ *
+ * 시각 위계: 메인 카드 > 보조 정보 (작은 폰트, 어두운 톤).
+ * 자동 hide:
+ *  - 경과시간: totalStartedAt 없으면(레거시) hide
+ *  - 다음 BREAK: structure에 break 레벨 없으면 hide
+ * 둘 다 없으면 mount 자체 안 함 (DOM noise 0).
+ *
+ * scale: 좌측 컬럼 톤 통일을 위해 structureScale을 그대로 받음.
+ */
+function LeftSmartInfoStack({
+  session,
+  structure,
+  sec,
+  display,
+  scale,
+}: {
+  session: LiveSession;
+  structure:
+    | { level: number; sb: number; bb: number; ante: number; durationSec: number; isBreak?: boolean }[]
+    | undefined;
+  sec: number;
+  display: TimerDisplaySettings;
+  scale: number;
+}) {
+  const safeScale = Math.min(2.0, Math.max(0.5, scale));
+  const labelFont = Math.round(10 * safeScale);
+  const valueFont = Math.round(18 * safeScale);
+  const subFont = Math.round(10 * safeScale);
+  const padY = Math.max(6, Math.round(8 * Math.pow(safeScale, 0.7)));
+  const padX = Math.round(12 * Math.pow(safeScale, 0.7));
+
+  // ⏱ 경과시간: totalStartedAt 기준. 시:분으로 표시 (60분 미만은 분 단위만).
+  const startedMs = session.totalStartedAt?.toMillis?.() ?? null;
+  const elapsedMin = startedMs != null ? Math.max(0, Math.floor((Date.now() - startedMs) / 60000)) : null;
+  const elapsedText =
+    elapsedMin == null
+      ? null
+      : elapsedMin < 60
+      ? `${elapsedMin}분`
+      : `${Math.floor(elapsedMin / 60)}시간 ${elapsedMin % 60}분`;
+
+  // 🎯 다음 BREAK까지: 현재 레벨 남은 sec + 이후 정규 레벨 durationSec 누적, 다음 break 만나면 stop.
+  // (현재 레벨 자체가 break이면 "지금 휴식 중" → 다른 텍스트)
+  const currentLevelObj = structure?.find((l) => l.level === session.currentLevel);
+  const isCurrentlyBreak = currentLevelObj?.isBreak === true;
+  let nextBreakMin: number | null = null;
+  let breakLevel: number | null = null;
+  if (structure && !isCurrentlyBreak) {
+    let total = sec; // 현재 레벨 남은 시간
+    let foundBreak = false;
+    for (let lv = session.currentLevel + 1; lv <= (structure[structure.length - 1]?.level ?? 0); lv++) {
+      const item = structure.find((l) => l.level === lv);
+      if (!item) continue;
+      if (item.isBreak) {
+        breakLevel = item.level;
+        foundBreak = true;
+        break;
+      }
+      total += item.durationSec;
+    }
+    if (foundBreak) {
+      nextBreakMin = Math.ceil(total / 60);
+    }
+  }
+
+  // 둘 다 없으면 mount 안 함
+  if (elapsedText == null && nextBreakMin == null && !isCurrentlyBreak) return null;
+
+  const card = (
+    label: string,
+    value: string,
+    sub: string,
+    accent: string,
+  ) => (
+    <div
+      className="rounded-lg border backdrop-blur-sm flex items-center gap-2"
+      style={{
+        background: 'rgba(0,0,0,0.45)',
+        borderColor: 'rgba(255,255,255,0.10)',
+        padding: `${padY}px ${padX}px`,
+      }}
+    >
+      <div
+        className="flex-shrink-0 flex items-center justify-center rounded-md"
+        style={{
+          width: Math.round(28 * safeScale),
+          height: Math.round(28 * safeScale),
+          background: `${accent}22`,
+          border: `1px solid ${accent}44`,
+          fontSize: Math.round(14 * safeScale),
+        }}
+      >
+        {label.slice(0, 2)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div
+          className="font-extrabold tracking-[0.18em] truncate"
+          style={{ color: display.textColor, opacity: 0.55, fontSize: labelFont }}
+        >
+          {label.slice(2).trim()}
+        </div>
+        <div
+          className="font-mono font-extrabold tabular-nums leading-tight truncate"
+          style={{ color: display.textColor, fontSize: valueFont, letterSpacing: '-0.01em' }}
+        >
+          {value}
+        </div>
+        {sub && (
+          <div
+            className="truncate"
+            style={{ color: display.textColor, opacity: 0.55, fontSize: subFont, marginTop: 1 }}
+          >
+            {sub}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-2 mt-1">
+      {elapsedText != null && card('⏱ ELAPSED', elapsedText, '토너 진행', display.accentColor)}
+      {isCurrentlyBreak
+        ? card('☕ ON BREAK', '휴식 중', '곧 재개', '#FFD166')
+        : nextBreakMin != null
+        ? card(
+            '🎯 NEXT BREAK',
+            nextBreakMin < 60 ? `${nextBreakMin}분` : `${Math.floor(nextBreakMin / 60)}시 ${nextBreakMin % 60}분`,
+            breakLevel != null ? `Lv ${breakLevel} 이후` : '곧',
+            '#FFD166',
+          )
+        : null}
+    </div>
+  );
+}
+
+/**
  * BlindStructurePanel — 2026-05-24 PM 정정 (5레벨 컴팩트 + 앤티 컬럼 자동).
  *
  * 사용자 정정 (2026-05-24):
@@ -2635,11 +2833,15 @@ function BlindStructurePanel({
   currentLevel,
   display,
   variant,
+  scale = 1.0,
 }: {
   structure: { level: number; sb: number; bb: number; ante: number; durationSec: number; isBreak?: boolean }[] | undefined;
   currentLevel: number;
   display: TimerDisplaySettings;
   variant: 'desktop' | 'landscape';
+  /** 2026-05-24 사용자 정정: 행 폰트/패딩 배율 (0.5x ~ 2.0x). 디폴트 1.0.
+   *  사용자 명시: "좌측 카드안의 내용을 조검더 꽉찬 폰트사이즈로 표기". */
+  scale?: number;
 }) {
   if (!structure || structure.length === 0) return null;
 
@@ -2659,15 +2861,24 @@ function BlindStructurePanel({
 
   // variant별 사이즈/패딩 결정.
   // 2026-05-24 사용자 정정: 폰트 1.5~2배 키움 (시인성 우선).
-  //   landscape: text-[11px] → text-[15px] (헤더) / text-[12px] → text-[17px] (행) — ~1.4~1.5배
-  //   desktop:   text-sm → text-base (헤더+행)
-  //   panelWidth landscape 100% 유지 (grid가 컬럼 폭 결정), desktop 240 → 280 확장
-  const headerSize =
-    variant === 'desktop' ? 'text-base px-3 py-2' : 'text-[15px] px-2.5 py-2';
-  const rowSize =
-    variant === 'desktop' ? 'px-3 py-2 text-base' : 'px-2.5 py-1.5 text-[17px]';
+  //   landscape: text-[11px] → text-[15px] (헤더) / text-[12px] → text-[17px] (행)
+  //   desktop:   text-sm → text-base
+  // 2026-05-24 사용자 정정 (재²): scale prop으로 매장이 실시간 미세조정.
+  //   기본 폰트값에 scale을 곱하고, padding도 비례로 살짝 늘림.
+  //   className 기반 텍스트 폰트는 inline style fontSize로 override (배율 정밀 적용).
+  const safeScale = Math.min(2.0, Math.max(0.5, scale));
+  const baseHeaderFont = variant === 'desktop' ? 16 : 15; // px
+  const baseRowFont = variant === 'desktop' ? 16 : 17;    // px
+  const headerFontPx = Math.round(baseHeaderFont * safeScale);
+  const rowFontPx = Math.round(baseRowFont * safeScale);
+  // padding은 폰트보다 완만하게 (0.7제곱) — 너무 비대해지는 거 방지.
+  const padScale = Math.pow(safeScale, 0.7);
+  const headerPadY = Math.max(4, Math.round(8 * padScale));
+  const headerPadX = variant === 'desktop' ? Math.round(12 * padScale) : Math.round(10 * padScale);
+  const rowPadY = variant === 'desktop' ? Math.round(8 * padScale) : Math.round(6 * padScale);
+  const rowPadX = variant === 'desktop' ? Math.round(12 * padScale) : Math.round(10 * padScale);
   const panelWidth =
-    variant === 'desktop' ? 280 : '100%';
+    variant === 'desktop' ? Math.round(280 * Math.min(1.4, safeScale)) : '100%';
   const accent = display.accentColor;
   const blinds = display.blindsColor;
   const fg = display.textColor;
@@ -2682,19 +2893,24 @@ function BlindStructurePanel({
       }}
       aria-label="블라인드 스트럭쳐 (10레벨)"
     >
-      {/* 헤더 */}
+      {/* 헤더 — scale 적용 (2026-05-24 정정 재²) */}
       <div
-        className={`${headerSize} font-extrabold tracking-[0.2em] border-b flex-shrink-0 flex items-center justify-between`}
+        className="font-extrabold tracking-[0.2em] border-b flex-shrink-0 flex items-center justify-between"
         style={{
           borderColor: 'rgba(255,255,255,0.1)',
           color: fg,
           background: 'rgba(0,0,0,0.35)',
+          fontSize: headerFontPx,
+          padding: `${headerPadY}px ${headerPadX}px`,
         }}
       >
         <span>📋 STRUCTURE</span>
         <span
           className="tabular-nums opacity-60"
-          style={{ fontSize: variant === 'desktop' ? 13 : 12, letterSpacing: '0.1em' }}
+          style={{
+            fontSize: Math.round((variant === 'desktop' ? 13 : 12) * safeScale),
+            letterSpacing: '0.1em',
+          }}
         >
           Lv {currentLevel} / {structure.length}
         </span>
@@ -2725,7 +2941,7 @@ function BlindStructurePanel({
           return (
             <div
               key={`${lvl.level}-${lvl.isBreak ? 'br' : 'lv'}`}
-              className={`${rowSize} font-mono flex items-center gap-2 transition-all`}
+              className="font-mono flex items-center gap-2 transition-all"
               style={{
                 background: rowBg,
                 border: rowBorder,
@@ -2736,6 +2952,8 @@ function BlindStructurePanel({
                 transformOrigin: 'left center',
                 margin: '3px 5px',
                 borderRadius: 8,
+                fontSize: rowFontPx,
+                padding: `${rowPadY}px ${rowPadX}px`,
               }}
             >
               <span
@@ -2743,8 +2961,8 @@ function BlindStructurePanel({
                 style={{
                   color: markerColor,
                   opacity: isCurrent ? 1 : 0.85,
-                  width: variant === 'desktop' ? 18 : 16,
-                  fontSize: variant === 'desktop' ? 16 : 14,
+                  width: Math.round((variant === 'desktop' ? 18 : 16) * safeScale),
+                  fontSize: Math.round((variant === 'desktop' ? 16 : 14) * safeScale),
                 }}
                 aria-hidden
               >
