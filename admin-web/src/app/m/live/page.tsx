@@ -11,6 +11,8 @@ import {
   computeLateRegMinutes,
   useLiveCountdown,
   computeFinishingGraceSec,
+  isLiveOnBreak,
+  resolveNextPlayLevel,
 } from '@/lib/live';
 import { posterStyleFor, fmtBuyInTicketsMobile } from '@/lib/templates';
 import { bumpStoreMetric } from '@/lib/analytics';
@@ -200,7 +202,11 @@ const DARK = {
 function LiveCard({ session, distance, locality }: { session: LiveSession; distance?: number; locality?: string }) {
   const sec = useLiveCountdown(session);
   const isPaused = session.status === 'paused';
-  const lowTime = sec > 0 && sec <= 10 && !isPaused;
+  // 2026-05-24: BREAK 상태 — amber 톤
+  const onBreak = isLiveOnBreak(session);
+  const nextPlay = onBreak ? resolveNextPlayLevel(session) : null;
+  // BREAK일 땐 lowTime 위험 깜빡임 끔
+  const lowTime = sec > 0 && sec <= 10 && !isPaused && !onBreak;
   const lateMin = computeLateRegMinutes(session, sec);
   const isLateRegOpen = !session.lateRegClosed && lateMin > 0;
   const graceSec = computeFinishingGraceSec(session);
@@ -220,18 +226,23 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
 
   const timerColor = isFinishing
     ? DARK.red
-    : isPaused
+    : onBreak
       ? DARK.yellow
-      : lowTime
-        ? DARK.red
-        : DARK.textTitle;
+      : isPaused
+        ? DARK.yellow
+        : lowTime
+          ? DARK.red
+          : DARK.textTitle;
   const timerPulse = isFinishing || lowTime;
 
+  // 2026-05-24: BREAK 우선순위 = finishing > onBreak > paused
   const statusChip = isFinishing
     ? { label: '곧 종료', bg: DARK.redSoft, color: DARK.red, pulse: true }
-    : isPaused
-      ? { label: '일시정지', bg: 'rgba(255,179,26,0.18)', color: DARK.yellow, pulse: false }
-      : null;
+    : onBreak
+      ? { label: '☕ BREAK', bg: 'rgba(245,158,11,0.22)', color: DARK.yellow, pulse: false }
+      : isPaused
+        ? { label: '일시정지', bg: 'rgba(255,179,26,0.18)', color: DARK.yellow, pulse: false }
+        : null;
 
   return (
     <Link
@@ -308,33 +319,60 @@ function LiveCard({ session, distance, locality }: { session: LiveSession; dista
         </div>
       </div>
 
-      {/* 메인 — 좌: Lv·블라인드 / 우: hero 타이머 (TV 풀스크린 축소판) */}
+      {/* 메인 — 좌: Lv·블라인드 (BREAK일 땐 "☕ 휴식 중") / 우: hero 타이머 (TV 풀스크린 축소판) */}
       <div className="px-4 pb-3.5 flex items-end gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-1.5">
-            <span
-              className="text-[11px] font-bold"
-              style={{ color: DARK.textHint, letterSpacing: '0.02em' }}
-            >
-              Lv
-            </span>
-            <span
-              className="text-[22px] font-extrabold leading-none tabular-nums"
-              style={{ color: DARK.textTitle, letterSpacing: '-0.03em' }}
-            >
-              {session.currentLevel}
-            </span>
-            <span aria-hidden style={{ color: DARK.textHint }}>·</span>
-            <span
-              className="text-[18px] font-extrabold tabular-nums leading-none"
-              style={{ color: DARK.textTitle, letterSpacing: '-0.025em' }}
-            >
-              {session.smallBlind}
-              <span style={{ color: DARK.textHint }}>/</span>
-              {session.bigBlind}
-            </span>
-          </div>
-          {nextBlind && !isFinishing && (
+          {onBreak ? (
+            <div className="flex items-baseline gap-1.5">
+              <span
+                className="text-[18px] font-extrabold leading-none"
+                style={{ color: DARK.yellow, letterSpacing: '-0.02em' }}
+              >
+                ☕ 휴식 중
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-1.5">
+              <span
+                className="text-[11px] font-bold"
+                style={{ color: DARK.textHint, letterSpacing: '0.02em' }}
+              >
+                Lv
+              </span>
+              <span
+                className="text-[22px] font-extrabold leading-none tabular-nums"
+                style={{ color: DARK.textTitle, letterSpacing: '-0.03em' }}
+              >
+                {session.currentLevel}
+              </span>
+              <span aria-hidden style={{ color: DARK.textHint }}>·</span>
+              <span
+                className="text-[18px] font-extrabold tabular-nums leading-none"
+                style={{ color: DARK.textTitle, letterSpacing: '-0.025em' }}
+              >
+                {session.smallBlind}
+                <span style={{ color: DARK.textHint }}>/</span>
+                {session.bigBlind}
+              </span>
+            </div>
+          )}
+          {onBreak && nextPlay && (
+            <div className="mt-2 inline-flex items-baseline gap-1">
+              <span
+                className="text-[9.5px] font-bold tracking-wider"
+                style={{ color: DARK.yellow }}
+              >
+                NEXT
+              </span>
+              <span
+                className="text-[11px] tabular-nums font-bold"
+                style={{ color: DARK.textBody }}
+              >
+                LV{nextPlay.displayedNumber} · {nextPlay.sb.toLocaleString()}/{nextPlay.bb.toLocaleString()}
+              </span>
+            </div>
+          )}
+          {!onBreak && nextBlind && !isFinishing && (
             <div className="mt-2 inline-flex items-baseline gap-1">
               <span
                 className="text-[9.5px] font-bold tracking-wider"

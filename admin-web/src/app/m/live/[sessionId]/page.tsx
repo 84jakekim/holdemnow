@@ -20,6 +20,8 @@ import {
   computeLateRegMinutes,
   useLiveCountdown,
   advanceLevelIfDue,
+  isLiveOnBreak,
+  resolveNextPlayLevel,
 } from '@/lib/live';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric } from '@/lib/analytics';
@@ -218,14 +220,18 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
   }
 
   const paused = session.status === 'paused';
+  // 2026-05-24: BREAK — amber 톤
+  const onBreak = isLiveOnBreak(session);
+  const nextPlay = onBreak ? resolveNextPlayLevel(session) : null;
   const lateMin = computeLateRegMinutes(session, sec);
   const structureForNext =
     session.blindStructureLocked && session.blindStructureLocked.length > 0
       ? session.blindStructureLocked
       : session.blindStructure;
   const nextBlind = structureForNext.find((l) => l.level === session.currentLevel + 1);
-  // 10초 이하 빨강 강조 (running 중일 때만) — 사용자 요청 핵심
-  const isWarning = !paused && sec > 0 && sec <= 10 && session.status === 'running';
+  // 10초 이하 빨강 강조 (running 중일 때만) — 사용자 요청 핵심.
+  // BREAK일 땐 위험 강조 X (휴식 끝 카운트다운).
+  const isWarning = !paused && !onBreak && sec > 0 && sec <= 10 && session.status === 'running';
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col">
@@ -267,9 +273,22 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
         </div>
       </div>
 
-      {/* LIVE / PAUSED 표시 */}
+      {/* LIVE / PAUSED / BREAK 표시 — 2026-05-24: BREAK 케이스 추가 */}
       <div className="flex items-center justify-center gap-2 pt-6">
-        {paused ? (
+        {onBreak ? (
+          <>
+            <span
+              className="font-extrabold tracking-widest text-sm px-3 py-1 rounded-full"
+              style={{
+                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                color: '#1F1300',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.30), 0 0 16px rgba(245,158,11,0.55)',
+              }}
+            >
+              ☕ BREAK · 휴식 중
+            </span>
+          </>
+        ) : paused ? (
           <>
             <span className="text-amber-400 font-extrabold tracking-widest text-xs">⏸ PAUSED</span>
           </>
@@ -290,18 +309,30 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
         })()}
       </div>
 
-      {/* 거대 카운트다운 — 10초 이내 빨강 + pulse */}
+      {/* 거대 카운트다운 — 10초 이내 빨강 + pulse. BREAK은 amber.
+          2026-05-24: BREAK일 땐 색·라벨 모두 amber로 휴식 인지 강화 */}
       <div className="text-center px-4 mt-2">
         <div
           className={`font-mono font-extrabold leading-none ${isWarning ? 'animate-pulse' : ''}`}
           style={{
             fontSize: '96px',
             letterSpacing: '-0.04em',
-            color: paused ? '#A8A8A8' : isWarning ? '#FF4757' : '#fff',
+            color: onBreak ? '#FBBF24' : paused ? '#A8A8A8' : isWarning ? '#FF4757' : '#fff',
+            textShadow: onBreak ? '0 2px 18px rgba(245,158,11,0.5)' : undefined,
           }}
         >
           {fmtTime(sec)}
         </div>
+        {onBreak && (
+          <div className="text-amber-300/90 text-xs font-bold tracking-widest mt-2">
+            휴식 남은 시간
+            {nextPlay && (
+              <span className="text-amber-200/70">
+                {' · '}끝나면 LV {nextPlay.displayedNumber} ({nextPlay.sb.toLocaleString()}/{nextPlay.bb.toLocaleString()})
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 블라인드 */}

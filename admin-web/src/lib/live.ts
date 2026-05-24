@@ -1024,6 +1024,25 @@ const RECENT_STOP_CALLS = new Map<string, number>();
 const STOP_DEBOUNCE_MS = 5000;
 const RECENT_STOP_GC_MS = 5 * 60 * 1000;
 
+// 호출 직전 5초 내 마지막 키보드 이벤트 추적 — 사용자 보고(2026-05-24):
+//   "전체화면에서 ESC 누르면 세션 종료된다". 코드상 ESC→stopLiveSession 직접 경로 없음.
+//   가설: F11 fullscreen + window.confirm + ESC/Enter race로 confirm 자동 통과.
+//   audit에 마지막 keydown(key + target + delta)을 박아 다음 사건 시 결정적 진단.
+let LAST_KEY_EVENT: { key: string; target: string; ts: number } | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      LAST_KEY_EVENT = {
+        key: e.key,
+        target: (e.target as HTMLElement | null)?.tagName ?? 'unknown',
+        ts: Date.now(),
+      };
+    },
+    true, // capture phase — 어떤 핸들러보다 먼저 잡음
+  );
+}
+
 export async function stopLiveSession(
   s: LiveSession,
   currentSecondsLeft: number,
@@ -1052,6 +1071,10 @@ export async function stopLiveSession(
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
         pathname: typeof window !== 'undefined' ? window.location.pathname : null,
         uid: auth.currentUser?.uid ?? null,
+        lastKey: LAST_KEY_EVENT && (nowMs - LAST_KEY_EVENT.ts < 5000)
+          ? `${LAST_KEY_EVENT.key}@${LAST_KEY_EVENT.target}(${nowMs - LAST_KEY_EVENT.ts}ms)`
+          : null,
+        fullscreenActive: typeof document !== 'undefined' ? !!document.fullscreenElement : null,
         timestamp: serverTimestamp(),
       });
     } catch { /* ignore */ }
@@ -1101,6 +1124,12 @@ export async function stopLiveSession(
       pathname: typeof window !== 'undefined' ? window.location.pathname : null,
       viewport: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : null,
       uid: auth.currentUser?.uid ?? null,
+      // 2026-05-24 ESC 가설 검증 — 호출 직전 5초 내 마지막 keydown 정보.
+      // null 또는 (Escape/Enter/Space + 5초 이내)면 키보드 race로 트리거됐을 가능성.
+      lastKey: LAST_KEY_EVENT && (nowMs - LAST_KEY_EVENT.ts < 5000)
+        ? `${LAST_KEY_EVENT.key}@${LAST_KEY_EVENT.target}(${nowMs - LAST_KEY_EVENT.ts}ms)`
+        : null,
+      fullscreenActive: typeof document !== 'undefined' ? !!document.fullscreenElement : null,
       timestamp: serverTimestamp(),
     });
   } catch {
@@ -1188,4 +1217,59 @@ export function fmtTime(sec: number): string {
   const m = Math.floor(Math.max(0, sec) / 60);
   const s = Math.max(0, sec) % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/* ──────────────────────────────────────────────
+ * BREAK 상태 헬퍼 — 2026-05-24 신규
+ *
+ * 사용자 앱(/m/*) LIVE 카드/배지/타이머 색을 BREAK일 때 명확히 차별화하기 위한
+ * 통합 진실의 원천. 5곳(PrimaryLiveCard, LiveSlider, /m/find, /m/store, /m/live)에서 공유.
+ *
+ * 판정 우선순위:
+ *   1) session.status === 'break'  → BREAK (서버 명시)
+ *   2) blindStructureLocked|blindStructure에서 currentLevel 행의 isBreak === true → BREAK
+ *
+ * 두 경로 모두 잡는 이유: 어떤 토너는 status='break'로 명시 토글하고, 어떤 토너는
+ * status는 'running' 유지하면서 단순히 break 레벨로 currentLevel만 advance함.
+ * (TournamentControlCenter가 후자를 채택)
+ * ────────────────────────────────────────────── */
+
+/** 세션이 현재 BREAK 레벨에 있는지. 위 판정 우선순위 참고. */
+export function isLiveOnBreak(s: LiveSession | null | undefined): boolean {
+  if (!s) return false;
+  if (s.status === 'break') return true;
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+  if (!structure || structure.length === 0) return false;
+  const cur = structure.find((l) => l.level === s.currentLevel);
+  return cur?.isBreak === true;
+}
+
+/** BREAK 종료 후 진입할 다음 play 레벨(isBreak=false 첫 행)을 찾는다.
+ *  없으면 null (= 마지막이 break인 비정상 케이스).
+ *  사용자 카드에서 "다음 LV N · SB/BB" 표시에 사용. */
+export function resolveNextPlayLevel(
+  s: LiveSession | null | undefined,
+): { level: number; sb: number; bb: number; ante: number; displayedNumber: number } | null {
+  if (!s) return null;
+  const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
+    ? s.blindStructureLocked
+    : s.blindStructure;
+  if (!structure || structure.length === 0) return null;
+  // currentLevel 이후 첫 play 레벨
+  let playSeq = 0;
+  for (const row of structure) {
+    if (!row.isBreak) playSeq++;
+    if (row.level > s.currentLevel && !row.isBreak) {
+      return {
+        level: row.level,
+        sb: row.sb,
+        bb: row.bb,
+        ante: row.ante,
+        displayedNumber: playSeq,
+      };
+    }
+  }
+  return null;
 }

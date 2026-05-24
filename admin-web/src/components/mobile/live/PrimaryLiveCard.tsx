@@ -20,6 +20,8 @@ import {
   computeLateRegMinutes,
   computeRemainingSec,
   fmtTime,
+  isLiveOnBreak,
+  resolveNextPlayLevel,
 } from '@/lib/live';
 import { fmtBuyInTicketsMobile } from '@/lib/templates';
 
@@ -80,6 +82,15 @@ function BigCard({
   const isLateRegOpen = !session.lateRegClosed && session.currentLevel <= session.lateRegEndLevel && lateRegMin > 0;
   const isRunning = session.status === 'running';
   const buyIn = buyInLabel(session);
+  // 2026-05-24: BREAK 상태 — LIVE/일반 진행과 시각 구분 (amber 톤)
+  const onBreak = isLiveOnBreak(session);
+  const nextPlay = onBreak ? resolveNextPlayLevel(session) : null;
+  // 타이머 색: BREAK는 amber, 일반은 white, 멈춤(paused)은 회색
+  const timerColor = onBreak
+    ? '#FBBF24'
+    : isRunning
+      ? '#fff'
+      : 'rgba(255,255,255,0.55)';
 
   return (
     <Link
@@ -132,23 +143,41 @@ function BigCard({
         <div className="flex flex-col gap-1 min-w-0">
           {/* LIVE 배지 + 상태 + (우측) 참가가능/참가마감 뱃지 */}
           <div className="flex items-center gap-2">
-            <span
-              className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(220,38,38,0.92)', color: '#fff' }}
-            >
+            {/* 2026-05-24: BREAK일 때 amber "☕ BREAK" 배지로 교체 (LIVE 빨강과 구분) */}
+            {onBreak ? (
               <span
-                className="w-1.5 h-1.5 rounded-full pulse-live flex-shrink-0"
-                style={{ background: '#fff' }}
-                aria-hidden="true"
-              />
-              LIVE
-            </span>
-            <span
-              className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-              style={{ background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.9)' }}
-            >
-              {statusLabel(session)}
-            </span>
+                className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                style={{
+                  background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                  color: '#1F1300',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 0 12px rgba(245,158,11,0.55)',
+                }}
+                aria-label="브레이크 휴식 중"
+              >
+                <span aria-hidden="true">☕</span>
+                BREAK
+              </span>
+            ) : (
+              <span
+                className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(220,38,38,0.92)', color: '#fff' }}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full pulse-live flex-shrink-0"
+                  style={{ background: '#fff' }}
+                  aria-hidden="true"
+                />
+                LIVE
+              </span>
+            )}
+            {!onBreak && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                style={{ background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.9)' }}
+              >
+                {statusLabel(session)}
+              </span>
+            )}
             {/* 우측: 참가가능 / 참가마감 뱃지 — premium pill 디자인
              * · 가능: emerald 그라데이션 + 내부 inset 하이라이트 + 외부 글로우 + 펄스 도트
              * · 마감: 다크 글래스(blur) + 미세 border + SVG 자물쇠 라인 아이콘 (이모지 X) */}
@@ -226,38 +255,83 @@ function BigCard({
 
         {/* ── 하단: 타이머 + 게임 정보 (그라데이션 위에 배치) ── */}
         <div className="flex flex-col gap-0">
-          {/* 타이머 (최우선, 가장 크게) */}
+          {/* 타이머 (최우선, 가장 크게) — BREAK는 amber, 일반은 white */}
           <div className="flex items-baseline gap-2 mb-1">
             <span
               className="font-mono font-extrabold leading-none tabular-nums"
               style={{
                 fontSize: '48px',
-                color: isRunning ? '#fff' : 'rgba(255,255,255,0.55)',
-                textShadow: '0 2px 12px rgba(0,0,0,0.6)',
+                color: timerColor,
+                textShadow: onBreak
+                  ? '0 2px 14px rgba(245,158,11,0.5)'
+                  : '0 2px 12px rgba(0,0,0,0.6)',
                 letterSpacing: '-0.02em',
               }}
-              aria-label={`남은 시간 ${fmtTime(sec)}`}
+              aria-label={
+                onBreak
+                  ? `휴식 남은 시간 ${fmtTime(sec)}`
+                  : `남은 시간 ${fmtTime(sec)}`
+              }
             >
               {fmtTime(sec)}
             </span>
-            {!isRunning && (
+            {onBreak ? (
               <span
-                className="text-[12px] font-bold"
-                style={{ color: 'rgba(255,255,255,0.55)' }}
+                className="text-[12px] font-extrabold"
+                style={{ color: '#FBBF24' }}
               >
-                {session.status === 'paused' ? '일시정지' : '브레이크'}
+                휴식 중
               </span>
+            ) : (
+              !isRunning && (
+                <span
+                  className="text-[12px] font-bold"
+                  style={{ color: 'rgba(255,255,255,0.55)' }}
+                >
+                  {session.status === 'paused' ? '일시정지' : '브레이크'}
+                </span>
+              )
             )}
           </div>
 
-          {/* 레벨 + 블라인드 */}
-          <div
-            className="text-[16px] font-bold leading-snug mb-2"
-            style={{ color: 'rgba(255,255,255,0.92)' }}
-            aria-label={`레벨 ${session.currentLevel}, 블라인드 ${blindLabel(session)}`}
-          >
-            Lv.{session.currentLevel} &nbsp;·&nbsp; {blindLabel(session)}
-          </div>
+          {/* 레벨 + 블라인드 — BREAK일 땐 "다음 LV N · SB/BB"로 교체 */}
+          {onBreak ? (
+            <div
+              className="text-[14px] font-bold leading-snug mb-2 flex items-baseline gap-1.5"
+              style={{ color: 'rgba(255,255,255,0.92)' }}
+              aria-label={
+                nextPlay
+                  ? `브레이크 후 LV ${nextPlay.displayedNumber}, 블라인드 ${nextPlay.sb.toLocaleString()}/${nextPlay.bb.toLocaleString()}`
+                  : '브레이크 중'
+              }
+            >
+              <span
+                className="text-[10px] font-extrabold tracking-widest"
+                style={{ color: '#FBBF24' }}
+              >
+                NEXT
+              </span>
+              {nextPlay ? (
+                <>
+                  <span>LV {nextPlay.displayedNumber}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.40)' }}>·</span>
+                  <span className="font-mono tabular-nums">
+                    {nextPlay.sb.toLocaleString()}/{nextPlay.bb.toLocaleString()}
+                  </span>
+                </>
+              ) : (
+                <span style={{ color: 'rgba(255,255,255,0.65)' }}>마지막 휴식</span>
+              )}
+            </div>
+          ) : (
+            <div
+              className="text-[16px] font-bold leading-snug mb-2"
+              style={{ color: 'rgba(255,255,255,0.92)' }}
+              aria-label={`레벨 ${session.currentLevel}, 블라인드 ${blindLabel(session)}`}
+            >
+              Lv.{session.currentLevel} &nbsp;·&nbsp; {blindLabel(session)}
+            </div>
+          )}
 
           {/* 구분선 */}
           <div

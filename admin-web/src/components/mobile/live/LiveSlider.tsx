@@ -16,7 +16,14 @@
 
 import Link from 'next/link';
 import type { LiveSession } from '@/lib/live';
-import { useLiveCountdown, fmtTime, computeLateRegMinutes, computeRemainingSec } from '@/lib/live';
+import {
+  useLiveCountdown,
+  fmtTime,
+  computeLateRegMinutes,
+  computeRemainingSec,
+  isLiveOnBreak,
+  resolveNextPlayLevel,
+} from '@/lib/live';
 import { fmtBuyInTicketsMobile } from '@/lib/templates';
 
 interface Props {
@@ -54,6 +61,14 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
     !session.lateRegClosed &&
     session.currentLevel <= session.lateRegEndLevel &&
     lateRegMin > 0;
+  // 2026-05-24: BREAK 표시 — 큰 카드와 동일 정책 (amber 톤)
+  const onBreak = isLiveOnBreak(session);
+  const nextPlay = onBreak ? resolveNextPlayLevel(session) : null;
+  const timerColor = onBreak
+    ? '#FBBF24'
+    : isRunning
+      ? '#fff'
+      : 'rgba(255,255,255,0.50)';
 
   return (
     <Link
@@ -102,19 +117,35 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
       {/* 콘텐츠 — 하단 정렬 (큰 카드와 동일) */}
       <div className="relative z-10 flex flex-col h-full px-2 pt-2 pb-2 gap-0 justify-end">
 
-        {/* LIVE 배지 + (우측) 가능/마감 뱃지 — 같은 라인에 좌·우 정렬 */}
+        {/* LIVE 배지 + (우측) 가능/마감 뱃지 — 같은 라인에 좌·우 정렬
+            2026-05-24: BREAK일 땐 amber "☕ BREAK" 배지로 교체 */}
         <div className="mb-1 flex items-center gap-1">
-          <span
-            className="inline-flex items-center gap-0.5 text-[8px] font-extrabold px-1 py-0.5 rounded-full"
-            style={{ background: 'rgba(220,38,38,0.9)', color: '#fff' }}
-          >
+          {onBreak ? (
             <span
-              className="w-1 h-1 rounded-full pulse-live flex-shrink-0"
-              style={{ background: '#fff' }}
-              aria-hidden="true"
-            />
-            LIVE
-          </span>
+              className="inline-flex items-center gap-0.5 text-[8px] font-extrabold px-1 py-0.5 rounded-full"
+              style={{
+                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                color: '#1F1300',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 0 8px rgba(245,158,11,0.55)',
+              }}
+              aria-label="브레이크 휴식 중"
+            >
+              <span aria-hidden="true">☕</span>
+              BREAK
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-0.5 text-[8px] font-extrabold px-1 py-0.5 rounded-full"
+              style={{ background: 'rgba(220,38,38,0.9)', color: '#fff' }}
+            >
+              <span
+                className="w-1 h-1 rounded-full pulse-live flex-shrink-0"
+                style={{ background: '#fff' }}
+                aria-hidden="true"
+              />
+              LIVE
+            </span>
+          )}
           <span className="ml-auto" />
           {isLateRegOpen ? (
             <span
@@ -177,26 +208,45 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
           {session.storeName}
         </div>
 
-        {/* 타이머 — 가장 크게 */}
+        {/* 타이머 — 가장 크게. BREAK는 amber */}
         <div
           className="font-mono font-extrabold leading-none tabular-nums mb-0.5"
           style={{
             fontSize: '20px',
-            color: isRunning ? '#fff' : 'rgba(255,255,255,0.50)',
+            color: timerColor,
             letterSpacing: '-0.02em',
+            textShadow: onBreak ? '0 1px 6px rgba(245,158,11,0.5)' : undefined,
           }}
-          aria-label={`남은 시간 ${fmtTime(sec)}`}
+          aria-label={
+            onBreak ? `휴식 남은 시간 ${fmtTime(sec)}` : `남은 시간 ${fmtTime(sec)}`
+          }
         >
           {fmtTime(sec)}
         </div>
 
-        {/* 레벨 + 블라인드 */}
-        <div
-          className="text-[9px] font-bold leading-none mb-1"
-          style={{ color: 'rgba(255,255,255,0.80)' }}
-        >
-          Lv.{session.currentLevel} · {blindShort(session)}
-        </div>
+        {/* 레벨 + 블라인드 — BREAK일 땐 "다음 LV N · SB/BB" */}
+        {onBreak ? (
+          <div
+            className="text-[9px] font-bold leading-none mb-1 flex items-baseline gap-1"
+            style={{ color: 'rgba(255,255,255,0.85)' }}
+          >
+            <span style={{ color: '#FBBF24' }}>NEXT</span>
+            {nextPlay ? (
+              <span className="font-mono tabular-nums truncate">
+                LV{nextPlay.displayedNumber} · {shortBlind(nextPlay.sb)}/{shortBlind(nextPlay.bb)}
+              </span>
+            ) : (
+              <span style={{ color: 'rgba(255,255,255,0.55)' }}>마지막 휴식</span>
+            )}
+          </div>
+        ) : (
+          <div
+            className="text-[9px] font-bold leading-none mb-1"
+            style={{ color: 'rgba(255,255,255,0.80)' }}
+          >
+            Lv.{session.currentLevel} · {blindShort(session)}
+          </div>
+        )}
 
         {/* buy-in + (인라인) Late reg 분 — 작은 카드도 한 행에 통합 */}
         <div

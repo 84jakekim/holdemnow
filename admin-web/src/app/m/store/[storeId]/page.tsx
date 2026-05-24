@@ -10,7 +10,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import PendingStoreNotice from '@/components/mobile/PendingStoreNotice';
-import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveTimelineTick, computeReadyExpirySec, computeFinishingGraceSec } from '@/lib/live';
+import { subscribeStoreLiveSessions, type LiveSession, fmtTime, computeLateRegMinutes, useLiveTimelineTick, computeReadyExpirySec, computeFinishingGraceSec, isLiveOnBreak, resolveNextPlayLevel } from '@/lib/live';
 import { subscribeStoreTournaments, type TournamentInstance } from '@/lib/tournaments';
 import { posterStyleFor, fmtBuyInTicketsMobile } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
@@ -937,7 +937,11 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
 
   const paused = session.status === 'paused';
   const ready = session.status === 'ready';
-  const lowTime = sec <= 10 && !paused && !ready && session.status !== 'completed';
+  // 2026-05-24: BREAK 상태 — status='break'이거나 currentLevel이 break 행
+  const onBreak = isLiveOnBreak(session);
+  const nextPlay = onBreak ? resolveNextPlayLevel(session) : null;
+  // BREAK일 땐 lowTime 깜빡임 끔 (휴식 종료까지의 카운트다운이라 위험 강조 부적절)
+  const lowTime = sec <= 10 && !paused && !ready && !onBreak && session.status !== 'completed';
   const lateMin = computeLateRegMinutes(session, sec);
   const readyLeft = ready ? Math.max(0, computeReadyExpirySec(session) ?? 0) : 0;
   const finishingLeft = computeFinishingGraceSec(session);
@@ -974,46 +978,68 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
   // 등록 임박 (5분 이하) — 시각적으로 "지금 가야 함" 강조
   const lateRegUrgent = isLateRegOpen && lateMin <= 5;
 
-  // 상태별 컬러 토큰
+  // 상태별 컬러 토큰 — BREAK는 amber(45 158 11) 톤 (paused와 유사하지만 더 채도↑)
   const accent = ready
     ? '#2563eb'
-    : paused
-      ? 'var(--gold)'
-      : lowTime || finishing
-        ? 'var(--live)'
-        : 'var(--text-1)';
+    : onBreak
+      ? '#D97706'
+      : paused
+        ? 'var(--gold)'
+        : lowTime || finishing
+          ? 'var(--live)'
+          : 'var(--text-1)';
 
   const tintBg = ready
     ? 'rgba(59,130,246,0.06)'
-    : paused
-      ? 'rgba(245,158,11,0.06)'
-      : finishing
-        ? 'rgba(229,62,62,0.08)'
-        : lowTime
-          ? 'rgba(229,62,62,0.06)'
-          : 'var(--surface-2)';
+    : onBreak
+      ? 'rgba(245,158,11,0.10)'
+      : paused
+        ? 'rgba(245,158,11,0.06)'
+        : finishing
+          ? 'rgba(229,62,62,0.08)'
+          : lowTime
+            ? 'rgba(229,62,62,0.06)'
+            : 'var(--surface-2)';
 
   const tintBorder = ready
     ? 'rgba(59,130,246,0.28)'
-    : paused
-      ? 'rgba(245,158,11,0.24)'
-      : finishing
-        ? 'rgba(229,62,62,0.36)'
-        : lowTime
-          ? 'rgba(229,62,62,0.22)'
-          : 'var(--border)';
+    : onBreak
+      ? 'rgba(245,158,11,0.40)'
+      : paused
+        ? 'rgba(245,158,11,0.24)'
+        : finishing
+          ? 'rgba(229,62,62,0.36)'
+          : lowTime
+            ? 'rgba(229,62,62,0.22)'
+            : 'var(--border)';
 
-  // 진행률 막대 색
+  // 진행률 막대 색 — BREAK는 amber
   const barColor = lowTime || finishing
     ? 'var(--live)'
-    : paused
-      ? 'var(--gold)'
-      : 'var(--brand)';
+    : onBreak
+      ? '#D97706'
+      : paused
+        ? 'var(--gold)'
+        : 'var(--brand)';
 
+  // 2026-05-24: BREAK 우선순위 = ready > onBreak > paused > finishing > LIVE
   const statusBadge = ready ? (
     <span className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wider"
       style={{ background: 'rgba(59,130,246,0.12)', color: '#2563eb' }}>
       <span>READY</span>
+    </span>
+  ) : onBreak ? (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wider"
+      style={{
+        background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+        color: '#1F1300',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.30), 0 0 8px rgba(245,158,11,0.40)',
+      }}
+      aria-label="브레이크 휴식 중"
+    >
+      <span aria-hidden="true">☕</span>
+      <span>BREAK</span>
     </span>
   ) : paused ? (
     <span className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-extrabold tracking-wider"
@@ -1249,8 +1275,11 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
         </div>
         <div className="flex-1 pb-1.5">
           <div className="flex items-center justify-between text-[10px] mb-1" style={{ color: 'var(--text-3)' }}>
-            <span className="font-semibold">
-              {ready ? '자동 취소 만료' : paused ? '일시정지 중' : finishing ? '곧 종료' : '레벨 진행률'}
+            <span
+              className="font-semibold"
+              style={onBreak ? { color: '#D97706' } : undefined}
+            >
+              {ready ? '자동 취소 만료' : onBreak ? '☕ 휴식 남은 시간' : paused ? '일시정지 중' : finishing ? '곧 종료' : '레벨 진행률'}
             </span>
             <span className="font-mono font-bold" style={{ color: 'var(--text-2)' }}>
               {ready ? '–' : `${Math.round(levelProgress)}%`}
@@ -1275,9 +1304,22 @@ function TimerCard({ session, cols }: { session: LiveSession; cols: number }) {
           sub={ante > 0 ? `ante ${ante.toLocaleString()}` : '—'}
         />
         <MetricCell
-          label="다음 블라인드"
-          value={nextBlind ? `${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}` : '최종'}
-          sub={nextBlind ? `Lv ${liveLevel + 1}` : '마지막 레벨'}
+          label={onBreak ? '브레이크 후' : '다음 블라인드'}
+          value={
+            onBreak && nextPlay
+              ? `${nextPlay.sb.toLocaleString()}/${nextPlay.bb.toLocaleString()}`
+              : nextBlind
+                ? `${nextBlind.sb.toLocaleString()}/${nextBlind.bb.toLocaleString()}`
+                : '최종'
+          }
+          sub={
+            onBreak && nextPlay
+              ? `LV ${nextPlay.displayedNumber}로 진입`
+              : nextBlind
+                ? `Lv ${liveLevel + 1}`
+                : '마지막 레벨'
+          }
+          accent={onBreak ? 'positive' : undefined}
         />
         <MetricCell
           label="인원"
