@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HoldemNow / Pink Rabbit — Prototype Index</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <style>
+    :root{
+      --brand:#FF1F8F; --brand-dim:#E01077; --brand-pale:#FFF0F7;
+      --live:#E53E3E; --gold:#F59E0B; --success:#10B981;
+      --bg:#FFFFFF; --bg-sub:#F7F7F8;
+      --surface-1:#FFFFFF; --surface-2:#F3F4F6; --surface-3:#E5E7EB;
+      --border:#E5E7EB;
+      --text-1:#111827; --text-2:#6B7280; --text-3:#9CA3AF;
+      --shadow-card:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+      --shadow-float:0 4px 16px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.08);
+      --shadow-brand:0 2px 12px rgba(255,31,143,.20);
+      --shadow-hero:0 6px 28px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.12);
+    }
+    body{ font-family:'Pretendard',sans-serif; letter-spacing:-.01em; background:var(--bg-sub); color:var(--text-1); }
+    .swatch{ width:48px; height:48px; border-radius:12px; box-shadow:var(--shadow-card); }
+    .mono{ font-family:'JetBrains Mono','SF Mono',Menlo,monospace; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ── 헤더 ─────────────────────────────────── -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-6 py-5 flex items-center gap-4">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl" style="background:linear-gradient(135deg,#FF1F8F,#FF6BAA)">🐰</div>
+      <div class="flex-1">
+        <div class="text-xl font-black tracking-tight">Pink Rabbit / HoldemNow</div>
+        <div class="text-xs text-gray-500">디자이너 의뢰용 · 정적 프로토타입 v1.0 · 2026-05-25</div>
+      </div>
+      <span class="text-[10px] font-extrabold px-2 py-1 rounded-full text-white" style="background:#FF1F8F">BETA</span>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-10 space-y-12">
+
+    <!-- ── 의뢰 의도 ─────────────────────────── -->
+    <section class="bg-white rounded-3xl p-8 shadow-sm border border-gray-200">
+      <h2 class="text-2xl font-black mb-3">🎯 디자이너 의뢰 핵심</h2>
+      <p class="text-sm text-gray-700 leading-relaxed mb-4">
+        Pink Rabbit (HoldemNow)는 <b>부산·경남 홀덤펍 디스커버리 + 토너 디지털 인프라</b> 플랫폼.
+        현재 구현된 모든 화면을 <b>5개 카테고리</b>로 묶었습니다. 각 파일은 단일 HTML이며 Tailwind CDN + Pretendard CDN으로 즉시 렌더됩니다.
+      </p>
+      <ul class="text-sm text-gray-700 leading-relaxed list-disc list-inside space-y-1">
+        <li><b>유지할 것</b>: Pink Rabbit 브랜드(#FF1F8F), LIVE 빨강(#E53E3E), 야놀자·토스 DNA(라이트 + 핑크 액센트), 모바일 우선.</li>
+        <li><b>개선 자유</b>: 카드 비율·grid·여백·아이콘 일러스트레이션·다크 모드 톤·시그니처 컴포넌트 외형.</li>
+        <li><b>건드리지 말 것</b>: LIVE 빨강 의미(긴급/진행), 가로 TV 좌중우 3분할 골격, 채팅방형 /m/posts ASC 흐름.</li>
+      </ul>
+    </section>
+
+    <!-- ── 파일 카드 ─────────────────────────── -->
+    <section>
+      <h2 class="text-2xl font-black mb-5">📦 카테고리별 프로토타입</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <a href="01-user-app.html" class="block bg-white rounded-2xl p-6 border border-gray-200 hover:border-pink-300 hover:shadow-md transition">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-2xl">📱</span>
+            <div class="text-lg font-extrabold">01. 사용자 앱 (/m/*)</div>
+          </div>
+          <div class="text-sm text-gray-600 leading-relaxed">홈/매장찾기/지도탐색/채팅방/매장상세/LIVE/캘린더/이벤트/검색/즐겨찾기/예약/마이/커뮤니티(구인·딜러·중고)/알림. <b>20개 화면</b>.</div>
+          <div class="mt-3 text-[11px] mono text-gray-400">max-w-md 모바일 폭</div>
+        </a>
+
+        <a href="02-store-admin.html" class="block bg-white rounded-2xl p-6 border border-gray-200 hover:border-pink-300 hover:shadow-md transition">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-2xl">🏬</span>
+            <div class="text-lg font-extrabold">02. 매장 어드민 (/admin/[storeId])</div>
+          </div>
+          <div class="text-sm text-gray-600 leading-relaxed">사이드바 12메뉴 + 햄버거 드로어 + 🎬 토너 운영 3분할 control center + 화면 설정 + 광고 4등급 + 통계.</div>
+          <div class="mt-3 text-[11px] mono text-gray-400">데스크탑 + 모바일 모두</div>
+        </a>
+
+        <a href="03-platform-admin.html" class="block bg-white rounded-2xl p-6 border border-gray-200 hover:border-pink-300 hover:shadow-md transition">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-2xl">🛰️</span>
+            <div class="text-lg font-extrabold">03. 본사 어드민 (/platform/*)</div>
+          </div>
+          <div class="text-sm text-gray-600 leading-relaxed">다크 관제센터 톤. 회원관리 3-tab / LIVE 모니터링 / 광고 발급 / 피드 반경 / 홈 큐레이션 / 금지어 / 결제정산.</div>
+          <div class="mt-3 text-[11px] mono text-gray-400">data-theme="dark"</div>
+        </a>
+
+        <a href="04-tv-display.html" class="block bg-white rounded-2xl p-6 border border-gray-200 hover:border-pink-300 hover:shadow-md transition">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-2xl">📺</span>
+            <div class="text-lg font-extrabold">04. TV 디스플레이</div>
+          </div>
+          <div class="text-sm text-gray-600 leading-relaxed">가로/세로/데스크탑 풀스크린 + BREAK 상태 + 분배표 모드 + 매장 프리셋 5종(다크·그린·블루·크림슨·화이트).</div>
+          <div class="mt-3 text-[11px] mono text-gray-400">매장 운영의 얼굴</div>
+        </a>
+
+        <a href="05-auth-legal.html" class="block bg-white rounded-2xl p-6 border border-gray-200 hover:border-pink-300 hover:shadow-md transition">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-2xl">🔐</span>
+            <div class="text-lg font-extrabold">05. 로그인 / 가입 / 약관</div>
+          </div>
+          <div class="text-sm text-gray-600 leading-relaxed">사용자/매장/본사 3개 로그인 + 사용자/매장/대회사 자체 가입 + 약관 3종.</div>
+          <div class="mt-3 text-[11px] mono text-gray-400">진입 모먼트</div>
+        </a>
+
+      </div>
+    </section>
+
+    <!-- ── 디자인 토큰 ─────────────────────── -->
+    <section class="bg-white rounded-3xl p-8 shadow-sm border border-gray-200">
+      <h2 class="text-2xl font-black mb-5">🎨 디자인 토큰 카탈로그</h2>
+
+      <h3 class="text-sm font-extrabold mt-4 mb-3 text-gray-500 tracking-wider">COLOR ROLES</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#FF1F8F"></div><div><div class="text-sm font-bold">--brand</div><div class="text-[11px] mono text-gray-500">#FF1F8F</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#E01077"></div><div><div class="text-sm font-bold">--brand-dim</div><div class="text-[11px] mono text-gray-500">#E01077</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#FFF0F7"></div><div><div class="text-sm font-bold">--brand-pale</div><div class="text-[11px] mono text-gray-500">#FFF0F7</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#E53E3E"></div><div><div class="text-sm font-bold">--live</div><div class="text-[11px] mono text-gray-500">#E53E3E</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#F59E0B"></div><div><div class="text-sm font-bold">--gold</div><div class="text-[11px] mono text-gray-500">#F59E0B</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#10B981"></div><div><div class="text-sm font-bold">--success</div><div class="text-[11px] mono text-gray-500">#10B981</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#111827"></div><div><div class="text-sm font-bold">--text-1</div><div class="text-[11px] mono text-gray-500">#111827</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#6B7280"></div><div><div class="text-sm font-bold">--text-2</div><div class="text-[11px] mono text-gray-500">#6B7280</div></div></div>
+      </div>
+
+      <h3 class="text-sm font-extrabold mt-8 mb-3 text-gray-500 tracking-wider">SURFACE / BORDER</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="flex items-center gap-3"><div class="swatch border" style="background:#FFFFFF"></div><div><div class="text-sm font-bold">--bg / surface-1</div><div class="text-[11px] mono text-gray-500">#FFFFFF</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#F7F7F8"></div><div><div class="text-sm font-bold">--bg-sub</div><div class="text-[11px] mono text-gray-500">#F7F7F8</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#F3F4F6"></div><div><div class="text-sm font-bold">--surface-2</div><div class="text-[11px] mono text-gray-500">#F3F4F6</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#E5E7EB"></div><div><div class="text-sm font-bold">--surface-3 / border</div><div class="text-[11px] mono text-gray-500">#E5E7EB</div></div></div>
+      </div>
+
+      <h3 class="text-sm font-extrabold mt-8 mb-3 text-gray-500 tracking-wider">DARK MODE (본사 어드민·TV)</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#0F1419"></div><div><div class="text-sm font-bold text-gray-200">dark --bg</div><div class="text-[11px] mono text-gray-500">#0F1419</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#161B25"></div><div><div class="text-sm font-bold">dark --bg-sub</div><div class="text-[11px] mono text-gray-500">#161B25</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#1A1F2A"></div><div><div class="text-sm font-bold">dark --surface-1</div><div class="text-[11px] mono text-gray-500">#1A1F2A</div></div></div>
+        <div class="flex items-center gap-3"><div class="swatch" style="background:#2D3548"></div><div><div class="text-sm font-bold">dark --border</div><div class="text-[11px] mono text-gray-500">#2D3548</div></div></div>
+      </div>
+
+      <h3 class="text-sm font-extrabold mt-8 mb-3 text-gray-500 tracking-wider">TYPOGRAPHY</h3>
+      <div class="space-y-2">
+        <div><span class="mono text-xs text-gray-500 w-32 inline-block">Pretendard 900 / 24</span><span class="text-2xl font-black">홀덤펍 디스커버리</span></div>
+        <div><span class="mono text-xs text-gray-500 w-32 inline-block">Pretendard 800 / 18</span><span class="text-lg font-extrabold">화명동 깜깜이 펍</span></div>
+        <div><span class="mono text-xs text-gray-500 w-32 inline-block">Pretendard 700 / 14</span><span class="text-sm font-bold">매장 정보 보기</span></div>
+        <div><span class="mono text-xs text-gray-500 w-32 inline-block">Pretendard 500 / 12</span><span class="text-xs">부산 · 30T 라이브 진행중</span></div>
+        <div><span class="mono text-xs text-gray-500 w-32 inline-block">JetBrains Mono 800 / 48</span><span class="mono text-4xl font-extrabold">09:14</span></div>
+      </div>
+
+      <h3 class="text-sm font-extrabold mt-8 mb-3 text-gray-500 tracking-wider">RADIUS</h3>
+      <div class="flex gap-3 flex-wrap">
+        <div class="px-4 py-3 bg-gray-100 text-[11px] mono" style="border-radius:6px">r-xs 6</div>
+        <div class="px-4 py-3 bg-gray-100 text-[11px] mono" style="border-radius:10px">r-sm 10</div>
+        <div class="px-4 py-3 bg-gray-100 text-[11px] mono" style="border-radius:14px">r-md 14</div>
+        <div class="px-4 py-3 bg-gray-100 text-[11px] mono" style="border-radius:18px">r-lg 18</div>
+        <div class="px-4 py-3 bg-gray-100 text-[11px] mono" style="border-radius:22px">r-xl 22</div>
+        <div class="px-4 py-3 bg-gray-100 text-[11px] mono" style="border-radius:28px">r-2xl 28</div>
+        <div class="px-4 py-3 bg-gray-100 text-[11px] mono" style="border-radius:999px">pill</div>
+      </div>
+
+      <h3 class="text-sm font-extrabold mt-8 mb-3 text-gray-500 tracking-wider">SHADOW</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white px-4 py-6 rounded-2xl text-center text-[11px] mono" style="box-shadow:var(--shadow-card)">shadow-card</div>
+        <div class="bg-white px-4 py-6 rounded-2xl text-center text-[11px] mono" style="box-shadow:var(--shadow-float)">shadow-float</div>
+        <div class="bg-white px-4 py-6 rounded-2xl text-center text-[11px] mono" style="box-shadow:var(--shadow-brand)">shadow-brand</div>
+        <div class="bg-white px-4 py-6 rounded-2xl text-center text-[11px] mono" style="box-shadow:var(--shadow-hero)">shadow-hero</div>
+      </div>
+    </section>
+
+    <!-- ── 시그니처 컴포넌트 ────────────────── -->
+    <section class="bg-white rounded-3xl p-8 shadow-sm border border-gray-200">
+      <h2 class="text-2xl font-black mb-5">🧩 시그니처 컴포넌트 (개선 X)</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div>
+          <div class="text-xs font-extrabold text-gray-500 mb-2 tracking-wider">LIVE 배지 (펄스)</div>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold text-white tracking-wider" style="background:#E53E3E">
+            <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>LIVE
+          </span>
+          <p class="text-[11px] text-gray-500 mt-2">LIVE 빨강은 진행/긴급 의미만. 다른 카테고리에 절대 재사용 X.</p>
+        </div>
+
+        <div>
+          <div class="text-xs font-extrabold text-gray-500 mb-2 tracking-wider">매장 카테고리 아이콘 wrap</div>
+          <div class="flex gap-2">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style="background:#FFF0F7">🃏</div>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style="background:#FFF0F7">🎰</div>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style="background:#FFF0F7">🥃</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-xs font-extrabold text-gray-500 mb-2 tracking-wider">cardEmoji (오늘의 소식 색상 9종)</div>
+          <div class="flex gap-1.5">
+            <div class="w-7 h-7 rounded-lg" style="background:#FFE4F1"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#FFE9D6"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#FFF4C2"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#D9F5E1"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#D6F0FF"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#E1D8FF"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#F5D8E0"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#E5E7EB"></div>
+            <div class="w-7 h-7 rounded-lg" style="background:#111827"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-xs font-extrabold text-gray-500 mb-2 tracking-wider">CTA 핫핑크 버튼</div>
+          <button class="px-5 py-3 rounded-xl text-sm font-extrabold text-white" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">예약하기</button>
+        </div>
+
+        <div>
+          <div class="text-xs font-extrabold text-gray-500 mb-2 tracking-wider">TV 타이머 mono</div>
+          <span class="mono text-3xl font-extrabold">09:14</span>
+          <span class="ml-3 text-xs text-gray-500 mono">Lv 6 · 1,000/2,000</span>
+        </div>
+
+        <div>
+          <div class="text-xs font-extrabold text-gray-500 mb-2 tracking-wider">하단 탭바 알약 활성</div>
+          <div class="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full p-1">
+            <span class="px-3 py-1.5 text-xs font-extrabold text-white rounded-full" style="background:#FF1F8F">홈</span>
+            <span class="px-3 py-1.5 text-xs font-bold text-gray-500">매장찾기</span>
+            <span class="px-3 py-1.5 text-xs font-bold text-gray-500">채팅방</span>
+            <span class="px-3 py-1.5 text-xs font-bold text-gray-500">마이</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── 디자이너 입력 가이드 ─────────────── -->
+    <section class="bg-pink-50 rounded-3xl p-8 border border-pink-200">
+      <h2 class="text-2xl font-black mb-4">📝 디자이너 에게 보낼 prompt</h2>
+      <pre class="text-xs leading-relaxed bg-white rounded-2xl p-5 border border-pink-200 whitespace-pre-wrap">"Pink Rabbit (HoldemNow) 모바일/웹 디자인 리뉴얼.
+부산·경남 홀덤펍 디스커버리 + 토너 디지털 인프라 플랫폼.
+
+[유지]
+- 브랜드 핫핑크 #FF1F8F, LIVE 빨강 #E53E3E, 야놀자·토스 DNA(라이트+핑크 액센트).
+- 모바일 우선 (max-w-md), 한국어 Pretendard, 토큰명 그대로.
+- TV 타이머는 JetBrains Mono 거대 폰트.
+
+[개선 가능]
+- 카드 비율·grid·여백·일러스트레이션.
+- 본사 어드민 다크 톤(현재는 #0F1419 단조).
+- TV 5종 프리셋 컬러 팔레트(현재 5종 외 추가 가능).
+- 시그니처 마이크로 인터랙션(LIVE pulse 외).
+
+[금지]
+- LIVE 빨강을 LIVE 외 다른 카테고리에 재사용 X.
+- 가로 TV의 좌중우 3분할 골격 변경 X (운영자 학습 비용 큼).
+- 채팅방 /m/posts의 ASC 시간순 흐름 변경 X.
+
+[제출 형식]
+- Figma 페이지 5개 (01~05 카테고리별).
+- 각 페이지에 모바일 frame + 모든 variant.
+- 디자인 토큰을 Figma Variable로."</pre>
+    </section>
+
+    <footer class="text-center text-xs text-gray-500 py-8">
+      Pink Rabbit BETA · 정적 프로토타입 v1.0 · 2026-05-25 · 솔로 빌더(부산·경남 홀덤펍 카톡방 방장)
+    </footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>02. 매장 어드민 — Pink Rabbit Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <style>
+    :root{
+      --brand:#FF1F8F; --brand-pale:#FFF0F7;
+      --live:#E53E3E; --gold:#F59E0B; --success:#10B981;
+      --bg:#FFFFFF; --bg-sub:#F7F7F8;
+      --surface-1:#FFFFFF; --surface-2:#F3F4F6; --surface-3:#E5E7EB;
+      --border:#E5E7EB;
+      --text-1:#111827; --text-2:#6B7280; --text-3:#9CA3AF;
+      --shadow-card:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+      --shadow-float:0 4px 16px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.08);
+      --shadow-brand:0 2px 12px rgba(255,31,143,.20);
+    }
+    body{ font-family:'Pretendard',sans-serif; letter-spacing:-.01em; background:#EEF0F4; color:var(--text-1); }
+    .mono{ font-family:'JetBrains Mono','SF Mono',Menlo,monospace; }
+    .frame{ background:white; border-radius:24px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.10); border:1px solid #00000018; }
+    .badge-live{ display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:800; color:#fff; background:#E53E3E; }
+    .badge-live .dot{ width:5px; height:5px; border-radius:999px; background:#fff; animation:pulse 1.6s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .menu-item{ display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:12px; font-size:13px; font-weight:600; color:#374151; cursor:pointer; }
+    .menu-item:hover{ background:#F3F4F6; }
+    .menu-item.active{ background:#FFF0F7; color:#FF1F8F; font-weight:800; }
+    .frame-label{ display:block; text-align:center; font-size:11px; font-weight:800; color:#6B7280; margin-bottom:8px; font-family:monospace; }
+  </style>
+</head>
+<body class="min-h-screen py-10 px-4">
+
+<header class="max-w-7xl mx-auto mb-10">
+  <a href="00-index.html" class="text-xs text-gray-500 mono">← 00-index.html</a>
+  <h1 class="text-3xl font-black mt-2">02 · 매장 어드민 (/admin/[storeId])</h1>
+  <p class="text-sm text-gray-600 mt-1">사이드바 12메뉴 · 데스크탑 + 모바일 드로어 · 🎬 토너 운영 3분할 control center</p>
+</header>
+
+<main class="max-w-7xl mx-auto space-y-14">
+
+<!-- ──────────────────────────────────────── -->
+<!-- 1. 데스크탑 — 사이드바 + 대시보드 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="dashboard">
+  <h2 class="text-xl font-extrabold mb-1">1. 데스크탑 골격 — 사이드바 + 대시보드</h2>
+  <p class="text-xs text-gray-500 mb-4">데스크탑 너비 1200+ · lg 이상에서 사이드바 고정</p>
+  <span class="frame-label">desktop 1280px</span>
+  <div class="frame" style="width:1280px;max-width:100%;display:flex;min-height:760px">
+    <!-- 사이드바 -->
+    <aside class="w-60 border-r border-gray-200 bg-white flex flex-col">
+      <div class="px-4 py-4 border-b border-gray-200 flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xl text-white" style="background:linear-gradient(135deg,#FF1F8F,#FF6BAA)">🐰</div>
+        <div>
+          <div class="text-xs text-gray-500 font-bold tracking-wider">STORE OPS</div>
+          <div class="text-sm font-extrabold">화명동 깜깜이 펍</div>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <div class="menu-item active"><span>📊</span><span class="flex-1">대시보드</span></div>
+        <div class="menu-item"><span>🎬</span><span class="flex-1">토너 운영</span><span class="badge-live"><span class="dot"></span>LIVE</span></div>
+        <div class="menu-item"><span>📢</span><span class="flex-1">오늘의 소식</span></div>
+        <div class="menu-item"><span>💼</span><span class="flex-1">구인</span></div>
+        <div class="menu-item"><span>🃏</span><span class="flex-1">딜러 풀</span></div>
+        <div class="menu-item"><span>🛒</span><span class="flex-1">중고거래</span></div>
+        <div class="menu-item"><span>📅</span><span class="flex-1">예정 토너</span></div>
+        <div class="menu-item"><span>📅</span><span class="flex-1">예약 관리</span><span class="text-[10px] font-extrabold text-white px-1.5 py-0.5 rounded-full" style="background:#FF1F8F">3</span></div>
+        <div class="menu-item"><span>⭐</span><span class="flex-1">리뷰 답글</span></div>
+        <div class="menu-item"><span>🏬</span><span class="flex-1">매장 정보</span></div>
+        <div class="menu-item"><span>📣</span><span class="flex-1">광고</span></div>
+        <div class="menu-item"><span>📈</span><span class="flex-1">통계</span></div>
+      </div>
+      <div class="border-t border-gray-200 p-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center text-sm">사</div>
+          <div class="text-xs flex-1">
+            <div class="font-extrabold">사장님</div>
+            <div class="text-[10px] text-gray-500">owner</div>
+          </div>
+          <button class="text-gray-400 text-xs">⚙</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 본문 — 대시보드 -->
+    <main class="flex-1 p-6 overflow-y-auto" style="background:var(--bg-sub)">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-xl font-extrabold">대시보드</h2>
+          <div class="text-xs text-gray-500 mt-0.5">오늘 5/25 · 매출/예약/LIVE 한눈에</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="badge-live"><span class="dot"></span>LIVE 진행중 1개</span>
+          <button class="px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-white">🔔 3</button>
+          <button class="px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-white">🌓 라이트</button>
+        </div>
+      </div>
+
+      <!-- KPI 4종 -->
+      <div class="grid grid-cols-4 gap-3 mb-4">
+        <div class="bg-white rounded-2xl p-4 border border-gray-200">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">오늘 예약</div>
+          <div class="mono text-2xl font-extrabold mt-1">24</div>
+          <div class="text-[11px] text-emerald-600 mt-0.5">▲ 18% vs 어제</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-gray-200">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">진행중 토너</div>
+          <div class="mono text-2xl font-extrabold mt-1">1</div>
+          <div class="text-[11px] text-gray-500 mt-0.5">데일리 30T · 24/30명</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-gray-200">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">대기 답글 (리뷰)</div>
+          <div class="mono text-2xl font-extrabold mt-1">5</div>
+          <div class="text-[11px] text-red-500 mt-0.5">미답글 24h 초과 2건</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-gray-200">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">광고 잔여 노출</div>
+          <div class="mono text-2xl font-extrabold mt-1">12.3K</div>
+          <div class="text-[11px] text-gray-500 mt-0.5">7일 남음</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- 신규 예약 알림 -->
+        <div class="bg-white rounded-2xl p-4 border border-gray-200">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-extrabold">📅 신규 예약 (대기 3건)</div>
+            <a class="text-xs font-bold text-[#FF1F8F]">전체 →</a>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-pink-50">
+              <span class="w-2 h-2 rounded-full bg-[#FF1F8F]"></span>
+              <div class="flex-1">
+                <div class="text-[12px] font-extrabold">홀덤러브 · 5/25 21:00 데일리 30T</div>
+                <div class="text-[10px] text-gray-500">3분 전 · 010-1234-XXXX</div>
+              </div>
+              <button class="px-2 py-1 text-[11px] font-extrabold rounded text-white" style="background:#10B981">확정</button>
+              <button class="px-2 py-1 text-[11px] font-extrabold rounded border border-gray-300">거절</button>
+            </div>
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-pink-50">
+              <span class="w-2 h-2 rounded-full bg-[#FF1F8F]"></span>
+              <div class="flex-1">
+                <div class="text-[12px] font-extrabold">에이스 · 5/26 19:00 ROYAL CUP</div>
+                <div class="text-[10px] text-gray-500">8분 전 · 010-5678-XXXX</div>
+              </div>
+              <button class="px-2 py-1 text-[11px] font-extrabold rounded text-white" style="background:#10B981">확정</button>
+              <button class="px-2 py-1 text-[11px] font-extrabold rounded border border-gray-300">거절</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 진행중 LIVE 미리보기 -->
+        <div class="bg-white rounded-2xl p-4 border border-gray-200">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-extrabold flex items-center gap-2"><span class="badge-live"><span class="dot"></span>LIVE</span>데일리 히든에이스 30T</div>
+            <a class="text-xs font-bold text-[#FF1F8F]">컨트롤 →</a>
+          </div>
+          <div class="grid grid-cols-3 text-center mb-3">
+            <div><div class="mono text-xl font-extrabold">09:14</div><div class="text-[10px] text-gray-500">남은 시간</div></div>
+            <div><div class="mono text-xl font-extrabold">Lv 6</div><div class="text-[10px] text-gray-500">1k / 2k</div></div>
+            <div><div class="mono text-xl font-extrabold">24/30</div><div class="text-[10px] text-gray-500">참가자</div></div>
+          </div>
+          <div class="rounded-xl bg-gray-50 p-2.5">
+            <div class="text-[11px] text-gray-500 font-bold mb-1">PRIZE POOL</div>
+            <div class="mono text-lg font-extrabold">₩1,100,000</div>
+          </div>
+        </div>
+
+        <!-- 매출 그래프 placeholder -->
+        <div class="bg-white rounded-2xl p-4 border border-gray-200 col-span-2">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-extrabold">📈 최근 7일 매출</div>
+            <span class="text-xs text-gray-500">총 ₩4,820,000</span>
+          </div>
+          <div class="h-32 flex items-end gap-3">
+            <div class="flex-1 rounded-t-lg" style="height:50%;background:linear-gradient(180deg,#FF1F8F,#FFC9DE)"></div>
+            <div class="flex-1 rounded-t-lg" style="height:65%;background:linear-gradient(180deg,#FF1F8F,#FFC9DE)"></div>
+            <div class="flex-1 rounded-t-lg" style="height:42%;background:linear-gradient(180deg,#FF1F8F,#FFC9DE)"></div>
+            <div class="flex-1 rounded-t-lg" style="height:78%;background:linear-gradient(180deg,#FF1F8F,#FFC9DE)"></div>
+            <div class="flex-1 rounded-t-lg" style="height:60%;background:linear-gradient(180deg,#FF1F8F,#FFC9DE)"></div>
+            <div class="flex-1 rounded-t-lg" style="height:95%;background:linear-gradient(180deg,#FF1F8F,#FFC9DE)"></div>
+            <div class="flex-1 rounded-t-lg" style="height:88%;background:linear-gradient(180deg,#FF1F8F,#FFC9DE)"></div>
+          </div>
+          <div class="flex justify-between text-[10px] text-gray-400 mt-2 mono">
+            <span>5/19</span><span>5/20</span><span>5/21</span><span>5/22</span><span>5/23</span><span>5/24</span><span>5/25</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 2. 🎬 토너 운영 3분할 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="tournament">
+  <h2 class="text-xl font-extrabold mb-1">2. 🎬 토너 운영 — 3분할 Control Center</h2>
+  <p class="text-xs text-gray-500 mb-4">좌: LIVE+템플릿 · 중앙: 거대 타이머+컨트롤 · 우: TV송출/화면설정/미리보기 탭</p>
+  <span class="frame-label">desktop content (사이드바 숨김)</span>
+  <div class="frame" style="width:1280px;max-width:100%;background:var(--bg-sub);padding:16px">
+
+    <div class="grid gap-3" style="grid-template-columns:280px 1fr 320px;min-height:680px">
+
+      <!-- ─ 좌: LIVE + 템플릿 ─ -->
+      <aside class="bg-white rounded-2xl border border-gray-200 p-4 overflow-y-auto">
+        <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">진행중 LIVE</div>
+        <div class="rounded-xl p-3" style="background:linear-gradient(135deg,#FFE4F1,#FFF0F7);border:1px solid #FFC9DE">
+          <div class="flex items-center gap-1.5"><span class="badge-live"><span class="dot"></span>LIVE</span><span class="text-[11px] text-gray-500 mono">slot 1</span></div>
+          <div class="text-sm font-extrabold mt-1">데일리 히든에이스 30T</div>
+          <div class="mono text-[11px] text-gray-600 mt-0.5">Lv 6 · 1k/2k · 24/30</div>
+        </div>
+
+        <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mt-4 mb-2">토너 템플릿</div>
+        <div class="space-y-1.5">
+          <div class="p-2.5 rounded-xl border-2 border-[#FF1F8F]" style="background:#FFF0F7">
+            <div class="text-[12px] font-extrabold">데일리 30T 히든에이스</div>
+            <div class="text-[10px] text-gray-500">20레벨 · 10분 · 앤티 ON</div>
+          </div>
+          <div class="p-2.5 rounded-xl border border-gray-200">
+            <div class="text-[12px] font-extrabold">주말 50T 메인</div>
+            <div class="text-[10px] text-gray-500">25레벨 · 15분</div>
+          </div>
+          <div class="p-2.5 rounded-xl border border-gray-200">
+            <div class="text-[12px] font-extrabold">새틀라이트 10T</div>
+            <div class="text-[10px] text-gray-500">12레벨 · 8분</div>
+          </div>
+          <button class="w-full p-2.5 rounded-xl border-2 border-dashed border-gray-300 text-[12px] font-bold text-gray-500">+ 새 템플릿</button>
+        </div>
+
+        <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mt-4 mb-2">디스플레이 슬롯</div>
+        <div class="space-y-1">
+          <div class="p-2 rounded-lg flex items-center gap-2" style="background:#FFE4F1">
+            <span class="text-[10px] font-extrabold text-white px-1 rounded" style="background:#FF1F8F">TV 1</span>
+            <span class="text-[11px] flex-1">메인 홀</span>
+            <span class="badge-live"><span class="dot"></span>송출중</span>
+          </div>
+          <div class="p-2 rounded-lg flex items-center gap-2 bg-gray-100">
+            <span class="text-[10px] font-extrabold text-white px-1 rounded bg-gray-500">TV 2</span>
+            <span class="text-[11px] flex-1">VIP 룸</span>
+            <span class="text-[10px] text-gray-500">대기</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ─ 중앙: 거대 타이머 + 컨트롤 ─ -->
+      <section class="rounded-2xl p-6 text-white flex flex-col" style="background:linear-gradient(135deg,#1a1a1a,#2D2D2D)">
+        <div class="text-[10px] font-extrabold tracking-widest opacity-70">CONTROL · DATA SYNCED</div>
+        <div class="flex items-center justify-between mt-1">
+          <div>
+            <div class="text-base font-extrabold">데일리 히든에이스 30T</div>
+            <div class="text-[11px] opacity-70">Lv 6 / 20 · 앤티 250 · 24/30명</div>
+          </div>
+          <span class="badge-live"><span class="dot"></span>LIVE</span>
+        </div>
+
+        <!-- 거대 타이머 -->
+        <div class="flex-1 flex flex-col items-center justify-center my-4">
+          <div class="text-[10px] tracking-widest text-white/50 font-bold">LEVEL 6 · BLINDS</div>
+          <div class="mono text-[120px] font-extrabold leading-none mt-1" style="color:#FF1F8F">09:14</div>
+          <div class="mono text-2xl font-extrabold mt-2">1,000 / 2,000</div>
+          <div class="text-[11px] text-white/50 mt-1">NEXT Lv 7 · 1,500 / 3,000 · 5분 ↓</div>
+        </div>
+
+        <!-- 컨트롤 버튼 -->
+        <div class="grid grid-cols-4 gap-2 mb-2">
+          <button class="py-3 rounded-xl text-sm font-extrabold bg-white/10 hover:bg-white/20">⏸ 일시정지</button>
+          <button class="py-3 rounded-xl text-sm font-extrabold bg-white/10 hover:bg-white/20">⏮ -1분</button>
+          <button class="py-3 rounded-xl text-sm font-extrabold bg-white/10 hover:bg-white/20">+1분 ⏭</button>
+          <button class="py-3 rounded-xl text-sm font-extrabold bg-white/10 hover:bg-white/20">⏭ NEXT LV</button>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <button class="py-2.5 rounded-xl text-xs font-bold border border-white/20">레벨 점프</button>
+          <button class="py-2.5 rounded-xl text-xs font-bold border border-white/20">참가자 +/-</button>
+          <button class="py-2.5 rounded-xl text-xs font-extrabold text-white" style="background:#E53E3E">⏹ 토너 종료</button>
+        </div>
+      </section>
+
+      <!-- ─ 우: TV송출 / 화면설정 / 미리보기 탭 ─ -->
+      <aside class="bg-white rounded-2xl border border-gray-200 flex flex-col overflow-hidden">
+        <div class="flex border-b border-gray-200 text-[11px] font-extrabold">
+          <button class="flex-1 py-3 border-b-2" style="border-color:#FF1F8F;color:#FF1F8F">TV 송출</button>
+          <button class="flex-1 py-3 text-gray-500">화면 설정</button>
+          <button class="flex-1 py-3 text-gray-500">미리보기</button>
+        </div>
+        <div class="p-4 flex-1 overflow-y-auto">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">현재 송출중 TV</div>
+          <div class="rounded-xl p-3 mb-3 text-white" style="background:#0F1419">
+            <div class="text-[10px] tracking-widest opacity-60">TV 1 · 메인 홀</div>
+            <div class="text-[11px] font-extrabold mt-0.5">데일리 30T 송출중</div>
+            <div class="mono text-[10px] opacity-70 mt-1">display.holdemnow.com/abc/1</div>
+          </div>
+
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">디스플레이 미리보기</div>
+          <div class="rounded-xl overflow-hidden border border-gray-200 mb-3">
+            <div class="aspect-video bg-gradient-to-br from-gray-900 to-black p-2 text-white flex flex-col">
+              <div class="flex items-center justify-between text-[7px]">
+                <span>데일리 히든에이스</span>
+                <span class="px-0.5 rounded bg-red-500">LIVE</span>
+              </div>
+              <div class="flex-1 flex items-center justify-center">
+                <span class="mono text-2xl font-extrabold" style="color:#FF1F8F">09:14</span>
+              </div>
+              <div class="text-[7px] text-center opacity-70">Lv 6 · 1k/2k · 24/30</div>
+            </div>
+          </div>
+
+          <button class="w-full py-2.5 rounded-xl text-xs font-extrabold border border-gray-200">🔗 디스플레이 URL 복사</button>
+          <button class="w-full mt-2 py-2.5 rounded-xl text-xs font-extrabold text-white" style="background:#FF1F8F">+ TV 슬롯 추가</button>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 3. 토너 템플릿 편집기 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="template-editor">
+  <h2 class="text-xl font-extrabold mb-1">3. 토너 템플릿 편집기</h2>
+  <p class="text-xs text-gray-500 mb-4">스트럭쳐 이름 · 블라인드 표 · 앤티 모드 · 휴식</p>
+  <div class="frame p-6 max-w-4xl" style="background:white">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <input class="text-xl font-extrabold border-b border-gray-300 outline-none" value="데일리 30T 히든에이스">
+        <div class="text-[11px] text-gray-500 mt-1">20레벨 · 평균 진행시간 3h 20m</div>
+      </div>
+      <div class="flex gap-2">
+        <button class="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-bold">미리보기</button>
+        <button class="px-3 py-1.5 rounded-lg text-white text-xs font-extrabold" style="background:#FF1F8F">저장</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-4">
+      <div class="rounded-xl bg-gray-50 p-3">
+        <div class="text-[10px] font-extrabold text-gray-500">기본 스택</div>
+        <input class="mono text-base font-extrabold bg-transparent outline-none w-full" value="20,000">
+      </div>
+      <div class="rounded-xl bg-gray-50 p-3">
+        <div class="text-[10px] font-extrabold text-gray-500">레벨 길이</div>
+        <input class="mono text-base font-extrabold bg-transparent outline-none w-full" value="10분">
+      </div>
+      <div class="rounded-xl bg-gray-50 p-3">
+        <div class="text-[10px] font-extrabold text-gray-500">앤티 모드</div>
+        <div class="flex items-center justify-between mt-1">
+          <span class="text-sm font-extrabold">BB ANTE</span>
+          <div class="w-9 h-5 rounded-full p-0.5" style="background:#FF1F8F"><div class="w-4 h-4 rounded-full bg-white ml-auto"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-[11px] text-gray-500 font-extrabold border-b border-gray-200">
+          <th class="text-left py-2">LV</th>
+          <th class="text-left py-2">SB</th>
+          <th class="text-left py-2">BB</th>
+          <th class="text-left py-2">ANTE</th>
+          <th class="text-left py-2">길이</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody class="mono">
+        <tr class="border-b border-gray-100"><td>1</td><td>100</td><td>200</td><td>—</td><td>10분</td><td></td></tr>
+        <tr class="border-b border-gray-100"><td>2</td><td>200</td><td>400</td><td>—</td><td>10분</td><td></td></tr>
+        <tr class="border-b border-gray-100"><td>3</td><td>300</td><td>600</td><td>100</td><td>10분</td><td></td></tr>
+        <tr class="border-b border-gray-100"><td>4</td><td>500</td><td>1,000</td><td>100</td><td>10분</td><td></td></tr>
+        <tr class="border-b border-gray-100"><td>5</td><td>800</td><td>1,500</td><td>200</td><td>10분</td><td></td></tr>
+        <tr class="border-b border-gray-100" style="background:#FFE4F1"><td class="font-extrabold">6 ←</td><td>1,000</td><td>2,000</td><td>250</td><td>10분</td><td><span class="badge-live"><span class="dot"></span>현재</span></td></tr>
+        <tr class="border-b border-gray-100"><td>7</td><td>1,500</td><td>3,000</td><td>400</td><td>10분</td><td></td></tr>
+        <tr class="border-b border-gray-100 text-amber-600"><td>8</td><td colspan="4" class="font-extrabold">☕ BREAK 5분</td><td></td></tr>
+      </tbody>
+    </table>
+    <button class="mt-3 px-3 py-2 rounded-lg border border-gray-300 text-xs font-bold">+ 레벨 추가</button>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 4. 화면 설정 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="display-settings">
+  <h2 class="text-xl font-extrabold mb-1">4. 화면 설정 (TV 송출 커스터마이즈)</h2>
+  <p class="text-xs text-gray-500 mb-4">배경 · 컬러 팔레트 5종 · 텍스트 3줄 · 프라이즈풀 토글 · 폰트 슬라이더</p>
+  <div class="frame p-6 max-w-5xl" style="background:white">
+    <div class="grid grid-cols-2 gap-6">
+
+      <!-- 설정 컨트롤 -->
+      <div class="space-y-5">
+        <div>
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">매장 프리셋</div>
+          <div class="grid grid-cols-5 gap-2">
+            <div class="aspect-square rounded-xl ring-2 ring-[#FF1F8F]" style="background:#0F1419"></div>
+            <div class="aspect-square rounded-xl" style="background:linear-gradient(135deg,#0a3a2a,#1d6b48)"></div>
+            <div class="aspect-square rounded-xl" style="background:linear-gradient(135deg,#0a1d4a,#2a4ba8)"></div>
+            <div class="aspect-square rounded-xl" style="background:linear-gradient(135deg,#3a0814,#9b1c2e)"></div>
+            <div class="aspect-square rounded-xl border" style="background:#fff"></div>
+          </div>
+          <div class="grid grid-cols-5 gap-2 mt-1 text-[9px] text-center text-gray-500 font-bold">
+            <span>다크</span><span>그린</span><span>블루</span><span>크림슨</span><span>화이트</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">상단 텍스트 3줄</div>
+          <input class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm mb-1.5" value="화명동 깜깜이 펍">
+          <input class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm mb-1.5" value="데일리 히든에이스 30T">
+          <input class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" value="바이인 3만 · GTD 100만">
+        </div>
+
+        <div>
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">프라이즈풀</div>
+          <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50">
+            <span class="text-sm font-extrabold">💰 PRIZE POOL 표시</span>
+            <div class="w-9 h-5 rounded-full p-0.5" style="background:#FF1F8F"><div class="w-4 h-4 rounded-full bg-white ml-auto"></div></div>
+          </div>
+          <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 mt-1.5">
+            <span class="text-sm font-extrabold">📊 분배표(payout) 표시</span>
+            <div class="w-9 h-5 rounded-full p-0.5 bg-gray-300"><div class="w-4 h-4 rounded-full bg-white"></div></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">타이머 폰트 크기</div>
+          <div class="flex items-center gap-3">
+            <span class="text-[10px] text-gray-500">A</span>
+            <div class="flex-1 h-1.5 rounded-full bg-gray-200 relative">
+              <div class="absolute h-1.5 rounded-full" style="width:70%;background:#FF1F8F"></div>
+              <div class="absolute w-4 h-4 rounded-full bg-white border-2 border-[#FF1F8F]" style="left:calc(70% - 8px);top:-5px"></div>
+            </div>
+            <span class="text-lg font-extrabold">A</span>
+          </div>
+          <div class="text-center text-[10px] text-gray-500 mt-1">scale 1.4×</div>
+        </div>
+      </div>
+
+      <!-- 라이브 미리보기 -->
+      <div>
+        <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">📺 라이브 미리보기</div>
+        <div class="rounded-2xl overflow-hidden border border-gray-200" style="background:#0F1419">
+          <div class="aspect-video p-4 text-white flex flex-col">
+            <div class="text-[8px] tracking-widest text-white/50 font-bold">화명동 깜깜이 펍</div>
+            <div class="text-[10px] font-extrabold">데일리 히든에이스 30T</div>
+            <div class="text-[8px] text-white/70 mt-0.5">바이인 3만 · GTD 100만</div>
+            <div class="flex-1 flex flex-col items-center justify-center">
+              <div class="text-[8px] tracking-widest text-white/40">LEVEL 6</div>
+              <div class="mono text-5xl font-extrabold" style="color:#FF1F8F">09:14</div>
+              <div class="mono text-xs font-extrabold mt-1">1,000 / 2,000</div>
+            </div>
+            <div class="flex justify-between text-[8px] text-white/60">
+              <span>👥 24/30</span>
+              <span>💰 ₩1,100,000</span>
+              <span>NEXT 1.5k/3k</span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 text-[10px] text-gray-500 mono">실시간 반영 · TV에 동일하게 송출됩니다</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 5. 📢 오늘의 소식 작성 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="posts">
+  <h2 class="text-xl font-extrabold mb-1">5. 📢 오늘의 소식 — 작성 폼</h2>
+  <p class="text-xs text-gray-500 mb-4">카드 색상 9종 · 이모지 48종 · 24h 만료 · 자유 태그</p>
+  <div class="frame p-6 max-w-3xl" style="background:white">
+    <div class="grid grid-cols-2 gap-6">
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-[10px] font-extrabold text-gray-500 tracking-wider">제목 (필수)</label>
+          <input class="w-full mt-1 px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-extrabold" value="오늘 밤 9시 30T 데일리 OPEN!">
+        </div>
+        <div>
+          <label class="text-[10px] font-extrabold text-gray-500 tracking-wider">본문 (선택)</label>
+          <textarea class="w-full mt-1 px-3 py-2.5 rounded-xl border border-gray-200 text-sm" rows="3">바이인 3만 · GTD 100만 · 리바이 무제한
+늦참 1레벨까지 가능합니다 🎲</textarea>
+        </div>
+        <div>
+          <label class="text-[10px] font-extrabold text-gray-500 tracking-wider">카드 색상</label>
+          <div class="flex gap-1.5 mt-1 flex-wrap">
+            <div class="w-9 h-9 rounded-lg ring-2 ring-[#FF1F8F]" style="background:#FFE4F1"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#FFE9D6"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#FFF4C2"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#D9F5E1"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#D6F0FF"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#E1D8FF"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#F5D8E0"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#E5E7EB"></div>
+            <div class="w-9 h-9 rounded-lg" style="background:#111827"></div>
+          </div>
+        </div>
+        <div>
+          <label class="text-[10px] font-extrabold text-gray-500 tracking-wider">이모지</label>
+          <div class="grid grid-cols-12 gap-1 mt-1 text-lg p-2 rounded-xl bg-gray-50">
+            <span class="text-center cursor-pointer">🃏</span><span class="text-center cursor-pointer ring-2 ring-[#FF1F8F] rounded">🎲</span><span class="text-center cursor-pointer">🎰</span><span class="text-center cursor-pointer">🥃</span><span class="text-center cursor-pointer">🍺</span><span class="text-center cursor-pointer">🍸</span><span class="text-center cursor-pointer">🎉</span><span class="text-center cursor-pointer">🎁</span><span class="text-center cursor-pointer">🔥</span><span class="text-center cursor-pointer">⭐</span><span class="text-center cursor-pointer">💰</span><span class="text-center cursor-pointer">🏆</span>
+            <span class="text-center cursor-pointer">👥</span><span class="text-center cursor-pointer">🎯</span><span class="text-center cursor-pointer">📣</span><span class="text-center cursor-pointer">📢</span><span class="text-center cursor-pointer">🆕</span><span class="text-center cursor-pointer">⚡</span><span class="text-center cursor-pointer">💎</span><span class="text-center cursor-pointer">👑</span><span class="text-center cursor-pointer">🎪</span><span class="text-center cursor-pointer">🎤</span><span class="text-center cursor-pointer">📅</span><span class="text-center cursor-pointer">⏰</span>
+          </div>
+        </div>
+        <div>
+          <label class="text-[10px] font-extrabold text-gray-500 tracking-wider">자유 태그 (콤마)</label>
+          <input class="w-full mt-1 px-3 py-2.5 rounded-xl border border-gray-200 text-sm" value="#데일리, #30T, #100만GTD">
+        </div>
+        <div class="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200">
+          <span class="text-xs">⏰ <b>24시간</b> 후 자동 만료</span>
+          <label class="flex items-center gap-1 text-xs"><input type="checkbox"> 📌 pinned (3일)</label>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">미리보기</div>
+        <div class="rounded-2xl p-4" style="background:#FFE4F1;border:1px solid #FFC9DE">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded-full bg-white flex items-center justify-center text-base">🎲</div>
+            <div class="text-[12px] font-extrabold">화명동 깜깜이 펍</div>
+            <span class="ml-auto text-[10px] text-gray-500 mono">방금</span>
+          </div>
+          <div class="text-[14px] font-bold leading-snug mb-1">오늘 밤 9시 30T 데일리 OPEN!</div>
+          <div class="text-[12px] text-gray-700 leading-relaxed">바이인 3만 · GTD 100만 · 리바이 무제한<br>늦참 1레벨까지 가능합니다 🎲</div>
+          <div class="mt-2 flex flex-wrap gap-1">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white">#데일리</span>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white">#30T</span>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white">#100만GTD</span>
+          </div>
+        </div>
+        <button class="w-full mt-4 py-3 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">📢 즉시 게시</button>
+        <button class="w-full mt-2 py-2.5 rounded-xl border border-gray-200 text-sm font-extrabold text-gray-600">임시 저장</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 6. 📣 광고 4등급 + ROI -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="ads">
+  <h2 class="text-xl font-extrabold mb-1">6. 📣 광고 — 4등급 카드 + ROI 계산기</h2>
+  <p class="text-xs text-gray-500 mb-4">Bronze / Silver / Gold / Platinum · 분배표 · FAQ</p>
+  <div class="frame p-6 max-w-5xl" style="background:white">
+
+    <div class="grid grid-cols-4 gap-3 mb-6">
+      <div class="rounded-2xl p-4 border-2 border-gray-200">
+        <div class="text-[10px] font-extrabold text-gray-500 tracking-widest">BRONZE</div>
+        <div class="text-2xl font-black mt-1">5만원<span class="text-xs text-gray-500">/월</span></div>
+        <div class="text-[11px] text-gray-500 mt-2">• 매장 리스트 상단 노출<br>• 노출 5,000회<br>• 7일 보장</div>
+        <button class="w-full mt-3 py-2 rounded-lg border border-gray-300 text-xs font-bold">신청</button>
+      </div>
+      <div class="rounded-2xl p-4 border-2 border-gray-200">
+        <div class="text-[10px] font-extrabold tracking-widest" style="color:#9CA3AF">SILVER</div>
+        <div class="text-2xl font-black mt-1">15만원<span class="text-xs text-gray-500">/월</span></div>
+        <div class="text-[11px] text-gray-500 mt-2">• 홈 본사 광고 슬롯<br>• 노출 30,000회<br>• 14일 보장</div>
+        <button class="w-full mt-3 py-2 rounded-lg border border-gray-300 text-xs font-bold">신청</button>
+      </div>
+      <div class="rounded-2xl p-4 border-2" style="border-color:#F59E0B;background:linear-gradient(180deg,#FFFBEB,#fff)">
+        <div class="text-[10px] font-extrabold tracking-widest text-amber-600">★ GOLD (추천)</div>
+        <div class="text-2xl font-black mt-1">35만원<span class="text-xs text-gray-500">/월</span></div>
+        <div class="text-[11px] text-gray-500 mt-2">• 홈 상단 + 채팅방 pinned<br>• 노출 80,000회<br>• 30일 보장</div>
+        <button class="w-full mt-3 py-2 rounded-lg text-xs font-extrabold text-white" style="background:#F59E0B">신청</button>
+      </div>
+      <div class="rounded-2xl p-4 border-2" style="border-color:#111827;background:linear-gradient(180deg,#0F1419,#1A1F2A);color:#fff">
+        <div class="text-[10px] font-extrabold tracking-widest" style="color:#FF1F8F">PLATINUM</div>
+        <div class="text-2xl font-black mt-1">80만원<span class="text-xs text-white/60">/월</span></div>
+        <div class="text-[11px] text-white/70 mt-2">• 푸시 알림 + 모든 슬롯<br>• 노출 무제한<br>• 30일 보장</div>
+        <button class="w-full mt-3 py-2 rounded-lg text-xs font-extrabold" style="background:#FF1F8F;color:#fff">상담 문의</button>
+      </div>
+    </div>
+
+    <!-- ROI 계산기 -->
+    <div class="rounded-2xl p-5 bg-gradient-to-br from-pink-50 to-pink-100 border border-pink-200">
+      <div class="text-sm font-extrabold mb-3">🧮 ROI 계산기</div>
+      <div class="grid grid-cols-4 gap-3">
+        <div>
+          <div class="text-[10px] font-bold text-gray-500">평균 객단가</div>
+          <input class="mono text-base font-extrabold bg-white border border-pink-200 rounded-lg px-2 py-1.5 w-full mt-1" value="35,000">
+        </div>
+        <div>
+          <div class="text-[10px] font-bold text-gray-500">목표 신규 고객/월</div>
+          <input class="mono text-base font-extrabold bg-white border border-pink-200 rounded-lg px-2 py-1.5 w-full mt-1" value="30">
+        </div>
+        <div>
+          <div class="text-[10px] font-bold text-gray-500">예상 추가 매출</div>
+          <div class="mono text-base font-extrabold mt-1.5" style="color:#FF1F8F">₩1,050,000</div>
+        </div>
+        <div>
+          <div class="text-[10px] font-bold text-gray-500">ROI (GOLD 기준)</div>
+          <div class="mono text-base font-extrabold mt-1.5" style="color:#10B981">300%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 분배표 -->
+    <div class="mt-5 text-xs">
+      <div class="font-extrabold mb-2">💸 매장 수수료 분배 (월 1회 정산)</div>
+      <div class="rounded-xl border border-gray-200 overflow-hidden">
+        <div class="grid grid-cols-4 bg-gray-50 px-3 py-2 text-[11px] font-extrabold text-gray-500">
+          <span>매출 항목</span><span>본사</span><span>매장</span><span>비고</span>
+        </div>
+        <div class="grid grid-cols-4 px-3 py-2 border-t border-gray-100"><span>광고비</span><span>20%</span><span>—</span><span>플랫폼 운영</span></div>
+        <div class="grid grid-cols-4 px-3 py-2 border-t border-gray-100"><span>예약 수수료</span><span>5%</span><span>95%</span><span>noshow 미차감</span></div>
+        <div class="grid grid-cols-4 px-3 py-2 border-t border-gray-100"><span>광고 신청 수수료</span><span>20%</span><span>—</span><span>고정</span></div>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="mt-5 text-xs space-y-2">
+      <div class="font-extrabold">❓ 자주 묻는 질문</div>
+      <details class="p-3 rounded-xl bg-gray-50 cursor-pointer"><summary class="font-bold">광고 효과는 언제부터 나타나나요?</summary><div class="text-gray-600 mt-1.5">평균 3~7일 내 신규 예약 증가. 30일 차에 평균 +28% 매출 향상.</div></details>
+      <details class="p-3 rounded-xl bg-gray-50 cursor-pointer"><summary class="font-bold">중도 해지 가능한가요?</summary><div class="text-gray-600 mt-1.5">월 단위 결제. 다음 달 자동 갱신 중지 가능. 환불 없음.</div></details>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 7. 모바일 드로어 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="mobile-drawer">
+  <h2 class="text-xl font-extrabold mb-1">7. 모바일 — 햄버거 드로어</h2>
+  <p class="text-xs text-gray-500 mb-4">lg 미만에서 사이드바를 드로어로 전환</p>
+  <span class="frame-label">mobile 392px (드로어 OPEN)</span>
+  <div class="frame mx-auto" style="width:392px;height:680px;position:relative">
+    <!-- 본문 (어둡게) -->
+    <div class="absolute inset-0 bg-gray-100" style="filter:brightness(.6)">
+      <header class="px-4 h-14 flex items-center justify-between border-b border-gray-200 bg-white">
+        <button class="text-2xl">☰</button>
+        <div class="text-sm font-extrabold">대시보드</div>
+        <button class="text-xl">🔔</button>
+      </header>
+    </div>
+    <!-- 드로어 -->
+    <aside class="absolute top-0 left-0 bottom-0 w-[280px] bg-white shadow-2xl flex flex-col">
+      <div class="px-4 py-4 border-b border-gray-200 flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xl text-white" style="background:linear-gradient(135deg,#FF1F8F,#FF6BAA)">🐰</div>
+        <div>
+          <div class="text-[10px] text-gray-500 font-bold tracking-wider">STORE OPS</div>
+          <div class="text-sm font-extrabold">화명동 깜깜이 펍</div>
+        </div>
+        <button class="ml-auto text-gray-400">✕</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <div class="menu-item active"><span>📊</span><span>대시보드</span></div>
+        <div class="menu-item"><span>🎬</span><span>토너 운영</span></div>
+        <div class="menu-item"><span>📢</span><span>오늘의 소식</span></div>
+        <div class="menu-item"><span>💼</span><span>구인</span></div>
+        <div class="menu-item"><span>🃏</span><span>딜러 풀</span></div>
+        <div class="menu-item"><span>🛒</span><span>중고거래</span></div>
+        <div class="menu-item"><span>📅</span><span>예정 토너</span></div>
+        <div class="menu-item"><span>📅</span><span class="flex-1">예약 관리</span><span class="text-[10px] font-extrabold text-white px-1.5 rounded-full" style="background:#FF1F8F">3</span></div>
+        <div class="menu-item"><span>⭐</span><span>리뷰 답글</span></div>
+        <div class="menu-item"><span>🏬</span><span>매장 정보</span></div>
+        <div class="menu-item"><span>📣</span><span>광고</span></div>
+        <div class="menu-item"><span>📈</span><span>통계</span></div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<footer class="text-center text-xs text-gray-500 py-10">
+  Pink Rabbit · 매장 어드민 prototype · 12메뉴 · 데스크탑+모바일 · v1.0
+</footer>
+
+</main>
+</body>
+</html>

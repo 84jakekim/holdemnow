@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>05. 로그인 / 가입 / 약관 — Pink Rabbit Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <style>
+    :root{
+      --brand:#FF1F8F; --brand-pale:#FFF0F7; --live:#E53E3E;
+      --bg:#FFFFFF; --surface-2:#F3F4F6; --border:#E5E7EB;
+      --text-1:#111827; --text-2:#6B7280; --text-3:#9CA3AF;
+      --shadow-card:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+      --shadow-float:0 4px 16px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.08);
+      --shadow-brand:0 2px 12px rgba(255,31,143,.20);
+    }
+    body{ font-family:'Pretendard',sans-serif; letter-spacing:-.01em; background:#EEF0F4; color:var(--text-1); }
+    .mono{ font-family:'JetBrains Mono','SF Mono',Menlo,monospace; }
+    .phone{ width:392px; max-width:100%; margin:0 auto; background:var(--bg); border-radius:36px; overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,.16); border:1px solid #1a1a1a18; }
+    .phone-label{ display:block; text-align:center; font-size:11px; font-weight:800; color:#6B7280; margin-bottom:8px; font-family:monospace; }
+    .input{ display:block; width:100%; padding:13px 14px; border-radius:14px; border:1.5px solid #E5E7EB; font-size:14px; outline:none; background:#fff; transition:border-color .15s; }
+    .input:focus{ border-color:#FF1F8F; box-shadow:0 0 0 3px rgba(255,31,143,.10); }
+    .label{ font-size:11px; font-weight:800; color:#6B7280; letter-spacing:.04em; }
+  </style>
+</head>
+<body class="min-h-screen py-10 px-4">
+
+<header class="max-w-7xl mx-auto mb-10">
+  <a href="00-index.html" class="text-xs text-gray-500 mono">← 00-index.html</a>
+  <h1 class="text-3xl font-black mt-2">05 · 로그인 / 가입 / 약관</h1>
+  <p class="text-sm text-gray-600 mt-1">사용자/매장/본사 3개 로그인 · 사용자/매장/대회사 자체 가입 · 약관 3종</p>
+</header>
+
+<main class="max-w-7xl mx-auto space-y-14">
+
+<!-- ──────────────────────────────────────── -->
+<!-- 1. 사용자 로그인 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="login-user">
+  <h2 class="text-xl font-extrabold mb-1">1. 일반 사용자 로그인 — <span class="mono text-xs text-gray-500">/login</span></h2>
+  <p class="text-xs text-gray-500 mb-4">카카오 OAuth 메인 + Email/Password 보조</p>
+  <span class="phone-label">phone 392px</span>
+  <div class="phone p-8" style="min-height:680px;display:flex;flex-direction:column">
+    <div class="text-center">
+      <div class="w-20 h-20 rounded-3xl mx-auto flex items-center justify-center text-5xl text-white" style="background:linear-gradient(135deg,#FF1F8F,#FF6BAA)">🐰</div>
+      <div class="text-2xl font-black mt-4">Pink Rabbit</div>
+      <div class="text-xs text-gray-500 mt-1">부산·경남 홀덤펍 디스커버리</div>
+    </div>
+
+    <div class="mt-10 flex-1">
+      <div class="label">이메일</div>
+      <input class="input mt-1.5" placeholder="hako0409@gmail.com">
+      <div class="label mt-4">비밀번호</div>
+      <input type="password" class="input mt-1.5" placeholder="••••••••">
+
+      <div class="flex items-center justify-between mt-3 text-xs">
+        <label class="flex items-center gap-1.5"><input type="checkbox"> 자동 로그인</label>
+        <a class="text-gray-500 font-bold">비밀번호 찾기</a>
+      </div>
+
+      <button class="w-full mt-5 py-3.5 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">이메일로 로그인</button>
+
+      <div class="flex items-center gap-3 my-5 text-[10px] text-gray-400">
+        <div class="flex-1 h-px bg-gray-200"></div>또는<div class="flex-1 h-px bg-gray-200"></div>
+      </div>
+
+      <button class="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm font-extrabold" style="background:#FEE500;color:#191919">
+        <span>💬</span> 카카오로 3초 만에 시작
+      </button>
+    </div>
+
+    <div class="text-center mt-5 text-xs">
+      <span class="text-gray-500">아직 회원이 아니신가요?</span>
+      <a class="font-extrabold ml-1" style="color:#FF1F8F">가입하기 →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 2. 매장/본사 로그인 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="login-business-platform">
+  <h2 class="text-xl font-extrabold mb-1">2~3. 매장 / 본사 로그인 — <span class="mono text-xs text-gray-500">/login/business · /login/platform</span></h2>
+  <p class="text-xs text-gray-500 mb-4">Email 전용 (카카오 X) · 본사는 다크 톤</p>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <div>
+      <span class="phone-label">/login/business — 매장 사장</span>
+      <div class="phone p-8" style="min-height:600px">
+        <div class="flex items-center gap-2 mb-6">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xl text-white" style="background:linear-gradient(135deg,#FF1F8F,#FF6BAA)">🐰</div>
+          <div>
+            <div class="text-xs font-extrabold text-gray-500 tracking-wider">STORE OPS</div>
+            <div class="text-sm font-extrabold">매장 어드민 로그인</div>
+          </div>
+        </div>
+        <div class="label">매장 이메일</div>
+        <input class="input mt-1.5" placeholder="store@example.com">
+        <div class="label mt-4">비밀번호</div>
+        <input type="password" class="input mt-1.5" placeholder="••••••••">
+        <button class="w-full mt-5 py-3.5 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">매장 어드민 로그인</button>
+
+        <div class="mt-5 p-3 rounded-xl text-[11px]" style="background:#FFF0F7;color:#FF1F8F">
+          💡 매장 가입은 본사 승인 후 활성화됩니다 (영업일 1일 내)
+        </div>
+        <div class="text-center mt-3 text-xs">
+          <a class="font-extrabold" style="color:#FF1F8F">매장 자체 가입 →</a>
+          <span class="text-gray-400 mx-1">·</span>
+          <a class="text-gray-500 font-bold">비번 찾기</a>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <span class="phone-label">/login/platform — 본사 (다크)</span>
+      <div class="phone p-8" style="min-height:600px;background:#0F1419;color:#fff">
+        <div class="flex items-center gap-2 mb-6">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style="background:#FF1F8F">🛰️</div>
+          <div>
+            <div class="text-xs font-extrabold text-gray-500 tracking-wider">PLATFORM CONTROL</div>
+            <div class="text-sm font-extrabold">본사 관제센터</div>
+          </div>
+        </div>
+        <div class="label" style="color:#7A8294">관리자 이메일</div>
+        <input class="mt-1.5 w-full px-3.5 py-3 rounded-xl text-sm" style="background:#232936;border:1.5px solid #2D3548;color:#fff" placeholder="admin@holdemnow.com">
+        <div class="label mt-4" style="color:#7A8294">비밀번호</div>
+        <input type="password" class="mt-1.5 w-full px-3.5 py-3 rounded-xl text-sm" style="background:#232936;border:1.5px solid #2D3548;color:#fff" placeholder="••••••••">
+        <button class="w-full mt-5 py-3.5 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F">관제센터 로그인</button>
+        <div class="mt-6 p-3 rounded-xl text-[11px]" style="background:rgba(229,62,62,.10);color:#FCA5A5;border:1px solid rgba(229,62,62,.30)">
+          ⚠️ 관제센터는 본사 직원 전용 · 사내 IP 권장
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 4. 사용자 자체 가입 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="signup-player">
+  <h2 class="text-xl font-extrabold mb-1">4. 사용자 자체 가입 — <span class="mono text-xs text-gray-500">/signup/player</span></h2>
+  <p class="text-xs text-gray-500 mb-4">3단계 (이메일 → 본인확인 → 닉네임/약관)</p>
+  <span class="phone-label">phone 392px</span>
+  <div class="phone" style="min-height:720px">
+    <header class="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
+      <button class="w-9 h-9">←</button>
+      <div class="text-base font-extrabold flex-1">사용자 가입</div>
+      <span class="text-[11px] text-gray-500 mono">2/3</span>
+    </header>
+
+    <!-- 진행 바 -->
+    <div class="px-4 py-2">
+      <div class="flex gap-1.5">
+        <div class="flex-1 h-1 rounded-full" style="background:#FF1F8F"></div>
+        <div class="flex-1 h-1 rounded-full" style="background:#FF1F8F"></div>
+        <div class="flex-1 h-1 rounded-full bg-gray-200"></div>
+      </div>
+    </div>
+
+    <div class="p-5 space-y-4">
+      <div>
+        <div class="label">이메일 <span style="color:#FF1F8F">*</span></div>
+        <input class="input mt-1.5" value="hako0409@gmail.com">
+        <div class="text-[10px] text-emerald-600 mt-1">✓ 사용 가능한 이메일</div>
+      </div>
+      <div>
+        <div class="label">비밀번호 <span style="color:#FF1F8F">*</span></div>
+        <input type="password" class="input mt-1.5" value="••••••••••">
+        <div class="text-[10px] text-gray-500 mt-1">8자 이상 · 영문/숫자/특수문자 2종 이상</div>
+        <div class="flex gap-1 mt-1.5">
+          <div class="flex-1 h-1 rounded-full bg-emerald-500"></div>
+          <div class="flex-1 h-1 rounded-full bg-emerald-500"></div>
+          <div class="flex-1 h-1 rounded-full bg-emerald-500"></div>
+          <div class="flex-1 h-1 rounded-full bg-gray-200"></div>
+        </div>
+      </div>
+      <div>
+        <div class="label">닉네임</div>
+        <input class="input mt-1.5" value="호코" maxlength="12">
+        <div class="text-[10px] text-gray-500 mt-1">2~12자 · 한글/영문/숫자</div>
+      </div>
+      <div>
+        <div class="label">휴대폰</div>
+        <div class="flex gap-2">
+          <input class="input mt-1.5 flex-1" value="010-1234-XXXX">
+          <button class="mt-1.5 px-4 rounded-xl text-xs font-extrabold border border-gray-300">인증</button>
+        </div>
+      </div>
+
+      <div class="pt-3 space-y-1.5">
+        <label class="flex items-center gap-2 text-sm font-bold p-2.5 rounded-xl bg-gray-50">
+          <input type="checkbox" checked> <span class="flex-1">전체 동의</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs px-3"><input type="checkbox" checked> <span class="flex-1">[필수] 이용약관</span><a class="text-[#FF1F8F] font-bold">보기</a></label>
+        <label class="flex items-center gap-2 text-xs px-3"><input type="checkbox" checked> <span class="flex-1">[필수] 개인정보 처리방침</span><a class="text-[#FF1F8F] font-bold">보기</a></label>
+        <label class="flex items-center gap-2 text-xs px-3"><input type="checkbox"> <span class="flex-1">[선택] 마케팅 수신 동의</span></label>
+      </div>
+
+      <button class="w-full mt-3 py-3.5 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">다음 단계 →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 5. 매장 가입 (다음 우편번호 포함) -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="signup-store">
+  <h2 class="text-xl font-extrabold mb-1">5. 매장 자체 가입 — <span class="mono text-xs text-gray-500">/signup/store</span></h2>
+  <p class="text-xs text-gray-500 mb-4">다음 우편번호 API · 사업자 등록증 · 본사 승인 대기</p>
+  <span class="phone-label">phone 392px</span>
+  <div class="phone" style="min-height:820px">
+    <header class="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
+      <button class="w-9 h-9">←</button>
+      <div class="text-base font-extrabold flex-1">🏬 매장 가입 신청</div>
+    </header>
+    <div class="px-4 py-2 text-[11px] text-center" style="background:#FFF0F7;color:#FF1F8F">
+      💡 본사 승인까지 영업일 1일 이내 · 광고 1개월 무료 이벤트 진행중
+    </div>
+
+    <div class="p-5 space-y-4">
+      <div>
+        <div class="label">매장 이름 <span style="color:#FF1F8F">*</span></div>
+        <input class="input mt-1.5" placeholder="예: 화명동 깜깜이 펍">
+      </div>
+      <div>
+        <div class="label">대표 이메일 <span style="color:#FF1F8F">*</span></div>
+        <input class="input mt-1.5" placeholder="store@example.com">
+      </div>
+      <div>
+        <div class="label">비밀번호 <span style="color:#FF1F8F">*</span></div>
+        <input type="password" class="input mt-1.5" placeholder="8자 이상">
+      </div>
+
+      <!-- 다음 우편번호 -->
+      <div>
+        <div class="label">매장 주소 <span style="color:#FF1F8F">*</span></div>
+        <div class="flex gap-2 mt-1.5">
+          <input class="input flex-1" value="46562" maxlength="5" placeholder="우편번호" style="max-width:120px">
+          <button class="px-4 rounded-xl text-xs font-extrabold text-white" style="background:#FF1F8F">📍 주소 찾기</button>
+        </div>
+        <input class="input mt-2" value="부산 북구 화명동 OO로 12">
+        <input class="input mt-1.5" placeholder="상세주소 (3층 등)">
+      </div>
+
+      <div>
+        <div class="label">대표 전화 <span style="color:#FF1F8F">*</span></div>
+        <input class="input mt-1.5" placeholder="051-XXX-XXXX">
+      </div>
+      <div>
+        <div class="label">카카오톡 오픈채팅 URL (선택)</div>
+        <input class="input mt-1.5" placeholder="https://open.kakao.com/o/...">
+      </div>
+
+      <div>
+        <div class="label">사업자등록증 <span style="color:#FF1F8F">*</span></div>
+        <div class="mt-1.5 border-2 border-dashed border-gray-300 rounded-xl p-6 text-center">
+          <div class="text-2xl mb-1">📄</div>
+          <div class="text-xs font-bold">파일 업로드 (jpg/pdf · 10MB 이하)</div>
+          <div class="text-[10px] text-gray-500 mt-1">본사 검증 후 영구 삭제</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="label">매장 카테고리</div>
+        <div class="flex gap-1.5 mt-1.5 flex-wrap">
+          <span class="px-3 py-1.5 rounded-full text-[11px] font-extrabold text-white" style="background:#FF1F8F">🃏 토너 전용</span>
+          <span class="px-3 py-1.5 rounded-full text-[11px] font-bold bg-gray-100">🥃 캐쉬게임</span>
+          <span class="px-3 py-1.5 rounded-full text-[11px] font-bold bg-gray-100">🎰 복합</span>
+        </div>
+      </div>
+
+      <div class="pt-3 space-y-1.5">
+        <label class="flex items-center gap-2 text-xs"><input type="checkbox" checked> <span class="flex-1">[필수] 이용약관 + 매장 광고 약관</span><a class="text-[#FF1F8F] font-bold">보기</a></label>
+        <label class="flex items-center gap-2 text-xs"><input type="checkbox" checked> <span class="flex-1">[필수] 개인정보 처리방침</span></label>
+      </div>
+
+      <button class="w-full py-3.5 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">신청 제출 → 본사 승인 대기</button>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 6. 대회사(organizer) 가입 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="signup-organizer">
+  <h2 class="text-xl font-extrabold mb-1">6. 대회사 자체 가입 — <span class="mono text-xs text-gray-500">/signup/organizer</span></h2>
+  <p class="text-xs text-gray-500 mb-4">시리즈 운영 회사 (홀덤킹, WSOP KOREA 등)</p>
+  <span class="phone-label">phone 392px</span>
+  <div class="phone" style="min-height:680px">
+    <header class="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
+      <button class="w-9 h-9">←</button>
+      <div class="text-base font-extrabold flex-1">🏆 대회사 가입 신청</div>
+    </header>
+    <div class="p-5 space-y-4">
+      <div>
+        <div class="label">대회사 이름 <span style="color:#FF1F8F">*</span></div>
+        <input class="input mt-1.5" placeholder="예: 홀덤킹 KOREA TOUR">
+      </div>
+      <div>
+        <div class="label">대표 이메일 <span style="color:#FF1F8F">*</span></div>
+        <input class="input mt-1.5" placeholder="organizer@example.com">
+      </div>
+      <div>
+        <div class="label">비밀번호 <span style="color:#FF1F8F">*</span></div>
+        <input type="password" class="input mt-1.5" placeholder="8자 이상">
+      </div>
+      <div>
+        <div class="label">대표 운영 시리즈 (1개 이상)</div>
+        <input class="input mt-1.5" placeholder="예: SPRING KING CUP">
+        <button class="text-xs font-bold mt-1.5" style="color:#FF1F8F">+ 시리즈 추가</button>
+      </div>
+      <div>
+        <div class="label">공식 SNS / 홈페이지 URL</div>
+        <input class="input mt-1.5" placeholder="https://...">
+      </div>
+      <div>
+        <div class="label">사업자등록증 <span style="color:#FF1F8F">*</span></div>
+        <div class="mt-1.5 border-2 border-dashed border-gray-300 rounded-xl p-5 text-center">
+          <div class="text-2xl mb-1">📄</div>
+          <div class="text-xs font-bold">파일 업로드</div>
+        </div>
+      </div>
+
+      <div class="pt-3 space-y-1.5">
+        <label class="flex items-center gap-2 text-xs"><input type="checkbox" checked> <span class="flex-1">[필수] 이용약관 + 대회사 운영 약관</span></label>
+      </div>
+
+      <button class="w-full py-3.5 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">신청 제출</button>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 7. 약관 페이지 3종 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="legal">
+  <h2 class="text-xl font-extrabold mb-1">7. 약관 / 개인정보 — <span class="mono text-xs text-gray-500">/legal/terms · privacy · store-ads</span></h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+    <div>
+      <span class="phone-label">/legal/terms</span>
+      <div class="phone" style="height:580px;overflow:hidden">
+        <header class="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
+          <button class="w-9 h-9">←</button>
+          <div class="text-base font-extrabold flex-1">📜 서비스 이용약관</div>
+        </header>
+        <div class="p-5 text-xs leading-relaxed text-gray-600 overflow-y-auto" style="height:calc(100% - 56px)">
+          <div class="text-[11px] text-gray-400 mb-3">시행일 2026년 5월 25일 · 버전 v1.0</div>
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">제1조 (목적)</h3>
+          이 약관은 Pink Rabbit(이하 "회사")가 제공하는 홀덤펍 디스커버리 서비스(이하 "서비스")의 이용 조건 및 절차를 규정함을 목적으로 합니다.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">제2조 (정의)</h3>
+          ① "이용자"란 본 약관에 동의하고 회사가 제공하는 서비스를 이용하는 회원을 말합니다.<br>
+          ② "매장"이란 본 서비스에 입점하여 홀덤펍을 운영하는 사업자를 말합니다.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">제3조 (서비스의 제공)</h3>
+          ① 회사는 매장 디스커버리, 토너먼트 일정 안내, 리뷰, 예약 서비스를 제공합니다.<br>
+          ② 본 서비스는 부산·경남 지역에 우선 적용됩니다.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">제4조 (금지행위)</h3>
+          현금 환전, 사다리·바카라 등 불법 도박 알선, 무단 광고는 즉시 계정 정지됩니다.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">제5조 (책임의 한계)</h3>
+          매장과 이용자 간 거래·예약 분쟁에 대해 회사는 중개자로서의 책임만 부담합니다.
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <span class="phone-label">/legal/privacy</span>
+      <div class="phone" style="height:580px;overflow:hidden">
+        <header class="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
+          <button class="w-9 h-9">←</button>
+          <div class="text-base font-extrabold flex-1">🔒 개인정보 처리방침</div>
+        </header>
+        <div class="p-5 text-xs leading-relaxed text-gray-600 overflow-y-auto" style="height:calc(100% - 56px)">
+          <div class="text-[11px] text-gray-400 mb-3">최종 개정 2026년 5월 25일</div>
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">1. 수집 항목</h3>
+          이메일, 닉네임, 휴대폰 번호, 위치 정보 (앱 사용 중에만), 매장 사업자등록증(매장 회원).
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">2. 이용 목적</h3>
+          ① 본인 확인 및 회원 관리<br>② 매장 추천(반경 기반 LIVE 피드)<br>③ 예약 알림 푸시
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">3. 보관 기간</h3>
+          탈퇴 즉시 파기. 단, 전자상거래법에 따라 결제·예약 기록은 5년 보관.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">4. 제3자 제공</h3>
+          매장 예약 시 매장 owner에게 닉네임·전화번호 제공.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">5. 사용자 권리</h3>
+          /m/my에서 즉시 열람·수정·삭제 가능.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">6. 개인정보 보호책임자</h3>
+          이메일: privacy@holdemnow.com
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <span class="phone-label">/legal/store-ads</span>
+      <div class="phone" style="height:580px;overflow:hidden">
+        <header class="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
+          <button class="w-9 h-9">←</button>
+          <div class="text-base font-extrabold flex-1">📣 매장 광고 약관</div>
+        </header>
+        <div class="p-5 text-xs leading-relaxed text-gray-600 overflow-y-auto" style="height:calc(100% - 56px)">
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">1. 광고 등급</h3>
+          BRONZE · SILVER · GOLD · PLATINUM 4등급. 등급별 노출 슬롯·횟수 상이.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">2. 결제 / 환불</h3>
+          월 단위 선결제. 중도 해지 가능하나 환불 없음. 다음 달 자동 갱신 중지 가능.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">3. 광고 내용 검수</h3>
+          본사가 게시 전 검수. 금지어·허위사실·도박 알선 포함 시 게재 거부.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">4. 정산</h3>
+          매월 5일 정산. 본사 수수료 20%, 매장 80% (예약 매출 별도 95% 정산).
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">5. 노출 보장</h3>
+          등급별 노출 횟수 미달 시 익월 자동 보전. 매장 책임 사유(폐업·휴업)는 미보전.
+          <h3 class="font-extrabold text-gray-900 mt-3 mb-1">6. 계약 해지</h3>
+          본사는 금지어·신고 누적 5건 이상·휴면 매장에 대해 즉시 해지 가능.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 8. 비밀번호 복구 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="recover">
+  <h2 class="text-xl font-extrabold mb-1">8. 비밀번호 복구 — <span class="mono text-xs text-gray-500">/login/recover</span></h2>
+  <span class="phone-label">phone 392px</span>
+  <div class="phone p-8" style="min-height:520px">
+    <div class="text-center mb-6">
+      <div class="text-4xl">🔑</div>
+      <div class="text-lg font-extrabold mt-2">비밀번호 재설정</div>
+      <div class="text-xs text-gray-500 mt-1">가입한 이메일로 재설정 링크를 보내드립니다</div>
+    </div>
+    <div>
+      <div class="label">이메일</div>
+      <input class="input mt-1.5" placeholder="hako0409@gmail.com">
+    </div>
+    <button class="w-full mt-5 py-3.5 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F;box-shadow:var(--shadow-brand)">재설정 링크 보내기</button>
+    <div class="mt-4 p-3 rounded-xl text-[11px]" style="background:#F3F4F6;color:#6B7280">
+      💌 메일 도착까지 1~3분 소요. 스팸함도 확인해주세요.<br>
+      30분간 유효한 일회용 링크입니다.
+    </div>
+    <div class="text-center mt-5 text-xs">
+      <a class="font-extrabold" style="color:#FF1F8F">← 로그인으로 돌아가기</a>
+    </div>
+  </div>
+</section>
+
+<footer class="text-center text-xs text-gray-500 py-10">
+  Pink Rabbit · 로그인/가입/약관 prototype · v1.0
+</footer>
+
+</main>
+</body>
+</html>

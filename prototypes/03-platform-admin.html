@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>03. 본사 어드민 (다크) — Pink Rabbit Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <style>
+    :root{
+      --brand:#FF1F8F; --live:#E53E3E; --gold:#F59E0B; --success:#10B981;
+      --bg:#0F1419; --bg-sub:#161B25;
+      --surface-1:#1A1F2A; --surface-2:#232936; --surface-3:#2D3548;
+      --border:#2D3548;
+      --text-1:#F0F2F6; --text-2:#B8BFCC; --text-3:#7A8294;
+    }
+    body{ font-family:'Pretendard',sans-serif; letter-spacing:-.01em; background:#0B0F15; color:var(--text-1); }
+    .mono{ font-family:'JetBrains Mono','SF Mono',Menlo,monospace; }
+    .frame{ background:var(--bg); border-radius:24px; overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,.55); border:1px solid #2D3548; }
+    .badge-live{ display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:800; color:#fff; background:#E53E3E; }
+    .badge-live .dot{ width:5px; height:5px; border-radius:999px; background:#fff; animation:pulse 1.6s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .menu-item{ display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px; font-size:13px; font-weight:600; color:#B8BFCC; cursor:pointer; }
+    .menu-item:hover{ background:#232936; color:#F0F2F6; }
+    .menu-item.active{ background:rgba(255,31,143,.12); color:#FF1F8F; font-weight:800; border-left:2px solid #FF1F8F; padding-left:12px; }
+    .card{ background:var(--surface-1); border:1px solid var(--border); border-radius:14px; }
+    .frame-label{ display:block; text-align:center; font-size:11px; font-weight:800; color:#7A8294; margin-bottom:8px; font-family:monospace; }
+  </style>
+</head>
+<body class="min-h-screen py-10 px-4">
+
+<header class="max-w-7xl mx-auto mb-10">
+  <a href="00-index.html" class="text-xs text-gray-400 mono">← 00-index.html</a>
+  <h1 class="text-3xl font-black mt-2 text-white">03 · 본사 어드민 (/platform)</h1>
+  <p class="text-sm text-gray-400 mt-1">다크 관제센터 · 회원 3-tab · LIVE 모니터링 · 광고 발급 · 피드 반경 · 홈 큐레이션 · 금지어</p>
+</header>
+
+<main class="max-w-7xl mx-auto space-y-14">
+
+<!-- ──────────────────────────────────────── -->
+<!-- 1. 본사 관제센터 메인 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="platform-home">
+  <h2 class="text-xl font-extrabold mb-1 text-white">1. 본사 관제센터 — 메인</h2>
+  <p class="text-xs text-gray-500 mb-4">사이드바 + 실시간 LIVE 그리드 + 알림</p>
+  <span class="frame-label">desktop 1280px · data-theme="dark"</span>
+  <div class="frame" style="width:1280px;max-width:100%;display:flex;min-height:760px">
+
+    <aside class="w-60 border-r flex flex-col" style="background:var(--surface-1);border-color:var(--border)">
+      <div class="px-4 py-4 border-b" style="border-color:var(--border)">
+        <div class="text-[10px] tracking-widest text-gray-500 font-bold">PLATFORM CONTROL</div>
+        <div class="text-base font-extrabold mt-1">Pink Rabbit 본사</div>
+        <div class="text-[10px] mt-1 text-gray-400">총관리자 · thethego@</div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <div class="menu-item active"><span>🛰️</span><span>관제센터</span></div>
+        <div class="menu-item"><span>👥</span><span>회원 관리</span><span class="ml-auto text-[10px] font-bold px-1.5 rounded-full" style="background:#FF1F8F;color:#fff">3</span></div>
+        <div class="menu-item"><span>🔴</span><span class="flex-1">LIVE 모니터</span><span class="badge-live"><span class="dot"></span>6</span></div>
+        <div class="menu-item"><span>📣</span><span>광고 발급</span></div>
+        <div class="menu-item"><span>🏬</span><span>매장 승인</span></div>
+        <div class="menu-item"><span>📍</span><span>피드 반경</span></div>
+        <div class="menu-item"><span>🏠</span><span>홈 콘텐츠</span></div>
+        <div class="menu-item"><span>📺</span><span>유튜브 큐레이션</span></div>
+        <div class="menu-item"><span>🎙️</span><span>유튜버 채널</span></div>
+        <div class="menu-item"><span>🚫</span><span>금지어 사전</span></div>
+        <div class="menu-item"><span>📣</span><span>본사 pinned</span></div>
+        <div class="menu-item"><span>⭐</span><span>리뷰 신고</span></div>
+        <div class="menu-item"><span>💸</span><span>결제 / 정산</span></div>
+        <div class="menu-item"><span>📊</span><span>전체 통계</span></div>
+        <div class="menu-item"><span>📜</span><span>감사 로그</span></div>
+      </div>
+    </aside>
+
+    <main class="flex-1 p-6 overflow-y-auto" style="background:var(--bg)">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-xl font-extrabold">🛰️ 관제센터</h2>
+          <div class="text-xs text-gray-500 mt-0.5">2026-05-25 21:23 · 실시간 운영 현황</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="badge-live"><span class="dot"></span>전국 LIVE 6</span>
+          <button class="px-3 py-2 text-xs font-bold rounded-lg card">🔔 12</button>
+        </div>
+      </div>
+
+      <!-- KPI 글로벌 -->
+      <div class="grid grid-cols-5 gap-3 mb-4">
+        <div class="card p-4">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">활성 매장</div>
+          <div class="mono text-2xl font-extrabold mt-1">42</div>
+          <div class="text-[11px] text-emerald-400 mt-0.5">▲ 6 (이번주)</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">DAU</div>
+          <div class="mono text-2xl font-extrabold mt-1">1,247</div>
+          <div class="text-[11px] text-emerald-400 mt-0.5">▲ 12%</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">진행중 LIVE</div>
+          <div class="mono text-2xl font-extrabold mt-1" style="color:#E53E3E">6</div>
+          <div class="text-[11px] text-gray-500 mt-0.5">평균 진행 84분</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">광고 활성</div>
+          <div class="mono text-2xl font-extrabold mt-1">8</div>
+          <div class="text-[11px] text-gray-500 mt-0.5">매출 240만 / 월</div>
+        </div>
+        <div class="card p-4">
+          <div class="text-[10px] font-extrabold text-gray-500 tracking-wider">대기 액션</div>
+          <div class="mono text-2xl font-extrabold mt-1" style="color:#F59E0B">11</div>
+          <div class="text-[11px] text-gray-500 mt-0.5">매장 3 · 신고 5 · 답글 3</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- LIVE 그리드 미니 -->
+        <div class="card p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-extrabold">🔴 LIVE 진행중 (6)</div>
+            <a class="text-xs font-bold" style="color:#FF1F8F">전체 →</a>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="rounded-lg overflow-hidden" style="background:var(--surface-2)">
+              <div class="aspect-video bg-gradient-to-br from-red-700 to-red-900 relative p-1">
+                <span class="badge-live"><span class="dot"></span>L</span>
+              </div>
+              <div class="p-1.5"><div class="text-[10px] font-extrabold truncate">화명동 깜깜이</div><div class="text-[9px] text-gray-500 mono">09:14 · 24/30</div></div>
+            </div>
+            <div class="rounded-lg overflow-hidden" style="background:var(--surface-2)">
+              <div class="aspect-video bg-gradient-to-br from-pink-700 to-red-900 relative p-1">
+                <span class="badge-live"><span class="dot"></span>L</span>
+              </div>
+              <div class="p-1.5"><div class="text-[10px] font-extrabold truncate">서면 로얄</div><div class="text-[9px] text-gray-500 mono">15:42 · 32/40</div></div>
+            </div>
+            <div class="rounded-lg overflow-hidden" style="background:var(--surface-2)">
+              <div class="aspect-video bg-gradient-to-br from-amber-600 to-orange-800 relative p-1">
+                <span class="px-1 py-0.5 text-[8px] font-extrabold text-white rounded" style="background:#F59E0B">BR</span>
+              </div>
+              <div class="p-1.5"><div class="text-[10px] font-extrabold truncate">동래 ACE</div><div class="text-[9px] text-gray-500 mono">04:32 · 18/30</div></div>
+            </div>
+            <div class="rounded-lg overflow-hidden" style="background:var(--surface-2)">
+              <div class="aspect-video bg-gradient-to-br from-indigo-700 to-blue-900 relative p-1">
+                <span class="badge-live"><span class="dot"></span>L</span>
+              </div>
+              <div class="p-1.5"><div class="text-[10px] font-extrabold truncate">김해 BLUE</div><div class="text-[9px] text-gray-500 mono">22:01 · 12/20</div></div>
+            </div>
+            <div class="rounded-lg overflow-hidden" style="background:var(--surface-2)">
+              <div class="aspect-video bg-gradient-to-br from-emerald-700 to-green-900 relative p-1">
+                <span class="badge-live"><span class="dot"></span>L</span>
+              </div>
+              <div class="p-1.5"><div class="text-[10px] font-extrabold truncate">진주 GRAND</div><div class="text-[9px] text-gray-500 mono">31:08 · 8/16</div></div>
+            </div>
+            <div class="rounded-lg overflow-hidden" style="background:var(--surface-2)">
+              <div class="aspect-video bg-gradient-to-br from-purple-700 to-violet-900 relative p-1">
+                <span class="badge-live"><span class="dot"></span>L</span>
+              </div>
+              <div class="p-1.5"><div class="text-[10px] font-extrabold truncate">양산 LUCKY</div><div class="text-[9px] text-gray-500 mono">07:55 · 15/24</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 대기 액션 -->
+        <div class="card p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-extrabold">⏳ 대기 액션</div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 p-2.5 rounded-lg" style="background:var(--surface-2)">
+              <span class="w-2 h-2 rounded-full" style="background:#F59E0B"></span>
+              <div class="flex-1 text-xs">신규 매장 가입 승인 — <b>창원 RIVER STAR</b></div>
+              <button class="px-2 py-1 text-[10px] font-extrabold rounded text-white" style="background:#10B981">승인</button>
+              <button class="px-2 py-1 text-[10px] font-extrabold rounded" style="background:var(--surface-3);color:#fff">검토</button>
+            </div>
+            <div class="flex items-center gap-2 p-2.5 rounded-lg" style="background:var(--surface-2)">
+              <span class="w-2 h-2 rounded-full" style="background:#E53E3E"></span>
+              <div class="flex-1 text-xs">리뷰 신고 5건 누적 — <b>동래 ACE KING</b></div>
+              <button class="px-2 py-1 text-[10px] font-extrabold rounded" style="background:var(--surface-3);color:#fff">검토</button>
+            </div>
+            <div class="flex items-center gap-2 p-2.5 rounded-lg" style="background:var(--surface-2)">
+              <span class="w-2 h-2 rounded-full" style="background:#FF1F8F"></span>
+              <div class="flex-1 text-xs">광고 신청 — <b>김해 BLUE CHIP</b> Gold 30일</div>
+              <button class="px-2 py-1 text-[10px] font-extrabold rounded text-white" style="background:#FF1F8F">발급</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 전국 매장 분포 -->
+        <div class="card p-4 col-span-2">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-extrabold">🗺️ 전국 매장 분포</div>
+            <span class="text-[11px] text-gray-500">42곳 · 부산 18 · 경남 14 · 서울 7 · 기타 3</span>
+          </div>
+          <div class="h-44 rounded-xl flex items-center justify-center" style="background:var(--surface-2);background-image:radial-gradient(circle at 25% 70%,rgba(255,31,143,.35) 0,transparent 25%),radial-gradient(circle at 27% 75%,rgba(255,31,143,.25) 0,transparent 30%),radial-gradient(circle at 65% 35%,rgba(229,62,62,.20) 0,transparent 25%),radial-gradient(circle at 80% 25%,rgba(245,158,11,.15) 0,transparent 25%)">
+            <div class="text-[10px] text-gray-500 mono">[ 한반도 지도 mockup · 부산·경남 hotspot ]</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 2. 회원 관리 3-tab -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="members">
+  <h2 class="text-xl font-extrabold mb-1 text-white">2. 회원 관리 — 3-tab (사용자 / 매장 / 대회사)</h2>
+  <span class="frame-label">통합 회원관리</span>
+  <div class="frame p-6" style="background:var(--bg);max-width:1280px">
+    <div class="flex items-center gap-2 mb-5">
+      <div class="flex bg-[#232936] rounded-xl p-1 text-xs font-extrabold">
+        <span class="px-4 py-2 rounded-lg" style="background:#FF1F8F;color:#fff">👤 사용자 (1,247)</span>
+        <span class="px-4 py-2 rounded-lg text-gray-300">🏬 매장 (42)</span>
+        <span class="px-4 py-2 rounded-lg text-gray-300">🏆 대회사 (8)</span>
+      </div>
+      <div class="ml-auto flex gap-2">
+        <input class="text-xs px-3 py-2 rounded-lg w-60" style="background:var(--surface-2);color:#fff" placeholder="🔍 이메일·전화·이름 검색">
+        <button class="px-3 py-2 text-xs font-bold rounded-lg" style="background:var(--surface-2);color:#fff">필터</button>
+      </div>
+    </div>
+
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-[11px] text-gray-500 font-extrabold text-left border-b" style="border-color:var(--border)">
+          <th class="py-3">UID</th>
+          <th>이메일</th>
+          <th>닉네임</th>
+          <th>가입일</th>
+          <th>최근 접속</th>
+          <th>예약</th>
+          <th>역할</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody class="text-[12px]">
+        <tr class="border-b" style="border-color:var(--border)">
+          <td class="py-3 mono text-gray-400">u_8f3a...</td>
+          <td>hako0409@gmail.com</td>
+          <td class="font-extrabold">호코</td>
+          <td>2026-01-15</td>
+          <td class="text-emerald-400">방금 · 부산</td>
+          <td class="mono">12</td>
+          <td><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded text-white" style="background:#FF1F8F">platform_admin</span></td>
+          <td><button class="text-[#FF1F8F]">상세</button></td>
+        </tr>
+        <tr class="border-b" style="border-color:var(--border)">
+          <td class="py-3 mono text-gray-400">u_a1b2...</td>
+          <td>love@example.com</td>
+          <td class="font-extrabold">홀덤러브</td>
+          <td>2026-03-22</td>
+          <td>3분 전 · 화명동</td>
+          <td class="mono">28</td>
+          <td><span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="background:var(--surface-2)">player</span></td>
+          <td><button class="text-[#FF1F8F]">상세</button></td>
+        </tr>
+        <tr class="border-b" style="border-color:var(--border)">
+          <td class="py-3 mono text-gray-400">u_c4d5...</td>
+          <td>dealer.park@kakao.com</td>
+          <td class="font-extrabold">박딜러</td>
+          <td>2026-04-08</td>
+          <td>1시간 전</td>
+          <td class="mono">2</td>
+          <td><span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="background:var(--surface-2)">dealer</span></td>
+          <td><button class="text-[#FF1F8F]">상세</button></td>
+        </tr>
+        <tr class="border-b" style="border-color:var(--border)">
+          <td class="py-3 mono text-gray-400">u_e7f8...</td>
+          <td>ace.king@gmail.com</td>
+          <td class="font-extrabold">에이스</td>
+          <td>2026-05-01</td>
+          <td>어제</td>
+          <td class="mono">5</td>
+          <td><span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="background:var(--surface-2)">player</span></td>
+          <td><button class="text-[#FF1F8F]">상세</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="flex justify-between items-center mt-4 text-xs text-gray-500">
+      <span>총 1,247명 · 페이지 1/42</span>
+      <div class="flex gap-1">
+        <button class="px-3 py-1.5 rounded" style="background:var(--surface-2)">‹</button>
+        <button class="px-3 py-1.5 rounded text-white" style="background:#FF1F8F">1</button>
+        <button class="px-3 py-1.5 rounded" style="background:var(--surface-2)">2</button>
+        <button class="px-3 py-1.5 rounded" style="background:var(--surface-2)">3</button>
+        <button class="px-3 py-1.5 rounded" style="background:var(--surface-2)">›</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 3. 피드 반경 + 홈 콘텐츠 큐레이션 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="feed-home">
+  <h2 class="text-xl font-extrabold mb-1 text-white">3. 피드 반경 슬라이더 + 홈 콘텐츠 큐레이션</h2>
+  <div class="grid grid-cols-2 gap-6">
+
+    <div class="frame p-6">
+      <div class="text-xs text-gray-500 mono mb-1">/platform/feed-config</div>
+      <h3 class="text-base font-extrabold mb-4">📍 피드 반경 설정</h3>
+      <div class="mb-5">
+        <div class="text-[11px] font-extrabold text-gray-400 mb-2">기본 반경 (디폴트)</div>
+        <div class="flex items-center gap-3">
+          <span class="text-[10px] text-gray-500">5km</span>
+          <div class="flex-1 h-2 rounded-full relative" style="background:var(--surface-3)">
+            <div class="absolute h-2 rounded-full" style="width:30%;background:#FF1F8F"></div>
+            <div class="absolute w-5 h-5 rounded-full bg-white border-2 border-[#FF1F8F]" style="left:calc(30% - 10px);top:-6px"></div>
+          </div>
+          <span class="text-[10px] text-gray-500">100km</span>
+        </div>
+        <div class="text-center mono text-2xl font-extrabold mt-2" style="color:#FF1F8F">10km</div>
+      </div>
+      <div class="mb-3">
+        <div class="text-[11px] font-extrabold text-gray-400 mb-2">사용자에게 노출할 반경 옵션</div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-[11px] font-bold px-3 py-1 rounded-full text-white" style="background:#FF1F8F">5km</span>
+          <span class="text-[11px] font-bold px-3 py-1 rounded-full text-white" style="background:#FF1F8F">10km</span>
+          <span class="text-[11px] font-bold px-3 py-1 rounded-full text-white" style="background:#FF1F8F">30km</span>
+          <span class="text-[11px] font-bold px-3 py-1 rounded-full text-white" style="background:#FF1F8F">50km</span>
+          <span class="text-[11px] font-bold px-3 py-1 rounded-full text-white" style="background:#FF1F8F">100km</span>
+          <span class="text-[11px] font-bold px-3 py-1 rounded-full text-white" style="background:#FF1F8F">전국</span>
+        </div>
+      </div>
+      <div class="p-3 rounded-xl text-[11px] text-amber-300" style="background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.30)">
+        💡 사용자 위치 0건일 때 자동 확장 ladder · 위 옵션 순서대로 진행
+      </div>
+      <button class="mt-4 w-full py-3 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F">저장</button>
+    </div>
+
+    <div class="frame p-6">
+      <div class="text-xs text-gray-500 mono mb-1">/platform/home-content</div>
+      <h3 class="text-base font-extrabold mb-4">🏠 홈 콘텐츠 큐레이션</h3>
+      <div class="space-y-2.5">
+        <div class="card p-3">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded text-white" style="background:#FF1F8F">광고 슬롯 TOP</span>
+            <div class="text-xs font-extrabold flex-1">홀덤킹 KOREA TOUR 2026</div>
+            <span class="badge-live"><span class="dot"></span>활성</span>
+          </div>
+          <div class="aspect-[16/5] rounded-lg bg-gradient-to-br from-gray-800 to-pink-700"></div>
+        </div>
+        <div class="card p-3">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded" style="background:var(--surface-2)">유튜브 슬롯</span>
+            <div class="text-xs font-extrabold flex-1">사이드폿 ALL-IN 3연속!</div>
+            <button class="text-[10px] text-gray-400">⋯</button>
+          </div>
+        </div>
+        <div class="card p-3">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded" style="background:var(--surface-2)">유튜버 슬롯</span>
+            <div class="text-xs font-extrabold flex-1">홀덤스코프 · 부산딜러 · 포커브레인</div>
+          </div>
+        </div>
+        <button class="w-full p-3 rounded-xl border-2 border-dashed text-xs font-bold text-gray-400" style="border-color:var(--border)">+ 새 슬롯 추가</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 4. 금지어 사전 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="moderation-keywords">
+  <h2 class="text-xl font-extrabold mb-1 text-white">4. 🚫 금지어 사전 (5 카테고리)</h2>
+  <div class="frame p-6" style="max-width:1100px">
+    <div class="text-xs text-gray-500 mono mb-1">/platform/moderation-keywords</div>
+    <h3 class="text-base font-extrabold mb-4">금지어 사전 · 자동 검열 룰</h3>
+    <div class="flex gap-2 mb-4 flex-wrap">
+      <span class="px-3 py-1.5 text-xs font-extrabold rounded-full text-white" style="background:#FF1F8F">전체 (147)</span>
+      <span class="px-3 py-1.5 text-xs font-bold rounded-full" style="background:var(--surface-2);color:#fff">💸 도박·환전 (42)</span>
+      <span class="px-3 py-1.5 text-xs font-bold rounded-full" style="background:var(--surface-2);color:#fff">🔞 음란 (28)</span>
+      <span class="px-3 py-1.5 text-xs font-bold rounded-full" style="background:var(--surface-2);color:#fff">😡 욕설 (35)</span>
+      <span class="px-3 py-1.5 text-xs font-bold rounded-full" style="background:var(--surface-2);color:#fff">⚠️ 폭력 위협 (21)</span>
+      <span class="px-3 py-1.5 text-xs font-bold rounded-full" style="background:var(--surface-2);color:#fff">📢 스팸 (21)</span>
+    </div>
+    <div class="flex gap-2 mb-4">
+      <input class="flex-1 px-3 py-2 rounded-lg text-sm" style="background:var(--surface-2);color:#fff" placeholder="새 금지어 추가">
+      <select class="px-3 py-2 rounded-lg text-sm" style="background:var(--surface-2);color:#fff">
+        <option>💸 도박·환전</option>
+      </select>
+      <button class="px-4 py-2 rounded-lg text-sm font-extrabold text-white" style="background:#FF1F8F">+ 추가</button>
+      <button class="px-4 py-2 rounded-lg text-sm font-bold" style="background:var(--surface-2);color:#fff">🌱 시드 import (147개)</button>
+    </div>
+    <div class="card p-4">
+      <div class="flex flex-wrap gap-1.5">
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">현금환전 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">실머니 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">불법사이트 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">사다리 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">먹튀 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">보증 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">슬롯 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">바카라 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">총잡이 ✕</span>
+        <span class="px-2.5 py-1 rounded text-[11px] font-bold" style="background:var(--surface-2);color:#fff">노머니 ✕</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 5. 결제 / 정산 + 광고 발급 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="ads-billing">
+  <h2 class="text-xl font-extrabold mb-1 text-white">5. 광고 발급 · 결제 / 정산</h2>
+  <div class="grid grid-cols-2 gap-6">
+
+    <div class="frame p-6">
+      <div class="text-xs text-gray-500 mono mb-1">/platform/ads</div>
+      <h3 class="text-base font-extrabold mb-4">📣 광고 발급</h3>
+      <div class="space-y-2.5">
+        <div class="card p-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded text-white" style="background:#F59E0B">GOLD</span>
+            <div class="text-sm font-extrabold flex-1">화명동 깜깜이 펍 · 30일</div>
+            <span class="text-[11px] text-gray-400 mono">D-12</span>
+          </div>
+          <div class="text-[11px] text-gray-400">홈 상단 + 채팅방 pinned · 노출 42k/80k</div>
+          <div class="h-1.5 rounded-full mt-2" style="background:var(--surface-2)"><div class="h-1.5 rounded-full" style="width:52%;background:#F59E0B"></div></div>
+        </div>
+        <div class="card p-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded text-white" style="background:#FF1F8F">PLATINUM</span>
+            <div class="text-sm font-extrabold flex-1">서면 로얄홀덤 · 30일</div>
+            <span class="text-[11px] text-gray-400 mono">D-8</span>
+          </div>
+          <div class="text-[11px] text-gray-400">모든 슬롯 + 푸시 · 노출 무제한</div>
+          <div class="h-1.5 rounded-full mt-2" style="background:var(--surface-2)"><div class="h-1.5 rounded-full" style="width:73%;background:#FF1F8F"></div></div>
+        </div>
+        <div class="card p-3 opacity-70">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:#fff">SILVER</span>
+            <div class="text-sm font-extrabold flex-1">동래 ACE KING · 만료</div>
+            <span class="text-[11px] text-red-400 mono">종료</span>
+          </div>
+        </div>
+        <button class="w-full py-2.5 rounded-xl text-xs font-extrabold text-white" style="background:#FF1F8F">+ 새 광고 발급</button>
+      </div>
+    </div>
+
+    <div class="frame p-6">
+      <div class="text-xs text-gray-500 mono mb-1">/platform/billing</div>
+      <h3 class="text-base font-extrabold mb-4">💸 결제 / 정산 (이번달)</h3>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="card p-3">
+          <div class="text-[10px] text-gray-500 font-bold">총 매출</div>
+          <div class="mono text-xl font-extrabold mt-1" style="color:#10B981">₩2,400,000</div>
+        </div>
+        <div class="card p-3">
+          <div class="text-[10px] text-gray-500 font-bold">본사 수익 (20%)</div>
+          <div class="mono text-xl font-extrabold mt-1">₩480,000</div>
+        </div>
+      </div>
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-[10px] text-gray-500 text-left border-b" style="border-color:var(--border)">
+            <th class="py-2">매장</th><th>광고</th><th>금액</th><th>상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b" style="border-color:var(--border)"><td class="py-2">화명동 깜깜이</td><td>GOLD 30d</td><td class="mono">350,000</td><td><span class="text-[10px] text-emerald-400">결제완료</span></td></tr>
+          <tr class="border-b" style="border-color:var(--border)"><td class="py-2">서면 로얄</td><td>PLATINUM 30d</td><td class="mono">800,000</td><td><span class="text-[10px] text-emerald-400">결제완료</span></td></tr>
+          <tr class="border-b" style="border-color:var(--border)"><td class="py-2">김해 BLUE</td><td>GOLD 30d</td><td class="mono">350,000</td><td><span class="text-[10px] text-amber-400">대기</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────── -->
+<!-- 6. 본사 pinned 작성 -->
+<!-- ──────────────────────────────────────── -->
+<section data-screen="pinned">
+  <h2 class="text-xl font-extrabold mb-1 text-white">6. 📣 본사 pinned — 채팅방 상단 박스 작성</h2>
+  <div class="frame p-6" style="max-width:900px">
+    <div class="text-xs text-gray-500 mono mb-1">/platform/pinned</div>
+    <h3 class="text-base font-extrabold mb-4">본사 공지 (채팅방 상단 핑크 박스)</h3>
+    <div class="grid grid-cols-2 gap-6">
+      <div class="space-y-3">
+        <input class="w-full px-3 py-2.5 rounded-xl text-sm font-extrabold" style="background:var(--surface-2);color:#fff" value="Pink Rabbit 6월 신규매장 모집중">
+        <textarea class="w-full px-3 py-2.5 rounded-xl text-sm" style="background:var(--surface-2);color:#fff" rows="3">부산·경남 5곳 한정 · 6월 1일까지 입점 신청 시 광고 1개월 무료</textarea>
+        <input class="w-full px-3 py-2.5 rounded-xl text-sm" style="background:var(--surface-2);color:#fff" placeholder="CTA URL (선택)" value="https://holdemnow.com/signup/store">
+        <div class="flex items-center gap-2 text-xs">
+          <label class="flex items-center gap-1"><input type="checkbox" checked> 활성</label>
+          <span class="text-gray-400">·</span>
+          <span>만료일: <input class="mono px-2 py-1 rounded" style="background:var(--surface-2);color:#fff" value="2026-06-01"></span>
+        </div>
+        <button class="w-full py-3 rounded-xl text-white text-sm font-extrabold" style="background:#FF1F8F">📌 게시 / 업데이트</button>
+      </div>
+      <div>
+        <div class="text-[10px] text-gray-500 font-extrabold mb-2">채팅방 미리보기</div>
+        <div class="rounded-xl p-3 bg-white text-gray-900">
+          <div class="rounded-xl px-3 py-2.5" style="background:linear-gradient(135deg,rgba(255,31,143,.12),rgba(255,31,143,.04));border:1px solid rgba(255,31,143,.25)">
+            <div class="flex items-center gap-1.5 mb-0.5">
+              <span class="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded text-white" style="background:#FF1F8F">공지</span>
+              <span class="text-[12px] font-extrabold">Pink Rabbit 6월 신규매장 모집중</span>
+            </div>
+            <div class="text-[11px] text-gray-600">부산·경남 5곳 한정 · 6월 1일까지 입점 신청 시 광고 1개월 무료</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="text-center text-xs text-gray-500 py-10">
+  Pink Rabbit · 본사 어드민 prototype · 15메뉴 · 다크 관제센터 · v1.0
+</footer>
+
+</main>
+</body>
+</html>
