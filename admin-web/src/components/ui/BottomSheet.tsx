@@ -4,7 +4,7 @@
  * BottomSheet — 공통 바텀시트 컴포넌트
  *
  * 모바일 우선 패턴. 핸들 바 + 오버레이 + slideUp 220ms.
- * 토큰화: bg-[var(--surface-1)] / text-[var(--text-*)] 사용 → 다크 모드 자동.
+ * 토큰화: var(--surface-1) / var(--text-1/2/3) 등 CSS 변수 사용 → 다크 모드 자동.
  *
  * 사용 예시:
  *   <BottomSheet open={open} onClose={() => setOpen(false)} ariaLabel="로그아웃 확인">
