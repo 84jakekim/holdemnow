@@ -145,24 +145,28 @@ export default function DisplayPage({
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const [isMobileLandscape, setIsMobileLandscape] = useState(false);
+  const [isDesktopPointer, setIsDesktopPointer] = useState(false);
   const [showLandscapeHint, setShowLandscapeHint] = useState(false);
 
-  // 모바일 폭 + 세로/가로 감지 — 첫 진입 + resize 시 갱신.
+  // 화면 회전 감지 — 첫 진입 + resize 시 갱신.
   // 세로(h>w + 모바일폭): isMobilePortrait → 컴팩트 세로 레이아웃
-  // 가로(w>h): isMobileLandscape → 가로 전용 풀폭 레이아웃
-  //   ※ 폭 제한 제거 — 폰 가로(844x390 등)도, 태블릿 가로(1024x768)도, 모두 진입.
-  //   ※ 데스크탑 풀 레이아웃은 매우 큰 화면(>=1366px) AND 마우스 가능일 때만 유지.
+  // 가로(w>h): isMobileLandscape → 가로 통합 레이아웃 (모든 폭 동일)
+  //   ※ 2026-05-24 PM 정정: 폭/매체 분기 폐기. 모바일 가로·태블릿 가로·데스크탑·4K 모두 동일 layout.
+  //     같은 grid 구도를 모든 viewport에서 유지하여 카드가 중앙으로 흘러나오는 문제 해결.
+  //   ※ 또한 isDesktopPointer 신호로 PC 우상단 전체화면 버튼만 별도 게이트.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const update = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
       const isPortraitMobile = w <= 768 && h > w;
-      // 가로(landscape)만 보면 됨. 데스크탑 풀 레이아웃은 hover:fine + 큰 폭 한정.
-      const isCoarseOrSmall = !window.matchMedia('(hover: hover) and (pointer: fine)').matches || w < 1366;
-      const isLandscapeForMobileLayout = w > h && isCoarseOrSmall;
+      // 가로(landscape): 모든 폭에서 통합 layout 사용
+      const isLandscape = w > h;
+      // PC/데스크탑 hover-pointer 매체: 우상단 전체화면 버튼 노출 X (F11/ESC로 충분)
+      const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
       setIsMobilePortrait(isPortraitMobile);
-      setIsMobileLandscape(isLandscapeForMobileLayout);
+      setIsMobileLandscape(isLandscape);
+      setIsDesktopPointer(isDesktop);
     };
     update();
     window.addEventListener('resize', update);
@@ -582,7 +586,7 @@ export default function DisplayPage({
   // 가로 모드는 isMobileLandscape 분기로만 처리.
 
   return (
-    <div className="min-h-screen text-white flex flex-col relative overflow-hidden" style={bgStyle}>
+    <div className="h-screen text-white flex flex-col relative overflow-hidden" style={bgStyle}>
       {/* 이미지 배경 시 어둠 overlay */}
       {display.backgroundType === 'image' && display.backgroundImageUrl && (
         <div className="absolute inset-0 pointer-events-none" style={{ background: `rgba(0,0,0,${display.overlayOpacity})` }} />
@@ -1058,12 +1062,13 @@ export default function DisplayPage({
         </div>
       )}
 
-      {/* 전체화면 진입 버튼 — 2026-05-23 PM 단독 정리.
-          • 우측 상단 진입 버튼은 데스크탑/대형 TV(>1024px 가로) 에서만 노출.
-          • 모바일 세로(isMobilePortrait): MobilePortraitLayout 자체 하단 버튼 사용 (중복 제거 — 사용자 요구)
+      {/* 전체화면 진입 버튼 — 2026-05-24 PM 정정.
+          • PC/데스크탑(hover:fine): 버튼 노출 X. F11(진입) + ESC(종료)만 사용 (사용자 명시).
+          • 모바일/태블릿(coarse): 가로 진입 트리거 필요하므로 노출 유지 (단, 가로 진입 후 컨트롤 행의 ⛶로 종료).
+          • 모바일 세로(isMobilePortrait): MobilePortraitLayout 자체 하단 버튼 사용 (중복 제거)
           • 모바일 가로(isMobileLandscape): 자체 컨트롤 행의 ⛶ 종료 버튼 사용
       */}
-      {audioReady && !isFullscreenActive && !isMobilePortrait && !isMobileLandscape && (
+      {audioReady && !isFullscreenActive && !isMobilePortrait && !isMobileLandscape && !isDesktopPointer && (
         <button
           type="button"
           onClick={(e) => {
@@ -1079,9 +1084,9 @@ export default function DisplayPage({
         </button>
       )}
 
-      {/* 전체화면 종료 버튼 — 데스크탑/대형 TV 한정.
-          모바일 가로는 컨트롤 행에 ⛶ 종료 버튼이 있으므로 중복 노출 X. */}
-      {audioReady && isFullscreenActive && !isMobileLandscape && (
+      {/* 전체화면 종료 버튼 — 모바일 한정.
+          PC는 ESC(브라우저 기본) 사용. 모바일 가로는 컨트롤 행에 ⛶ 종료 버튼이 있으므로 중복 노출 X. */}
+      {audioReady && isFullscreenActive && !isMobileLandscape && !isDesktopPointer && (
         <button
           type="button"
           onClick={(e) => {
@@ -1837,99 +1842,120 @@ function MobileLandscapeLayout({
     ? '#FFD166'
     : display.timerColor;
 
+  // 2026-05-24 PM 정정 #5건 통합: 단일 가로 layout (모든 폭 동일).
+  // - 상단 헤더 row: 제목 + LEVEL 거대 폰트 중앙 정렬 (사용자 정정 #4)
+  // - 본문 grid: 좌(블라인드/NEXT) / 중(거대 타이머) / 우(stat 3카드 중앙 정렬)
+  // - viewport 100vh 가득, 카드 흘러나옴 X (사용자 정정 #1, #5)
+  const titled = !!(display.titleText && display.titleText.trim().length > 0);
+  const titleBold = titled && display.titleStyle.includes('bold');
+  const titleItalic = titled && display.titleStyle.includes('italic');
+  const noteBold = display.noteStyle.includes('bold');
+  const noteItalic = display.noteStyle.includes('italic');
+
   return (
-    <div className="relative flex-1 flex flex-col px-3 pt-2 pb-2 min-h-0">
-      {/* 본문 3분할 grid — 2026-05-24 PM 정정: 좌측 STRUCTURE 패널 제거 + 우측 stack 3카드.
-          사용자 정정: "왼쪽에 스트럭쳐 표시는 화면구도와도 맞지 않고있다"
-          → 좌측은 LIVE/LEVEL/BLINDS/NEXT만 (스트럭쳐 패널 mount X)
-          → grid 비율 재조정 (좌 더 좁히고 중앙·우측 확장): 좌 0.8fr / 중 2.4fr / 우 1.4fr */}
+    <div className="relative flex-1 flex flex-col px-3 pt-2 pb-2 min-h-0 overflow-hidden">
+      {/* ─── 상단 헤더 row — 제목/노트/LEVEL 중앙 정렬 + 거대 폰트 (사용자 정정 #4) ─── */}
+      <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1 pb-1">
+        {/* 상태 뱃지 — 중앙 상단 */}
+        <div className="flex items-center gap-2">
+          {paused ? (
+            <span className="font-extrabold tracking-[0.3em]" style={{ color: '#FFD166', fontSize: 'clamp(11px, 1.3vw, 16px)' }}>
+              ⏸ PAUSED
+            </span>
+          ) : isCurrentBreak ? (
+            <span className="font-extrabold tracking-[0.3em]" style={{ color: '#FFD166', fontSize: 'clamp(11px, 1.3vw, 16px)' }}>
+              ☕ BREAK
+            </span>
+          ) : (
+            <>
+              <span
+                className="rounded-full animate-pulse"
+                style={{ background: display.accentColor, width: 'clamp(6px, 0.7vw, 10px)', height: 'clamp(6px, 0.7vw, 10px)' }}
+              />
+              <span
+                className="font-extrabold tracking-[0.3em]"
+                style={{ color: display.accentColor, fontSize: 'clamp(11px, 1.3vw, 16px)' }}
+              >
+                LIVE
+              </span>
+            </>
+          )}
+        </div>
+        {/* 제목 (heroTitle) — 거대 중앙 정렬. 사용자: "제목또한 중앙상단에 배치되며 잘보여야한다. 현재는 폰트가 너무 작음" */}
+        <div
+          className="text-center truncate max-w-[95%]"
+          title={heroTitle}
+          style={{
+            color: titled ? display.titleColor : display.textColor,
+            opacity: titled ? 1 : 0.9,
+            fontSize: 'clamp(20px, 3vw, 38px)',
+            fontWeight: titleBold ? 800 : 700,
+            fontStyle: titleItalic ? 'italic' : 'normal',
+            letterSpacing: '-0.01em',
+            lineHeight: 1.1,
+          }}
+        >
+          {heroTitle}
+        </div>
+        {/* 노트 (있을 때만) — 중앙 정렬 */}
+        {display.noteText && display.noteText.trim().length > 0 && (
+          <div
+            className="text-center truncate max-w-[90%]"
+            style={{
+              color: display.noteColor,
+              fontSize: 'clamp(11px, 1.3vw, 18px)',
+              fontWeight: noteBold ? 700 : 400,
+              fontStyle: noteItalic ? 'italic' : 'normal',
+              opacity: 0.88,
+              lineHeight: 1.15,
+            }}
+            title={display.noteText}
+          >
+            {display.noteText}
+          </div>
+        )}
+        {/* LEVEL — 중앙 정렬, 키운 폰트. 사용자: "현재레벨이 몇레벨인지 폰트크기가 잘보여야한다" */}
+        <div
+          className="text-center font-extrabold tracking-[0.25em]"
+          style={{
+            color: display.accentColor,
+            fontSize: 'clamp(16px, 2.4vw, 30px)',
+            lineHeight: 1.1,
+          }}
+        >
+          {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
+        </div>
+      </div>
+
+      {/* 본문 3분할 grid — 2026-05-24 PM 정정 #5건 통합.
+          모든 viewport에서 동일 구도 유지 (사용자 정정 #1, #5).
+          좌: BLINDS/NEXT (제목·LEVEL은 상단 헤더로 이동)
+          중: 거대 타이머 + 진행바 + 자막
+          우: PLAYERS/LATE REG/PRIZE POOL 세로 stack (모두 중앙 정렬)
+          grid 비율 조정: 좌 1fr / 중 2.6fr / 우 1.4fr — 모든 폭에서 동일. */}
       <div
         className="flex-1 grid items-stretch gap-3 min-h-0"
-        style={{ gridTemplateColumns: '0.8fr 2.4fr 1.4fr' }}
+        style={{ gridTemplateColumns: '1fr 2.6fr 1.4fr' }}
       >
-        {/* ─── 좌: 토너 정보 ─── */}
-        <div className="flex flex-col justify-center gap-2 min-w-0">
-          {/* 상태 뱃지 */}
-          <div className="flex items-center gap-1.5">
-            {paused ? (
-              <span className="font-extrabold tracking-[0.25em] text-[10px]" style={{ color: '#FFD166' }}>
-                ⏸ PAUSED
-              </span>
-            ) : isCurrentBreak ? (
-              <span className="font-extrabold tracking-[0.25em] text-[10px]" style={{ color: '#FFD166' }}>
-                ☕ BREAK
-              </span>
-            ) : (
-              <>
-                <span
-                  className="w-2 h-2 rounded-full animate-pulse"
-                  style={{ background: display.accentColor }}
-                />
-                <span
-                  className="font-extrabold tracking-[0.25em] text-[10px]"
-                  style={{ color: display.accentColor }}
-                >
-                  LIVE
-                </span>
-              </>
-            )}
-          </div>
-          {/* 첫째 줄 — 게임 타이틀 (truncate, titleText면 폰트 옵션 적용) */}
-          {(() => {
-            const titled = !!(display.titleText && display.titleText.trim().length > 0);
-            const bold = titled && display.titleStyle.includes('bold');
-            const italic = titled && display.titleStyle.includes('italic');
-            return (
-              <div
-                className="truncate"
-                title={heroTitle}
-                style={{
-                  color: titled ? display.titleColor : display.textColor,
-                  opacity: titled ? 1 : 0.9,
-                  fontSize: titled
-                    ? `clamp(${Math.max(11, display.titleFontSize * 0.45)}px, ${display.titleFontSize / 36}vw, ${display.titleFontSize * 0.85}px)`
-                    : '11px',
-                  fontWeight: bold ? 800 : 700,
-                  fontStyle: italic ? 'italic' : 'normal',
-                  letterSpacing: titled ? '-0.01em' : '0.05em',
-                  lineHeight: 1.2,
-                }}
-              >
-                {heroTitle}
-              </div>
-            );
-          })()}
-          {/* 둘째 줄 — 게임 참고사항 */}
-          {display.noteText && display.noteText.trim().length > 0 && (
-            <div
-              className="truncate"
-              style={{
-                color: display.noteColor,
-                fontSize: `clamp(${Math.max(9, display.noteFontSize * 0.5)}px, ${display.noteFontSize / 40}vw, ${display.noteFontSize * 0.8}px)`,
-                fontWeight: display.noteStyle.includes('bold') ? 700 : 400,
-                fontStyle: display.noteStyle.includes('italic') ? 'italic' : 'normal',
-                opacity: 0.85,
-                lineHeight: 1.2,
-              }}
-              title={display.noteText}
-            >
-              {display.noteText}
-            </div>
-          )}
-          {/* 레벨 */}
-          <div className="text-[9px] tracking-[0.3em] mt-1" style={{ color: display.textColor, opacity: 0.6 }}>
-            {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
-          </div>
+        {/* ─── 좌: BLINDS + NEXT (제목·LEVEL은 상단 헤더 이동) ─── */}
+        <div className="flex flex-col justify-center gap-3 min-w-0 min-h-0 overflow-hidden">
           {/* 블라인드 */}
           {!isCurrentBreak && (
-            <div>
-              <div className="text-[9px] tracking-[0.3em] mb-1" style={{ color: display.textColor, opacity: 0.55 }}>
+            <div className="text-center">
+              <div
+                className="font-extrabold tracking-[0.3em] mb-1"
+                style={{
+                  color: display.textColor,
+                  opacity: 0.6,
+                  fontSize: 'clamp(10px, 1.1vw, 14px)',
+                }}
+              >
                 BLINDS
               </div>
               <div
                 className="font-mono font-extrabold leading-tight"
                 style={{
-                  fontSize: 'clamp(20px, 3.4vw, 32px)',
+                  fontSize: 'clamp(24px, 3.2vw, 48px)',
                   color: display.blindsColor,
                   letterSpacing: '-0.02em',
                 }}
@@ -1939,34 +1965,45 @@ function MobileLandscapeLayout({
                 {session.bigBlind.toLocaleString()}
               </div>
               {session.ante > 0 && (
-                <div className="font-mono text-[10px] mt-0.5" style={{ color: display.textColor, opacity: 0.6 }}>
+                <div
+                  className="font-mono mt-1"
+                  style={{ color: display.textColor, opacity: 0.65, fontSize: 'clamp(11px, 1.1vw, 15px)' }}
+                >
                   Ante {session.ante.toLocaleString()}
                 </div>
               )}
             </div>
           )}
-          {/* NEXT 박스 — 컴팩트. 2026-05-24 PM 정정: 가로 모드 좌측 STRUCTURE 패널 폐기 후
-              NEXT 항상 노출. (이전: showStructure=false일 때만 노출 → 좌측 패널 사라지면 빈자리). */}
+          {/* NEXT 박스 — 중앙 정렬 */}
           {nextBlind && (
             <div
-              className="rounded-lg px-2 py-1.5 border mt-1"
+              className="rounded-lg px-2 py-2 border text-center"
               style={{
                 background: 'rgba(0,0,0,0.45)',
                 borderColor: nextBlind.isBreak ? '#FFD166' : `${display.accentColor}55`,
               }}
             >
               <div
-                className="text-[8px] font-extrabold tracking-[0.3em] mb-0.5"
-                style={{ color: nextBlind.isBreak ? '#FFD166' : display.accentColor }}
+                className="font-extrabold tracking-[0.3em] mb-1"
+                style={{
+                  color: nextBlind.isBreak ? '#FFD166' : display.accentColor,
+                  fontSize: 'clamp(9px, 1vw, 12px)',
+                }}
               >
                 ▶ NEXT
               </div>
               {nextBlind.isBreak ? (
-                <div className="font-extrabold text-[11px]" style={{ color: '#FFD166' }}>
+                <div
+                  className="font-extrabold"
+                  style={{ color: '#FFD166', fontSize: 'clamp(13px, 1.5vw, 18px)' }}
+                >
                   ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
                 </div>
               ) : (
-                <div className="font-mono font-extrabold text-[12px]" style={{ color: display.blindsColor }}>
+                <div
+                  className="font-mono font-extrabold"
+                  style={{ color: display.blindsColor, fontSize: 'clamp(14px, 1.6vw, 20px)' }}
+                >
                   LV {nextBlind.level} · {nextBlind.sb.toLocaleString()}
                   <span style={{ color: display.textColor, opacity: 0.4 }} className="mx-1">/</span>
                   {nextBlind.bb.toLocaleString()}
@@ -1974,9 +2011,6 @@ function MobileLandscapeLayout({
               )}
             </div>
           )}
-          {/* 좌측 STRUCTURE 패널 — 2026-05-24 PM 정정으로 가로 모드에서 완전 제거.
-              사용자 명시: "왼쪽에 스트럭쳐 표시는 화면구도와도 맞지 않고있다"
-              스트럭쳐는 데스크탑 풀 layout(fixed left-6 hidden lg:block)에서만 노출. */}
         </div>
 
         {/* ─── 중: 거대 타이머 + 진행바 ─── */}
@@ -2087,10 +2121,12 @@ function MobileLandscapeLayout({
                   accentColor={display.accentColor}
                   borderColor="rgba(255,255,255,0.10)"
                 />
-                {/* 3) PRIZE POOL — 단독 카드 (showPrize일 때만, accent 그라데이션) */}
+                {/* 3) PRIZE POOL — 단독 카드 (showPrize일 때만, accent 그라데이션)
+                    2026-05-24 PM 정정 #3: 헤더+금액 중앙 정렬.
+                    DISTRIBUTION 분배표 행은 라벨좌/금액우 정렬 유지 (사용자 명시). */}
                 {showPrize && (
                   <div
-                    className="flex-1 rounded-2xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0"
+                    className="flex-1 rounded-2xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0 text-center"
                     style={{
                       background: `linear-gradient(135deg, ${accent}22 0%, rgba(0,0,0,0.6) 70%)`,
                       borderColor: `${accent}50`,
@@ -2099,8 +2135,13 @@ function MobileLandscapeLayout({
                     aria-label="프라이즈 풀"
                   >
                     <div
-                      className="text-[10px] tracking-[0.32em] font-extrabold flex items-center gap-1.5 flex-shrink-0"
-                      style={{ color: accent, opacity: 0.95 }}
+                      className="font-extrabold flex items-center justify-center gap-1.5 flex-shrink-0"
+                      style={{
+                        color: accent,
+                        opacity: 0.95,
+                        fontSize: 'clamp(10px, 1.1vw, 14px)',
+                        letterSpacing: '0.32em',
+                      }}
                     >
                       <span>💰</span>
                       <span>PRIZE POOL</span>
@@ -2108,7 +2149,7 @@ function MobileLandscapeLayout({
                     <div
                       className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
                       style={{
-                        fontSize: 'clamp(26px, 4.5vw, 48px)',
+                        fontSize: 'clamp(26px, 4.5vw, 52px)',
                         color: display.textColor,
                         letterSpacing: '-0.03em',
                         textShadow: `0 2px 12px ${accent}55`,
@@ -2118,11 +2159,11 @@ function MobileLandscapeLayout({
                     </div>
                     {mode === 'distribution' && amounts.length > 0 && (
                       <div
-                        className="mt-2 pt-2 border-t flex-1 min-h-0 overflow-hidden flex flex-col"
+                        className="mt-2 pt-2 border-t flex-1 min-h-0 overflow-hidden flex flex-col text-left"
                         style={{ borderColor: 'rgba(255,255,255,0.12)' }}
                       >
                         <div
-                          className="text-[9px] tracking-[0.25em] font-extrabold opacity-65 mb-1 flex-shrink-0"
+                          className="text-[9px] tracking-[0.25em] font-extrabold opacity-65 mb-1 flex-shrink-0 text-center"
                           style={{ color: display.textColor }}
                         >
                           DISTRIBUTION
@@ -2451,24 +2492,31 @@ function SideStatCard({
   accentColor?: string;
   borderColor: string;
 }) {
+  // 2026-05-24 PM 정정 #3: 우측 카드 폰트 정렬 = 중앙.
+  // 사용자 정정: "우측에 배치되는 플레이어,레이트레지,프라이즈풀 카드의 폰트정렬을 중앙으로해야함"
   return (
     <div
-      className="rounded-2xl px-3 py-3 border backdrop-blur-sm flex-shrink-0"
+      className="rounded-2xl px-3 py-3 border backdrop-blur-sm flex-shrink-0 text-center"
       style={{
         background: 'rgba(0,0,0,0.45)',
         borderColor,
       }}
     >
       <div
-        className="text-[10px] tracking-[0.32em] font-extrabold flex-shrink-0"
-        style={{ color, opacity: 0.6 }}
+        className="font-extrabold flex-shrink-0"
+        style={{
+          color,
+          opacity: 0.6,
+          fontSize: 'clamp(10px, 1.1vw, 14px)',
+          letterSpacing: '0.32em',
+        }}
       >
         {label}
       </div>
       <div
         className="font-mono font-extrabold tabular-nums leading-none mt-2"
         style={{
-          fontSize: 'clamp(22px, 3.8vw, 40px)',
+          fontSize: 'clamp(22px, 3.8vw, 44px)',
           letterSpacing: '-0.02em',
           color: highlight && accentColor ? accentColor : color,
         }}
@@ -2477,8 +2525,8 @@ function SideStatCard({
       </div>
       {sub && (
         <div
-          className="text-[10px] mt-1.5"
-          style={{ color, opacity: 0.6 }}
+          className="mt-1.5"
+          style={{ color, opacity: 0.6, fontSize: 'clamp(10px, 1.05vw, 13px)' }}
         >
           {sub}
         </div>
