@@ -16,7 +16,7 @@ import {
   orderBy,
   increment,
 } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { auth, db } from './firebase';
 import { stripUndefined } from './firestoreUtil';
 import type { BlindLevel, PayoutStructure, PrizeDisplayUnit, TournamentTemplate } from './templates';
@@ -324,6 +324,37 @@ export function useLiveTimelineTick(
     session?.totalPausedMs,
     session?.pausedAt?.toMillis(),
   ]);
+
+  // 2026-05-24 사용자 정정 #3: 드래그로 시간 당긴 후 자동 advance가 30~60초 지연되는 버그.
+  //
+  // 결정적 원인:
+  //   - computeTimelinePosition은 elapsed >= cumulative 도달 즉시 다음 레벨로 wrap →
+  //     secondsLeft가 0이 아니라 다음 레벨 전체 시간으로 점프한다.
+  //   - 따라서 호출처(SessionControlPanel/LivePanel/m/live/display)의
+  //     `prev > 0 && sec === 0` 조건 useEffect가 한 tick도 sec=0 상태를 못 보고 통과 →
+  //     advanceLevelIfDue 영영 트리거 X. autoAdvanceLevel cron(1분)만 처리 = 사용자 호소.
+  //
+  // Fix: timeline이 인식한 `pos.level`이 서버 `session.currentLevel`보다 크다는 것은
+  //   "이 레벨은 이미 시간이 다 지나 다음 레벨로 넘어가야 한다"는 결정적 신호.
+  //   pos가 한 tick이라도 그 상태에 진입하면 즉시 advanceLevelIfDue(session.id, currentLevel) 호출.
+  //   - cycle key로 같은 expected level 중복 호출 차단
+  //   - 마지막 레벨이면 advanceLevelIfDue가 finishingAt만 박고 currentLevel 유지
+  //     → pos.isFinishing=true가 되며 자동 종료는 호출처의 finishingAt useEffect가 처리
+  //   - running 상태에서만 발사 (paused/break/ready/completed는 advance 대상 아님)
+  const advanceFiredKeyRef = useRef<string>('');
+  useEffect(() => {
+    if (!session || !pos) return;
+    if (session.status !== 'running') return;
+    if (pos.level <= session.currentLevel) return;
+    const key = `lv${session.currentLevel}-${session.id}`;
+    if (advanceFiredKeyRef.current === key) return;
+    advanceFiredKeyRef.current = key;
+    void advanceLevelIfDue(session.id, session.currentLevel).catch(() => {
+      // 실패 시 다음 tick에서 재시도 가능하도록 key 해제 (서버가 아직 옛 레벨이면 동일 key 재사용 OK)
+      advanceFiredKeyRef.current = '';
+    });
+  }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
+
   return pos;
 }
 
@@ -992,6 +1023,15 @@ export async function setTimeRemainingInSession(
   }
 
   await patchSession(s.id, updates);
+
+  // 2026-05-24 사용자 정정 #3 보조: 사용자가 드래그를 0초까지 당긴 경우,
+  // useLiveTimelineTick wrap 감지(최대 1 tick=1초)를 기다리지 않고 즉시 transaction으로 advance 시도.
+  //   - 옵션 A(timeline wrap 감지)와 중복 발사돼도 advanceLevelIfDue 내부 transaction이
+  //     expectedLevel 일치 여부로 idempotent하게 처리 → 두 번째 호출은 false 반환.
+  //   - running 상태일 때만 의미 있음 (paused/break는 deadline null).
+  if (clamped === 0 && s.status === 'running') {
+    void advanceLevelIfDue(s.id, s.currentLevel).catch(() => {});
+  }
 }
 
 export async function eliminatePlayerInSession(s: LiveSession, currentSecondsLeft: number) {
