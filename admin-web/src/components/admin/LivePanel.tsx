@@ -21,6 +21,7 @@ import {
   computeFinishingGraceSec,
   computeReadyExpirySec,
 } from '@/lib/live';
+import HoldToConfirmButton from './HoldToConfirmButton';
 import {
   type TournamentTemplate,
   subscribeTemplates,
@@ -492,16 +493,12 @@ function SessionControls({ session }: { session: LiveSession }) {
         >
           {session.lateRegClosed ? '등록 재오픈' : '늦은 등록 마감'}
         </button>
-        <button
-          onClick={() => {
-            if (window.confirm(`"${session.tournamentName}" 종료할까요?`)) {
-              stopLiveSession(session, seconds, 'LivePanel:user-button');
-            }
-          }}
-          className="flex-1 py-2.5 rounded-lg border-[1.5px] border-red-200 text-red-600 font-bold text-xs"
-        >
-          ■ 이 세션 종료
-        </button>
+        {/* 우발 클릭 방지 — 3초 길게 누르기. 사용자 보고(2026-05-24) */}
+        <HoldToConfirmButton
+          label="■ 이 세션 종료 (3초 길게)"
+          onConfirm={() => stopLiveSession(session, seconds, 'LivePanel:user-button')}
+          className="flex-1 py-2.5 rounded-lg font-bold text-xs"
+        />
       </div>
     </div>
   );

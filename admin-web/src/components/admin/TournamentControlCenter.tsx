@@ -44,6 +44,7 @@ import {
   patchSession,
   recomputeSessionPrizePool,
 } from '@/lib/live';
+import HoldToConfirmButton from './HoldToConfirmButton';
 import {
   type TournamentTemplate,
   type PayoutStructure,
@@ -725,17 +726,12 @@ function SessionControlPanel({
         >
           {session.lateRegClosed ? '등록 재오픈' : '늦은 등록 마감'}
         </button>
-        <button
-          onClick={() => {
-            if (window.confirm(`"${session.tournamentName}" 종료할까요?`)) {
-              stopLiveSession(session, seconds, 'TournamentControlCenter:user-button');
-            }
-          }}
+        {/* 우발 클릭 방지 — 3초 길게 누르기. 사용자 보고(2026-05-24): 모르게 종료됨 */}
+        <HoldToConfirmButton
+          label="■ 이 세션 종료 (3초 길게)"
+          onConfirm={() => stopLiveSession(session, seconds, 'TournamentControlCenter:user-button')}
           className="flex-1 py-2.5 rounded-lg font-bold text-xs"
-          style={{ background: 'rgba(239,68,68,0.10)', color: '#B91C1C', border: '1.5px solid rgba(239,68,68,0.30)' }}
-        >
-          ■ 이 세션 종료
-        </button>
+        />
       </div>
 
       {showJump && (

@@ -17,7 +17,7 @@ import {
   increment,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { stripUndefined } from './firestoreUtil';
 import type { BlindLevel, PayoutStructure, PrizeDisplayUnit, TournamentTemplate } from './templates';
 import { computeAutoPrizePool, resolvePayoutStructure, resolveShowPrizePool } from './templates';
@@ -995,17 +995,57 @@ export async function toggleLateRegInSession(s: LiveSession, currentSecondsLeft:
 /**
  * 세션 종료 — caller를 명시해 어디서 호출됐는지 추적한다.
  * 2026-05-21 3차 핫픽스: "타이머 중도종료" 신고 3회 후 결정적 진단 위해 audit 도입.
- * 모든 호출이 stack trace + 호출 컨텍스트를 console과 Firestore audit 컬렉션에 기록한다.
+ * 2026-05-24 4차 핫픽스: audit에 caller='user-button' 0.187초 간격 double-fire 패턴 발견.
+ *   사용자는 종료 버튼 누른 적 없다고 주장. 모바일 ghost click / 키보드 race / 우발 클릭
+ *   가설 모두 차단하기 위해 (1) 5초 진입 debounce, (2) audit에 userAgent/pathname/uid 추가.
  *
  * caller 예: 'LivePanel:auto-finishing', 'LivePanel:user-button',
  *           'TournamentControlCenter:auto-finishing', 'TournamentControlCenter:user-button',
  *           'platform/live:auto-finishing', 'platform/live:user-button'
  */
+const RECENT_STOP_CALLS = new Map<string, number>();
+const STOP_DEBOUNCE_MS = 5000;
+const RECENT_STOP_GC_MS = 5 * 60 * 1000;
+
 export async function stopLiveSession(
   s: LiveSession,
   currentSecondsLeft: number,
   caller: string = 'unknown',
 ) {
+  // ── debounce: 같은 sessionId가 5초 안에 또 호출되면 즉시 reject ──
+  // double-fire (모바일 ghost click·React reconciliation race·키보드 trigger 등) 차단.
+  // 단, 진짜 마지막 레벨 auto-finishing은 컴포넌트 unmount/remount로 한 번만 fire되도록
+  // useEffect가 cleanup 보장 — debounce가 막아도 부작용 없음.
+  const nowMs = Date.now();
+  const lastCall = RECENT_STOP_CALLS.get(s.id);
+  if (lastCall && nowMs - lastCall < STOP_DEBOUNCE_MS) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[stopLiveSession] ⛔ DEBOUNCED — sessionId=${s.id} ${nowMs - lastCall}ms ago. ` +
+      `caller=${caller} (likely double-fire / ghost click)`
+    );
+    // 진단을 위해 debounce된 호출도 audit에 따로 기록
+    try {
+      await addDoc(collection(db, 'liveSessionsAudit'), {
+        sessionId: s.id,
+        storeId: s.storeId,
+        action: 'debounced',
+        caller,
+        msSinceLastCall: nowMs - lastCall,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
+        pathname: typeof window !== 'undefined' ? window.location.pathname : null,
+        uid: auth.currentUser?.uid ?? null,
+        timestamp: serverTimestamp(),
+      });
+    } catch { /* ignore */ }
+    return;
+  }
+  RECENT_STOP_CALLS.set(s.id, nowMs);
+  // GC: 5분 이상 된 entry 제거
+  for (const [k, v] of RECENT_STOP_CALLS) {
+    if (nowMs - v > RECENT_STOP_GC_MS) RECENT_STOP_CALLS.delete(k);
+  }
+
   const structure = (s.blindStructureLocked && s.blindStructureLocked.length > 0)
     ? s.blindStructureLocked
     : s.blindStructure;
@@ -1024,7 +1064,7 @@ export async function stopLiveSession(
     new Error('stopLiveSession call site').stack
   );
 
-  // Firestore audit (best-effort, 실패해도 stop은 진행)
+  // Firestore audit (best-effort, 실패해도 stop은 진행) — 강화된 컨텍스트
   try {
     const auditCol = collection(db, 'liveSessionsAudit');
     await addDoc(auditCol, {
@@ -1039,6 +1079,11 @@ export async function stopLiveSession(
       hadFinishingAt: !!s.finishingAt,
       secondsLeft: currentSecondsLeft,
       structureLen: structure?.length ?? 0,
+      // 2026-05-24 추가 — 누가/어디서/어떤 디바이스
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
+      pathname: typeof window !== 'undefined' ? window.location.pathname : null,
+      viewport: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : null,
+      uid: auth.currentUser?.uid ?? null,
       timestamp: serverTimestamp(),
     });
   } catch {
