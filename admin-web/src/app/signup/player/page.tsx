@@ -352,9 +352,18 @@ export default function PlayerSignupPage() {
                     checked={agreeService}
                     onChange={setAgreeService}
                   />
-                  <span className="text-[13px] text-gray-700">
+                  <span className="text-[13px] text-gray-700 flex-1">
                     서비스 이용약관 동의{' '}
-                    <span className="text-[#FF1F8F] font-bold">(필수)</span>
+                    <span className="text-[#FF1F8F] font-bold">(필수)</span>{' '}
+                    <a
+                      href="/legal/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-1 text-[11px] text-gray-400 underline hover:text-[#FF1F8F]"
+                    >
+                      전문 보기
+                    </a>
                   </span>
                 </label>
 
@@ -364,9 +373,18 @@ export default function PlayerSignupPage() {
                     checked={agreePrivacy}
                     onChange={setAgreePrivacy}
                   />
-                  <span className="text-[13px] text-gray-700">
+                  <span className="text-[13px] text-gray-700 flex-1">
                     개인정보 처리방침 동의{' '}
-                    <span className="text-[#FF1F8F] font-bold">(필수)</span>
+                    <span className="text-[#FF1F8F] font-bold">(필수)</span>{' '}
+                    <a
+                      href="/legal/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-1 text-[11px] text-gray-400 underline hover:text-[#FF1F8F]"
+                    >
+                      전문 보기
+                    </a>
                   </span>
                 </label>
 

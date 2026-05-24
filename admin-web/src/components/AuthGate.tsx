@@ -43,6 +43,7 @@ const ANONYMOUS_WHITELIST = [
   '/auth/kakao/callback',
   '/display',
   '/onboarding/kyc',
+  '/legal',  // 약관/개인정보/매장광고정책 — 누구나 접근 (로그인/가입 전에도 읽을 수 있어야 함)
 ];
 
 // KYC redirect 없이 통과할 경로 (KYC 페이지 자체 + 화이트리스트)

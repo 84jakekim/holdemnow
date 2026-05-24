@@ -423,6 +423,7 @@ export default function OrganizerSignupPage() {
                   required
                   label="서비스 이용약관 동의 (필수)"
                   detail="본 서비스는 홀덤 정보 제공·중개 플랫폼이며, 베팅·환금 매개를 하지 않습니다. 대회사는 관련 법규를 준수해야 합니다."
+                  linkHref="/legal/terms"
                 />
                 <AgreementItem
                   checked={form.agreePrivacy}
@@ -430,6 +431,7 @@ export default function OrganizerSignupPage() {
                   required
                   label="개인정보 처리방침 동의 (필수)"
                   detail="수집 항목: 이메일, 대표자 정보, 담당자 정보, 사업자등록번호. 목적: 서비스 제공 및 대회사 운영. 보유: 탈퇴 시까지."
+                  linkHref="/legal/privacy"
                 />
                 <AgreementItem
                   checked={form.agreeMarketing}
@@ -540,9 +542,9 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 function AgreementItem({
-  checked, onChange, required, label, detail,
+  checked, onChange, required, label, detail, linkHref,
 }: {
-  checked: boolean; onChange: (v: boolean) => void; required: boolean; label: string; detail: string;
+  checked: boolean; onChange: (v: boolean) => void; required: boolean; label: string; detail: string; linkHref?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -557,6 +559,17 @@ function AgreementItem({
       {expanded && (
         <div className="mt-2 ml-7 text-[11px] text-gray-500 leading-relaxed bg-white rounded-lg p-3 border border-gray-100">
           {detail}
+          {linkHref && (
+            <div className="mt-2">
+              <Link
+                href={linkHref}
+                target="_blank"
+                className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[#FF1F8F] underline"
+              >
+                전문 보기 ↗
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
