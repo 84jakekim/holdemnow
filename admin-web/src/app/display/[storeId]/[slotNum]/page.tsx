@@ -676,6 +676,7 @@ export default function DisplayPage({
             데스크탑/대형 TV(>1024px 가로)는 기존 풀 레이아웃 유지. */
         <MobileLandscapeLayout
           session={session}
+          structure={structure}
           sec={sec}
           paused={paused}
           isRunning={isRunning}
@@ -787,14 +788,36 @@ export default function DisplayPage({
               {noteText}
             </div>
           )}
-          <div className="text-[10px] tracking-[0.3em] mb-3" style={{ color: display.textColor, opacity: 0.7 }}>
-            {isCurrentBreak ? `BREAK · ${currentLevelObj?.level ?? ''}레벨` : `LEVEL ${session.currentLevel}`}
-          </div>
+          {/* 2026-05-24 PM 정정 #3: LEVEL은 타이머 컨테이너 안 최상단 배지로 이동.
+              아래 inline-flex 첫 자식으로. */}
 
-          {/* 거대 카운트다운 + 진행률 바 + 자막 — 동일 폭 컨테이너로 묶음 (자막 폭=타이머 폭).
-              2026-05-24 PM 자막 정책: 셋째 줄 marqueeText를 타이머 바로 아래에 좌→우로 흐름.
-              화면 전체 폭 X, 타이머 폭만. (inline-flex로 타이머 폭에 컨테이너 폭이 fit) */}
-          <div className="inline-flex flex-col items-stretch">
+          {/* 거대 카운트다운 + 진행률 바 + 블라인드 — 2026-05-24 PM 자막 제거.
+              inline-flex 안에 NOW 배지 → 타이머 → 진행바 → 블라인드(중앙) 순. */}
+          <div className="inline-flex flex-col items-center">
+            {/* NOW 배지 — 타이머 바로 위 */}
+            <div
+              className="rounded-full px-3 py-1 mb-3 border flex items-center gap-1.5"
+              style={{
+                background: isCurrentBreak
+                  ? 'linear-gradient(135deg, rgba(255,209,102,0.2), rgba(0,0,0,0.5))'
+                  : `linear-gradient(135deg, ${display.accentColor}26, rgba(0,0,0,0.5))`,
+                borderColor: isCurrentBreak ? '#FFD16688' : `${display.accentColor}66`,
+              }}
+            >
+              <span
+                className="font-extrabold tracking-[0.18em] text-xs"
+                style={{ color: isCurrentBreak ? '#FFD166' : display.accentColor }}
+              >
+                ▶ NOW
+              </span>
+              <span className="text-xs opacity-40" style={{ color: display.textColor }}>·</span>
+              <span
+                className="font-extrabold tracking-[0.18em] text-sm"
+                style={{ color: display.textColor }}
+              >
+                {isCurrentBreak ? `BREAK · LV ${session.currentLevel}` : `LV ${session.currentLevel}`}
+              </span>
+            </div>
             <div
               className={`font-mono font-extrabold leading-none transition-colors text-center ${veryLow ? 'animate-pulse' : ''}`}
               style={{
@@ -825,16 +848,8 @@ export default function DisplayPage({
               />
             )}
 
-            {/* 셋째 줄 — 자막 공지 (좌→우, 타이머 폭만). marqueeText 있을 때만 mount. */}
-            {display.marqueeText && display.marqueeText.trim().length > 0 && (
-              <TimerWidthMarquee
-                text={display.marqueeText}
-                color={display.marqueeColor}
-                fontSize={display.marqueeFontSize}
-                styleVariant={display.marqueeStyle}
-                speedSec={display.marqueeSpeedSec}
-              />
-            )}
+            {/* 2026-05-24 PM 정정 #6: 셋째 줄 자막 제거 (사용자 명시: "중앙하단 자막기능은 제거").
+                데이터 모델(marqueeText/Color/FontSize/Style/SpeedSec)은 backward compat 유지하되 UI mount X. */}
           </div>
 
           {/* 블라인드 (break 아닐 때만 표시) */}
@@ -1309,13 +1324,34 @@ function MobilePortraitLayout({
             {display.noteText}
           </div>
         )}
-        <div className="text-[9px] tracking-[0.3em]" style={{ color: display.textColor, opacity: 0.7 }}>
-          {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
-        </div>
+        {/* 2026-05-24 PM 정정 #3: LEVEL 라인 제거. 타이머 위 NOW 배지로 대체 (아래 컨테이너 안). */}
       </div>
 
-      {/* 거대 타이머 — 화면 폭의 18~22vw 정도 */}
+      {/* 거대 타이머 — 화면 폭의 18~22vw 정도. NOW 배지가 타이머 바로 위. */}
       <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+        <div
+          className="rounded-full px-2.5 py-0.5 mb-2 border flex items-center gap-1"
+          style={{
+            background: isCurrentBreak
+              ? 'linear-gradient(135deg, rgba(255,209,102,0.2), rgba(0,0,0,0.5))'
+              : `linear-gradient(135deg, ${display.accentColor}26, rgba(0,0,0,0.5))`,
+            borderColor: isCurrentBreak ? '#FFD16688' : `${display.accentColor}66`,
+          }}
+        >
+          <span
+            className="font-extrabold tracking-[0.18em] text-[9px]"
+            style={{ color: isCurrentBreak ? '#FFD166' : display.accentColor }}
+          >
+            ▶ NOW
+          </span>
+          <span className="text-[9px] opacity-40" style={{ color: display.textColor }}>·</span>
+          <span
+            className="font-extrabold tracking-[0.16em] text-[11px]"
+            style={{ color: display.textColor }}
+          >
+            {isCurrentBreak ? `BREAK · LV ${session.currentLevel}` : `LV ${session.currentLevel}`}
+          </span>
+        </div>
         <div
           className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
           style={{
@@ -1334,8 +1370,7 @@ function MobilePortraitLayout({
           {fmtTime(sec)}
         </div>
 
-        {/* 진행바 + 자막 — 동일 폭 컨테이너 (max-w-xs).
-            2026-05-24 PM: 자막은 진행바 아래에 좌→우 흐름, 컨테이너 폭만. */}
+        {/* 진행바 — 단순. 2026-05-24 PM 정정 #6: 자막 mount X (사용자 명시 제거). */}
         {(isRunning || paused) && currentDur > 0 && (
           <div className="mt-3 w-full max-w-xs">
             <div className="relative h-1.5 bg-white/15 rounded-full overflow-hidden">
@@ -1347,27 +1382,6 @@ function MobilePortraitLayout({
                 }}
               />
             </div>
-            {display.marqueeText && display.marqueeText.trim().length > 0 && (
-              <TimerWidthMarquee
-                text={display.marqueeText}
-                color={display.marqueeColor}
-                fontSize={Math.min(display.marqueeFontSize, 14)}
-                styleVariant={display.marqueeStyle}
-                speedSec={display.marqueeSpeedSec}
-              />
-            )}
-          </div>
-        )}
-        {/* 진행바가 없을 때(ready/완료) 도 자막은 보여줘야 함 — 좁은 폭으로 별도 mount */}
-        {!(isRunning || paused) && display.marqueeText && display.marqueeText.trim().length > 0 && (
-          <div className="mt-3 w-full max-w-xs">
-            <TimerWidthMarquee
-              text={display.marqueeText}
-              color={display.marqueeColor}
-              fontSize={Math.min(display.marqueeFontSize, 14)}
-              styleVariant={display.marqueeStyle}
-              speedSec={display.marqueeSpeedSec}
-            />
           </div>
         )}
 
@@ -1780,6 +1794,7 @@ function Stat({
  */
 function MobileLandscapeLayout({
   session,
+  structure,
   sec,
   paused,
   isRunning,
@@ -1807,6 +1822,7 @@ function MobileLandscapeLayout({
   onExitFullscreen,
 }: {
   session: LiveSession;
+  structure: LiveSession['blindStructure'] | undefined;
   sec: number;
   paused: boolean;
   isRunning: boolean;
@@ -1914,65 +1930,30 @@ function MobileLandscapeLayout({
             {display.noteText}
           </div>
         )}
-        {/* LEVEL — 중앙 정렬, 키운 폰트. 사용자: "현재레벨이 몇레벨인지 폰트크기가 잘보여야한다" */}
-        <div
-          className="text-center font-extrabold tracking-[0.25em]"
-          style={{
-            color: display.accentColor,
-            fontSize: 'clamp(16px, 2.4vw, 30px)',
-            lineHeight: 1.1,
-          }}
-        >
-          {isCurrentBreak ? `BREAK · ${session.currentLevel}레벨` : `LEVEL ${session.currentLevel}`}
-        </div>
+        {/* 2026-05-24 PM 정정 #3: LEVEL 표시는 헤더 row에서 제거하고
+            거대 타이머 바로 위 중앙으로 이동 (아래 중앙 컬럼 참조). */}
       </div>
 
-      {/* 본문 3분할 grid — 2026-05-24 PM 정정 #5건 통합.
-          모든 viewport에서 동일 구도 유지 (사용자 정정 #1, #5).
-          좌: BLINDS/NEXT (제목·LEVEL은 상단 헤더로 이동)
-          중: 거대 타이머 + 진행바 + 자막
-          우: PLAYERS/LATE REG/PRIZE POOL 세로 stack (모두 중앙 정렬)
-          grid 비율 조정: 좌 1fr / 중 2.6fr / 우 1.4fr — 모든 폭에서 동일. */}
+      {/* 본문 3분할 grid — 2026-05-24 PM 정정 #1~#6 통합.
+          좌: 5레벨 컴팩트 스트럭쳐 + NEXT (BLINDS는 중앙 하단으로 이동)
+          중: LEVEL 카드(타이머 위 작게) + 거대 타이머 + 진행바 + BLINDS(중앙 하단)
+          우: PLAYERS/LATE REG/PRIZE POOL 세로 stack (30~40% 축소)
+          grid: 좌 1fr / 중 2.6fr / 우 1.4fr — 모든 폭에서 동일. */}
       <div
         className="flex-1 grid items-stretch gap-3 min-h-0"
         style={{ gridTemplateColumns: '1fr 2.6fr 1.4fr' }}
       >
-        {/* ─── 좌: BLINDS + NEXT (제목·LEVEL은 상단 헤더 이동) ─── */}
+        {/* ─── 좌: 5레벨 컴팩트 스트럭쳐 + NEXT ─── */}
         <div className="flex flex-col justify-center gap-3 min-w-0 min-h-0 overflow-hidden">
-          {/* 블라인드 */}
-          {!isCurrentBreak && (
-            <div className="text-center">
-              <div
-                className="font-extrabold tracking-[0.3em] mb-1"
-                style={{
-                  color: display.textColor,
-                  opacity: 0.6,
-                  fontSize: 'clamp(10px, 1.1vw, 14px)',
-                }}
-              >
-                BLINDS
-              </div>
-              <div
-                className="font-mono font-extrabold leading-tight"
-                style={{
-                  fontSize: 'clamp(24px, 3.2vw, 48px)',
-                  color: display.blindsColor,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                {session.smallBlind.toLocaleString()}
-                <span style={{ opacity: 0.45 }} className="mx-1">/</span>
-                {session.bigBlind.toLocaleString()}
-              </div>
-              {session.ante > 0 && (
-                <div
-                  className="font-mono mt-1"
-                  style={{ color: display.textColor, opacity: 0.65, fontSize: 'clamp(11px, 1.1vw, 15px)' }}
-                >
-                  Ante {session.ante.toLocaleString()}
-                </div>
-              )}
-            </div>
+          {/* 2026-05-24 PM 정정 #4: 좌측 5레벨 스트럭쳐 부활 (가로 통합 layout).
+              showStructure 토글 존중. 앤티 있으면 자동으로 ante 행 추가. */}
+          {display.showStructure !== false && (
+            <BlindStructurePanel
+              structure={structure}
+              currentLevel={session.currentLevel}
+              display={display}
+              variant="landscape"
+            />
           )}
           {/* NEXT 박스 — 중앙 정렬 */}
           {nextBlind && (
@@ -2013,8 +1994,52 @@ function MobileLandscapeLayout({
           )}
         </div>
 
-        {/* ─── 중: 거대 타이머 + 진행바 ─── */}
+        {/* ─── 중: LEVEL 배지 + 거대 타이머 + 진행바 + 중앙 하단 BLINDS ─── */}
         <div className="flex flex-col items-center justify-center min-w-0">
+          {/* 2026-05-24 PM 정정 #3: LEVEL은 거대 타이머 바로 위 중앙에 작은 카드/배지로.
+              사용자 정정: "중앙상단에 레벨 표시는 제목쪽보단 타이머 시간위에 표시되거나
+                            좌측 플라인드 윗쪽으로 표시되는게 깔끔할것같다.
+                            (카드형태로 돋보이게 now 표시를 넣어도되고 안넣어도되고)"
+              ⇒ 작은 배지: ▶ NOW · LV N (또는 BREAK · LV N)
+              ⇒ 배경 그라데이션 + 보더로 카드형. */}
+          <div
+            className="rounded-full px-3 py-1 mb-2 border flex items-center gap-1.5"
+            style={{
+              background: isCurrentBreak
+                ? 'linear-gradient(135deg, rgba(255,209,102,0.2), rgba(0,0,0,0.5))'
+                : `linear-gradient(135deg, ${display.accentColor}26, rgba(0,0,0,0.5))`,
+              borderColor: isCurrentBreak ? '#FFD16688' : `${display.accentColor}66`,
+            }}
+          >
+            <span
+              className="font-extrabold tracking-[0.18em]"
+              style={{
+                color: isCurrentBreak ? '#FFD166' : display.accentColor,
+                fontSize: 'clamp(9px, 1vw, 12px)',
+              }}
+            >
+              ▶ NOW
+            </span>
+            <span
+              className="font-extrabold tracking-[0.15em]"
+              style={{
+                color: display.textColor,
+                opacity: 0.4,
+                fontSize: 'clamp(9px, 0.9vw, 11px)',
+              }}
+            >
+              ·
+            </span>
+            <span
+              className="font-extrabold tracking-[0.18em]"
+              style={{
+                color: display.textColor,
+                fontSize: 'clamp(11px, 1.3vw, 16px)',
+              }}
+            >
+              {isCurrentBreak ? `BREAK · LV ${session.currentLevel}` : `LV ${session.currentLevel}`}
+            </span>
+          </div>
           <div
             className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
             style={{
@@ -2028,7 +2053,7 @@ function MobileLandscapeLayout({
           </div>
           {/* 진행바 — 가로 전용 (사용자 요구: 드래그로 디테일 시간 조절).
               canControl=true 일 때만 드래그 가능. 비권한자는 표시만.
-              2026-05-24 PM: 진행바 아래에 셋째 줄 자막 mount (중앙 컬럼 폭만, 좌→우). */}
+              2026-05-24 PM 정정 #6: 자막 마퀴 mount 제거 (사용자 명시: "중앙하단 자막기능은 제거"). */}
           {(isRunning || paused) && currentDur > 0 && (
             <div className="mt-4 w-full max-w-2xl px-4">
               {canControl ? (
@@ -2057,27 +2082,38 @@ function MobileLandscapeLayout({
                   <span>{fmtTime(currentLevelObj.durationSec)}</span>
                 </div>
               )}
-              {display.marqueeText && display.marqueeText.trim().length > 0 && (
-                <TimerWidthMarquee
-                  text={display.marqueeText}
-                  color={display.marqueeColor}
-                  fontSize={Math.min(display.marqueeFontSize, 18)}
-                  styleVariant={display.marqueeStyle}
-                  speedSec={display.marqueeSpeedSec}
-                />
-              )}
             </div>
           )}
-          {/* 진행바가 없는 ready/완료 상태에서도 자막은 보여줘야 함 */}
-          {!(isRunning || paused) && display.marqueeText && display.marqueeText.trim().length > 0 && (
-            <div className="mt-4 w-full max-w-2xl px-4">
-              <TimerWidthMarquee
-                text={display.marqueeText}
-                color={display.marqueeColor}
-                fontSize={Math.min(display.marqueeFontSize, 18)}
-                styleVariant={display.marqueeStyle}
-                speedSec={display.marqueeSpeedSec}
-              />
+          {/* 2026-05-24 PM 정정 #5: 블라인드 금액 중앙 하단 (타이머 밑) 큰 폰트.
+              사용자 정정: "현재 블라인드금액표기는 중앙 하단 타이머 밑으로 배치하는게 시인성에 좋을것같다는 의견"
+              ⇒ 좌측 컬럼에서 BLINDS 제거 (스트럭쳐 패널이 그 자리 차지)
+              ⇒ 진행바 아래 중앙 정렬, 타이머보다 작지만 큰 폰트 */}
+          {!isCurrentBreak && (
+            <div className="mt-4 text-center">
+              <div
+                className="font-mono font-extrabold leading-none"
+                style={{
+                  fontSize: 'clamp(32px, 5vw, 72px)',
+                  color: display.blindsColor,
+                  letterSpacing: '-0.03em',
+                }}
+              >
+                {session.smallBlind.toLocaleString()}
+                <span style={{ opacity: 0.4 }} className="mx-2">/</span>
+                {session.bigBlind.toLocaleString()}
+              </div>
+              {session.ante > 0 && (
+                <div
+                  className="font-mono mt-1"
+                  style={{
+                    color: display.textColor,
+                    opacity: 0.65,
+                    fontSize: 'clamp(13px, 1.4vw, 20px)',
+                  }}
+                >
+                  Ante {session.ante.toLocaleString()}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2126,7 +2162,7 @@ function MobileLandscapeLayout({
                     DISTRIBUTION 분배표 행은 라벨좌/금액우 정렬 유지 (사용자 명시). */}
                 {showPrize && (
                   <div
-                    className="flex-1 rounded-2xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0 text-center"
+                    className="flex-1 rounded-xl px-2.5 py-2 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0 text-center"
                     style={{
                       background: `linear-gradient(135deg, ${accent}22 0%, rgba(0,0,0,0.6) 70%)`,
                       borderColor: `${accent}50`,
@@ -2135,21 +2171,23 @@ function MobileLandscapeLayout({
                     aria-label="프라이즈 풀"
                   >
                     <div
-                      className="font-extrabold flex items-center justify-center gap-1.5 flex-shrink-0"
+                      className="font-extrabold flex items-center justify-center gap-1 flex-shrink-0"
                       style={{
                         color: accent,
                         opacity: 0.95,
-                        fontSize: 'clamp(10px, 1.1vw, 14px)',
-                        letterSpacing: '0.32em',
+                        fontSize: 'clamp(8px, 0.85vw, 11px)',
+                        letterSpacing: '0.28em',
                       }}
                     >
                       <span>💰</span>
                       <span>PRIZE POOL</span>
                     </div>
+                    {/* 2026-05-24 PM 정정 #1: PRIZE POOL 금액 30~40% 축소.
+                        4.5vw → 2.9vw, max 52px → 32px (-38%) */}
                     <div
-                      className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
+                      className="font-mono font-extrabold tabular-nums leading-none mt-1.5 flex-shrink-0"
                       style={{
-                        fontSize: 'clamp(26px, 4.5vw, 52px)',
+                        fontSize: 'clamp(18px, 2.9vw, 32px)',
                         color: display.textColor,
                         letterSpacing: '-0.03em',
                         textShadow: `0 2px 12px ${accent}55`,
@@ -2157,13 +2195,16 @@ function MobileLandscapeLayout({
                     >
                       {session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
                     </div>
+                    {/* 2026-05-24 PM 정정 #2: DISTRIBUTION 분배표 폰트 키움 (시인성 우선).
+                        rank 라벨 1.3vw→1.7vw / 금액 1.4vw→1.9vw, max 14px→20px.
+                        정렬은 라벨좌/금액우 유지 (사용자 명시) */}
                     {mode === 'distribution' && amounts.length > 0 && (
                       <div
-                        className="mt-2 pt-2 border-t flex-1 min-h-0 overflow-hidden flex flex-col text-left"
+                        className="mt-1.5 pt-1.5 border-t flex-1 min-h-0 overflow-hidden flex flex-col text-left"
                         style={{ borderColor: 'rgba(255,255,255,0.12)' }}
                       >
                         <div
-                          className="text-[9px] tracking-[0.25em] font-extrabold opacity-65 mb-1 flex-shrink-0 text-center"
+                          className="text-[9px] tracking-[0.22em] font-extrabold opacity-65 mb-1 flex-shrink-0 text-center"
                           style={{ color: display.textColor }}
                         >
                           DISTRIBUTION
@@ -2181,7 +2222,7 @@ function MobileLandscapeLayout({
                               <span
                                 className="font-extrabold tabular-nums"
                                 style={{
-                                  fontSize: 'clamp(10px, 1.3vw, 13px)',
+                                  fontSize: 'clamp(12px, 1.7vw, 18px)',
                                   color: a.rank === 1 ? accent : display.textColor,
                                 }}
                               >
@@ -2190,7 +2231,7 @@ function MobileLandscapeLayout({
                               <span
                                 className="tabular-nums font-bold"
                                 style={{
-                                  fontSize: 'clamp(10px, 1.4vw, 14px)',
+                                  fontSize: 'clamp(13px, 1.9vw, 20px)',
                                   color: display.blindsColor,
                                 }}
                               >
@@ -2201,7 +2242,7 @@ function MobileLandscapeLayout({
                         </div>
                         {amounts.length > 6 && (
                           <div
-                            className="text-[9px] mt-1 opacity-55 flex-shrink-0"
+                            className="text-[10px] mt-1 opacity-55 flex-shrink-0 text-center"
                             style={{ color: display.textColor }}
                           >
                             +{amounts.length - 6}등 더
@@ -2492,11 +2533,16 @@ function SideStatCard({
   accentColor?: string;
   borderColor: string;
 }) {
-  // 2026-05-24 PM 정정 #3: 우측 카드 폰트 정렬 = 중앙.
-  // 사용자 정정: "우측에 배치되는 플레이어,레이트레지,프라이즈풀 카드의 폰트정렬을 중앙으로해야함"
+  // 2026-05-24 PM 정정 #1 (재정정): 우측 카드 30~40% 축소.
+  //   사용자 정정: "우측 나열되는 카드들의 크기가 비효율적으로 크다. 30~40% 줄여도 될것같은데"
+  //   값 폰트  3.8vw → 2.4vw (-37%) / max 44px → 28px (-36%)
+  //   라벨 폰트 1.1vw → 0.85vw (-23%) / max 14px → 11px (-21%)
+  //   sub 폰트  1.05vw → 0.85vw (-19%) / max 13px → 11px (-15%)
+  //   패딩     py-3 → py-2 (-33%) / px-3 → px-2.5 (-17%)
+  //   gap     mt-2 → mt-1, mt-1.5 → mt-1 (-33~50%)
   return (
     <div
-      className="rounded-2xl px-3 py-3 border backdrop-blur-sm flex-shrink-0 text-center"
+      className="rounded-xl px-2.5 py-2 border backdrop-blur-sm flex-shrink-0 text-center"
       style={{
         background: 'rgba(0,0,0,0.45)',
         borderColor,
@@ -2507,16 +2553,16 @@ function SideStatCard({
         style={{
           color,
           opacity: 0.6,
-          fontSize: 'clamp(10px, 1.1vw, 14px)',
-          letterSpacing: '0.32em',
+          fontSize: 'clamp(8px, 0.85vw, 11px)',
+          letterSpacing: '0.28em',
         }}
       >
         {label}
       </div>
       <div
-        className="font-mono font-extrabold tabular-nums leading-none mt-2"
+        className="font-mono font-extrabold tabular-nums leading-none mt-1"
         style={{
-          fontSize: 'clamp(22px, 3.8vw, 44px)',
+          fontSize: 'clamp(16px, 2.4vw, 28px)',
           letterSpacing: '-0.02em',
           color: highlight && accentColor ? accentColor : color,
         }}
@@ -2525,8 +2571,8 @@ function SideStatCard({
       </div>
       {sub && (
         <div
-          className="mt-1.5"
-          style={{ color, opacity: 0.6, fontSize: 'clamp(10px, 1.05vw, 13px)' }}
+          className="mt-1"
+          style={{ color, opacity: 0.6, fontSize: 'clamp(8px, 0.85vw, 11px)' }}
         >
           {sub}
         </div>
@@ -2536,33 +2582,33 @@ function SideStatCard({
 }
 
 /**
- * BlindStructurePanel — 2026-05-23 PM 정정 (10레벨 확장 + 사이즈 키움).
+ * BlindStructurePanel — 2026-05-24 PM 정정 (5레벨 컴팩트 + 앤티 컬럼 자동).
  *
- * 사용자 정정 (2026-05-23):
- *   "화면의 좌측 스트럭쳐 표시를 10개로 늘려주고 사이즈를 조금더 키우면 좋겠어.
- *    세로모드에서는 보이지 않아도된다."
+ * 사용자 정정 (2026-05-24):
+ *   "좌측 5레벨 컴팩트 스트럭쳐 표시는 제대로 작동하지 않는것같은데 확인바란다.
+ *    (이건 엔티가있는 경기도 감안하여 크기 측정->개선)"
  *
- *   → 노출 범위: 현재 -2, 현재, +1 ~ +7 (정확히 10줄, break도 한 줄로 계산)
- *   → overflow hidden 강제, 스크롤 없음
- *   → 폰트/패딩 키움 (가독성 우선)
+ *   → 직전 10레벨에서 5레벨로 축소 (현재 -1, 현재, +1 ~ +3 = 5줄)
+ *   → 좌측 컬럼 폭에 맞게 컴팩트 (블라인드는 중앙 하단으로 이동했음)
+ *   → 앤티 있는 경기: sb/bb 행 아래 ante 작게 표시 (한 행 안)
+ *   → overflow hidden, 스크롤 없음
  *   → portrait variant는 호출부에서 mount 제외
  *
- * 디자인:
- *   ┌──────────────────────────┐
- *   │ 📋 STRUCTURE              │ ← 헤더 (조금 큼)
- *   ├──────────────────────────┤
- *   │ ✓ Lv 3   100 / 200        │ ← -2 (페이드)
- *   │ ✓ Lv 4   200 / 400        │ ← -1 (페이드)
- *   │ ▶ Lv 5   300 / 600        │ ← 현재 (배경+테두리+bold+scale)
- *   │   Lv 6   500 / 1000       │ ← 다음
- *   │   ...                      │
- *   │   Lv 12  4000 / 8000      │ ← +7
- *   └──────────────────────────┘
+ * 디자인 (앤티 없을 때):                  디자인 (앤티 있을 때):
+ *   ┌────────────────┐                   ┌──────────────────┐
+ *   │ 📋 STRUCTURE    │                   │ 📋 STRUCTURE      │
+ *   ├────────────────┤                   ├──────────────────┤
+ *   │ ✓ Lv 4  200/400 │                   │ ✓ Lv 4  200/400   │
+ *   │ ▶ Lv 5  300/600 │                   │       ante 100    │
+ *   │   Lv 6  500/1k  │                   │ ▶ Lv 5  300/600   │
+ *   │   Lv 7  800/1.6k│                   │       ante 200    │
+ *   │   Lv 8  1k/2k   │                   │ ...               │
+ *   └────────────────┘                   └──────────────────┘
  *
  * Size variant: 'desktop' | 'landscape' — 폰트/간격 자동 조절.
  * Empty handling: structure 비면 null 반환 (mount 안 함).
  */
-const VISIBLE_LEVELS_AROUND_CURRENT = 10; // 직전 2 + 현재 1 + 다음 7
+const VISIBLE_LEVELS_AROUND_CURRENT = 5; // 직전 1 + 현재 1 + 다음 3 = 5줄 (사용자 정정 2026-05-24)
 
 function BlindStructurePanel({
   structure,
@@ -2577,27 +2623,27 @@ function BlindStructurePanel({
 }) {
   if (!structure || structure.length === 0) return null;
 
-  // 10레벨 슬라이딩 윈도우 계산 — 현재 -2, 현재, +1 ~ +7.
-  // current가 index 0이면 [0..9] / current가 마지막이면 마지막 10개 위치 조정.
+  // 5레벨 슬라이딩 윈도우 계산 — 현재 -1, 현재, +1 ~ +3.
   const currentIdx = structure.findIndex((lv) => lv.level === currentLevel);
-  // currentLevel이 못 찾으면 첫 인덱스 fallback
   const cIdx = currentIdx >= 0 ? currentIdx : 0;
-  // start = cIdx - 2, end = cIdx + 8 (총 10개) — 경계 clamp
-  let start = Math.max(0, cIdx - 2);
+  // start = cIdx - 1, end = cIdx + 4 (총 5개) — 경계 clamp
+  let start = Math.max(0, cIdx - 1);
   let end = Math.min(structure.length, start + VISIBLE_LEVELS_AROUND_CURRENT);
-  // end가 끝까지 못 채우면 start 앞으로 당김 (10개 유지)
+  // end가 끝까지 못 채우면 start 앞으로 당김 (5개 유지)
   if (end - start < VISIBLE_LEVELS_AROUND_CURRENT && start > 0) {
     start = Math.max(0, end - VISIBLE_LEVELS_AROUND_CURRENT);
   }
   const visible = structure.slice(start, end);
+  // 앤티가 한 행이라도 있으면 앤티 컬럼 표시 (UX 일관성 위해 visible 범위 기준)
+  const hasAnyAnte = visible.some((lv) => !lv.isBreak && lv.ante > 0);
 
-  // variant별 사이즈/패딩 결정 — 사용자 정정: 사이즈 키움
+  // variant별 사이즈/패딩 결정 — 컴팩트(좌측 컬럼 폭 맞춤)
   const headerSize =
-    variant === 'desktop' ? 'text-sm px-4 py-2.5' : 'text-xs px-2.5 py-2';
+    variant === 'desktop' ? 'text-sm px-3 py-2' : 'text-[11px] px-2 py-1.5';
   const rowSize =
-    variant === 'desktop' ? 'px-3 py-2 text-base' : 'px-2.5 py-1.5 text-[13px]';
+    variant === 'desktop' ? 'px-2.5 py-1.5 text-sm' : 'px-2 py-1 text-[12px]';
   const panelWidth =
-    variant === 'desktop' ? 280 : '100%';
+    variant === 'desktop' ? 240 : '100%';
   const accent = display.accentColor;
   const blinds = display.blindsColor;
   const fg = display.textColor;
@@ -2694,24 +2740,38 @@ function BlindStructurePanel({
                   <span
                     className="font-bold tabular-nums"
                     style={{
-                      minWidth: variant === 'desktop' ? 46 : 40,
+                      minWidth: variant === 'desktop' ? 38 : 32,
                       opacity: 0.85,
                     }}
                   >
                     Lv {lvl.level}
                   </span>
-                  <span
-                    className="tabular-nums"
-                    style={{
-                      color: blinds,
-                      opacity: isCurrent ? 1 : 0.9,
-                      marginLeft: 'auto',
-                    }}
-                  >
-                    {lvl.sb.toLocaleString()}
-                    <span style={{ opacity: 0.4 }}>/</span>
-                    {lvl.bb.toLocaleString()}
-                  </span>
+                  <div className="flex flex-col items-end" style={{ marginLeft: 'auto' }}>
+                    <span
+                      className="tabular-nums leading-tight"
+                      style={{
+                        color: blinds,
+                        opacity: isCurrent ? 1 : 0.9,
+                      }}
+                    >
+                      {lvl.sb.toLocaleString()}
+                      <span style={{ opacity: 0.4 }}>/</span>
+                      {lvl.bb.toLocaleString()}
+                    </span>
+                    {hasAnyAnte && (
+                      <span
+                        className="tabular-nums leading-tight"
+                        style={{
+                          color: fg,
+                          opacity: lvl.ante > 0 ? 0.7 : 0.3,
+                          fontSize: variant === 'desktop' ? 10 : 9,
+                          marginTop: 1,
+                        }}
+                      >
+                        a{lvl.ante > 0 ? lvl.ante.toLocaleString() : '—'}
+                      </span>
+                    )}
+                  </div>
                 </>
               )}
             </div>

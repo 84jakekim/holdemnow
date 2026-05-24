@@ -199,8 +199,77 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-700">{error}</div>
         )}
 
+        {/*
+         * 2026-05-24 PM 정정 #7: "텍스트 3줄"을 화면 설정 최상단으로 이동.
+         * 사용자 정정: "제목설정은 화면설정의 가장 위로 올려서 화면설정시 제목부터 설정하도록 순서배치"
+         * ⇒ 사용자가 화면 설정 진입 즉시 토너 제목부터 입력 가능.
+         * ⇒ 셋째 줄(자막)은 deprecated 안내로 변경 — 2026-05-24 사용자가 마퀴 제거 요청.
+         */}
+        <Section
+          title="📝 1. 화면 텍스트 — 토너 제목부터"
+          hint="TV에 띄울 자유 텍스트 — 토너 제목·설명 순서로 입력. 위치 다이어그램으로 어디에 노출되는지 미리 확인"
+        >
+          {/* 전체 위치 가이드 — 한눈에 보이는 다이어그램 */}
+          <PositionDiagramAll />
+
+          <div className="h-3" />
+
+          {/* 첫째 줄 — 토너먼트 제목 (가장 위, 가장 큼) */}
+          <TextLineEditor
+            badge="🏆 첫째 줄 — 토너 제목 (가장 큼)"
+            subtitle="TV 화면 정중앙 상단 · 가장 큰 헤드라인 · 예: 토너 이름"
+            positionDiagram={<PositionDiagram active="title" />}
+            placeholder="예) 🎰 5/24 정기 토너 100K"
+            text={settings.titleText}
+            fontSize={settings.titleFontSize}
+            color={settings.titleColor}
+            style={settings.titleStyle}
+            onTextChange={(v) => update('titleText', v)}
+            onFontSizeChange={(v) => update('titleFontSize', v)}
+            onColorChange={(v) => update('titleColor', v)}
+            onStyleChange={(v) => update('titleStyle', v)}
+            sizeMin={16}
+            sizeMax={64}
+          />
+
+          <div className="h-3" />
+
+          {/* 둘째 줄 — 토너 설명 (제목 바로 아래, 부제) */}
+          <TextLineEditor
+            badge="📝 둘째 줄 — 토너 설명 (부제)"
+            subtitle="제목 바로 아래 · 부제 · 예: GTD·리바인 횟수·디너 시간 등 보조 정보"
+            positionDiagram={<PositionDiagram active="note" />}
+            placeholder="예) GTD 100만 · 리바인 3회 · 18:30 디너"
+            text={settings.noteText}
+            fontSize={settings.noteFontSize}
+            color={settings.noteColor}
+            style={settings.noteStyle}
+            onTextChange={(v) => update('noteText', v)}
+            onFontSizeChange={(v) => update('noteFontSize', v)}
+            onColorChange={(v) => update('noteColor', v)}
+            onStyleChange={(v) => update('noteStyle', v)}
+            sizeMin={10}
+            sizeMax={40}
+          />
+
+          {/* 2026-05-24 PM 정정 #6: 셋째 줄 자막 폐기 안내.
+              사용자 명시: "중앙하단 자막기능은 제거".
+              데이터 모델은 유지하되 입력 UI를 deprecated 안내로 대체. */}
+          <div className="mt-4 rounded-lg px-3 py-3 border-2 border-dashed"
+               style={{ background: 'rgba(156,163,175,0.08)', borderColor: 'rgba(156,163,175,0.3)' }}>
+            <div className="text-[11px] font-extrabold text-gray-600 mb-1">
+              📢 셋째 줄 — 자막 공지 (2026-05-24 제거됨)
+            </div>
+            <div className="text-[10.5px] text-gray-500 leading-relaxed">
+              하단 흐름 자막 기능은 사용자 정정으로 화면에서 제거되었습니다.
+              실시간 공지는 토너 제목·설명을 통해 안내해 주세요.
+              (기존 입력값은 저장되어 있으나 TV에는 표시되지 않습니다.)
+            </div>
+          </div>
+        </Section>
+
         {/* 프리셋 */}
-        <Section title="🎨 테마 프리셋" hint="매장 분위기에 맞는 컬러 세트를 한 번에 적용">
+        <Section title="🎨 2. 테마 프리셋" hint="매장 분위기에 맞는 컬러 세트를 한 번에 적용">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {PRESETS.map((p) => (
               <button
@@ -219,7 +288,7 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
         </Section>
 
         {/* 배경 */}
-        <Section title="🖼️ 배경" hint="단색·그라데이션·이미지 중 선택">
+        <Section title="🖼️ 3. 배경" hint="단색·그라데이션·이미지 중 선택">
           <div className="flex gap-2 mb-3">
             {(['solid', 'gradient', 'image'] as const).map((t) => (
               <button
@@ -354,7 +423,7 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
         </Section>
 
         {/* 색 팔레트 */}
-        <Section title="🎨 컬러 팔레트">
+        <Section title="🎨 4. 컬러 팔레트">
           <div className="grid grid-cols-2 gap-2">
             <ColorField label="타이머 숫자" value={settings.timerColor} onChange={(v) => update('timerColor', v)} />
             <ColorField label="블라인드 숫자" value={settings.blindsColor} onChange={(v) => update('blindsColor', v)} />
@@ -363,99 +432,11 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
           </div>
         </Section>
 
-        {/* 텍스트 3줄 — 2026-05-23 신규 (게임타이틀 · 참고사항 · 하단 마퀴) */}
-        <Section
-          title="📝 화면 텍스트 3줄"
-          hint="TV에 띄울 자유 텍스트 3줄 — 각 줄이 화면 어디에 노출되는지 미리보기 다이어그램 확인"
-        >
-          {/* 전체 위치 가이드 — 한눈에 보이는 다이어그램 */}
-          <PositionDiagramAll />
-
-          <div className="h-3" />
-
-          {/* 첫째 줄 — 토너먼트 제목 (상단 중앙) */}
-          <TextLineEditor
-            badge="🏆 첫째 줄 — 토너먼트 제목"
-            subtitle="TV 화면 정중앙 상단 · 가장 큰 헤드라인"
-            positionDiagram={<PositionDiagram active="title" />}
-            placeholder="예) 🎰 5/24 정기 토너 100K"
-            text={settings.titleText}
-            fontSize={settings.titleFontSize}
-            color={settings.titleColor}
-            style={settings.titleStyle}
-            onTextChange={(v) => update('titleText', v)}
-            onFontSizeChange={(v) => update('titleFontSize', v)}
-            onColorChange={(v) => update('titleColor', v)}
-            onStyleChange={(v) => update('titleStyle', v)}
-            sizeMin={16}
-            sizeMax={64}
-          />
-
-          <div className="h-3" />
-
-          {/* 둘째 줄 — 토너 설명 (제목 바로 아래) */}
-          <TextLineEditor
-            badge="📝 둘째 줄 — 토너 설명"
-            subtitle="제목 바로 아래 · 부제 (GTD·리바인·휴식 정보)"
-            positionDiagram={<PositionDiagram active="note" />}
-            placeholder="예) GTD 100만 · 리바인 3회 · 18:30 디너"
-            text={settings.noteText}
-            fontSize={settings.noteFontSize}
-            color={settings.noteColor}
-            style={settings.noteStyle}
-            onTextChange={(v) => update('noteText', v)}
-            onFontSizeChange={(v) => update('noteFontSize', v)}
-            onColorChange={(v) => update('noteColor', v)}
-            onStyleChange={(v) => update('noteStyle', v)}
-            sizeMin={10}
-            sizeMax={40}
-          />
-
-          <div className="h-3" />
-
-          {/* 셋째 줄 — 실시간 자막 공지 (2026-05-24 PM 재정의로 부활).
-              사용자 정정: "중앙하단에 자막처럼 지나가는 실시간공지글로 설정.
-                            좌에서 우측으로 타이머 숫자 맨우측에서 맨좌측 숫자까지만 지나가는 구간."
-              ⇒ 폭: 타이머 컨테이너 폭만 (화면 전체 X)
-              ⇒ 방향: 좌→우 (translateX -100% → 0, 이전 우→좌와 반대)
-              ⇒ 위치: 진행률 바 아래 (중앙 하단). */}
-          <TextLineEditor
-            badge="📢 셋째 줄 — 자막 공지 (좌→우)"
-            subtitle="중앙 하단 · 타이머 폭 안에서만 좌→우로 흐름 · 비우면 표시 X"
-            positionDiagram={<PositionDiagram active="marquee" />}
-            placeholder="예) 디너 20:00 시작 · 휴식 5분 후"
-            text={settings.marqueeText}
-            fontSize={settings.marqueeFontSize}
-            color={settings.marqueeColor}
-            style={settings.marqueeStyle}
-            onTextChange={(v) => update('marqueeText', v)}
-            onFontSizeChange={(v) => update('marqueeFontSize', v)}
-            onColorChange={(v) => update('marqueeColor', v)}
-            onStyleChange={(v) => update('marqueeStyle', v)}
-            sizeMin={10}
-            sizeMax={32}
-            extra={
-              <div className="mt-3">
-                <FieldLabel
-                  label={`흐름 속도 — 한 바퀴 ${settings.marqueeSpeedSec}초`}
-                  hint="작을수록 빠름 (10초 빠름 ~ 60초 느림). 디폴트 30초."
-                />
-                <input
-                  type="range"
-                  min={10}
-                  max={60}
-                  step={1}
-                  value={settings.marqueeSpeedSec}
-                  onChange={(e) => update('marqueeSpeedSec', Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            }
-          />
-        </Section>
+        {/* 2026-05-24 PM 정정 #7: 화면 텍스트 3줄 Section은 최상단으로 이동됨 (위쪽 참조).
+            여기엔 기타 텍스트 옵션만 남김. */}
 
         {/* 텍스트 — 기타 */}
-        <Section title="🏷️ 텍스트 — 기타">
+        <Section title="🏷️ 5. 텍스트 — 기타 (대회명·스폰서·로고)">
           <FieldLabel label="대회명 오버라이드 (기존)" hint="비우면 세션 토너 이름 자동 사용 · 첫째 줄을 채우면 그 값을 우선 사용" />
           <input
             value={settings.customTournamentTitle}
@@ -496,7 +477,7 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
         </Section>
 
         {/* 사운드 */}
-        <Section title="🔔 사운드 알림" hint="TV가 켜진 브라우저에서 작동">
+        <Section title="🔔 6. 사운드 알림" hint="TV가 켜진 브라우저에서 작동">
           <div className="space-y-2">
             <SoundToggle
               label='카운트다운 비프 (10초 → 1초 매초 "삐")'
@@ -727,70 +708,52 @@ function TimerPreview({ settings }: { settings: TimerDisplaySettings }) {
               {settings.noteText}
             </div>
           )}
-          <div className="text-[9px] tracking-[0.3em] mb-1" style={{ color: settings.textColor, opacity: 0.7 }}>
-            LEVEL 4
-          </div>
-          {/* 타이머 컨테이너 — 자막의 폭 기준이 됨 (inline-block + 자식 자막이 width:100%) */}
-          <div className="inline-flex flex-col items-stretch">
+          {/* 2026-05-24 PM 정정 #3: LEVEL은 타이머 바로 위에 작은 배지로. */}
+          <div className="inline-flex flex-col items-center">
+            <div
+              className="rounded-full px-2 py-0.5 mb-1 border flex items-center gap-1"
+              style={{
+                background: `linear-gradient(135deg, ${settings.accentColor}26, rgba(0,0,0,0.5))`,
+                borderColor: `${settings.accentColor}66`,
+              }}
+            >
+              <span
+                className="font-extrabold tracking-[0.18em] text-[8px]"
+                style={{ color: settings.accentColor }}
+              >
+                ▶ NOW
+              </span>
+              <span className="text-[8px] opacity-40" style={{ color: settings.textColor }}>·</span>
+              <span
+                className="font-extrabold tracking-[0.15em] text-[10px]"
+                style={{ color: settings.textColor }}
+              >
+                LV 4
+              </span>
+            </div>
             <div
               className="font-mono font-extrabold leading-none text-center"
               style={{ color: settings.timerColor, fontSize: '56px', letterSpacing: '-0.04em' }}
             >
               {mm}:{ss}
             </div>
-            {/* 진행률 바 — 자막의 폭 기준 */}
+            {/* 진행률 바 */}
             <div className="mt-1.5 h-1 bg-white/15 rounded-full overflow-hidden">
               <div
                 className="h-full"
                 style={{ width: '54%', background: settings.blindsColor }}
               />
             </div>
-            {/* 셋째 줄 — 자막 (타이머 폭만, 좌→우, 미리보기) */}
-            {settings.marqueeText && (
-              <div
-                className="overflow-hidden whitespace-nowrap mt-1.5 rounded"
-                style={{
-                  background: 'rgba(0,0,0,0.35)',
-                  padding: '3px 0',
-                }}
-              >
-                <span
-                  className="inline-block preview-marquee-ltr"
-                  style={{
-                    color: settings.marqueeColor,
-                    fontSize: Math.min(settings.marqueeFontSize, 12),
-                    fontWeight: settings.marqueeStyle.includes('bold') ? 700 : 400,
-                    fontStyle: settings.marqueeStyle.includes('italic') ? 'italic' : 'normal',
-                    animationDuration: `${settings.marqueeSpeedSec}s`,
-                    willChange: 'transform',
-                    paddingLeft: 8,
-                    paddingRight: 8,
-                  }}
-                >
-                  {settings.marqueeText}
-                </span>
-                <style jsx>{`
-                  @keyframes preview-marquee-ltr-scroll {
-                    from { transform: translateX(-100%); }
-                    to   { transform: translateX(100%); }
-                  }
-                  .preview-marquee-ltr {
-                    animation-name: preview-marquee-ltr-scroll;
-                    animation-timing-function: linear;
-                    animation-iteration-count: infinite;
-                  }
-                `}</style>
-              </div>
-            )}
-          </div>
-          <div
-            className="font-mono font-extrabold mt-2"
-            style={{ color: settings.blindsColor, fontSize: '22px' }}
-          >
-            300 / 600
-          </div>
-          <div className="text-[10px] mt-1" style={{ color: settings.textColor, opacity: 0.6 }}>
-            Ante 75
+            {/* 2026-05-24 PM 정정 #5: 블라인드 금액을 진행바 아래 중앙으로 이동 (사용자 정정). */}
+            <div
+              className="font-mono font-extrabold text-center mt-2"
+              style={{ color: settings.blindsColor, fontSize: '28px', letterSpacing: '-0.02em' }}
+            >
+              300 / 600
+            </div>
+            <div className="text-[10px] text-center mt-0.5" style={{ color: settings.textColor, opacity: 0.6 }}>
+              Ante 75
+            </div>
           </div>
 
           {/* 미니 통계 */}
