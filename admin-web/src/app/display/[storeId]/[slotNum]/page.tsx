@@ -1882,10 +1882,13 @@ function MobileLandscapeLayout({
   const sStructure = clampScale(display.structureScale);
   const sNext = clampScale(display.nextScale);
 
+  // 2026-05-24 사용자 정정 (보고서): "검은 여백 많음 — 화면 채우지 못함"
+  //   외곽 padding 축소 (px-3 pt-2 pb-2 → px-2 pt-1 pb-1) + 헤더 gap 축소.
+  //   더 큰 폰트가 차지할 공간을 확보. min-h-0 overflow-hidden 유지로 viewport 가득.
   return (
-    <div className="relative flex-1 flex flex-col px-3 pt-2 pb-2 min-h-0 overflow-hidden">
+    <div className="relative flex-1 flex flex-col px-2 pt-1 pb-1 min-h-0 overflow-hidden">
       {/* ─── 상단 헤더 row — 제목/노트/LEVEL 중앙 정렬 + 거대 폰트 (사용자 정정 #4) ─── */}
-      <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1 pb-1">
+      <div className="flex-shrink-0 flex flex-col items-center justify-center gap-0.5 pb-0.5">
         {/* 상태 뱃지 — 중앙 상단 */}
         <div className="flex items-center gap-2">
           {paused ? (
@@ -1919,7 +1922,9 @@ function MobileLandscapeLayout({
           style={{
             color: titled ? display.titleColor : display.textColor,
             opacity: titled ? 1 : 0.9,
-            fontSize: `clamp(${20 * sTitle}px, ${3 * sTitle}vw, ${38 * sTitle}px)`,
+            // 2026-05-24 사용자 정정 (#2 보고서): "상단 제목 거의 안 보임" — 작은 viewport에서 min에 수렴.
+            //   기존 clamp(20, 3vw, 38) → clamp(30, 4vw, 56). min 1.5배 / max 1.5배.
+            fontSize: `clamp(${30 * sTitle}px, ${4 * sTitle}vw, ${56 * sTitle}px)`,
             fontWeight: titleBold ? 800 : 700,
             fontStyle: titleItalic ? 'italic' : 'normal',
             letterSpacing: '-0.01em',
@@ -1934,7 +1939,8 @@ function MobileLandscapeLayout({
             className="text-center truncate max-w-[90%]"
             style={{
               color: display.noteColor,
-              fontSize: `clamp(${11 * sTitle}px, ${1.3 * sTitle}vw, ${18 * sTitle}px)`,
+              // 2026-05-24 사용자 정정: 노트도 비례 키움 (제목 톤 일관성).
+              fontSize: `clamp(${16 * sTitle}px, ${1.8 * sTitle}vw, ${26 * sTitle}px)`,
               fontWeight: noteBold ? 700 : 400,
               fontStyle: noteItalic ? 'italic' : 'normal',
               opacity: 0.88,
@@ -2000,7 +2006,8 @@ function MobileLandscapeLayout({
                   className="font-extrabold tracking-[0.3em] mb-2"
                   style={{
                     color: nextBlind.isBreak ? '#FFD166' : display.accentColor,
-                    fontSize: `clamp(${11 * sNext}px, ${1.2 * sNext}vw, ${15 * sNext}px)`,
+                    // 2026-05-24 사용자 정정 (보고서): NEXT 안내 라벨 +50% — 11→16 / 15→22
+                    fontSize: `clamp(${16 * sNext}px, ${1.6 * sNext}vw, ${22 * sNext}px)`,
                   }}
                 >
                   ▶ NEXT BLIND
@@ -2010,7 +2017,8 @@ function MobileLandscapeLayout({
                     className="font-extrabold"
                     style={{
                       color: '#FFD166',
-                      fontSize: `clamp(${18 * sNext}px, ${2.2 * sNext}vw, ${28 * sNext}px)`,
+                      // 2026-05-24 사용자 정정 (보고서): 휴식 안내 +50% — 18→28 / 28→44
+                      fontSize: `clamp(${28 * sNext}px, ${3 * sNext}vw, ${44 * sNext}px)`,
                     }}
                   >
                     ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
@@ -2021,17 +2029,19 @@ function MobileLandscapeLayout({
                       className="font-mono font-extrabold tracking-wide"
                       style={{
                         color: display.textColor,
-                        opacity: 0.7,
-                        fontSize: `clamp(${11 * sNext}px, ${1.1 * sNext}vw, ${14 * sNext}px)`,
+                        opacity: 0.75,
+                        // 2026-05-24 사용자 정정 (보고서): LV 표시 +50% — 11→16 / 14→20
+                        fontSize: `clamp(${16 * sNext}px, ${1.5 * sNext}vw, ${20 * sNext}px)`,
                       }}
                     >
                       LV {nextBlind.level}
                     </div>
                     <div
-                      className="font-mono font-extrabold mt-1"
+                      className="font-mono font-extrabold mt-1.5"
                       style={{
                         color: display.blindsColor,
-                        fontSize: `clamp(${22 * sNext}px, ${2.6 * sNext}vw, ${36 * sNext}px)`,
+                        // 2026-05-24 사용자 정정 (보고서): NEXT 블라인드 +50% — 22→34 / 36→56
+                        fontSize: `clamp(${34 * sNext}px, ${3.4 * sNext}vw, ${56 * sNext}px)`,
                         letterSpacing: '-0.02em',
                       }}
                     >
@@ -2041,11 +2051,12 @@ function MobileLandscapeLayout({
                     </div>
                     {nextBlind.ante > 0 && (
                       <div
-                        className="font-mono mt-1"
+                        className="font-mono mt-1.5"
                         style={{
                           color: display.textColor,
-                          opacity: 0.7,
-                          fontSize: `clamp(${11 * sNext}px, ${1.1 * sNext}vw, ${15 * sNext}px)`,
+                          opacity: 0.75,
+                          // 2026-05-24 사용자 정정 (보고서): NEXT Ante +50% — 11→18 / 15→24
+                          fontSize: `clamp(${18 * sNext}px, ${1.8 * sNext}vw, ${24 * sNext}px)`,
                         }}
                       >
                         Ante {nextBlind.ante.toLocaleString()}
@@ -2079,11 +2090,10 @@ function MobileLandscapeLayout({
 
         {/* ─── 중: LEVEL 배지 + 거대 타이머 + 진행바 + 중앙 하단 BLINDS ─── */}
         <div className="flex flex-col items-center justify-center min-w-0">
-          {/* 2026-05-24 사용자 정정 (재): "현재레벨표시의 폰트 사이즈를 현재크기의 2.5배로 설정하고
-              level 이라고 명확하게 표시할것."
-              ⇒ NOW 배지/구분점/LV 약어 폐기. 단일 거대 텍스트 "LEVEL N" (또는 "BREAK").
-              ⇒ 폰트 2.5배: clamp(11px, 1.3vw, 16px) → clamp(28px, 3.3vw, 40px)
-              ⇒ tracking 0.18em 유지로 dignified, padding 확장으로 시각적 무게감. */}
+          {/* 2026-05-24 사용자 정정 (재²): "level 2.5배가 안 됨" — 가로 layout clamp min/max 키움.
+              직전: clamp(28px, 3.3vw, 40px) — 작은 viewport에서 min(28)에 수렴 → 안 커 보임.
+              현재: clamp(48px, 5.2vw, 80px) — 1.7~2배 키움. 실제 시각 2.5배 효과.
+              tracking 0.18em / padding 확장 유지로 dignified. */}
           <div
             className="rounded-2xl px-5 py-2 mb-3 border flex items-center justify-center"
             style={{
@@ -2101,7 +2111,8 @@ function MobileLandscapeLayout({
               className="font-extrabold tracking-[0.18em] leading-none"
               style={{
                 color: isCurrentBreak ? '#FFD166' : display.textColor,
-                fontSize: `clamp(${28 * sLevel}px, ${3.3 * sLevel}vw, ${40 * sLevel}px)`,
+                // 2026-05-24 사용자 정정 (보고서): "LEVEL 2.5배 안 됨" — clamp min 28→48 / max 40→80
+                fontSize: `clamp(${48 * sLevel}px, ${5.2 * sLevel}vw, ${80 * sLevel}px)`,
               }}
             >
               {isCurrentBreak ? `BREAK ${session.currentLevel}` : `LEVEL ${session.currentLevel}`}
@@ -2110,7 +2121,9 @@ function MobileLandscapeLayout({
           <div
             className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
             style={{
-              fontSize: `clamp(${80 * sTimer}px, ${16 * sTimer}vw, ${220 * sTimer}px)`,
+              // 2026-05-24 사용자 정정 (보고서): 타이머 시인성 강화 — min 80→128 / vw 16→18 / max 220→300
+              //   작은 viewport(iPhone SE 568 가로 360h)에서도 시인성 보장.
+              fontSize: `clamp(${128 * sTimer}px, ${18 * sTimer}vw, ${300 * sTimer}px)`,
               letterSpacing: '-0.05em',
               color: timerColor,
               transition: 'color 0.2s',
@@ -2160,7 +2173,8 @@ function MobileLandscapeLayout({
               <div
                 className="font-mono font-extrabold leading-none"
                 style={{
-                  fontSize: `clamp(${32 * sBlinds}px, ${5 * sBlinds}vw, ${72 * sBlinds}px)`,
+                  // 2026-05-24 사용자 정정 (보고서): 블라인드 — min 32→52 / vw 5→6 / max 72→104
+                  fontSize: `clamp(${52 * sBlinds}px, ${6 * sBlinds}vw, ${104 * sBlinds}px)`,
                   color: display.blindsColor,
                   letterSpacing: '-0.03em',
                 }}
@@ -2174,8 +2188,9 @@ function MobileLandscapeLayout({
                   className="font-mono mt-1"
                   style={{
                     color: display.textColor,
-                    opacity: 0.65,
-                    fontSize: `clamp(${13 * sAnte}px, ${1.4 * sAnte}vw, ${20 * sAnte}px)`,
+                    opacity: 0.7,
+                    // 2026-05-24 사용자 정정 (보고서): "ante 거의 안 보임" — min 13→22 / vw 1.4→2.6 / max 20→44
+                    fontSize: `clamp(${22 * sAnte}px, ${2.6 * sAnte}vw, ${44 * sAnte}px)`,
                   }}
                 >
                   Ante {session.ante.toLocaleString()}
@@ -2243,19 +2258,20 @@ function MobileLandscapeLayout({
                       style={{
                         color: accent,
                         opacity: 0.95,
-                        fontSize: 'clamp(8px, 0.85vw, 11px)',
-                        letterSpacing: '0.28em',
+                        // 2026-05-24 사용자 정정 (보고서): PRIZE POOL 라벨 키움 (+50%)
+                        fontSize: 'clamp(12px, 1.2vw, 16px)',
+                        letterSpacing: '0.24em',
                       }}
                     >
                       <span>💰</span>
                       <span>PRIZE POOL</span>
                     </div>
-                    {/* 2026-05-24 PM 정정 #1: PRIZE POOL 금액 30~40% 축소.
-                        4.5vw → 2.9vw, max 52px → 32px (-38%) */}
+                    {/* 2026-05-24 사용자 정정 (보고서): PRIZE POOL 금액 +50%.
+                        직전 clamp(18, 2.9vw, 32) → clamp(26, 3.6vw, 46). 슬림 폭 180 유지하면서 시인성 ↑ */}
                     <div
-                      className="font-mono font-extrabold tabular-nums leading-none mt-1.5 flex-shrink-0"
+                      className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
                       style={{
-                        fontSize: 'clamp(18px, 2.9vw, 32px)',
+                        fontSize: 'clamp(26px, 3.6vw, 46px)',
                         color: display.textColor,
                         letterSpacing: '-0.03em',
                         textShadow: `0 2px 12px ${accent}55`,
@@ -2263,17 +2279,17 @@ function MobileLandscapeLayout({
                     >
                       {session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
                     </div>
-                    {/* 2026-05-24 PM 정정 #2: DISTRIBUTION 분배표 폰트 키움 (시인성 우선).
-                        rank 라벨 1.3vw→1.7vw / 금액 1.4vw→1.9vw, max 14px→20px.
+                    {/* 2026-05-24 사용자 정정 (보고서): DISTRIBUTION 분배표 +50% 추가 키움.
+                        rank 12→16 / 금액 13→18 / max 18→26 / 20→28 / 라벨 9→13.
                         정렬은 라벨좌/금액우 유지 (사용자 명시) */}
                     {mode === 'distribution' && amounts.length > 0 && (
                       <div
-                        className="mt-1.5 pt-1.5 border-t flex-1 min-h-0 overflow-hidden flex flex-col text-left"
+                        className="mt-2 pt-2 border-t flex-1 min-h-0 overflow-hidden flex flex-col text-left"
                         style={{ borderColor: 'rgba(255,255,255,0.12)' }}
                       >
                         <div
-                          className="text-[9px] tracking-[0.22em] font-extrabold opacity-65 mb-1 flex-shrink-0 text-center"
-                          style={{ color: display.textColor }}
+                          className="tracking-[0.22em] font-extrabold opacity-75 mb-1 flex-shrink-0 text-center"
+                          style={{ color: display.textColor, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
                         >
                           DISTRIBUTION
                         </div>
@@ -2290,7 +2306,7 @@ function MobileLandscapeLayout({
                               <span
                                 className="font-extrabold tabular-nums"
                                 style={{
-                                  fontSize: 'clamp(12px, 1.7vw, 18px)',
+                                  fontSize: 'clamp(16px, 2vw, 26px)',
                                   color: a.rank === 1 ? accent : display.textColor,
                                 }}
                               >
@@ -2299,7 +2315,7 @@ function MobileLandscapeLayout({
                               <span
                                 className="tabular-nums font-bold"
                                 style={{
-                                  fontSize: 'clamp(13px, 1.9vw, 20px)',
+                                  fontSize: 'clamp(18px, 2.2vw, 28px)',
                                   color: display.blindsColor,
                                 }}
                               >
@@ -2310,8 +2326,8 @@ function MobileLandscapeLayout({
                         </div>
                         {amounts.length > 6 && (
                           <div
-                            className="text-[10px] mt-1 opacity-55 flex-shrink-0 text-center"
-                            style={{ color: display.textColor }}
+                            className="mt-1 opacity-65 flex-shrink-0 text-center"
+                            style={{ color: display.textColor, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
                           >
                             +{amounts.length - 6}등 더
                           </div>
@@ -2601,13 +2617,13 @@ function SideStatCard({
   accentColor?: string;
   borderColor: string;
 }) {
-  // 2026-05-24 사용자 정정 (재): "우측에 배치되는 플레이어표시,레이트레지,프라이즈풀 카드의 가로폭이 너무 넓다."
-  //   카드 자체 maxWidth 180px 도입 (grid 컬럼 폭이 더 넓어도 카드는 슬림 유지)
-  //   mx-auto로 컬럼 내 중앙 정렬 (시인성 + 균형)
-  //   폰트 값은 직전(9acde8c) 30~40% 축소 유지 — 값 2.4vw / 라벨 0.85vw
+  // 2026-05-24 사용자 정정 (보고서): "우측 카드 매우 작음" — maxWidth 180 유지 + 폰트 +50%.
+  //   max는 180 슬림 폭 유지 (사용자 명시 제약). min을 키워서 작은 viewport에서도 시인성 보장.
+  //   라벨 8→12 / 값 16→24 / 서브 8→12 (min 기준 +50%).
+  //   max도 키워 큰 화면에서 visual weight 확보 (11→16 / 28→40 / 11→16).
   return (
     <div
-      className="rounded-xl px-2.5 py-2 border backdrop-blur-sm flex-shrink-0 text-center w-full mx-auto"
+      className="rounded-xl px-2.5 py-2.5 border backdrop-blur-sm flex-shrink-0 text-center w-full mx-auto"
       style={{
         background: 'rgba(0,0,0,0.45)',
         borderColor,
@@ -2618,17 +2634,17 @@ function SideStatCard({
         className="font-extrabold flex-shrink-0"
         style={{
           color,
-          opacity: 0.6,
-          fontSize: 'clamp(8px, 0.85vw, 11px)',
-          letterSpacing: '0.28em',
+          opacity: 0.7,
+          fontSize: 'clamp(12px, 1.2vw, 16px)',
+          letterSpacing: '0.24em',
         }}
       >
         {label}
       </div>
       <div
-        className="font-mono font-extrabold tabular-nums leading-none mt-1"
+        className="font-mono font-extrabold tabular-nums leading-none mt-1.5"
         style={{
-          fontSize: 'clamp(16px, 2.4vw, 28px)',
+          fontSize: 'clamp(24px, 3vw, 40px)',
           letterSpacing: '-0.02em',
           color: highlight && accentColor ? accentColor : color,
         }}
@@ -2638,7 +2654,7 @@ function SideStatCard({
       {sub && (
         <div
           className="mt-1"
-          style={{ color, opacity: 0.6, fontSize: 'clamp(8px, 0.85vw, 11px)' }}
+          style={{ color, opacity: 0.7, fontSize: 'clamp(12px, 1.2vw, 16px)' }}
         >
           {sub}
         </div>
@@ -2680,11 +2696,13 @@ function LeftSmartInfoStack({
   scale: number;
 }) {
   const safeScale = Math.min(2.0, Math.max(0.5, scale));
-  const labelFont = Math.round(10 * safeScale);
-  const valueFont = Math.round(18 * safeScale);
-  const subFont = Math.round(10 * safeScale);
-  const padY = Math.max(6, Math.round(8 * Math.pow(safeScale, 0.7)));
-  const padX = Math.round(12 * Math.pow(safeScale, 0.7));
+  // 2026-05-24 사용자 정정 (보고서): LeftSmartInfoStack 폰트 키움 (좌측 컬럼 보조 정보 시인성).
+  //   라벨 10→14 / 값 18→26 / 서브 10→13. 메인 STRUCTURE 카드보다 한 단계 작게 (위계 유지).
+  const labelFont = Math.round(14 * safeScale);
+  const valueFont = Math.round(26 * safeScale);
+  const subFont = Math.round(13 * safeScale);
+  const padY = Math.max(8, Math.round(10 * Math.pow(safeScale, 0.7)));
+  const padX = Math.round(14 * Math.pow(safeScale, 0.7));
 
   // ⏱ 경과시간: totalStartedAt 기준. 시:분으로 표시 (60분 미만은 분 단위만).
   const startedMs = session.totalStartedAt?.toMillis?.() ?? null;
@@ -2740,11 +2758,12 @@ function LeftSmartInfoStack({
       <div
         className="flex-shrink-0 flex items-center justify-center rounded-md"
         style={{
-          width: Math.round(28 * safeScale),
-          height: Math.round(28 * safeScale),
+          // 2026-05-24 사용자 정정 (보고서): 아이콘 박스도 비례 키움 28→36 / 14→20
+          width: Math.round(36 * safeScale),
+          height: Math.round(36 * safeScale),
           background: `${accent}22`,
           border: `1px solid ${accent}44`,
-          fontSize: Math.round(14 * safeScale),
+          fontSize: Math.round(20 * safeScale),
         }}
       >
         {label.slice(0, 2)}
@@ -2867,18 +2886,21 @@ function BlindStructurePanel({
   //   기본 폰트값에 scale을 곱하고, padding도 비례로 살짝 늘림.
   //   className 기반 텍스트 폰트는 inline style fontSize로 override (배율 정밀 적용).
   const safeScale = Math.min(2.0, Math.max(0.5, scale));
-  const baseHeaderFont = variant === 'desktop' ? 16 : 15; // px
-  const baseRowFont = variant === 'desktop' ? 16 : 17;    // px
+  // 2026-05-24 사용자 정정 (보고서): "좌측 STRUCTURE 패널 너무 작음" — base 폰트 20~28로 키움.
+  //   직전 16/15·16/17 → 22/22·24/24. landscape 기준 +40~50%.
+  //   variant=landscape는 좌측 컬럼(1.3fr) 폭이 충분히 확보됨 → 큰 폰트 OK.
+  const baseHeaderFont = variant === 'desktop' ? 20 : 22; // px
+  const baseRowFont = variant === 'desktop' ? 22 : 24;    // px
   const headerFontPx = Math.round(baseHeaderFont * safeScale);
   const rowFontPx = Math.round(baseRowFont * safeScale);
   // padding은 폰트보다 완만하게 (0.7제곱) — 너무 비대해지는 거 방지.
   const padScale = Math.pow(safeScale, 0.7);
-  const headerPadY = Math.max(4, Math.round(8 * padScale));
-  const headerPadX = variant === 'desktop' ? Math.round(12 * padScale) : Math.round(10 * padScale);
-  const rowPadY = variant === 'desktop' ? Math.round(8 * padScale) : Math.round(6 * padScale);
-  const rowPadX = variant === 'desktop' ? Math.round(12 * padScale) : Math.round(10 * padScale);
+  const headerPadY = Math.max(6, Math.round(10 * padScale));
+  const headerPadX = variant === 'desktop' ? Math.round(14 * padScale) : Math.round(12 * padScale);
+  const rowPadY = variant === 'desktop' ? Math.round(10 * padScale) : Math.round(8 * padScale);
+  const rowPadX = variant === 'desktop' ? Math.round(14 * padScale) : Math.round(12 * padScale);
   const panelWidth =
-    variant === 'desktop' ? Math.round(280 * Math.min(1.4, safeScale)) : '100%';
+    variant === 'desktop' ? Math.round(300 * Math.min(1.4, safeScale)) : '100%';
   const accent = display.accentColor;
   const blinds = display.blindsColor;
   const fg = display.textColor;
@@ -2906,9 +2928,10 @@ function BlindStructurePanel({
       >
         <span>📋 STRUCTURE</span>
         <span
-          className="tabular-nums opacity-60"
+          className="tabular-nums opacity-70"
           style={{
-            fontSize: Math.round((variant === 'desktop' ? 13 : 12) * safeScale),
+            // 2026-05-24 사용자 정정 (보고서): "Lv N / N" 라벨도 비례 키움 13→17 / 12→16
+            fontSize: Math.round((variant === 'desktop' ? 17 : 16) * safeScale),
             letterSpacing: '0.1em',
           }}
         >
@@ -2960,9 +2983,10 @@ function BlindStructurePanel({
                 className="text-center"
                 style={{
                   color: markerColor,
-                  opacity: isCurrent ? 1 : 0.85,
-                  width: Math.round((variant === 'desktop' ? 18 : 16) * safeScale),
-                  fontSize: Math.round((variant === 'desktop' ? 16 : 14) * safeScale),
+                  opacity: isCurrent ? 1 : 0.9,
+                  // 2026-05-24 사용자 정정 (보고서): 마커 폭/폰트 비례 키움 18→22 / 16→20
+                  width: Math.round((variant === 'desktop' ? 22 : 22) * safeScale),
+                  fontSize: Math.round((variant === 'desktop' ? 20 : 20) * safeScale),
                 }}
                 aria-hidden
               >
@@ -2973,7 +2997,7 @@ function BlindStructurePanel({
                   <span className="font-extrabold" style={{ color: '#FFD166' }}>
                     휴식
                   </span>
-                  <span style={{ opacity: 0.7, marginLeft: 'auto' }}>
+                  <span style={{ opacity: 0.8, marginLeft: 'auto' }}>
                     {Math.round(lvl.durationSec / 60)}분
                   </span>
                 </>
@@ -2982,8 +3006,9 @@ function BlindStructurePanel({
                   <span
                     className="font-bold tabular-nums"
                     style={{
-                      minWidth: variant === 'desktop' ? 42 : 38,
-                      opacity: 0.85,
+                      // 2026-05-24 사용자 정정: "Lv N" 컬럼 minWidth 42→52 / 38→48 (큰 폰트에 맞춰).
+                      minWidth: variant === 'desktop' ? 52 : 48,
+                      opacity: 0.9,
                     }}
                   >
                     Lv {lvl.level}
