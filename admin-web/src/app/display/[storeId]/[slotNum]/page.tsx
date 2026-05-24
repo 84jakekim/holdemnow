@@ -10,6 +10,7 @@ import {
   fmtTime,
   computeLateRegMinutes,
   useLiveCountdown,
+  useLiveTimelineTick,
   setTimeRemainingInSession,
   togglePauseSession,
   goToLevelInSession,
@@ -38,6 +39,7 @@ import {
   countPlayLevels,
 } from '@/lib/templates';
 import { useAuth, useUserDoc, useStoreDoc, hasRole } from '@/lib/hooks';
+import { useViewport } from '@/lib/useViewport';
 
 interface StoreData {
   name: string;
@@ -128,57 +130,24 @@ export default function DisplayPage({
     };
   }, []);
 
-  // ─── 모바일 화면 모드 (2026-05-23 PM 핫픽스 — CSS rotate fallback 폐기) ───
-  // 정정 사양 (사용자 외출 모드 긴급 보고 — error.jpg 첨부 분석):
-  //  ❌ 이전 5bcc1b8: CSS `transform: rotate(90deg)` fallback이 활성화되면
-  //      전체 컨테이너(세로 layout 포함)가 그대로 90도 누워서 표시됨.
-  //      또한 isMobileLandscape 조건이 needsCssRotate에도 OR로 묶여있어
-  //      CSS rotate가 적용된 상태에서 가로 layout이 한 번 더 회전하는 race도 발생.
-  //  ✅ 새 동작:
-  //     ① CSS rotate fallback 폐기. orientation lock 실패 시에도 누이지 않음.
-  //        대신 사용자에게 "기기를 가로로 회전해 주세요" 안내 띠 (자체 회전 X).
-  //     ② 가로(landscape) 감지 = window.innerWidth > window.innerHeight 단독.
-  //        폭 제한 폐기 — 폰/태블릿/PC 모두 가로면 MobileLandscapeLayout. 큰 TV는
-  //        충분히 가로지만 컨트롤이 노출돼도 무해 (어차피 canControl 검증 통과 필요).
-  //        ※ 데스크탑 TV 매핑 페이지에서 더 풍부한 풀 레이아웃이 필요하면 폭 >=1280
-  //          + 마우스 hover 가능 매체일 때 풀 레이아웃 유지하도록 분기.
-  //     ③ 모바일 세로(<=768px + h>w) = MobilePortraitLayout 자체 컴팩트.
-  //     ④ fullscreen + orientation lock 시도는 사용자 명시적 클릭에서만.
-  //        race 차단을 위해 fullscreenchange만 자연 종료 트리거로 사용.
+  // ─── 화면 환경 판정 (2026-05-24 PM 핫픽스 — useViewport hook으로 일원화) ───
+  // 정정 사양 (사용자 직접 보고: "PWA 재설치해도 모바일 최적화 안 됨"):
+  //   직전: 단일 가로 layout(`isMobileLandscape = w > h`)이 PC 기준으로 설계되어
+  //         모바일 가로(360~800px)에서 폰트/패딩 과대 → viewport 가득 차고 잘림.
+  //   새: useViewport hook으로 3-way 명확 분리.
+  //     - 'mobile-portrait'  : 모바일 + 세로 → MobilePortraitLayout
+  //     - 'mobile-landscape' : 모바일 + 가로 → MobileLandscapeLayout(compact=true)
+  //     - 'desktop'          : PC/태블릿/4K → MobileLandscapeLayout(compact=false)
+  //   compact prop으로 동일 컴포넌트가 두 모드를 모두 처리 (코드 중복 회피).
+  //   isDesktopPointer는 PC 전용 UI(F11 안내) 게이트로 별도 활용.
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
-  const [isMobilePortrait, setIsMobilePortrait] = useState(false);
-  const [isMobileLandscape, setIsMobileLandscape] = useState(false);
-  const [isDesktopPointer, setIsDesktopPointer] = useState(false);
   const [showLandscapeHint, setShowLandscapeHint] = useState(false);
-
-  // 화면 회전 감지 — 첫 진입 + resize 시 갱신.
-  // 세로(h>w + 모바일폭): isMobilePortrait → 컴팩트 세로 레이아웃
-  // 가로(w>h): isMobileLandscape → 가로 통합 레이아웃 (모든 폭 동일)
-  //   ※ 2026-05-24 PM 정정: 폭/매체 분기 폐기. 모바일 가로·태블릿 가로·데스크탑·4K 모두 동일 layout.
-  //     같은 grid 구도를 모든 viewport에서 유지하여 카드가 중앙으로 흘러나오는 문제 해결.
-  //   ※ 또한 isDesktopPointer 신호로 PC 우상단 전체화면 버튼만 별도 게이트.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const update = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const isPortraitMobile = w <= 768 && h > w;
-      // 가로(landscape): 모든 폭에서 통합 layout 사용
-      const isLandscape = w > h;
-      // PC/데스크탑 hover-pointer 매체: 우상단 전체화면 버튼 노출 X (F11/ESC로 충분)
-      const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-      setIsMobilePortrait(isPortraitMobile);
-      setIsMobileLandscape(isLandscape);
-      setIsDesktopPointer(isDesktop);
-    };
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
-    };
-  }, []);
+  const viewport = useViewport();
+  const isMobilePortrait = viewport.category === 'mobile-portrait';
+  const isMobileLandscape = viewport.category === 'mobile-landscape' || viewport.category === 'desktop';
+  // compactLandscape: 모바일 가로일 때만 작은 clamp 값 적용
+  const compactLandscape = viewport.category === 'mobile-landscape';
+  const isDesktopPointer = viewport.isDesktopPointer;
 
   // 첫 진입 — audio unlock 자동 적용 (이전에 unlock 했다면). fullscreen/orientation은 X.
   useEffect(() => {
@@ -600,7 +569,7 @@ export default function DisplayPage({
   // 가로 모드는 isMobileLandscape 분기로만 처리.
 
   return (
-    <div className="h-screen text-white flex flex-col relative overflow-hidden" style={bgStyle}>
+    <div className="h-[100dvh] text-white flex flex-col relative overflow-hidden" style={bgStyle}>
       {/* 이미지 배경 시 어둠 overlay */}
       {display.backgroundType === 'image' && display.backgroundImageUrl && (
         <div className="absolute inset-0 pointer-events-none" style={{ background: `rgba(0,0,0,${display.overlayOpacity})` }} />
@@ -720,6 +689,7 @@ export default function DisplayPage({
           onExitFullscreen={exitFullscreenMode}
           displayedLevelLabel={displayedLevelLabel}
           nextDisplayedNumber={nextDisplayedNumber}
+          compact={compactLandscape}
         />
       ) : !session || session.status === 'completed' ? (
         <div className="relative flex-1 flex flex-col items-center justify-center">
@@ -1849,6 +1819,7 @@ function MobileLandscapeLayout({
   onExitFullscreen,
   displayedLevelLabel,
   nextDisplayedNumber,
+  compact = false,
 }: {
   session: LiveSession;
   structure: LiveSession['blindStructure'] | undefined;
@@ -1880,6 +1851,11 @@ function MobileLandscapeLayout({
   /** 2026-05-24 정정 #1: 브레이크는 레벨 번호 X. play 레벨만 displayedNumber. */
   displayedLevelLabel: string;
   nextDisplayedNumber: number | null;
+  /** 2026-05-24 PM 핫픽스: true면 모바일 가로용 컴팩트 clamp 값 적용.
+   *  모바일(<=1024px 가로)에서 PC clamp(48, ..., 80)는 작은 viewport에서 min에 수렴
+   *  → 화면 가득 차고 잘림. compact=true면 clamp(24, vw, 48) 같이 가벼운 값.
+   *  PC/태블릿은 compact=false (기본 유지). */
+  compact?: boolean;
 }) {
   const barColor = lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor;
   const timerColor = paused
@@ -1910,32 +1886,46 @@ function MobileLandscapeLayout({
   const sStructure = clampScale(display.structureScale);
   const sNext = clampScale(display.nextScale);
 
+  // ─── 2026-05-24 PM 핫픽스 (사용자 보고: "모바일 최적화 안 됨") ───
+  // compact=true(모바일 가로 360~1024px)일 때 clamp 값을 PC 대비 ~60%로 줄임.
+  //   - vw 비율은 동일 유지(화면 비례 확장)
+  //   - min/max만 줄여서 작은 viewport에서 큰 폰트가 화면을 가득 채우지 않게.
+  //   - PC compact=false는 기존 값 유지 (이미 잘 작동).
+  // 동시에 grid gap/padding도 모바일 가로용으로 축소.
+  const cMul = compact ? 0.6 : 1.0; // min/max 배율
+  const cGrid = compact ? '1.1fr 2.8fr 1.0fr' : '1.3fr 2.9fr 1fr';
+  const cGap = compact ? 'gap-1.5' : 'gap-3';
+  const cPx = compact ? 'px-1' : 'px-2';
+  // 동적 clamp 생성 헬퍼 (vw 비율은 동일, min/max만 compact 배율 적용)
+  const fz = (minPx: number, vw: number, maxPx: number, scale = 1) =>
+    `clamp(${Math.round(minPx * cMul * scale)}px, ${vw * scale}vw, ${Math.round(maxPx * cMul * scale)}px)`;
+
   // 2026-05-24 사용자 정정 (보고서): "검은 여백 많음 — 화면 채우지 못함"
   //   외곽 padding 축소 (px-3 pt-2 pb-2 → px-2 pt-1 pb-1) + 헤더 gap 축소.
   //   더 큰 폰트가 차지할 공간을 확보. min-h-0 overflow-hidden 유지로 viewport 가득.
   return (
-    <div className="relative flex-1 flex flex-col px-2 pt-1 pb-1 min-h-0 overflow-hidden">
+    <div className={`relative flex-1 flex flex-col ${cPx} pt-1 pb-1 min-h-0 overflow-hidden`}>
       {/* ─── 상단 헤더 row — 제목/노트/LEVEL 중앙 정렬 + 거대 폰트 (사용자 정정 #4) ─── */}
       <div className="flex-shrink-0 flex flex-col items-center justify-center gap-0.5 pb-0.5">
-        {/* 상태 뱃지 — 중앙 상단 */}
+        {/* 상태 뱃지 — 중앙 상단 (compact 적용) */}
         <div className="flex items-center gap-2">
           {paused ? (
-            <span className="font-extrabold tracking-[0.3em]" style={{ color: '#FFD166', fontSize: 'clamp(11px, 1.3vw, 16px)' }}>
+            <span className="font-extrabold tracking-[0.3em]" style={{ color: '#FFD166', fontSize: fz(11, 1.3, 16) }}>
               ⏸ PAUSED
             </span>
           ) : isCurrentBreak ? (
-            <span className="font-extrabold tracking-[0.3em]" style={{ color: '#FFD166', fontSize: 'clamp(11px, 1.3vw, 16px)' }}>
+            <span className="font-extrabold tracking-[0.3em]" style={{ color: '#FFD166', fontSize: fz(11, 1.3, 16) }}>
               ☕ BREAK
             </span>
           ) : (
             <>
               <span
                 className="rounded-full animate-pulse"
-                style={{ background: display.accentColor, width: 'clamp(6px, 0.7vw, 10px)', height: 'clamp(6px, 0.7vw, 10px)' }}
+                style={{ background: display.accentColor, width: fz(6, 0.7, 10), height: fz(6, 0.7, 10) }}
               />
               <span
                 className="font-extrabold tracking-[0.3em]"
-                style={{ color: display.accentColor, fontSize: 'clamp(11px, 1.3vw, 16px)' }}
+                style={{ color: display.accentColor, fontSize: fz(11, 1.3, 16) }}
               >
                 LIVE
               </span>
@@ -1952,7 +1942,8 @@ function MobileLandscapeLayout({
             opacity: titled ? 1 : 0.9,
             // 2026-05-24 사용자 정정 (#2 보고서): "상단 제목 거의 안 보임" — 작은 viewport에서 min에 수렴.
             //   기존 clamp(20, 3vw, 38) → clamp(30, 4vw, 56). min 1.5배 / max 1.5배.
-            fontSize: `clamp(${30 * sTitle}px, ${4 * sTitle}vw, ${56 * sTitle}px)`,
+            //   2026-05-24 PM 핫픽스: compact=true(모바일 가로)면 min/max를 60%로 줄임.
+            fontSize: fz(30, 4, 56, sTitle),
             fontWeight: titleBold ? 800 : 700,
             fontStyle: titleItalic ? 'italic' : 'normal',
             letterSpacing: '-0.01em',
@@ -1967,8 +1958,8 @@ function MobileLandscapeLayout({
             className="text-center truncate max-w-[90%]"
             style={{
               color: display.noteColor,
-              // 2026-05-24 사용자 정정: 노트도 비례 키움 (제목 톤 일관성).
-              fontSize: `clamp(${16 * sTitle}px, ${1.8 * sTitle}vw, ${26 * sTitle}px)`,
+              // 2026-05-24 사용자 정정: 노트도 비례 키움 (제목 톤 일관성). compact 적용.
+              fontSize: fz(16, 1.8, 26, sTitle),
               fontWeight: noteBold ? 700 : 400,
               fontStyle: noteItalic ? 'italic' : 'normal',
               opacity: 0.88,
@@ -1992,8 +1983,8 @@ function MobileLandscapeLayout({
           ⇒ 좌측 컬럼 위아래 여백에 스마트 정보 카드 (⏱ 경과 + 🎯 다음 BREAK) 추가.
           (직전 1/3/1 → 1.3/2.9/1.0 — 우측 슬림 유지, 중앙은 미세 축소되어도 OK) */}
       <div
-        className="flex-1 grid items-stretch gap-3 min-h-0"
-        style={{ gridTemplateColumns: '1.3fr 2.9fr 1fr' }}
+        className={`flex-1 grid items-stretch ${cGap} min-h-0`}
+        style={{ gridTemplateColumns: cGrid }}
       >
         {/* ─── 좌: 스트럭쳐 OR NEXT — 토글로 양자택일 (사용자 정정 #4) ─── */}
         {/* 2026-05-24 사용자 정정 (스마트 분기):
@@ -2006,12 +1997,13 @@ function MobileLandscapeLayout({
           {display.showStructure !== false ? (
             // [ON] 스트럭쳐 패널 — NEXT는 mount하지 않음 (스트럭쳐가 다음 레벨 포함)
             // 2026-05-24 사용자 정정: structureScale 배율로 폰트/패딩/폭 동적 조절.
+            // 2026-05-24 PM 핫픽스: compact일 때 scale에 0.65 곱해 모바일 가로용 컴팩트 패널.
             <BlindStructurePanel
               structure={structure}
               currentLevel={session.currentLevel}
               display={display}
               variant="landscape"
-              scale={sStructure}
+              scale={sStructure * (compact ? 0.65 : 1.0)}
             />
           ) : (
             // [OFF] NEXT 안내 카드만 (스트럭쳐 가려진 상태)
@@ -2034,8 +2026,8 @@ function MobileLandscapeLayout({
                   className="font-extrabold tracking-[0.3em] mb-2"
                   style={{
                     color: nextBlind.isBreak ? '#FFD166' : display.accentColor,
-                    // 2026-05-24 사용자 정정 (보고서): NEXT 안내 라벨 +50% — 11→16 / 15→22
-                    fontSize: `clamp(${16 * sNext}px, ${1.6 * sNext}vw, ${22 * sNext}px)`,
+                    // 2026-05-24 사용자 정정 (보고서): NEXT 안내 라벨 +50% — 11→16 / 15→22 / compact 적용
+                    fontSize: fz(16, 1.6, 22, sNext),
                   }}
                 >
                   ▶ NEXT BLIND
@@ -2045,8 +2037,8 @@ function MobileLandscapeLayout({
                     className="font-extrabold"
                     style={{
                       color: '#FFD166',
-                      // 2026-05-24 사용자 정정 (보고서): 휴식 안내 +50% — 18→28 / 28→44
-                      fontSize: `clamp(${28 * sNext}px, ${3 * sNext}vw, ${44 * sNext}px)`,
+                      // 2026-05-24 사용자 정정 (보고서): 휴식 안내 +50% — 18→28 / 28→44 / compact 적용
+                      fontSize: fz(28, 3, 44, sNext),
                     }}
                   >
                     ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
@@ -2058,8 +2050,8 @@ function MobileLandscapeLayout({
                       style={{
                         color: display.textColor,
                         opacity: 0.75,
-                        // 2026-05-24 사용자 정정 (보고서): LV 표시 +50% — 11→16 / 14→20
-                        fontSize: `clamp(${16 * sNext}px, ${1.5 * sNext}vw, ${20 * sNext}px)`,
+                        // 2026-05-24 사용자 정정 (보고서): LV 표시 +50% — 11→16 / 14→20 / compact 적용
+                        fontSize: fz(16, 1.5, 20, sNext),
                       }}
                     >
                       LV {nextDisplayedNumber ?? nextBlind.level}
@@ -2068,8 +2060,8 @@ function MobileLandscapeLayout({
                       className="font-mono font-extrabold mt-1.5"
                       style={{
                         color: display.blindsColor,
-                        // 2026-05-24 사용자 정정 (보고서): NEXT 블라인드 +50% — 22→34 / 36→56
-                        fontSize: `clamp(${34 * sNext}px, ${3.4 * sNext}vw, ${56 * sNext}px)`,
+                        // 2026-05-24 사용자 정정 (보고서): NEXT 블라인드 +50% — 22→34 / 36→56 / compact 적용
+                        fontSize: fz(34, 3.4, 56, sNext),
                         letterSpacing: '-0.02em',
                       }}
                     >
@@ -2083,8 +2075,8 @@ function MobileLandscapeLayout({
                         style={{
                           color: display.textColor,
                           opacity: 0.75,
-                          // 2026-05-24 사용자 정정 (보고서): NEXT Ante +50% — 11→18 / 15→24
-                          fontSize: `clamp(${18 * sNext}px, ${1.8 * sNext}vw, ${24 * sNext}px)`,
+                          // 2026-05-24 사용자 정정 (보고서): NEXT Ante +50% — 11→18 / 15→24 / compact 적용
+                          fontSize: fz(18, 1.8, 24, sNext),
                         }}
                       >
                         Ante {nextBlind.ante.toLocaleString()}
@@ -2112,7 +2104,7 @@ function MobileLandscapeLayout({
             structure={structure}
             sec={sec}
             display={display}
-            scale={sStructure}
+            scale={sStructure * (compact ? 0.65 : 1.0)}
           />
         </div>
 
@@ -2140,7 +2132,8 @@ function MobileLandscapeLayout({
               style={{
                 color: isCurrentBreak ? '#FFD166' : display.textColor,
                 // 2026-05-24 사용자 정정 (보고서): "LEVEL 2.5배 안 됨" — clamp min 28→48 / max 40→80
-                fontSize: `clamp(${48 * sLevel}px, ${5.2 * sLevel}vw, ${80 * sLevel}px)`,
+                // 2026-05-24 PM 핫픽스: compact면 모바일 viewport에 맞춰 min/max 축소.
+                fontSize: fz(48, 5.2, 80, sLevel),
               }}
             >
               {displayedLevelLabel}
@@ -2151,7 +2144,8 @@ function MobileLandscapeLayout({
             style={{
               // 2026-05-24 사용자 정정 (보고서): 타이머 시인성 강화 — min 80→128 / vw 16→18 / max 220→300
               //   작은 viewport(iPhone SE 568 가로 360h)에서도 시인성 보장.
-              fontSize: `clamp(${128 * sTimer}px, ${18 * sTimer}vw, ${300 * sTimer}px)`,
+              // 2026-05-24 PM 핫픽스: compact면 min 128→77, max 300→180. 모바일 가로(360x320)에서도 viewport 안.
+              fontSize: fz(128, 18, 300, sTimer),
               letterSpacing: '-0.05em',
               color: timerColor,
               transition: 'color 0.2s',
@@ -2202,7 +2196,8 @@ function MobileLandscapeLayout({
                 className="font-mono font-extrabold leading-none"
                 style={{
                   // 2026-05-24 사용자 정정 (보고서): 블라인드 — min 32→52 / vw 5→6 / max 72→104
-                  fontSize: `clamp(${52 * sBlinds}px, ${6 * sBlinds}vw, ${104 * sBlinds}px)`,
+                  // 2026-05-24 PM 핫픽스: compact 적용.
+                  fontSize: fz(52, 6, 104, sBlinds),
                   color: display.blindsColor,
                   letterSpacing: '-0.03em',
                 }}
@@ -2218,7 +2213,8 @@ function MobileLandscapeLayout({
                     color: display.textColor,
                     opacity: 0.7,
                     // 2026-05-24 사용자 정정 (보고서): "ante 거의 안 보임" — min 13→22 / vw 1.4→2.6 / max 20→44
-                    fontSize: `clamp(${22 * sAnte}px, ${2.6 * sAnte}vw, ${44 * sAnte}px)`,
+                    // 2026-05-24 PM 핫픽스: compact 적용.
+                    fontSize: fz(22, 2.6, 44, sAnte),
                   }}
                 >
                   Ante {session.ante.toLocaleString()}
@@ -2256,6 +2252,7 @@ function MobileLandscapeLayout({
                   }
                   color={display.textColor}
                   borderColor="rgba(255,255,255,0.10)"
+                  compact={compact}
                 />
                 {/* 2) LATE REG — 단독 카드 */}
                 <SideStatCard
@@ -2266,6 +2263,7 @@ function MobileLandscapeLayout({
                   highlight={!lateClosed && lateMin <= 5}
                   accentColor={display.accentColor}
                   borderColor="rgba(255,255,255,0.10)"
+                  compact={compact}
                 />
                 {/* 3) PRIZE POOL — 단독 카드 (showPrize일 때만, accent 그라데이션)
                     2026-05-24 PM 정정 라운드 2 (사용자 핵심 호소):
@@ -2281,12 +2279,14 @@ function MobileLandscapeLayout({
                 */}
                 {showPrize && mode === 'total' && (
                   <div
-                    className="flex-shrink-0 rounded-xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col text-center w-full mx-auto"
+                    className={`flex-shrink-0 rounded-xl border backdrop-blur-sm relative overflow-hidden flex flex-col text-center w-full mx-auto ${
+                      compact ? 'px-2 py-2' : 'px-3 py-3'
+                    }`}
                     style={{
                       background: `linear-gradient(135deg, ${accent}22 0%, rgba(0,0,0,0.6) 70%)`,
                       borderColor: `${accent}50`,
                       boxShadow: `0 0 24px ${accent}1A inset`,
-                      maxWidth: 220,
+                      maxWidth: compact ? 160 : 220,
                     }}
                     aria-label="프라이즈 풀 (총액)"
                   >
@@ -2295,7 +2295,7 @@ function MobileLandscapeLayout({
                       style={{
                         color: accent,
                         opacity: 0.95,
-                        fontSize: 'clamp(12px, 1.2vw, 16px)',
+                        fontSize: fz(12, 1.2, 16),
                         letterSpacing: '0.24em',
                       }}
                     >
@@ -2305,7 +2305,7 @@ function MobileLandscapeLayout({
                     <div
                       className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
                       style={{
-                        fontSize: 'clamp(26px, 3.6vw, 46px)',
+                        fontSize: fz(26, 3.6, 46),
                         color: display.textColor,
                         letterSpacing: '-0.03em',
                         textShadow: `0 2px 12px ${accent}55`,
@@ -2751,6 +2751,7 @@ function SideStatCard({
   color,
   accentColor,
   borderColor,
+  compact = false,
 }: {
   label: string;
   value: string;
@@ -2759,17 +2760,25 @@ function SideStatCard({
   color: string;
   accentColor?: string;
   borderColor: string;
+  /** 2026-05-24 PM 핫픽스: 모바일 가로일 때 폰트/패딩/maxWidth 축소 */
+  compact?: boolean;
 }) {
   // 2026-05-24 사용자 정정 라운드 2 (보고서): "우측열 플레이어/레이트레지/프라이즈풀 카드폭도 보기좋게 개선"
   //   maxWidth 180 → 220 (slim 제약 완화). 라벨/값/서브 폰트는 그대로 (시인성 확보된 상태).
   //   카드 폭이 늘어 좌우 padding 자연스럽게 호흡 → 글자 잘림/줄바꿈 위험 ↓.
+  // 2026-05-24 PM 핫픽스: compact=true면 모바일 가로용으로 maxWidth 220→160, 폰트 60%.
+  const cMul = compact ? 0.6 : 1.0;
+  const fz = (minPx: number, vw: number, maxPx: number) =>
+    `clamp(${Math.round(minPx * cMul)}px, ${vw}vw, ${Math.round(maxPx * cMul)}px)`;
   return (
     <div
-      className="rounded-xl px-3 py-2.5 border backdrop-blur-sm flex-shrink-0 text-center w-full mx-auto"
+      className={`rounded-xl border backdrop-blur-sm flex-shrink-0 text-center w-full mx-auto ${
+        compact ? 'px-2 py-1.5' : 'px-3 py-2.5'
+      }`}
       style={{
         background: 'rgba(0,0,0,0.45)',
         borderColor,
-        maxWidth: 220,
+        maxWidth: compact ? 160 : 220,
       }}
     >
       <div
@@ -2777,7 +2786,7 @@ function SideStatCard({
         style={{
           color,
           opacity: 0.7,
-          fontSize: 'clamp(12px, 1.2vw, 16px)',
+          fontSize: fz(12, 1.2, 16),
           letterSpacing: '0.24em',
         }}
       >
@@ -2786,7 +2795,7 @@ function SideStatCard({
       <div
         className="font-mono font-extrabold tabular-nums leading-none mt-1.5"
         style={{
-          fontSize: 'clamp(24px, 3vw, 40px)',
+          fontSize: fz(24, 3, 40),
           letterSpacing: '-0.02em',
           color: highlight && accentColor ? accentColor : color,
         }}
@@ -2796,7 +2805,7 @@ function SideStatCard({
       {sub && (
         <div
           className="mt-1"
-          style={{ color, opacity: 0.7, fontSize: 'clamp(12px, 1.2vw, 16px)' }}
+          style={{ color, opacity: 0.7, fontSize: fz(12, 1.2, 16) }}
         >
           {sub}
         </div>
