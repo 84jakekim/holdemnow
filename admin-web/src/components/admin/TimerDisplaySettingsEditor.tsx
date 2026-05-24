@@ -203,6 +203,35 @@ export default function TimerDisplaySettingsEditor({ storeId }: Props) {
         )}
 
         {/*
+         * 2026-05-24 사용자 정정 라운드 2 대응 — 사장 호소:
+         *   "토너운영 > 화면설정페이지도 좀 수정을해 이요청은 몇차례했는데 왜 반영이 안되는건지 알수가없어"
+         *
+         * 코드는 이미 정리됨 (Section 1~7 번호 + 텍스트 최상단 + 폰트 슬라이더 8종).
+         * 사장이 못 본 원인은 PWA/브라우저 캐시일 가능성 ↑.
+         * → 명시적 "최신 정리됨" 배너 + 캐시 무효화 안내 (Ctrl+Shift+R / 홈 화면 PWA 재설치).
+         * 이 배너가 보이면 정리된 최신 버전이 떴다는 신호.
+         */}
+        <div
+          className="rounded-xl px-4 py-3 border-2 flex items-start gap-3"
+          style={{ background: 'linear-gradient(135deg,#FFF8E7 0%,#FFFBEB 100%)', borderColor: '#F59E0B' }}
+        >
+          <div className="text-2xl flex-shrink-0">✨</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12.5px] font-extrabold text-amber-900 leading-tight">
+              화면 설정 — 2026-05-24 정리 완료 (v2)
+            </div>
+            <div className="text-[10.5px] text-amber-800 mt-1 leading-relaxed">
+              7개 섹션으로 번호 매김 (1.텍스트 → 2.테마 → 3.배경 → 4.컬러 → 5.대회명/스폰서 →
+              6.<b>폰트 슬라이더</b> → 7.사운드). 토너 제목 입력이 최상단으로 이동했습니다.
+            </div>
+            <div className="text-[9.5px] text-amber-700 mt-1.5 leading-tight">
+              💡 화면이 예전 그대로면 캐시 문제 — <b>Ctrl+Shift+R</b> (PC) 또는 홈 화면 PWA 종료 후 재실행.
+            </div>
+          </div>
+        </div>
+
+
+        {/*
          * 2026-05-24 PM 정정 #7: "텍스트 3줄"을 화면 설정 최상단으로 이동.
          * 사용자 정정: "제목설정은 화면설정의 가장 위로 올려서 화면설정시 제목부터 설정하도록 순서배치"
          * ⇒ 사용자가 화면 설정 진입 즉시 토너 제목부터 입력 가능.

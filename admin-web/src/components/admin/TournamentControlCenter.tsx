@@ -60,6 +60,7 @@ import {
   computePayoutsFromStructure,
   computePayoutAmounts,
   computeAutoItmCount,
+  computePresetPayouts,
   DISTRIBUTION_LABELS,
 } from '@/lib/templates';
 import {
@@ -1914,7 +1915,9 @@ function PayoutPolicyExpander({
         </span>
       </summary>
       <div className="p-2 space-y-2 border-t" style={{ borderColor: 'var(--border)' }}>
-        {/* 시상 등수 */}
+        {/* 시상 등수 — 2026-05-24 사용자 정정 #4:
+            "수기입력항목이 있지만 설정할수있는 칸이 없다"
+            ⇒ 라디오(자동/3/5/8/10) + 직접 입력 input 신설. */}
         <div>
           <div className="text-[9px] font-extrabold mb-1" style={{ color: 'var(--text-2)' }}>
             시상 등수 (top N)
@@ -1953,6 +1956,39 @@ function PayoutPolicyExpander({
                 {n}등
               </button>
             ))}
+            {/* 직접 입력 — 1~50등 — auto/3/5/8/10 외 임의값 */}
+            <div className="flex items-center gap-1 ml-1">
+              <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>또는</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={50}
+                disabled={disabled}
+                placeholder="N"
+                value={
+                  typeof ps.itmCount === 'number' && ![3, 5, 8, 10].includes(ps.itmCount)
+                    ? ps.itmCount
+                    : ''
+                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === '') return;
+                  const v = parseInt(raw, 10);
+                  if (Number.isFinite(v) && v >= 1 && v <= 50) {
+                    onSave({ ...ps, itmCount: v });
+                  }
+                }}
+                className="w-12 text-[10px] font-mono font-bold text-center rounded border-2 px-1 py-1"
+                style={{
+                  background: 'var(--surface-1)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-1)',
+                }}
+                aria-label="시상 등수 직접 입력 (1~50)"
+              />
+              <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>등</span>
+            </div>
           </div>
         </div>
         {/* 분배 방식 */}
@@ -1968,7 +2004,21 @@ function PayoutPolicyExpander({
                   key={d}
                   type="button"
                   disabled={disabled}
-                  onClick={() => onSave({ ...ps, distribution: d })}
+                  onClick={() => {
+                    // custom 진입 시 customPercents 미존재면 standard 프리셋으로 시드
+                    if (d === 'custom' && (!ps.customPercents || ps.customPercents.length === 0)) {
+                      const itmN =
+                        ps.itmCount === 'auto'
+                          ? computeAutoItmCount(totalPlayers)
+                          : Math.max(1, ps.itmCount);
+                      const seed = computePresetPayouts('standard', itmN).map((p) =>
+                        Math.round(p.ratio * 1000) / 10,
+                      );
+                      onSave({ ...ps, distribution: d, customPercents: seed });
+                    } else {
+                      onSave({ ...ps, distribution: d });
+                    }
+                  }}
                   className={`text-[10px] px-2 py-1 rounded border-2 font-bold transition-all ${
                     selected ? '' : 'hover:bg-gray-50'
                   }`}
@@ -1985,6 +2035,17 @@ function PayoutPolicyExpander({
             })}
           </div>
         </div>
+        {/* custom 분배 편집 — 2026-05-24 사용자 정정 #4:
+            "수기입력항목이 있지만 설정할수있는 칸이 없다"
+            ⇒ distribution='custom'일 때만 등수별 % input mount. 합계 100% 검증. */}
+        {ps.distribution === 'custom' && (
+          <CustomPercentsEditor
+            ps={ps}
+            totalPlayers={totalPlayers}
+            disabled={disabled}
+            onSave={onSave}
+          />
+        )}
         {/* payoutPercent (시상 비율) */}
         <div>
           <div className="text-[9px] font-extrabold mb-1 flex items-center justify-between" style={{ color: 'var(--text-2)' }}>
@@ -2029,6 +2090,151 @@ function PayoutPolicyExpander({
         </div>
       </div>
     </details>
+  );
+}
+
+/**
+ * CustomPercentsEditor — distribution='custom'일 때 등수별 % 직접 편집.
+ * 2026-05-24 사용자 정정 #4: "수기입력항목이 있지만 설정할수있는 칸이 없다".
+ *
+ * - itmCount(자동/숫자)에 맞춰 N개 행 mount. 입력값이 부족하면 standard 프리셋으로 padding.
+ * - 입력은 number input (0~100, 1 step). 합계 100% 자동 검증 + 경고 배지.
+ * - "스탠다드 복사" 버튼으로 빠른 시드. "균등 N분배" 버튼으로 1/N 분배.
+ * - 합계가 100이 아니어도 저장은 허용 (computePayoutsFromStructure가 정규화).
+ *   다만 시각적으로 경고해 사장이 알아챌 수 있게.
+ *
+ * 데이터: customPercents: number[] — 합계 100. 1등이 index 0.
+ */
+function CustomPercentsEditor({
+  ps,
+  totalPlayers,
+  disabled,
+  onSave,
+}: {
+  ps: PayoutStructure;
+  totalPlayers: number;
+  disabled?: boolean;
+  onSave: (next: PayoutStructure) => Promise<void>;
+}) {
+  const itmN =
+    ps.itmCount === 'auto' ? computeAutoItmCount(totalPlayers) : Math.max(1, ps.itmCount);
+  // 행 수 = itmN. customPercents가 짧으면 standard 프리셋으로 패딩.
+  const current = (() => {
+    const arr = (ps.customPercents ?? []).slice(0, itmN);
+    if (arr.length >= itmN) return arr;
+    const fallback = computePresetPayouts('standard', itmN).map(
+      (p) => Math.round(p.ratio * 1000) / 10,
+    );
+    while (arr.length < itmN) arr.push(fallback[arr.length] ?? 0);
+    return arr;
+  })();
+  const sum = current.reduce((a, b) => a + b, 0);
+  const sumOk = Math.abs(sum - 100) < 0.5;
+
+  const updateAt = (idx: number, value: number) => {
+    const next = current.slice();
+    next[idx] = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+    onSave({ ...ps, customPercents: next });
+  };
+
+  const applyStandard = () => {
+    const seed = computePresetPayouts('standard', itmN).map(
+      (p) => Math.round(p.ratio * 1000) / 10,
+    );
+    onSave({ ...ps, customPercents: seed });
+  };
+
+  const applyFlat = () => {
+    const pct = Math.round((100 / itmN) * 10) / 10;
+    const seed = Array.from({ length: itmN }, () => pct);
+    onSave({ ...ps, customPercents: seed });
+  };
+
+  return (
+    <div
+      className="rounded-md p-2 space-y-1.5"
+      style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.25)' }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-[9px] font-extrabold tracking-wider" style={{ color: '#1D4ED8' }}>
+          ⚙️ 직접 편집 — 등수별 %
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={applyStandard}
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded border hover:bg-white/50"
+            style={{ borderColor: 'rgba(59,130,246,0.3)', color: '#1D4ED8' }}
+            title="스탠다드 프리셋을 시드로"
+          >
+            ↺ 스탠다드 복사
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={applyFlat}
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded border hover:bg-white/50"
+            style={{ borderColor: 'rgba(59,130,246,0.3)', color: '#1D4ED8' }}
+            title={`각 등수에 ${(100 / itmN).toFixed(1)}%씩`}
+          >
+            = 균등
+          </button>
+        </div>
+      </div>
+      {/* N행 — 등수별 % input */}
+      <div className="grid grid-cols-2 gap-1">
+        {current.map((pct, idx) => (
+          <div
+            key={idx}
+            className="flex items-center gap-1 rounded px-1.5 py-1"
+            style={{ background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(59,130,246,0.18)' }}
+          >
+            <span
+              className="text-[9px] font-extrabold tabular-nums w-7 flex-shrink-0"
+              style={{ color: idx === 0 ? '#B45309' : 'var(--text-2)' }}
+            >
+              {idx + 1}등
+            </span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={100}
+              step={0.5}
+              disabled={disabled}
+              value={Number.isFinite(pct) ? pct : 0}
+              onChange={(e) => updateAt(idx, parseFloat(e.target.value))}
+              className="flex-1 text-[10px] font-mono font-bold text-right rounded px-1 py-0.5 min-w-0"
+              style={{
+                background: 'var(--surface-1)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-1)',
+              }}
+              aria-label={`${idx + 1}등 분배율 %`}
+            />
+            <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>%</span>
+          </div>
+        ))}
+      </div>
+      {/* 합계 검증 */}
+      <div
+        className="text-[9.5px] font-bold flex items-center justify-between px-1"
+        style={{ color: sumOk ? '#047857' : '#DC2626' }}
+      >
+        <span>합계</span>
+        <span className="font-mono tabular-nums">
+          {sumOk ? '✓ ' : '⚠ '}
+          {sum.toFixed(1)}%
+          {!sumOk && ` (100% — ${(100 - sum).toFixed(1)}%${sum > 100 ? ' 초과' : ' 부족'})`}
+        </span>
+      </div>
+      {!sumOk && (
+        <div className="text-[9px] leading-tight" style={{ color: 'var(--text-3)' }}>
+          저장은 가능하지만 화면에는 자동 정규화 적용. 정확한 분배를 원하면 합계를 100%로 맞추세요.
+        </div>
+      )}
+    </div>
   );
 }
 

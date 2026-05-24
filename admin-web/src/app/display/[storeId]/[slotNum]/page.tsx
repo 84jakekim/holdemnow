@@ -2240,25 +2240,33 @@ function MobileLandscapeLayout({
                   borderColor="rgba(255,255,255,0.10)"
                 />
                 {/* 3) PRIZE POOL — 단독 카드 (showPrize일 때만, accent 그라데이션)
-                    2026-05-24 PM 정정 #3: 헤더+금액 중앙 정렬.
-                    DISTRIBUTION 분배표 행은 라벨좌/금액우 정렬 유지 (사용자 명시). */}
-                {showPrize && (
+                    2026-05-24 PM 정정 라운드 2 (사용자 핵심 호소):
+                      "총액만 모드일때는 카드가 세로로 길쭉해지면 안되는거 아닐까?
+                       만약 1-n등까지 표시 모드일경우 마지막등수까지가 카드의 길이가 되어야하고
+                       이 카드의 길이 맥시멈은 화면을 벗어나서 스크롤이 생기면안된다.
+                       최대 10명?15명? 일지는 모르겠지만 화면을 벗어나지 않는선의 명수까지만 표기."
+
+                    fix:
+                      - total 모드: flex-1 폐기 → flex-shrink-0 (높이 자연 컴팩트)
+                      - distribution 모드: viewport h 기반 maxRows 동적 산출 (12~14등 자동)
+                      - 잘린 등수는 "+N등 더" 안내. 가로 layout 100vh 가득 + 스크롤 X 제약 유지.
+                */}
+                {showPrize && mode === 'total' && (
                   <div
-                    className="flex-1 rounded-xl px-2.5 py-2 border backdrop-blur-sm relative overflow-hidden flex flex-col min-h-0 text-center w-full mx-auto"
+                    className="flex-shrink-0 rounded-xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col text-center w-full mx-auto"
                     style={{
                       background: `linear-gradient(135deg, ${accent}22 0%, rgba(0,0,0,0.6) 70%)`,
                       borderColor: `${accent}50`,
                       boxShadow: `0 0 24px ${accent}1A inset`,
-                      maxWidth: 180,
+                      maxWidth: 220,
                     }}
-                    aria-label="프라이즈 풀"
+                    aria-label="프라이즈 풀 (총액)"
                   >
                     <div
                       className="font-extrabold flex items-center justify-center gap-1 flex-shrink-0"
                       style={{
                         color: accent,
                         opacity: 0.95,
-                        // 2026-05-24 사용자 정정 (보고서): PRIZE POOL 라벨 키움 (+50%)
                         fontSize: 'clamp(12px, 1.2vw, 16px)',
                         letterSpacing: '0.24em',
                       }}
@@ -2266,8 +2274,6 @@ function MobileLandscapeLayout({
                       <span>💰</span>
                       <span>PRIZE POOL</span>
                     </div>
-                    {/* 2026-05-24 사용자 정정 (보고서): PRIZE POOL 금액 +50%.
-                        직전 clamp(18, 2.9vw, 32) → clamp(26, 3.6vw, 46). 슬림 폭 180 유지하면서 시인성 ↑ */}
                     <div
                       className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
                       style={{
@@ -2279,62 +2285,17 @@ function MobileLandscapeLayout({
                     >
                       {session.prizePool > 0 ? fmtPrizeDisplay(session.prizePool, unit) : '—'}
                     </div>
-                    {/* 2026-05-24 사용자 정정 (보고서): DISTRIBUTION 분배표 +50% 추가 키움.
-                        rank 12→16 / 금액 13→18 / max 18→26 / 20→28 / 라벨 9→13.
-                        정렬은 라벨좌/금액우 유지 (사용자 명시) */}
-                    {mode === 'distribution' && amounts.length > 0 && (
-                      <div
-                        className="mt-2 pt-2 border-t flex-1 min-h-0 overflow-hidden flex flex-col text-left"
-                        style={{ borderColor: 'rgba(255,255,255,0.12)' }}
-                      >
-                        <div
-                          className="tracking-[0.22em] font-extrabold opacity-75 mb-1 flex-shrink-0 text-center"
-                          style={{ color: display.textColor, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
-                        >
-                          DISTRIBUTION
-                        </div>
-                        <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-0.5">
-                          {amounts.slice(0, 6).map((a) => (
-                            <div
-                              key={a.rank}
-                              className="font-mono flex items-baseline justify-between rounded px-1.5 py-0.5"
-                              style={{
-                                color: display.textColor,
-                                background: a.rank === 1 ? `${accent}18` : 'transparent',
-                              }}
-                            >
-                              <span
-                                className="font-extrabold tabular-nums"
-                                style={{
-                                  fontSize: 'clamp(16px, 2vw, 26px)',
-                                  color: a.rank === 1 ? accent : display.textColor,
-                                }}
-                              >
-                                {a.rank}등
-                              </span>
-                              <span
-                                className="tabular-nums font-bold"
-                                style={{
-                                  fontSize: 'clamp(18px, 2.2vw, 28px)',
-                                  color: display.blindsColor,
-                                }}
-                              >
-                                {fmtPrizeDisplay(a.amount, unit) || '—'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                        {amounts.length > 6 && (
-                          <div
-                            className="mt-1 opacity-65 flex-shrink-0 text-center"
-                            style={{ color: display.textColor, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
-                          >
-                            +{amounts.length - 6}등 더
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
+                )}
+                {showPrize && mode === 'distribution' && (
+                  <PrizeDistributionCard
+                    accent={accent}
+                    textColor={display.textColor}
+                    blindsColor={display.blindsColor}
+                    amounts={amounts}
+                    unit={unit}
+                    prizePool={session.prizePool}
+                  />
                 )}
               </>
             );
@@ -2596,6 +2557,160 @@ function CompactStat({
 }
 
 /**
+ * PrizeDistributionCard — 분배표 모드 전용 우측 카드.
+ *
+ * 2026-05-24 사용자 정정 라운드 2 핵심 호소 처리:
+ *   "1-n등까지 표시 모드일경우 마지막등수까지가 카드의 길이가 되어야하고
+ *    이 카드의 길이 맥시멈은 화면을 벗어나서 스크롤이 생기면안된다.
+ *    최대 10명?15명? 일지는 모르겠지만 화면을 벗어나지 않는선의 명수까지만 표기."
+ *
+ * 알고리즘:
+ *   1) viewport h 측정 (window.innerHeight) — 가로 layout 100vh 전제.
+ *   2) 카드 헤더(46px) + 금액(70px) + DISTRIBUTION 라벨(28px) + "+N등 더"(20px) + padding(40px) = 약 204px reserved.
+ *   3) 가용 행 영역 ≈ vh × 0.70(가로 모드 우측 컬럼 점유율) − reserved.
+ *   4) 행당 높이 — clamp 기반 폰트로 ≈ 30~38px. 평균 34px로 산출.
+ *   5) maxRows = max(3, min(15, floor(available / rowHeight))). 최대 15등 hard cap.
+ *
+ * SSR safe: 초기 maxRows=10 (대표값) → mount 후 resize listener로 갱신.
+ * scroll 0 보장: max-height 명시적 제한 + overflow-hidden.
+ */
+function PrizeDistributionCard({
+  accent,
+  textColor,
+  blindsColor,
+  amounts,
+  unit,
+  prizePool,
+}: {
+  accent: string;
+  textColor: string;
+  blindsColor: string;
+  amounts: Array<{ rank: number; amount: number }>;
+  unit: 'amount' | 'ticket';
+  prizePool: number;
+}) {
+  // viewport 기반 최대 표시 등수 산출
+  const [maxRows, setMaxRows] = useState(10);
+  useEffect(() => {
+    const compute = () => {
+      const vh = window.innerHeight;
+      // 가로 layout 우측 컬럼 점유: 약 65~75% (헤더/푸터/컨트롤바 제외)
+      const usable = vh * 0.68;
+      // 카드 고정 영역: 헤더 46 + 금액 70 + DISTRIBUTION 28 + +N등더 22 + padding 40 = 206
+      const reserved = 206;
+      const available = Math.max(60, usable - reserved);
+      // 행당 평균 34px (clamp 16~26 폰트 + py 0.5 + gap)
+      const rowH = 34;
+      const calc = Math.floor(available / rowH);
+      // hard cap 15 (사용자 명시) + 최소 3
+      const next = Math.max(3, Math.min(15, calc));
+      setMaxRows(next);
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('orientationchange', compute);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('orientationchange', compute);
+    };
+  }, []);
+
+  const visible = amounts.slice(0, maxRows);
+  const hidden = Math.max(0, amounts.length - visible.length);
+
+  return (
+    <div
+      className="flex-shrink-0 rounded-xl px-3 py-3 border backdrop-blur-sm relative overflow-hidden flex flex-col text-center w-full mx-auto"
+      style={{
+        background: `linear-gradient(135deg, ${accent}22 0%, rgba(0,0,0,0.6) 70%)`,
+        borderColor: `${accent}50`,
+        boxShadow: `0 0 24px ${accent}1A inset`,
+        maxWidth: 220,
+        // 가로 layout 100vh 가득 + 스크롤 X 제약 유지 — 최대 90vh로 hard cap.
+        maxHeight: '90vh',
+      }}
+      aria-label="프라이즈 풀 (분배표)"
+    >
+      <div
+        className="font-extrabold flex items-center justify-center gap-1 flex-shrink-0"
+        style={{
+          color: accent,
+          opacity: 0.95,
+          fontSize: 'clamp(12px, 1.2vw, 16px)',
+          letterSpacing: '0.24em',
+        }}
+      >
+        <span>💰</span>
+        <span>PRIZE POOL</span>
+      </div>
+      <div
+        className="font-mono font-extrabold tabular-nums leading-none mt-2 flex-shrink-0"
+        style={{
+          fontSize: 'clamp(26px, 3.6vw, 46px)',
+          color: textColor,
+          letterSpacing: '-0.03em',
+          textShadow: `0 2px 12px ${accent}55`,
+        }}
+      >
+        {prizePool > 0 ? fmtPrizeDisplay(prizePool, unit) : '—'}
+      </div>
+      {amounts.length > 0 && (
+        <div
+          className="mt-2 pt-2 border-t flex flex-col text-left min-h-0 overflow-hidden"
+          style={{ borderColor: 'rgba(255,255,255,0.12)' }}
+        >
+          <div
+            className="tracking-[0.22em] font-extrabold opacity-75 mb-1 flex-shrink-0 text-center"
+            style={{ color: textColor, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
+          >
+            DISTRIBUTION
+          </div>
+          <div className="flex flex-col gap-0.5 overflow-hidden">
+            {visible.map((a) => (
+              <div
+                key={a.rank}
+                className="font-mono flex items-baseline justify-between rounded px-1.5 py-0.5"
+                style={{
+                  color: textColor,
+                  background: a.rank === 1 ? `${accent}18` : 'transparent',
+                }}
+              >
+                <span
+                  className="font-extrabold tabular-nums"
+                  style={{
+                    fontSize: 'clamp(16px, 2vw, 26px)',
+                    color: a.rank === 1 ? accent : textColor,
+                  }}
+                >
+                  {a.rank}등
+                </span>
+                <span
+                  className="tabular-nums font-bold"
+                  style={{
+                    fontSize: 'clamp(18px, 2.2vw, 28px)',
+                    color: blindsColor,
+                  }}
+                >
+                  {fmtPrizeDisplay(a.amount, unit) || '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+          {hidden > 0 && (
+            <div
+              className="mt-1 opacity-65 flex-shrink-0 text-center"
+              style={{ color: textColor, fontSize: 'clamp(11px, 1.1vw, 14px)' }}
+            >
+              +{hidden}등 더
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * SideStatCard — 가로 모드 우측 stack 전용 카드 (2026-05-24 PM 정정으로 신설).
  * 사용자 정정: "우측에는 플레이어 숫자, 그아래는 레이트레지, 그아래 프라이즈풀이 표시되면되고"
  * 좌측 정렬 라벨 + 큰 값 + 보조 텍스트. PRIZE POOL 카드와 시각적 균형을 위해 padding/폰트 키움.
@@ -2617,17 +2732,16 @@ function SideStatCard({
   accentColor?: string;
   borderColor: string;
 }) {
-  // 2026-05-24 사용자 정정 (보고서): "우측 카드 매우 작음" — maxWidth 180 유지 + 폰트 +50%.
-  //   max는 180 슬림 폭 유지 (사용자 명시 제약). min을 키워서 작은 viewport에서도 시인성 보장.
-  //   라벨 8→12 / 값 16→24 / 서브 8→12 (min 기준 +50%).
-  //   max도 키워 큰 화면에서 visual weight 확보 (11→16 / 28→40 / 11→16).
+  // 2026-05-24 사용자 정정 라운드 2 (보고서): "우측열 플레이어/레이트레지/프라이즈풀 카드폭도 보기좋게 개선"
+  //   maxWidth 180 → 220 (slim 제약 완화). 라벨/값/서브 폰트는 그대로 (시인성 확보된 상태).
+  //   카드 폭이 늘어 좌우 padding 자연스럽게 호흡 → 글자 잘림/줄바꿈 위험 ↓.
   return (
     <div
-      className="rounded-xl px-2.5 py-2.5 border backdrop-blur-sm flex-shrink-0 text-center w-full mx-auto"
+      className="rounded-xl px-3 py-2.5 border backdrop-blur-sm flex-shrink-0 text-center w-full mx-auto"
       style={{
         background: 'rgba(0,0,0,0.45)',
         borderColor,
-        maxWidth: 180,
+        maxWidth: 220,
       }}
     >
       <div
