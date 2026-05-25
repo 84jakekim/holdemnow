@@ -275,32 +275,64 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           히어로 사진 영역 — 가로형 사진 (16:9 비율)
           헤더는 사진 위에 오버레이 (투명 그라데이션)
+          핸드오프 v3.0: 사진 하단에 매장명/지역/평점 오버레이 (시각 임팩트↑)
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="relative" style={{ aspectRatio: '16/9' }}>
+      <div className="relative pr-card-photo" style={{ aspectRatio: '16/10', borderRadius: 0 }}>
 
         {/* 사진 */}
         {hasPhotos ? (
           <div className="absolute inset-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photos[photoIndex]}
               alt={`${store.name} 사진 ${photoIndex + 1}`}
               className="w-full h-full object-cover"
             />
-            {/* 상단 그라데이션 (헤더 버튼 가독성) */}
+            {/* 상단 + 하단 그라데이션 (헤더 버튼 + 매장명 오버레이 가독성) */}
             <div
               className="absolute inset-0"
-              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 35%, transparent 60%, rgba(0,0,0,0.55) 100%)' }}
+              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.40) 0%, transparent 30%, transparent 50%, rgba(0,0,0,0.75) 100%)' }}
               aria-hidden="true"
             />
           </div>
         ) : (
           <div
             className="absolute inset-0 flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, var(--brand-pale) 0%, var(--surface-2) 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #9F1239 0%, #BE185D 50%, #581C87 100%)' }}
           >
-            <div className="text-sm font-bold" style={{ color: 'var(--text-3)' }}>사진 미등록</div>
+            <div className="text-sm font-bold" style={{ color: 'rgba(255,255,255,0.85)' }}>사진 미등록</div>
+            {/* 하단 그라데이션 (오버레이 가독성) */}
+            <div
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.55) 100%)' }}
+              aria-hidden="true"
+            />
           </div>
         )}
+
+        {/* 사진 hero 내부 — LIVE 배지 (가운데 상단) */}
+        {sessions.length > 0 && !loading && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+            <span className="badge-live" style={{ fontSize: 11, padding: '4px 12px' }}>
+              <span className="dot" />
+              LIVE 진행중
+            </span>
+          </div>
+        )}
+
+        {/* 사진 hero 하단 — 매장명/지역/평점 오버레이 (handoff 패턴) */}
+        <div className="absolute left-4 right-4 bottom-3 z-10" style={{ color: '#FFFFFF', textShadow: '0 2px 8px rgba(0,0,0,0.45)' }}>
+          {store.address && (
+            <div className="text-[11px] font-semibold opacity-90 truncate">{store.address.split(' ').slice(0, 2).join(' ')}</div>
+          )}
+          <div className="text-[22px] font-black tracking-tight leading-tight truncate">{store.name}</div>
+          {(store.averageRating || 0) > 0 && (
+            <div className="text-[12px] font-semibold mt-1 flex items-center gap-2 opacity-95">
+              <span>⭐ {store.averageRating?.toFixed(1)}</span>
+              <span>({store.reviewCount ?? 0})</span>
+            </div>
+          )}
+        </div>
 
         {/* 헤더 오버레이 — 뒤로/공유 */}
         <div className="absolute top-0 left-0 right-0 z-20 px-4 flex items-center justify-between" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)', height: 60 }}>
@@ -384,23 +416,13 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           매장 정보 — 토스 스타일 흰 카드 + 강한 위계
+          핸드오프 v3.0: 매장명은 hero 사진 내부로 이동.
+          여기는 description 위주.
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
-        {/* 매장 이름 + LIVE 상태 */}
-        <div className="flex items-start justify-between gap-3 mb-1">
-          <h1 className="text-[22px] font-extrabold tracking-tight leading-tight flex-1" style={{ color: 'var(--text-1)' }}>
-            {store.name}
-          </h1>
-          {sessions.length > 0 && !loading && (
-            <span className="badge-live flex-shrink-0 mt-1" style={{ fontSize: 11, padding: '4px 10px' }}>
-              <span className="dot" />
-              LIVE
-            </span>
-          )}
-        </div>
 
         {store.description && (
-          <p className="text-[14px] leading-relaxed mt-2 mb-4" style={{ color: 'var(--text-2)' }}>
+          <p className="text-[14px] leading-relaxed mb-4" style={{ color: 'var(--text-2)' }}>
             {store.description}
           </p>
         )}
