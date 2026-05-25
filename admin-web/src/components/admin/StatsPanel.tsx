@@ -62,28 +62,46 @@ export default function StatsPanel({ storeId }: { storeId: string }) {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📈 통계 리포트</h1>
+        <h1 className="h2 text-gray-900">📈 통계 리포트</h1>
         <p className="text-sm text-gray-500 mt-1">실시간 누적 지표 · 일별/주별 추이는 v0.2</p>
       </div>
 
-      {/* CTR 카드 */}
+      {/* CTR 카드 — 핸드오프 KPI signature 톤 (r-2xl + shadow-hero) */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5">
-          <div className="text-[10px] font-bold text-amber-800 tracking-wider mb-1.5">
+        <div
+          className="lift"
+          style={{
+            background: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
+            border: '1px solid rgba(245,158,11,0.30)',
+            borderRadius: 22,
+            padding: 20,
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          <div className="text-[10px] font-extrabold tracking-wider mb-1.5" style={{ color: '#92400E' }}>
             카드 클릭률 (CTR)
           </div>
-          <div className="font-mono text-3xl font-extrabold text-gray-900">
+          <div className="mono text-3xl font-extrabold text-gray-900">
             {ctr}{typeof ctr === 'string' && ctr !== '–' ? '%' : ''}
           </div>
           <div className="text-[11px] text-gray-600 mt-2 leading-relaxed">
             노출 → 카드 클릭 비율. 5%↑이면 양호, 10%↑면 우수.
           </div>
         </div>
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5">
-          <div className="text-[10px] font-bold text-green-800 tracking-wider mb-1.5">
+        <div
+          className="lift"
+          style={{
+            background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)',
+            border: '1px solid rgba(16,185,129,0.30)',
+            borderRadius: 22,
+            padding: 20,
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          <div className="text-[10px] font-extrabold tracking-wider mb-1.5" style={{ color: '#065F46' }}>
             방문 전환율
           </div>
-          <div className="font-mono text-3xl font-extrabold text-gray-900">
+          <div className="mono text-3xl font-extrabold text-gray-900">
             {visitRate}{typeof visitRate === 'string' && visitRate !== '–' ? '%' : ''}
           </div>
           <div className="text-[11px] text-gray-600 mt-2 leading-relaxed">

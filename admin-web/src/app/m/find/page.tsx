@@ -145,28 +145,23 @@ export default function FindPage() {
 
 function FindHeader() {
   return (
-    <header
-      className="sticky top-0 z-30"
-      style={{
-        background: 'rgba(255,255,255,0.94)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid var(--border)',
-      }}
-    >
-      <div className="px-4 h-14 flex items-center justify-between gap-3">
-        <div className="text-[18px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-          매장찾기
+    <header className="sticky top-0 z-30 pr-home-hero">
+      <div className="pr-home-hero-content px-4 h-14 flex items-center justify-between gap-3">
+        <div
+          className="text-[19px] font-black tracking-tight"
+          style={{ color: '#FFFFFF', textShadow: '0 1px 4px rgba(0,0,0,0.18)' }}
+        >
+          🏠 매장찾기
         </div>
         <div className="flex items-center gap-1">
           <Link
             href="/m/search"
             aria-label="검색"
-            className="w-10 h-10 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)]"
+            className="hero-pink-action w-10 h-10 flex items-center justify-center rounded-full"
           >
             <svg
               width="18" height="18" viewBox="0 0 24 24"
-              fill="none" stroke="var(--text-1)"
+              fill="none" stroke="#FFFFFF"
               strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"
               aria-hidden="true"
             >
