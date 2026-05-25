@@ -31,19 +31,19 @@ env:
   # 다른 백엔드 URL — BACKEND_SETUP.md 참고하여 백엔드 생성 후 채워 넣을 것.
   # 빈 값일 때는 middleware가 /_blocked 안내 페이지로 rewrite (정보 누설 방지).
   - variable: NEXT_PUBLIC_BACKEND_APP_URL
-    value: ""
+    value: "https://holdemnow--holdemnow-prod.us-east4.hosted.app"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_BACKEND_BIZ_URL
-    value: ""
+    value: "https://holdemnow-biz--holdemnow-prod.us-east4.hosted.app"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_BACKEND_ADMIN_URL
-    value: ""
+    value: "https://holdemnow-admin--holdemnow-prod.us-east4.hosted.app"
     availability:
       - BUILD
       - RUNTIME

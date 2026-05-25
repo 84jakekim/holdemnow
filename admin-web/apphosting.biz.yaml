@@ -29,19 +29,19 @@ env:
       - RUNTIME
 
   - variable: NEXT_PUBLIC_BACKEND_APP_URL
-    value: ""
+    value: "https://holdemnow--holdemnow-prod.us-east4.hosted.app"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_BACKEND_BIZ_URL
-    value: ""
+    value: "https://holdemnow-biz--holdemnow-prod.us-east4.hosted.app"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_BACKEND_ADMIN_URL
-    value: ""
+    value: "https://holdemnow-admin--holdemnow-prod.us-east4.hosted.app"
     availability:
       - BUILD
       - RUNTIME
