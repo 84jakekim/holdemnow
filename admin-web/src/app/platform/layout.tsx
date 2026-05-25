@@ -28,6 +28,7 @@ import AuthGate from '@/components/AuthGate';
 import { useTheme } from '@/lib/theme';
 import AdminIdentityBadge from '@/components/admin/AdminIdentityBadge';
 import ThemeToggle from '@/components/admin/ThemeToggle';
+import { RabbitLogo } from '@/components/ui';
 
 interface MenuItem {
   id: string;
@@ -270,14 +271,8 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
         style={{ borderBottom: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-2 mb-1">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt=""
-            width={28}
-            height={28}
-            style={{ display: 'block', flexShrink: 0, objectFit: 'contain' }}
-          />
+          {/* Pink Rabbit handoff — mark variant (다크 톤 사이드바 위) */}
+          <RabbitLogo size={28} variant="mark" aria-label="Pink Rabbit" />
           <div
             style={{
               fontWeight: 900,

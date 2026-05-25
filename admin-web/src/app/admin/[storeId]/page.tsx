@@ -28,6 +28,7 @@ import { useTheme } from '@/lib/theme';
 import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
 import { subscribeStoreReservations } from '@/lib/reservations';
 import { changePassword, syncPasswordRecovery, validatePassword } from '@/lib/emailAuth';
+import { RabbitLogo } from '@/components/ui';
 
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드' },
@@ -176,10 +177,22 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           }}
         >
           <div className="flex items-center gap-2 mb-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" width={32} height={32} style={{ display: 'block', flexShrink: 0, objectFit: 'contain' }} />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.svg" alt="Pink Rabbit" width={110} height={18} style={{ display: 'block' }} />
+            {/* Pink Rabbit handoff — mark variant (라이트 톤 사이드바 위) */}
+            <RabbitLogo size={32} variant="mark" aria-label="Pink Rabbit" />
+            <div
+              style={{
+                fontWeight: 900,
+                fontSize: 17,
+                letterSpacing: '-0.03em',
+                background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+              }}
+            >
+              Pink Rabbit
+            </div>
           </div>
           <div
             className="text-[10px] font-extrabold"

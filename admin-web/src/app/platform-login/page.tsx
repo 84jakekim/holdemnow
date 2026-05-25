@@ -18,6 +18,7 @@ import { auth } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { loginWithEmailExpecting, WrongRoleError } from '@/lib/emailAuth';
 import { usernameToAdminEmail, validateAdminUsername } from '@/lib/platformAdmin';
+import { RabbitLogo } from '@/components/ui';
 
 export default function PlatformLoginPage() {
   return (
@@ -157,10 +158,24 @@ function PlatformLoginInner() {
       </Link>
 
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
-        {/* 로고 + 컨텍스트 라벨 (다크 톤 — 본사 어드민 컨텍스트 유지) */}
+        {/* 로고 — Pink Rabbit handoff: badge variant + glow (다크 톤) */}
         <div className="flex flex-col items-center mb-8 mt-6">
-          <img src="/logo-white.svg" alt="Pink Rabbit" width={180} height={30} className="mb-2" />
-          <div className="flex items-center gap-1.5 mt-1.5">
+          <RabbitLogo size={88} variant="badge" glow aria-label="Pink Rabbit Platform" />
+          <div
+            className="mt-3 font-black"
+            style={{
+              fontSize: 20,
+              letterSpacing: '-0.03em',
+              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              color: 'transparent',
+            }}
+          >
+            Pink Rabbit
+          </div>
+          <div className="flex items-center gap-1.5 mt-2">
             <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full tracking-widest border border-amber-400/30">
               🏢 본사 관리자 전용
             </span>

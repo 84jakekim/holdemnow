@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/hooks';
 import { signupAsPlayer, validatePassword } from '@/lib/emailAuth';
+import { RabbitLogo } from '@/components/ui';
 
 function mapFirebaseError(msg: string): string {
   if (msg.includes('email-already-in-use')) return '이미 사용 중인 이메일입니다.';
@@ -151,7 +152,24 @@ export default function PlayerSignupPage() {
             </svg>
             로그인
           </Link>
-          <img src="/logo.svg" alt="Pink Rabbit" width={140} height={24} className="mb-5" />
+          {/* 로고 — Pink Rabbit handoff: badge variant + glow */}
+          <div className="flex items-center gap-3 mb-5">
+            <RabbitLogo size={56} variant="badge" glow aria-label="Pink Rabbit" />
+            <div
+              className="font-black"
+              style={{
+                fontSize: 18,
+                letterSpacing: '-0.03em',
+                background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+              }}
+            >
+              Pink Rabbit
+            </div>
+          </div>
           <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">일반 가입</h1>
           <p className="text-sm text-gray-500 mt-1.5">플레이어·일반 사용자로 시작하세요.</p>
         </div>

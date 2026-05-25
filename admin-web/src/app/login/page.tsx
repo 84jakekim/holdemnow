@@ -27,6 +27,7 @@ import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { startKakaoLogin } from '@/lib/kakaoAuth';
 import { loginAsPlayerWithGoogle, getLoginIntent, clearLoginIntent } from '@/lib/auth';
 import { loginWithEmailExpecting, WrongRoleError } from '@/lib/emailAuth';
+import { RabbitLogo } from '@/components/ui';
 
 export default function LoginPage() {
   return (
@@ -302,10 +303,24 @@ function LoginPageInner() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
-        {/* 로고 */}
+        {/* 로고 — Pink Rabbit handoff: badge variant + glow */}
         <div className="flex flex-col items-center mb-8 mt-6">
-          <img src="/logo.svg" alt="Pink Rabbit" width={180} height={30} className="mb-2" />
-          <p className="text-xs text-gray-500">전국 홀덤펍 · 토너먼트 디스커버리</p>
+          <RabbitLogo size={96} variant="badge" glow aria-label="Pink Rabbit" />
+          <div
+            className="mt-3 font-black"
+            style={{
+              fontSize: 22,
+              letterSpacing: '-0.03em',
+              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              color: 'transparent',
+            }}
+          >
+            Pink Rabbit
+          </div>
+          <p className="text-xs text-gray-500 mt-1">전국 홀덤펍 · 토너먼트 디스커버리</p>
         </div>
 
         <div className="w-full max-w-sm">
