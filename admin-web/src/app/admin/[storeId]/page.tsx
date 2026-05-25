@@ -168,37 +168,54 @@ function AdminPageInner({ storeId }: { storeId: string }) {
       className="w-64 flex flex-col h-full"
       style={{ background: 'var(--surface-1)', borderRight: '1px solid var(--border)' }}
     >
-        {/* 로고 + STORE OPS 워드마크 (핑크 그라데이션 강조) */}
+        {/* 로고 + STORE OPS 워드마크 — DS v2.0: 핑크 hero 그라데이션 + RabbitLogo backdrop */}
         <div
-          className="p-5"
+          className="relative overflow-hidden"
           style={{
+            padding: '20px 20px 18px',
             borderBottom: '1px solid var(--border)',
-            background: 'linear-gradient(180deg, rgba(255,31,143,0.06) 0%, transparent 100%)',
+            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 55%, #FFB3D4 100%)',
+            color: '#ffffff',
           }}
         >
-          <div className="flex items-center gap-2 mb-1">
-            {/* Pink Rabbit handoff — mark variant (라이트 톤 사이드바 위) */}
-            <RabbitLogo size={32} variant="mark" aria-label="Pink Rabbit" />
-            <div
-              style={{
-                fontWeight: 900,
-                fontSize: 17,
-                letterSpacing: '-0.03em',
-                background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
-                WebkitBackgroundClip: 'text',
-                backgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                color: 'transparent',
-              }}
-            >
-              Pink Rabbit
-            </div>
-          </div>
+          {/* Rabbit backdrop — 우상단 opacity .14 (handoff 명세) */}
           <div
-            className="text-[10px] font-extrabold"
-            style={{ color: 'var(--brand)', letterSpacing: '0.18em' }}
+            aria-hidden
+            style={{ position: 'absolute', top: -18, right: -22, opacity: 0.18, pointerEvents: 'none' }}
           >
-            STORE OPS · 매장 운영
+            <RabbitLogo size={120} variant="mark" />
+          </div>
+          {/* 우상단 미세 글로우 원 (핸드오프 hero 패턴) */}
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute', top: -14, right: -14, width: 70, height: 70,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+          <div className="relative" style={{ zIndex: 1 }}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <RabbitLogo size={28} variant="badge" aria-label="Pink Rabbit" />
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: 17,
+                  letterSpacing: '-0.03em',
+                  color: '#ffffff',
+                  textShadow: '0 1px 4px rgba(0,0,0,0.18)',
+                }}
+              >
+                Pink Rabbit
+              </div>
+            </div>
+            <div
+              className="text-[10px] font-extrabold"
+              style={{ color: '#ffffff', letterSpacing: '0.20em', opacity: 0.94 }}
+            >
+              STORE OPS · 매장 운영
+            </div>
           </div>
         </div>
 
