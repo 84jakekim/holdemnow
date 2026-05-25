@@ -297,40 +297,46 @@ function SessionRow({ session, storeAddress }: { session: LiveSession; storeAddr
     await wrap(() => stopLiveSession(session, sec, 'platform/live:user-button'), verb);
   };
 
+  // Phase 11 (2026-05-26) — 핸드오프 mock 응용:
+  //   - 좌측 LIVE/BREAK 시그니처 칩 (배경 색 + pulse dot)
+  //   - 우측 mono 시간 거대 강조 (핀크 LIVE / amber BREAK·PAUSED)
+  const chipBg = isFinishing ? '#EA580C' : isReady ? '#3B82F6' : isPaused ? '#F59E0B' : '#E53E3E';
+  const chipLabel = isFinishing ? `⚠ ${fmtTime(graceSec)}` : isReady ? 'READY' : isPaused ? 'PAUSED' : 'LIVE';
+  const timeColor = sec <= 60 && isRunning ? '#EF4444' : isPaused ? '#B45309' : isFinishing ? '#EA580C' : '#FF1F8F';
+
   return (
     <div className={`px-4 sm:px-5 py-4 flex flex-col gap-3 sm:grid sm:grid-cols-12 sm:gap-4 sm:items-center hover:bg-gray-50 ${isFinishing ? 'animate-pulse bg-orange-50' : ''}`}>
       {/* 매장 + 토너 — 모바일 full, sm+ 4열 */}
-      <div className="sm:col-span-4 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          {isFinishing ? (
-            <span className="text-[10px] font-extrabold tracking-wider text-orange-700">
-              ⚠ 곧 종료 {fmtTime(graceSec)}
-            </span>
-          ) : isReady ? (
-            <span className="text-[10px] font-extrabold tracking-wider text-blue-700">
-              ⏳ READY{readyLeftSec != null && readyLeftSec > 0 ? ` · 자동취소 ${fmtTime(readyLeftSec)}` : ''}
-            </span>
-          ) : isPaused ? (
-            <span className="text-[10px] font-extrabold tracking-wider text-amber-700">⏸ PAUSED</span>
-          ) : (
-            <>
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[10px] font-extrabold tracking-wider text-red-600">LIVE</span>
-            </>
+      <div className="sm:col-span-4 min-w-0 flex items-center gap-3">
+        {/* 좌측 시그니처 LIVE/BREAK 칩 — Phase 11 */}
+        <span
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-extrabold tracking-wider text-white flex-shrink-0"
+          style={{ background: chipBg, boxShadow: `0 1px 4px ${chipBg}40` }}
+        >
+          {!isReady && !isPaused && !isFinishing && (
+            <span className="w-1.5 h-1.5 rounded-full bg-white" style={{ animation: 'pulse 1.6s infinite' }} />
           )}
-          <span className="text-sm font-bold text-gray-900 truncate">{session.storeName}</span>
+          {chipLabel}
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-sm font-bold text-gray-900 truncate">{session.storeName}</span>
+          </div>
+          <div className="text-xs text-gray-700 truncate">{session.tournamentName}</div>
+          {storeAddress && (
+            <div className="text-[10px] text-gray-400 truncate mt-0.5">📍 {storeAddress}</div>
+          )}
         </div>
-        <div className="text-xs text-gray-700 truncate">{session.tournamentName}</div>
-        {storeAddress && (
-          <div className="text-[10px] text-gray-400 truncate mt-0.5">📍 {storeAddress}</div>
-        )}
       </div>
 
       {/* 핵심 지표 — 모바일 4열 / sm+ col-span-5 */}
       <div className="sm:col-span-5 grid grid-cols-4 gap-2 text-center">
         <div>
           <div className="text-[9px] font-bold text-gray-500 tracking-wider">남은시간</div>
-          <div className={`font-mono text-base font-extrabold ${sec <= 60 && isRunning ? 'text-red-500' : isPaused ? 'text-amber-700' : 'text-gray-900'}`}>
+          <div
+            className="font-mono text-lg font-extrabold tabular-nums"
+            style={{ color: timeColor, letterSpacing: '-0.02em' }}
+          >
             {fmtTime(sec)}
           </div>
         </div>
