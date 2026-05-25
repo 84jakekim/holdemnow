@@ -182,7 +182,7 @@ function UsedGridCard({ item }: { item: UsedListing }) {
   return (
     <Link
       href={`/m/community/used/${item.id}`}
-      className="block rounded-2xl overflow-hidden transition active:scale-[0.98]"
+      className="block rounded-2xl overflow-hidden transition active:scale-[0.98] lift tap"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',

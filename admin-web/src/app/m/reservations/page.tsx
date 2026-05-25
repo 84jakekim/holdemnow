@@ -328,7 +328,7 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden"
+      className="rounded-2xl overflow-hidden lift"
       style={{
         background: tone.bg,
         border: `1.5px solid ${tone.border}`,
@@ -552,7 +552,7 @@ function ActionButton({
               color: 'var(--text-2)',
               border: '1px solid var(--border)',
             };
-  const cls = 'px-3 py-1.5 rounded-lg text-[12px] font-extrabold transition active:scale-95 disabled:opacity-40 whitespace-nowrap';
+  const cls = 'px-3 py-1.5 rounded-lg text-[12px] font-extrabold transition active:scale-95 disabled:opacity-40 whitespace-nowrap tap';
   if (href) {
     return (
       <Link href={href} className={cls} style={style}>

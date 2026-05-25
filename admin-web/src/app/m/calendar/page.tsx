@@ -277,12 +277,12 @@ export default function CalendarPage() {
               return (
                 <div
                   key={t.id}
-                  className="flex items-center gap-3 rounded-2xl p-3"
-                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                  className="flex items-center gap-3 rounded-2xl p-3 lift"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}
                 >
                   <button
                     onClick={() => { bumpStoreMetric(t.storeId, 'cardClicks'); router.push(`/m/store/${t.storeId}`); }}
-                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left tap"
                   >
                     <div
                       className="w-12 h-16 rounded-xl flex items-center justify-center text-[9px] font-extrabold text-center p-1 flex-shrink-0 leading-tight"

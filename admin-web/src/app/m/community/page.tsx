@@ -88,11 +88,11 @@ export default function CommunityIndexPage() {
           <Link
             key={cat.id}
             href={cat.href}
-            className="block transition active:scale-[0.99]"
+            className="block transition active:scale-[0.99] tap"
             aria-label={`${cat.title} — ${cat.subtitle}`}
           >
             <div
-              className="rounded-2xl overflow-hidden"
+              className="rounded-2xl overflow-hidden lift"
               style={{
                 background: 'var(--surface-1)',
                 border: '1px solid rgba(255,31,143,0.18)',

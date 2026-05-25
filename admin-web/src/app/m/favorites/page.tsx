@@ -158,10 +158,10 @@ export default function FavoritesPage() {
               return (
                 <div
                   key={fav.storeId}
-                  className="overflow-hidden"
-                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--r-xl)' }}
+                  className="overflow-hidden lift"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-card)' }}
                 >
-                  <Link href={`/m/store/${fav.storeId}`} className="block">
+                  <Link href={`/m/store/${fav.storeId}`} className="block tap">
                     <div className="relative h-40 overflow-hidden" style={{ background: 'var(--surface-3)' }}>
                       {store?.photoUrl ? (
                         <img src={store.photoUrl} alt={store.name} className="w-full h-full object-cover" />

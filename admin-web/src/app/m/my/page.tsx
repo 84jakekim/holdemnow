@@ -222,7 +222,7 @@ export default function MyPage() {
           <button
             key={k.label}
             onClick={() => router.push(k.go)}
-            className="rounded-xl py-4 text-center transition active:scale-[0.97]"
+            className="rounded-xl py-4 text-center transition active:scale-[0.97] tap"
             style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
           >
             <div className="font-mono text-xl font-extrabold" style={{ color: 'var(--brand)' }}>{k.value}</div>
@@ -269,7 +269,7 @@ export default function MyPage() {
           <button
             key={i}
             onClick={() => m.go && router.push(m.go)}
-            className="w-full px-1 py-4 flex items-center justify-between transition"
+            className="w-full px-1 py-4 flex items-center justify-between transition tap"
             style={{ borderBottom: '1px solid var(--border)' }}
           >
             <div className="flex items-center gap-3">

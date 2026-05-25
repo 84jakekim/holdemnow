@@ -169,7 +169,7 @@ function JobListCard({ job }: { job: JobOffer }) {
   return (
     <Link
       href={`/m/community/jobs/${job.id}`}
-      className="block rounded-2xl overflow-hidden transition active:scale-[0.99]"
+      className="block rounded-2xl overflow-hidden transition active:scale-[0.99] lift tap"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
