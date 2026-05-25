@@ -265,38 +265,60 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
         color: 'var(--text-1)',
       }}
     >
-      {/* 브랜드 헤더 */}
+      {/* 브랜드 헤더 — DS v2.0: 관제센터 다크 hero + 골드 액센트 */}
       <div
-        className="px-5 py-4"
-        style={{ borderBottom: '1px solid var(--border)' }}
+        className="relative overflow-hidden"
+        style={{
+          padding: '18px 20px 16px',
+          borderBottom: '1px solid var(--border)',
+          background:
+            'radial-gradient(ellipse at 20% 0%, rgba(255,31,143,0.18) 0%, rgba(255,31,143,0) 55%), linear-gradient(135deg, #1A0A1E 0%, #0D1117 60%, #0F1419 100%)',
+        }}
       >
-        <div className="flex items-center gap-2 mb-1">
-          {/* Pink Rabbit handoff — mark variant (다크 톤 사이드바 위) */}
-          <RabbitLogo size={28} variant="mark" aria-label="Pink Rabbit" />
+        {/* Rabbit backdrop — 우상단 opacity .14 */}
+        <div
+          aria-hidden
+          style={{ position: 'absolute', top: -16, right: -18, opacity: 0.14, pointerEvents: 'none' }}
+        >
+          <RabbitLogo size={100} variant="mark" />
+        </div>
+        {/* 상단 1px 그라데이션 라인 (hero-dark 패턴) */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+            background: 'linear-gradient(90deg, #FF1F8F 0%, #F59E0B 50%, #FF1F8F 100%)',
+          }}
+        />
+        <div className="relative" style={{ zIndex: 1 }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <RabbitLogo size={26} variant="badge" aria-label="Pink Rabbit" />
+            <div
+              style={{
+                fontWeight: 900,
+                fontSize: 15,
+                letterSpacing: '-0.02em',
+                background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+              }}
+            >
+              Pink Rabbit
+            </div>
+          </div>
           <div
             style={{
-              fontWeight: 900,
-              fontSize: 15,
-              letterSpacing: '-0.02em',
-              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              color: 'transparent',
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.20em',
+              color: 'var(--gold)',
+              textShadow: '0 1px 4px rgba(245,158,11,0.25)',
             }}
           >
-            Pink Rabbit
+            BACKOFFICE · 관제센터
           </div>
-        </div>
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: '0.18em',
-            color: 'var(--gold)',
-          }}
-        >
-          BACKOFFICE
         </div>
       </div>
 

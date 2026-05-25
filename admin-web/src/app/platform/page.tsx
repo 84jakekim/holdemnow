@@ -1401,9 +1401,8 @@ function KpiCard({
 }) {
   return (
     <div
-      className="lift"
+      className="lift kpi-signature-dark"
       style={{
-        background: 'var(--surface-1)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--r-md)',
         padding: '16px 18px',
