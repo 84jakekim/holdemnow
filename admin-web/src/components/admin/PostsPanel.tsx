@@ -371,7 +371,7 @@ function PostRow({
   };
 
   return (
-    <div className={`bg-white border rounded-xl p-4 flex gap-3 ${isActive ? 'border-emerald-200' : 'border-gray-200 opacity-60'}`}>
+    <div className={`bg-white border rounded-xl p-4 flex gap-3 lift ${isActive ? 'border-emerald-200' : 'border-gray-200 opacity-60'}`} style={{ boxShadow: 'var(--shadow-card)' }}>
       {post.imageUrls.length > 0 ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={post.imageUrls[0]} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />

@@ -239,7 +239,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
                     ? 'opacity-40 cursor-not-allowed'
                     : isActive
                       ? ''
-                      : 'hover:bg-[var(--surface-2)]'
+                      : 'hover:bg-[var(--surface-2)] tap'
                 }`}
                 style={
                   isActive

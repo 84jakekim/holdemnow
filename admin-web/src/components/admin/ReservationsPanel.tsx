@@ -277,7 +277,7 @@ function ReservationCard({ reservation: r, storeId, busy, onApprove, onRejectOpe
 
   return (
     <div
-      className="p-4"
+      className="p-4 lift"
       onClick={handleCardClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -287,6 +287,7 @@ function ReservationCard({ reservation: r, storeId, busy, onApprove, onRejectOpe
         borderLeft: isUnread ? '4px solid #F59E0B' : `4px solid ${tone.leftBar}`,
         borderRadius: 'var(--r-lg)',
         cursor: 'default',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       {/* 상단 — 상태 + 시간 임박 배지 */}

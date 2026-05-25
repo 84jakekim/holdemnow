@@ -97,7 +97,8 @@ export default function StatsPanel({ storeId }: { storeId: string }) {
         {rows.map((r) => (
           <div
             key={r.label}
-            className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4"
+            className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4 lift"
+            style={{ boxShadow: 'var(--shadow-card)' }}
           >
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold text-gray-900">{r.label}</div>
