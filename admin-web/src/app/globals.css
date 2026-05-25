@@ -32,6 +32,7 @@
   --brand:      #FF1F8F;
   --brand-dim:  #E01077;
   --brand-pale: #FFF0F7;
+  --brand-soft: #FF6BAA;             /* 그라데이션 보조 (Pink Rabbit handoff) */
   --brand-glow: rgba(255, 31, 143, 0.15);
 
   /* === LIVE 전용 === */
@@ -50,6 +51,7 @@
   --surface-2:  #F3F4F6;
   --surface-3:  #E5E7EB;
   --border:     #E5E7EB;
+  --border-strong: #D1D5DB;          /* 강조 보더 (Pink Rabbit handoff) */
   --border-soft: rgba(0, 0, 0, 0.06);
 
   /* === Typography (라이트) === */
@@ -92,6 +94,7 @@ html[data-theme="dark"] {
   --surface-2:  #232936;
   --surface-3:  #2D3548;
   --border:     #2D3548;
+  --border-strong: #3A4258;
   --border-soft: rgba(255, 255, 255, 0.06);
 
   /* === Typography (다크) === */
@@ -111,6 +114,7 @@ html[data-theme="dark"] {
   --color-brand:       var(--brand);
   --color-brand-dim:   var(--brand-dim);
   --color-brand-pale:  var(--brand-pale);
+  --color-brand-soft:  var(--brand-soft);
 
   /* live */
   --color-live:        var(--live);
@@ -127,6 +131,7 @@ html[data-theme="dark"] {
   --color-surface-2:   var(--surface-2);
   --color-surface-3:   var(--surface-3);
   --color-border:      var(--border);
+  --color-border-strong: var(--border-strong);
 
   /* text */
   --color-text-1:      var(--text-1);
@@ -698,4 +703,81 @@ html[data-theme="dark"] .tabbar-glass {
     border-radius: 16px !important;
     margin: 0 8px !important;
   }
+}
+
+/* ─────────────────────────────────────────────────────────
+ * Pink Rabbit handoff — 마이크로 인터랙션 utility (2026-05-25)
+ * Claude Design 핸드오프(claude-design/pimk-rabbit/) 토큰 + utility 추출.
+ * JSX 구조는 그대로 두고 className만 매핑하여 점진 적용.
+ *
+ *  · .lift          — hover translateY(-2px) + shadow-float
+ *  · .tap           — active scale 0.97 + 80ms transition
+ *  · .skel          — shimmer 스켈레톤 (.skeleton 짧은 별칭)
+ *  · .pill          — 작은 배지 (surface-2 배경, border)
+ *  · .mono          — tabular-nums + 모노 폰트
+ *  · .no-scrollbar  — .scrollbar-none 별칭 (handoff naming 호환)
+ *
+ * prefers-reduced-motion 사용자는 transform/transition 비활성.
+ * ───────────────────────────────────────────────────────── */
+
+.lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-float);
+}
+
+.tap {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.tap:active {
+  transform: scale(0.97);
+}
+
+/* shimmer 키프레임은 .skeleton 정의에서 이미 선언됨. 같은 이름 재사용 OK. */
+.skel {
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: var(--r-sm);
+}
+html[data-theme="dark"] .skel {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 600px 100%;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lift, .tap { transition: none !important; }
+  .lift:hover { transform: none !important; }
+  .tap:active { transform: none !important; }
+  .skel { animation: none !important; }
 }
