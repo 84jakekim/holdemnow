@@ -17,6 +17,7 @@ import {
   type Finalist,
 } from '@/lib/series';
 import { POSTER_STYLES, posterStyleFor } from '@/lib/templates';
+import EmptyState from '@/components/ui/EmptyState';
 
 export default function SeriesPanel({ organizerId }: { organizerId?: string } = {}) {
   const authState = useAuth();
@@ -100,14 +101,11 @@ export default function SeriesPanel({ organizerId }: { organizerId?: string } = 
       {loading ? (
         <div className="text-sm text-gray-500">로딩 중…</div>
       ) : series.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
-          <div className="text-4xl mb-3">🏆</div>
-          <div className="font-bold text-gray-900 mb-2">등록된 시리즈가 없습니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed">
-            "+ 새 시리즈"로 시즌 단위 시리즈를 등록하세요.<br />
-            협력 매장 매핑 후 위성 예선 결과를 입력하면 본선 진출자가 자동 집계됩니다.
-          </div>
-        </div>
+        <EmptyState
+          icon="🏆"
+          title="등록된 시리즈가 없습니다"
+          desc='"+ 새 시리즈"로 시즌 단위 시리즈를 등록하세요. 협력 매장 매핑 후 위성 예선 결과를 입력하면 본선 진출자가 자동 집계됩니다.'
+        />
       ) : (
         <div className="space-y-3">
           {series.map((s) => (

@@ -19,6 +19,7 @@ import {
   formatPrize,
 } from '@/lib/events';
 import { geocodeAddress } from '@/lib/kakao';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface Props {
   /** 본인 organizerId — 본사 모드에선 undefined */
@@ -89,14 +90,11 @@ export default function EventsPanel({ organizerId, organizerName, ownerUid, isPl
       {loading ? (
         <div className="text-sm text-gray-500 py-10 text-center">로딩 중…</div>
       ) : events.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-12 text-center">
-          <div className="text-4xl mb-3">🏆</div>
-          <div className="font-bold text-gray-900 mb-2">등록된 대회가 없습니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed max-w-md mx-auto">
-            우상단 "+ 새 대회" 버튼으로 첫 대회를 등록하세요. 등록 즉시 모바일 앱
-            "🏆 대회" 탭에 표시됩니다.
-          </div>
-        </div>
+        <EmptyState
+          icon="🏆"
+          title="등록된 대회가 없습니다"
+          desc='우상단 "+ 새 대회" 버튼으로 첫 대회를 등록하세요. 등록 즉시 모바일 앱 "🏆 대회" 탭에 표시됩니다.'
+        />
       ) : (
         <div className="space-y-2">
           {events.map((e) => (

@@ -29,6 +29,7 @@ import {
 } from '@/lib/campaigns';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '@/lib/hooks';
+import EmptyState from '@/components/ui/EmptyState';
 
 // =====================================================================
 // 유틸
@@ -182,18 +183,11 @@ export default function PlatformMarketingPage() {
           로딩 중…
         </div>
       ) : campaigns.length === 0 ? (
-        <div
-          className="rounded-xl p-12 text-center"
-          style={{ background: 'var(--surface-1)', border: '1px dashed var(--border)' }}
-        >
-          <div className="text-4xl mb-3">📣</div>
-          <div className="font-bold mb-2" style={{ color: 'var(--text-1)' }}>
-            등록된 캠페인이 없습니다
-          </div>
-          <div className="text-xs" style={{ color: 'var(--text-3)' }}>
-            오른쪽 위 &quot;+ 새 캠페인&quot;으로 첫 푸시를 만들어 보세요.
-          </div>
-        </div>
+        <EmptyState
+          icon="📣"
+          title="등록된 캠페인이 없습니다"
+          desc='우상단 "+ 새 캠페인"으로 첫 푸시를 만들어 보세요.'
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {campaigns.map((c) => (

@@ -10,6 +10,7 @@ import {
   uploadPinnedImage,
   deletePostImageByUrl,
 } from '@/lib/posts';
+import EmptyState from '@/components/ui/EmptyState';
 
 /**
  * 본사 pinned 글 — 모바일 홈 "오늘의 매장 소식" 섹션 최상단 고정.
@@ -58,13 +59,11 @@ export default function PlatformPinnedPage() {
       {loading ? (
         <div className="text-sm text-gray-500">로딩 중…</div>
       ) : posts.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
-          <div className="text-4xl mb-3">📌</div>
-          <div className="font-bold text-gray-900 mb-2">등록된 고정 공지가 없습니다</div>
-          <div className="text-xs text-gray-500">
-            오른쪽 위 &quot;+ 새 고정 공지&quot;로 홈 최상단 카드를 등록하세요.
-          </div>
-        </div>
+        <EmptyState
+          icon="📌"
+          title="등록된 고정 공지가 없습니다"
+          desc='우상단 "+ 새 고정 공지"로 홈 최상단 카드를 등록하세요.'
+        />
       ) : (
         <div className="space-y-2">
           {posts.map((p) => <PinnedRow key={p.id} post={p} onEdit={() => setEditing(p)} />)}

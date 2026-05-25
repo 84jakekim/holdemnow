@@ -12,6 +12,7 @@ import {
   deleteNoticeImageByUrl,
 } from '@/lib/notices';
 import { Timestamp } from 'firebase/firestore';
+import EmptyState from '@/components/ui/EmptyState';
 
 /** Timestamp → datetime-local input value (YYYY-MM-DDTHH:mm). */
 function toLocalInput(t?: Timestamp | null): string {
@@ -71,13 +72,11 @@ export default function PlatformNoticesPage() {
       {loading ? (
         <div className="text-sm text-gray-500">로딩 중…</div>
       ) : notices.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
-          <div className="text-4xl mb-3">📢</div>
-          <div className="font-bold text-gray-900 mb-2">등록된 공지가 없습니다</div>
-          <div className="text-xs text-gray-500">
-            오른쪽 위 &quot;+ 새 공지&quot;로 첫 팝업 공지를 만들어 보세요.
-          </div>
-        </div>
+        <EmptyState
+          icon="📢"
+          title="등록된 공지가 없습니다"
+          desc='우상단 "+ 새 공지"로 첫 팝업 공지를 만들어 보세요.'
+        />
       ) : (
         <div className="space-y-2">
           {notices.map((n) => (

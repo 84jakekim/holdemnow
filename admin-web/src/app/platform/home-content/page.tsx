@@ -30,6 +30,7 @@ import {
 } from '@/lib/curationConfig';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { app } from '@/lib/firebase';
+import EmptyState from '@/components/ui/EmptyState';
 
 // ─── homeContentCounts 동기화 ─────────────────────────────────
 
@@ -205,7 +206,7 @@ function AdsTab() {
           </div>
         ))}
         {!loading && filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-gray-400">등록된 광고가 없습니다</div>
+          <EmptyState icon="📣" title="등록된 광고가 없습니다" desc='우상단 "+ 새 광고"로 등록하세요.' variant="inline" />
         )}
       </div>
 
@@ -795,7 +796,7 @@ function VideosTab() {
           );
         })}
         {!loading && videos.length === 0 && (
-          <div className="py-12 text-center text-sm text-gray-400">등록된 영상이 없습니다</div>
+          <EmptyState icon="🎬" title="등록된 영상이 없습니다" desc='수동 등록 또는 RSS 자동 큐레이션을 활성화하세요.' variant="inline" />
         )}
       </div>
 

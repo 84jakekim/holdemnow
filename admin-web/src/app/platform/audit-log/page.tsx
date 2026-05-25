@@ -21,6 +21,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface AuditRow {
   id: string;
@@ -190,10 +191,11 @@ export default function AuditLogPage() {
       {loading ? (
         <div className="py-10 text-center text-sm text-gray-500">로딩 중…</div>
       ) : filtered.length === 0 ? (
-        <div className="py-12 text-center bg-white border-2 border-dashed border-gray-200 rounded-xl">
-          <div className="text-3xl mb-2">📋</div>
-          <div className="text-sm font-bold text-gray-700">조건에 맞는 감사 로그가 없습니다</div>
-        </div>
+        <EmptyState
+          icon="📋"
+          title="조건에 맞는 감사 로그가 없습니다"
+          desc="필터를 다시 설정하거나 기간을 더 넓게 조정해 보세요."
+        />
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="w-full text-sm" style={{ minWidth: 600 }}>

@@ -11,6 +11,7 @@ import {
 } from '@/lib/slots';
 import { subscribeStoreLiveSessions, type LiveSession, fmtTime } from '@/lib/live';
 import TimerDisplaySettingsEditor from './TimerDisplaySettingsEditor';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface Props {
   storeId: string;
@@ -100,14 +101,11 @@ export default function SlotsPanel({ storeId }: Props) {
       {loading ? (
         <div className="text-sm text-gray-500">로딩 중…</div>
       ) : slots.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-10 text-center">
-          <div className="text-4xl mb-3">📺</div>
-          <div className="font-bold text-gray-900 mb-2">디스플레이 슬롯이 없습니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed">
-            &quot;+ 슬롯 추가&quot;로 매장 TV 슬롯을 만드세요.<br />
-            각 슬롯은 고유 URL을 가져 TV 브라우저에서 열 수 있습니다.
-          </div>
-        </div>
+        <EmptyState
+          icon="📺"
+          title="디스플레이 슬롯이 없습니다"
+          desc='"+ 슬롯 추가"로 매장 TV 슬롯을 만드세요. 각 슬롯은 고유 URL을 가져 TV 브라우저에서 열 수 있습니다.'
+        />
       ) : (
         <div className="space-y-3">
           {slots.map((s) => {
