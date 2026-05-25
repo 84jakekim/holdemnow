@@ -128,7 +128,7 @@ export default function OrganizerSignupPage() {
   if (done) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm w-full max-w-md p-8 text-center">
+        <div className="bg-white rounded-2xl border border-gray-200 w-full max-w-md p-8 text-center lift" style={{ boxShadow: 'var(--shadow-card)' }}>
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path d="M20 6L9 17l-5-5" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -172,7 +172,7 @@ export default function OrganizerSignupPage() {
         </Link>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 w-full max-w-md overflow-hidden lift" style={{ boxShadow: 'var(--shadow-card)' }}>
         {/* 헤더 */}
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-2 mb-5">

@@ -121,7 +121,7 @@ export default function RecoverPage() {
           </Link>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden lift" style={{ boxShadow: 'var(--shadow-card)' }}>
           <div className="p-6 border-b border-gray-100">
             <div className="text-xl font-extrabold text-gray-900 mb-1">비밀번호 찾기</div>
             <div className="text-sm text-gray-500">
