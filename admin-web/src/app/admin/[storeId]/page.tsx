@@ -447,7 +447,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
             </div>
           )}
 
-          {activeMenu === 'dashboard' && <DashboardContent storeId={storeId} storeName={store.name} />}
+          {activeMenu === 'dashboard' && <DashboardContent storeId={storeId} storeName={store.name} onJump={setActiveMenu} />}
           {activeMenu === 'tournament' && <TournamentControlCenter storeId={storeId} storeName={store.name} />}
           {activeMenu === 'posts' && <PostsPanel storeId={storeId} storeName={store.name} isPlatformAdmin={isPlatformAdmin} />}
           {activeMenu === 'jobs' && <JobsPanel storeId={storeId} storeName={store.name} />}
@@ -469,7 +469,15 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   );
 }
 
-function DashboardContent({ storeId, storeName }: { storeId: string; storeName: string }) {
+function DashboardContent({
+  storeId,
+  storeName,
+  onJump,
+}: {
+  storeId: string;
+  storeName: string;
+  onJump: (menu: string) => void;
+}) {
   const [metrics, setMetrics] = useState<StoreMetrics>({});
   useEffect(() => {
     const unsub = subscribeStoreMetrics(storeId, setMetrics);
@@ -501,6 +509,34 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
         <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
           {storeName} · 실시간 누적 지표
         </p>
+      </div>
+
+      {/* Phase 14 — 빠른 액션 6 grid (핸드오프 phone mock 응용).
+          모바일 매장 사장이 사이드바를 열지 않고 즉시 핵심 패널로 점프. */}
+      <div className="mb-5">
+        <div className="text-[11px] font-extrabold tracking-widest mb-2" style={{ color: 'var(--text-3)' }}>
+          ⚡ 빠른 액션
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {[
+            { id: 'tournament', icon: '📺', label: 'TV 화면' },
+            { id: 'posts', icon: '📢', label: '소식 작성' },
+            { id: 'reservations', icon: '👥', label: '참가자' },
+            { id: 'tournament', icon: '🎟️', label: '리바이' },
+            { id: 'stats', icon: '📊', label: '통계' },
+            { id: 'store', icon: '⚙️', label: '설정' },
+          ].map((a, i) => (
+            <button
+              key={`${a.id}-${i}`}
+              type="button"
+              onClick={() => onJump(a.id)}
+              className="pr-quick-action tap"
+            >
+              <div className="pr-quick-action-icon">{a.icon}</div>
+              <div className="pr-quick-action-label">{a.label}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 환영 카드 — 시그니처 핑크 그라데이션 (handoff ds-card-signature) */}
