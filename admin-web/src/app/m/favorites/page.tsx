@@ -102,8 +102,9 @@ export default function FavoritesPage() {
 
   if (authState.status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
-        <div className="text-sm" style={{ color: 'var(--text-3)' }}>로딩 중…</div>
+      <div className="min-h-screen p-5 space-y-3" style={{ background: 'var(--bg)' }}>
+        <div className="skel h-20 rounded-r-xl" />
+        <div className="skel h-40 rounded-r-xl" />
       </div>
     );
   }
@@ -114,19 +115,32 @@ export default function FavoritesPage() {
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
 
-      {/* ── 헤더 ── */}
-      <header
-        className="px-5 h-14 flex items-center justify-between"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
-        <span className="text-xl font-extrabold tracking-tight font-serif" style={{ color: 'var(--text-1)' }}>
-          즐겨찾기
-        </span>
-        <span className="text-xs font-bold" style={{ color: 'var(--text-3)' }}>{sorted.length}개</span>
+      {/* ── 핑크 hero ── */}
+      <header className="pr-home-hero px-5 pt-5 pb-6">
+        <div className="pr-home-hero-content flex items-end justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">
+              FAVORITES
+            </div>
+            <h1 className="h2 font-serif mt-1.5">♥ 즐겨찾기</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">
+              LIVE 시작 알림을 받는 단골 매장
+            </p>
+          </div>
+          <div
+            className="hero-pink-action px-3 py-1.5 rounded-full text-[12px] font-extrabold mono"
+            style={{ color: '#fff' }}
+          >
+            {sorted.length}곳
+          </div>
+        </div>
       </header>
 
       {loading ? (
-        <div className="p-8 text-center text-sm" style={{ color: 'var(--text-3)' }}>로딩 중…</div>
+        <div className="p-4 space-y-3">
+          <div className="skel h-40 rounded-r-xl" />
+          <div className="skel h-40 rounded-r-xl" />
+        </div>
       ) : sorted.length === 0 ? (
         <div className="p-4">
           <EmptyState

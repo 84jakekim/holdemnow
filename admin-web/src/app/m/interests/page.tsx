@@ -73,20 +73,50 @@ export default function InterestsPage() {
 
   return (
     <div>
-      <div className="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
-        <button onClick={() => router.back()} className="text-xl px-1">←</button>
-        <span className="text-lg font-extrabold font-serif">관심 토너</span>
-      </div>
+      {/* 골드 hero — 관심 토너 = 트로피 톤 */}
+      <header
+        className="px-5 pt-5 pb-6 text-white relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, #B8860B 0%, #F59E0B 55%, #FCD34D 100%)',
+        }}
+      >
+        <div
+          aria-hidden
+          className="absolute top-[-40px] right-[-40px] w-[220px] h-[220px] rounded-full pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 65%)',
+          }}
+        />
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <button onClick={() => router.back()} className="hero-pink-action w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 tap" aria-label="뒤로">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">MY INTERESTS</div>
+            <h1 className="h2 font-serif mt-1.5">⭐ 관심 토너</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">시작 1시간 전 푸시 알림</p>
+          </div>
+          <div className="w-9 h-9 flex-shrink-0" aria-hidden />
+        </div>
+      </header>
 
       {loading ? (
-        <div className="p-8 text-center text-sm text-gray-500">로딩 중…</div>
+        <div className="p-5 space-y-2">
+          <div className="skel h-20 rounded-r-md" />
+          <div className="skel h-20 rounded-r-md" />
+        </div>
       ) : totalCount === 0 ? (
-        <div className="p-8 text-center">
-          <div className="text-4xl mb-3">⭐</div>
-          <div className="font-bold text-gray-900 mb-2">관심 토너가 없습니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed">
-            토너 캘린더나 매장 상세에서 ☆ 버튼을 눌러<br />
-            관심 토너를 등록하세요. <b>시작 1시간 전 푸시</b>로 알려드립니다.
+        <div className="px-5 pt-6">
+          <div className="empty-state">
+            <div className="empty-state-icon" aria-hidden>⭐</div>
+            <div>
+              <div className="empty-state-title">관심 토너가 없어요</div>
+              <div className="empty-state-desc" style={{ marginTop: 6 }}>
+                캘린더나 매장 상세에서 ☆ 버튼을 눌러 관심 토너를 등록하세요.
+                시작 1시간 전 푸시로 알려드립니다.
+              </div>
+            </div>
           </div>
         </div>
       ) : (

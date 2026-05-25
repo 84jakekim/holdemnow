@@ -82,18 +82,28 @@ export default function SearchPage() {
 
   return (
     <div>
-      {/* 상단 검색 바 */}
-      <div className="px-4 h-14 flex items-center gap-2 border-b border-gray-100 sticky top-0 bg-white z-10">
-        <button onClick={() => router.back()} className="text-xl px-1">←</button>
+      {/* 핑크 상단 검색 바 */}
+      <div
+        className="px-4 h-14 flex items-center gap-2 sticky top-0 z-10"
+        style={{
+          background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+          color: '#fff',
+        }}
+      >
+        <button onClick={() => router.back()} className="text-xl px-1 tap" aria-label="뒤로">←</button>
         <input
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="매장·토너·시리즈 검색"
-          className="flex-1 bg-gray-100 rounded-xl h-10 px-4 text-sm outline-none"
+          className="flex-1 rounded-full h-10 px-4 text-sm outline-none"
+          style={{
+            background: 'rgba(255,255,255,0.96)',
+            color: 'var(--text-1)',
+          }}
         />
         {q && (
-          <button onClick={() => setQ('')} className="text-gray-400 px-2 text-lg">
+          <button onClick={() => setQ('')} className="px-2 text-lg tap" style={{ color: '#fff' }}>
             ✕
           </button>
         )}
@@ -101,18 +111,28 @@ export default function SearchPage() {
 
       {/* 결과 또는 안내 */}
       {!results ? (
-        <div className="p-8 text-center">
-          <div className="text-3xl mb-3">🔍</div>
-          <div className="text-sm text-gray-500 leading-relaxed">
-            매장명·토너명·시리즈명으로 검색<br />
-            <span className="text-[11px] text-gray-400 mt-2 block">
-              예: 서면 / 프리징 / ABC 시리즈
-            </span>
+        <div className="px-5 pt-8">
+          <div className="empty-state">
+            <div className="empty-state-icon" aria-hidden>🔍</div>
+            <div>
+              <div className="empty-state-title">매장·토너·시리즈를 찾아보세요</div>
+              <div className="empty-state-desc" style={{ marginTop: 6 }}>
+                예: 서면 · 프리징 · ABC 시리즈
+              </div>
+            </div>
           </div>
         </div>
       ) : totalHits === 0 ? (
-        <div className="p-8 text-center text-sm text-gray-500">
-          "{q}" 검색 결과가 없습니다
+        <div className="px-5 pt-8">
+          <div className="empty-state">
+            <div className="empty-state-icon" aria-hidden>🤷</div>
+            <div>
+              <div className="empty-state-title">&quot;{q}&quot; 검색 결과가 없어요</div>
+              <div className="empty-state-desc" style={{ marginTop: 6 }}>
+                키워드를 줄이거나 띄어쓰기를 다르게 해보세요.
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="pb-6">

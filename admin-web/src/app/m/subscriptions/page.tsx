@@ -77,20 +77,50 @@ export default function SubscriptionsPage() {
 
   return (
     <div>
-      <div className="px-4 h-14 flex items-center gap-2 border-b border-gray-100">
-        <button onClick={() => router.back()} className="text-xl px-1">←</button>
-        <span className="text-lg font-extrabold font-serif">시리즈 구독</span>
-      </div>
+      {/* 골드 hero */}
+      <header
+        className="px-5 pt-5 pb-6 text-white relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, #B8860B 0%, #F59E0B 55%, #FCD34D 100%)',
+        }}
+      >
+        <div
+          aria-hidden
+          className="absolute top-[-40px] right-[-40px] w-[220px] h-[220px] rounded-full pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 65%)',
+          }}
+        />
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <button onClick={() => router.back()} className="hero-pink-action w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 tap" aria-label="뒤로">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">SERIES SUBSCRIPTIONS</div>
+            <h1 className="h2 font-serif mt-1.5">🏆 시리즈 구독</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">본선 D-7/D-3/D-1 푸시</p>
+          </div>
+          <div className="w-9 h-9 flex-shrink-0" aria-hidden />
+        </div>
+      </header>
 
       {loading ? (
-        <div className="p-8 text-center text-sm text-gray-500">로딩 중…</div>
+        <div className="p-5 space-y-3">
+          <div className="skel h-28 rounded-r-xl" />
+          <div className="skel h-28 rounded-r-xl" />
+        </div>
       ) : subs.length === 0 ? (
-        <div className="p-8 text-center">
-          <div className="text-4xl mb-3">🏆</div>
-          <div className="font-bold text-gray-900 mb-2">구독 중인 시리즈가 없습니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed">
-            홈의 메이저 시리즈 카드를 탭하고 🔔 구독을 누르세요.<br />
-            본선 D-7 / D-3 / D-1 푸시 알림을 받습니다.
+        <div className="px-5 pt-6">
+          <div className="empty-state">
+            <div className="empty-state-icon" aria-hidden>🏆</div>
+            <div>
+              <div className="empty-state-title">구독 중인 시리즈가 없어요</div>
+              <div className="empty-state-desc" style={{ marginTop: 6 }}>
+                홈의 메이저 시리즈 카드를 탭하고 🔔 구독을 누르세요.
+                본선 D-7/D-3/D-1 푸시 알림을 받습니다.
+              </div>
+            </div>
           </div>
         </div>
       ) : (
@@ -102,7 +132,7 @@ export default function SubscriptionsPage() {
               <Link
                 key={sub.seriesId}
                 href={`/m/series/${sub.seriesId}`}
-                className="block bg-white rounded-2xl border border-gray-200 overflow-hidden active:scale-[0.98] transition"
+                className="block pr-card overflow-hidden lift tap"
               >
                 {poster && s ? (
                   <div className="p-4" style={{ background: poster.bg, color: poster.color }}>

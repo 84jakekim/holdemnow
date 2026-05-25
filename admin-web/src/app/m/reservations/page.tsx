@@ -67,8 +67,9 @@ export default function ReservationsPage() {
 
   if (authState.status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
-        <div className="text-sm" style={{ color: 'var(--text-3)' }}>로딩 중…</div>
+      <div className="min-h-screen p-5 space-y-3" style={{ background: 'var(--bg)' }}>
+        <div className="skel h-20 rounded-r-xl" />
+        <div className="skel h-40 rounded-r-xl" />
       </div>
     );
   }
@@ -78,23 +79,31 @@ export default function ReservationsPage() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      {/* 헤더 */}
-      <header
-        className="px-5 h-14 flex items-center justify-between sticky top-0 z-20"
-        style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}
-      >
-        <span className="text-xl font-extrabold tracking-tight font-serif" style={{ color: 'var(--text-1)' }}>
-          내 예약
-        </span>
-        <span className="text-[11px] font-mono" style={{ color: 'var(--text-3)' }}>
-          예정 {upcoming.length} · 지난 {past.length}
-        </span>
+      {/* 핑크 hero */}
+      <header className="pr-home-hero px-5 pt-5 pb-6">
+        <div className="pr-home-hero-content flex items-end justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">
+              MY RESERVATIONS
+            </div>
+            <h1 className="h2 font-serif mt-1.5">📅 내 예약</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">
+              매장 방문 예약과 상태를 한눈에
+            </p>
+          </div>
+          <div
+            className="hero-pink-action px-3 py-1.5 rounded-full text-[11px] font-extrabold mono"
+            style={{ color: '#fff' }}
+          >
+            예정 {upcoming.length} · 지난 {past.length}
+          </div>
+        </div>
       </header>
 
       {/* 탭 */}
       <div
         className="sticky z-10 px-4 flex gap-1"
-        style={{ top: 56, background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}
+        style={{ top: 0, background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}
       >
         {([
           { id: 'upcoming' as Tab, label: '예정', count: upcoming.length },
