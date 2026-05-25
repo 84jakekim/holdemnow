@@ -107,16 +107,28 @@ export default function SeriesPage({ params }: { params: Promise<{ seriesId: str
   }, [series]);
 
   if (series === undefined) {
-    return <div className="p-10 text-center text-sm text-gray-500">로딩 중…</div>;
+    return (
+      <div className="p-5 space-y-3">
+        <div className="skel h-56 rounded-r-xl" />
+        <div className="skel h-32 rounded-r-xl" />
+      </div>
+    );
   }
   if (series === null) {
     return (
-      <div className="p-10 text-center">
-        <div className="text-4xl mb-3">⚠️</div>
-        <div className="font-bold mb-2">시리즈를 찾을 수 없습니다</div>
-        <button onClick={() => router.replace('/m')} className="text-xs text-gray-500 underline">
-          홈으로
-        </button>
+      <div className="p-6">
+        <div className="empty-state">
+          <div className="empty-state-icon" aria-hidden>⚠️</div>
+          <div>
+            <div className="empty-state-title">시리즈를 찾을 수 없어요</div>
+            <div className="empty-state-desc" style={{ marginTop: 6 }}>
+              삭제되었거나 비공개 처리된 시리즈일 수 있어요.
+            </div>
+          </div>
+          <button onClick={() => router.replace('/m')} className="btn-brand tap px-5 py-2.5 text-[13px]">
+            홈으로
+          </button>
+        </div>
       </div>
     );
   }

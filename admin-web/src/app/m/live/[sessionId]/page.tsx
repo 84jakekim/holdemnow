@@ -200,8 +200,11 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
 
   if (session === undefined) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] text-gray-500 flex items-center justify-center text-sm">
-        로딩 중…
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="w-3 h-3 mx-auto mb-3 rounded-full bg-[#E53E3E] animate-pulse" />
+          <div className="text-sm font-bold text-white tracking-wider">LIVE 불러오는 중</div>
+        </div>
       </div>
     );
   }
@@ -209,9 +212,14 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     return (
       <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-6">
         <div className="text-center">
-          <div className="text-3xl mb-3">●</div>
-          <div className="font-bold mb-2">LIVE가 종료되었습니다</div>
-          <button onClick={() => router.replace('/m')} className="text-xs text-gray-400 underline">
+          <div className="text-5xl mb-3" aria-hidden>●</div>
+          <div className="text-lg font-extrabold mb-1.5 font-serif">LIVE가 종료되었습니다</div>
+          <div className="text-xs text-white/60 mb-5">매장에서 새 LIVE를 시작하면 여기서 다시 볼 수 있어요</div>
+          <button
+            onClick={() => router.replace('/m')}
+            className="px-5 py-2.5 rounded-full text-[13px] font-bold tap"
+            style={{ background: '#FF1F8F', color: '#fff', boxShadow: '0 2px 12px rgba(255,31,143,0.30)' }}
+          >
             홈으로
           </button>
         </div>

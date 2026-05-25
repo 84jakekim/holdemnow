@@ -126,41 +126,65 @@ export default function LiveFeedListPage() {
 
   return (
     <div className="pb-24">
-      {/* 헤더 */}
-      <div className="px-5 h-14 flex items-center justify-between border-b border-gray-100 sticky top-0 bg-white z-10">
-        <Link href="/m" className="text-xl">←</Link>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-lg font-extrabold tracking-tight font-serif">지금 LIVE</span>
+      {/* LIVE hero — 빨강 그라데이션 (LIVE 시그니처) */}
+      <header
+        className="px-5 pt-5 pb-6 text-white relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, #C53030 0%, #E53E3E 55%, #FF6B6B 100%)',
+        }}
+      >
+        <div
+          aria-hidden
+          className="absolute top-[-40px] right-[-40px] w-[220px] h-[220px] rounded-full pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 65%)',
+          }}
+        />
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <Link href="/m" className="hero-pink-action w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 tap" aria-label="뒤로">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </Link>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              LIVE NOW
+            </div>
+            <h1 className="h2 font-serif mt-1.5">🎬 지금 LIVE</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">
+              {userLocation
+                ? `내 주변 ${NEARBY_RADIUS_M / 1000}km · 거리순`
+                : locationDenied
+                  ? '전체 LIVE 매장'
+                  : '위치 확인 중…'}
+            </p>
+          </div>
+          <div className="hero-pink-action px-3 py-1.5 rounded-full text-[12px] font-extrabold mono">
+            {filteredSessions.length}곳
+          </div>
         </div>
-        <div className="w-6" />
-      </div>
-
-      {/* 안내 */}
-      <div className="px-5 py-3 flex items-center justify-between text-[11px] text-gray-500">
-        <span>
-          {userLocation
-            ? `내 주변 ${NEARBY_RADIUS_M / 1000}km · 거리순`
-            : locationDenied
-              ? '전체 LIVE'
-              : '위치 확인 중…'}
-        </span>
-        <span>{filteredSessions.length}개</span>
-      </div>
+      </header>
 
       {/* 결과 */}
       {loading ? (
-        <div className="py-10 text-center text-sm text-gray-500">로딩 중…</div>
+        <div className="px-5 pt-4 space-y-3">
+          <div className="skel h-40 rounded-r-xl" />
+          <div className="skel h-40 rounded-r-xl" />
+        </div>
       ) : filteredSessions.length === 0 ? (
-        <div className="py-16 px-6 text-center">
-          <div className="text-4xl mb-3">🎬</div>
-          <div className="font-bold text-gray-900 mb-2">
-            {userLocation ? '내 주변 LIVE 없음' : '진행 중인 LIVE 없음'}
-          </div>
-          <div className="text-xs text-gray-500 leading-relaxed">
-            {userLocation
-              ? `반경 ${NEARBY_RADIUS_M / 1000}km 안에 진행 중인 LIVE 토너가 없습니다.`
-              : '어드민에서 LIVE 시작 시 즉시 표시됩니다.'}
+        <div className="px-5 pt-6">
+          <div className="empty-state">
+            <div className="empty-state-icon" aria-hidden>🎬</div>
+            <div>
+              <div className="empty-state-title">
+                {userLocation ? '내 주변에 LIVE가 없어요' : '진행 중인 LIVE가 없어요'}
+              </div>
+              <div className="empty-state-desc" style={{ marginTop: 6 }}>
+                {userLocation
+                  ? `반경 ${NEARBY_RADIUS_M / 1000}km 안에 LIVE 토너가 없습니다.`
+                  : '어드민에서 LIVE 시작 시 즉시 표시됩니다.'}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
