@@ -394,14 +394,14 @@ export default function PostsPage() {
         style={{
           height: 52,
           background: 'var(--surface-1)',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '2px solid rgba(255,31,143,0.18)',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
         <button
           type="button"
           onClick={() => router.back()}
-          className="inline-flex items-center justify-center rounded-md"
+          className="inline-flex items-center justify-center rounded-md tap"
           style={{ width: 36, height: 36, color: 'var(--text-1)' }}
           aria-label="뒤로"
         >
@@ -409,8 +409,8 @@ export default function PostsPage() {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <h1 className="flex-1 text-base font-extrabold truncate" style={{ color: 'var(--text-1)' }}>
-          오늘의 매장 소식
+        <h1 className="flex-1 text-base font-extrabold truncate font-serif" style={{ color: 'var(--text-1)' }}>
+          💬 오늘의 매장 소식
         </h1>
         {/* 반경 드롭다운 */}
         <div className="relative">

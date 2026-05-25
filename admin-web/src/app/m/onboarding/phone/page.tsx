@@ -82,18 +82,16 @@ export default function OnboardingPhonePage() {
       style={{ background: 'var(--bg)' }}
     >
       <div className="flex-1 flex flex-col px-6 pt-12 pb-8 max-w-md mx-auto w-full">
-        {/* 헤더 */}
-        <div className="mb-6">
-          <div className="text-3xl mb-3">📱</div>
-          <h1
-            className="text-2xl font-extrabold tracking-tight"
-            style={{ color: 'var(--text-1)' }}
-          >
-            전화번호 등록
-          </h1>
-          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--text-2)' }}>
-            Pink Rabbit 사용을 위해 본인 명의 핸드폰 번호를 등록해 주세요.
-          </p>
+        {/* 핑크 그라데이션 hero 카드 */}
+        <div className="pr-home-hero rounded-r-2xl px-5 py-6 mb-6">
+          <div className="pr-home-hero-content">
+            <div className="text-3xl mb-2" aria-hidden>📱</div>
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">PHONE VERIFICATION</div>
+            <h1 className="h2 font-serif mt-1.5">전화번호 등록</h1>
+            <p className="text-[13px] leading-relaxed font-semibold opacity-90 mt-2">
+              Pink Rabbit 사용을 위해 본인 명의 핸드폰 번호를 등록해 주세요.
+            </p>
+          </div>
         </div>
 
         {/* 안내 카드 */}

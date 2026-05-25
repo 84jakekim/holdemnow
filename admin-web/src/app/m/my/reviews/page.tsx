@@ -112,57 +112,48 @@ export default function MyReviewsPage() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      {/* ── 헤더 ── */}
-      <header
-        className="px-5 h-14 flex items-center justify-between"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.back()}
-            aria-label="뒤로"
-            className="w-9 h-9 -ml-2 flex items-center justify-center rounded-xl transition active:scale-90"
-            style={{ color: 'var(--text-2)' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6"/>
-            </svg>
-          </button>
-          <span className="text-xl font-extrabold tracking-tight font-serif" style={{ color: 'var(--text-1)' }}>
-            내가 쓴 리뷰
-          </span>
+      {/* ── 핑크 hero ── */}
+      <header className="pr-home-hero px-5 pt-5 pb-6">
+        <div className="pr-home-hero-content flex items-end justify-between gap-3">
+          <div className="flex items-end gap-2">
+            <button
+              onClick={() => router.back()}
+              aria-label="뒤로"
+              className="hero-pink-action w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 tap mb-1"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div>
+              <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">MY REVIEWS</div>
+              <h1 className="h2 font-serif mt-1">✎ 내가 쓴 리뷰</h1>
+              <p className="text-[13px] font-semibold opacity-90 mt-1.5">방문한 매장 후기 모음</p>
+            </div>
+          </div>
+          <div className="hero-pink-action px-3 py-1.5 rounded-full text-[12px] font-extrabold mono">
+            {reviews.length}개
+          </div>
         </div>
-        <span className="text-xs font-bold" style={{ color: 'var(--text-3)' }}>
-          {reviews.length}개
-        </span>
       </header>
 
       {loading ? (
-        <div className="p-8 text-center text-sm" style={{ color: 'var(--text-3)' }}>로딩 중…</div>
+        <div className="p-4 space-y-3">
+          <div className="skel h-32 rounded-r-xl" />
+          <div className="skel h-32 rounded-r-xl" />
+        </div>
       ) : reviews.length === 0 ? (
-        <div className="p-8 text-center">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4"
-            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-            aria-hidden="true"
-          >
-            ✎
+        <div className="px-5 pt-6">
+          <div className="empty-state">
+            <div className="empty-state-icon" aria-hidden>✎</div>
+            <div>
+              <div className="empty-state-title">아직 작성한 리뷰가 없어요</div>
+              <div className="empty-state-desc" style={{ marginTop: 6 }}>
+                방문한 매장 상세에서 <strong>리뷰 쓰기</strong> 버튼을 눌러 다른 분들에게 후기를 공유해 보세요.
+              </div>
+            </div>
+            <Link href="/m/find" className="btn-brand tap px-5 py-2.5 text-[13px]">
+              매장 둘러보기
+            </Link>
           </div>
-          <div className="font-bold mb-2" style={{ color: 'var(--text-1)' }}>
-            아직 작성한 리뷰가 없어요
-          </div>
-          <div className="text-xs leading-relaxed mb-6" style={{ color: 'var(--text-3)' }}>
-            방문한 매장 상세 화면에서 <strong>리뷰 쓰기</strong> 버튼을 눌러<br />
-            다른 분들에게 후기를 공유해 보세요
-          </div>
-          <Link
-            href="/m/discover"
-            className="inline-flex items-center gap-1.5 px-5 py-3 rounded-xl font-bold text-sm transition active:scale-[0.97]"
-            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
-          >
-            매장 둘러보기
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-          </Link>
         </div>
       ) : (
         <div className="p-4 space-y-3">

@@ -41,24 +41,28 @@ export default function NoticeDetailPage({
 
   if (post === undefined) {
     return (
-      <main className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
-        <div className="text-sm" style={{ color: 'var(--text-3)' }}>로딩 중…</div>
+      <main className="min-h-screen p-5 space-y-3" style={{ background: 'var(--bg)' }}>
+        <div className="skel h-14 rounded-r-md" />
+        <div className="skel h-48 rounded-r-xl" />
       </main>
     );
   }
 
   if (post === null) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center gap-3 p-10" style={{ background: 'var(--bg)' }}>
-        <div className="text-4xl">📢</div>
-        <div className="font-bold text-lg" style={{ color: 'var(--text-1)' }}>공지를 찾을 수 없습니다</div>
-        <Link
-          href="/m/find"
-          className="text-sm px-4 py-2 rounded-xl font-semibold mt-2"
-          style={{ background: 'var(--surface-2)', color: 'var(--text-2)' }}
-        >
-          매장찾기로 돌아가기
-        </Link>
+      <main className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg)' }}>
+        <div className="empty-state w-full max-w-sm">
+          <div className="empty-state-icon" aria-hidden>📢</div>
+          <div>
+            <div className="empty-state-title">공지를 찾을 수 없어요</div>
+            <div className="empty-state-desc" style={{ marginTop: 6 }}>
+              종료되었거나 비활성된 공지일 수 있어요.
+            </div>
+          </div>
+          <Link href="/m/find" className="btn-brand tap px-5 py-2.5 text-[13px]">
+            매장찾기로 돌아가기
+          </Link>
+        </div>
       </main>
     );
   }
@@ -79,15 +83,15 @@ export default function NoticeDetailPage({
 
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 40 }}>
-      {/* 헤더 */}
+      {/* 헤더 — 핑크 액센트 라인 */}
       <header
-        className="sticky top-0 z-20 px-4 h-12 flex items-center justify-between"
-        style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}
+        className="sticky top-0 z-20 px-4 h-12 flex items-center justify-between bg-white"
+        style={{ borderBottom: '2px solid rgba(255,31,143,0.18)' }}
       >
-        <Link href="/m/find" aria-label="뒤로" className="text-xl px-1" style={{ color: 'var(--text-1)' }}>
+        <Link href="/m/find" aria-label="뒤로" className="text-xl px-1 tap" style={{ color: 'var(--text-1)' }}>
           ←
         </Link>
-        <span className="text-[13px] font-extrabold" style={{ color: 'var(--text-1)' }}>본사 공지</span>
+        <div className="section-title" style={{ margin: 0 }}>📢 본사 공지</div>
         <div className="w-6" />
       </header>
 
