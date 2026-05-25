@@ -590,20 +590,48 @@ function SessionControlPanel({
     ? { background: 'var(--surface-1)', color: 'var(--text-1)', border: '1.5px solid var(--border)' }
     : { background: '#FF1F8F', color: '#fff', border: 'none' };
 
+  // Phase 10 (2026-05-26) — 핸드오프 mock 응용:
+  //   - 핑크 그라데이션 hero wrapper (.pr-live-hero) + BREAK 시 amber (.pr-live-hero-break)
+  //   - 상단 LIVE/BREAK 칩 (pulse dot)
+  //   - 거대 mono 타이머 (96px → tabular-nums)
+  //   - 하단 3지표 grid (PLAYERS / LATE REG / PRIZE POOL) — 매장 어드민이므로 PRIZE POOL 노출 OK
+  const playersRemaining = session.playersRemaining;
+  const totalEntries = resolveTotalEntries(session);
+  const prizeWon = session.prizePool ?? 0;
+  const prizeDisplay =
+    prizeWon >= 10_000_000 ? `${(prizeWon / 10_000_000).toFixed(1)}천만`
+    : prizeWon >= 1_000_000 ? `${(prizeWon / 1_000_000).toFixed(1)}M`
+    : prizeWon >= 10_000 ? `${Math.round(prizeWon / 10_000)}만`
+    : prizeWon > 0 ? prizeWon.toLocaleString()
+    : '—';
+  const lateRegLabel = (() => {
+    if (session.lateRegClosed || session.currentLevel > session.lateRegEndLevel) return '마감';
+    let totalSec = seconds;
+    for (let lv = session.currentLevel + 1; lv <= session.lateRegEndLevel; lv++) {
+      const item = session.blindStructure.find((l) => l.level === lv);
+      if (item) totalSec += item.durationSec;
+    }
+    return totalSec < 300 ? fmtTime(Math.max(0, totalSec)) : `${Math.ceil(totalSec / 60)}분`;
+  })();
+
   return (
     <div className="space-y-3">
-      {/* 거대 타이머 */}
+      {/* 거대 타이머 — Phase 10 핸드오프 시그니처 */}
       <div
-        className={`rounded-2xl p-6 text-center ${isFinishing ? 'animate-pulse' : ''}`}
-        style={{
-          background: isFinishing
-            ? 'rgba(249,115,22,0.10)'
-            : isCurrentBreak
-              ? 'rgba(245,158,11,0.10)'
-              : 'var(--surface-1)',
-          border: `1.5px solid ${isFinishing ? '#F97316' : isCurrentBreak ? '#F59E0B' : 'var(--border)'}`,
-        }}
+        className={`pr-live-hero ${isCurrentBreak ? 'pr-live-hero-break' : ''} ${isFinishing ? 'animate-pulse' : ''}`}
+        style={{ padding: '24px 20px', minHeight: 220 }}
       >
+        {/* 상태 칩 + 토너명 */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <span className={`pr-live-status ${isCurrentBreak ? 'pr-live-status-break' : ''}`}>
+            <span className="pr-live-status-dot" />
+            {isFinishing ? 'FINISHING' : isCurrentBreak ? 'BREAK' : isReady ? 'READY' : isPaused ? 'PAUSED' : 'LIVE'}
+          </span>
+          <div className="text-xs font-extrabold truncate" style={{ color: 'var(--text-1)' }}>
+            {session.tournamentName}
+          </div>
+        </div>
+        <div className="text-center">
         {/* LEVEL 표시 — 2026-05-24 정정 #1: 브레이크는 레벨 번호 X.
             resolveDisplayedLevel이 isBreak=true 행은 number=null을 반환 → "☕ 휴식"으로만 표시.
             play 레벨이면 isBreak를 건너뛴 사용자-facing 번호(1, 2, 3, ...). */}
@@ -707,6 +735,28 @@ function SessionControlPanel({
             )}
           </div>
         )}
+        </div>
+
+        {/* 3지표 시그니처 grid — Phase 10 (PLAYERS / LATE REG / PRIZE POOL). 매장 어드민이라 PRIZE 노출 OK. */}
+        <div className="grid grid-cols-3 gap-2 mt-4">
+          <div className="pr-kpi-cell">
+            <div className="pr-kpi-cell-val">{playersRemaining}/{totalEntries}</div>
+            <div className="pr-kpi-cell-label">PLAYERS</div>
+            <div className="pr-kpi-cell-sub">REBUY {resolveRebuysCount(session)}</div>
+          </div>
+          <div className="pr-kpi-cell">
+            <div className="pr-kpi-cell-val" style={{ color: lateRegLabel === '마감' ? 'var(--text-3)' : '#D97706' }}>
+              {lateRegLabel}
+            </div>
+            <div className="pr-kpi-cell-label">LATE REG</div>
+            <div className="pr-kpi-cell-sub">Lv {session.lateRegEndLevel}까지</div>
+          </div>
+          <div className="pr-kpi-cell">
+            <div className="pr-kpi-cell-val" style={{ color: '#FF1F8F' }}>{prizeDisplay}</div>
+            <div className="pr-kpi-cell-label">PRIZE POOL</div>
+            <div className="pr-kpi-cell-sub">{prizeWon > 0 ? prizeWon.toLocaleString() : '미정'}</div>
+          </div>
+        </div>
       </div>
 
       {/* 컨트롤 그리드 */}
