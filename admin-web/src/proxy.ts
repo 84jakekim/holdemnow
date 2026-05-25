@@ -6,43 +6,78 @@ import type { NextRequest } from 'next/server';
  * ------------------------------------------------
  * (Next.js 16에서 `middleware` 파일 컨벤션은 `proxy`로 rename. 동작 동일.)
  * 같은 코드베이스를 다른 백엔드(`holdemnow` / `holdemnow-biz` / `holdemnow-admin`)에
- * 배포한 뒤, 각 백엔드에 `NEXT_PUBLIC_APP_VARIANT` 환경변수로 역할을 부여한다.
+ * 배포한 뒤, **request host로 자동 분기**한다.
  *
- *   - variant = 'app'   → 일반 사용자(`/m/*`, `/login`, `/onboarding/*`, 일반 가입)
- *   - variant = 'biz'   → 매장·대회사(`/login/business`, `/admin/*`, 사업자 가입)
- *   - variant = 'admin' → 본사 운영(`/platform-login`, `/platform/*`)
+ *   - host = holdemnow--…hosted.app          → variant = 'app'
+ *   - host = holdemnow-biz--…hosted.app      → variant = 'biz'
+ *   - host = holdemnow-admin--…hosted.app    → variant = 'admin'
+ *   - 그 외 (localhost 등)                    → variant = null = 통합 모드 (모든 라우트 허용)
  *
- * 미설정 = 'app' (현재 단일 백엔드 backwards-compatible)
+ * **NEXT_PUBLIC_APP_VARIANT** 환경변수는 명시 override용(테스트 등).
+ *
+ * variant별 허용 경로:
+ *   - 'app'   → 일반 사용자(`/m/*`, `/login`, `/onboarding/*`, 일반 가입)
+ *   - 'biz'   → 매장·대회사(`/login/business`, `/admin/*`, 사업자 가입)
+ *   - 'admin' → 본사 운영(`/platform-login`, `/platform/*`)
  *
  * 다른 도메인의 경로로 진입한 경우:
- *   - 해당 백엔드 URL 환경변수가 설정돼 있으면 → 동일 path로 redirect (?from=variant)
- *   - 환경변수가 비어 있으면 → 404 안내 페이지(/_blocked)로 rewrite (정보 누설 방지)
+ *   - 동일 호스트 베이스의 의도 백엔드 URL로 동일 path redirect (?from=variant)
  *
- * /api/*, /_next/*, 정적 자원, root('/')는 항상 통과시킨다.
- * 정적 자원이 통과돼야 안내 페이지 자체가 정상 렌더링된다.
+ * /api/*, /_next/*, 정적 자원, root('/')는 특수 처리.
  */
 
 type Variant = 'app' | 'biz' | 'admin';
 
-/**
- * VARIANT 해석:
- *   - 'app' | 'biz' | 'admin' → 해당 백엔드로 가드 활성
- *   - null = 통합 모드 (모든 라우트 통과, backwards-compat / 로컬 dev)
- *
- * 운영에서는 각 백엔드의 apphosting yaml에 명시한다.
- * .env.local 미설정 / 로컬 dev / 단일 백엔드 운영 시 = null = 모든 라우트 허용.
- */
-const VARIANT: Variant | null = (() => {
+const BACKEND_PREFIXES: Record<Variant, string> = {
+  app: 'holdemnow--',
+  biz: 'holdemnow-biz--',
+  admin: 'holdemnow-admin--',
+};
+
+/** host header로 variant 자동 판별. localhost 등은 null 반환. */
+function detectVariantFromHost(host: string | null | undefined): Variant | null {
+  if (!host) return null;
+  const h = host.toLowerCase();
+  // 더 긴 prefix 먼저 매칭 (-biz--, -admin-- 이 holdemnow-- 보다 길다)
+  if (h.startsWith(BACKEND_PREFIXES.biz)) return 'biz';
+  if (h.startsWith(BACKEND_PREFIXES.admin)) return 'admin';
+  if (h.startsWith(BACKEND_PREFIXES.app)) return 'app';
+  return null;
+}
+
+/** 환경변수 override (테스트/명시용). 미설정 = host 자동 판별 우선. */
+function detectVariantFromEnv(): Variant | null {
   const raw = (process.env.NEXT_PUBLIC_APP_VARIANT ?? '').trim().toLowerCase();
   if (raw === 'app' || raw === 'biz' || raw === 'admin') return raw;
   return null;
-})();
+}
 
-const BACKEND_URLS: Record<Variant, string | undefined> = {
-  app: process.env.NEXT_PUBLIC_BACKEND_APP_URL?.trim() || undefined,
-  biz: process.env.NEXT_PUBLIC_BACKEND_BIZ_URL?.trim() || undefined,
-  admin: process.env.NEXT_PUBLIC_BACKEND_ADMIN_URL?.trim() || undefined,
-};
+/** host에서 base(공통 suffix) 추출. 예: holdemnow-biz--holdemnow-prod.us-east4.hosted.app → holdemnow-prod.us-east4.hosted.app */
+function extractHostBase(host: string): string {
+  for (const p of Object.values(BACKEND_PREFIXES)) {
+    if (host.startsWith(p)) return host.slice(p.length);
+  }
+  return host;
+}
+
+/** 다른 백엔드 URL 계산. host 기반 자동 도출 우선, 실패 시 환경변수 fallback. */
+function getBackendUrls(req: NextRequest): Record<Variant, string | undefined> {
+  const host = req.headers.get('host') ?? '';
+  const proto = req.nextUrl.protocol.replace(':', '') || 'https';
+  const base = extractHostBase(host);
+  const auto = base && base !== host
+    ? {
+        app: `${proto}://${BACKEND_PREFIXES.app}${base}`,
+        biz: `${proto}://${BACKEND_PREFIXES.biz}${base}`,
+        admin: `${proto}://${BACKEND_PREFIXES.admin}${base}`,
+      }
+    : null;
+  return {
+    app: auto?.app ?? (process.env.NEXT_PUBLIC_BACKEND_APP_URL?.trim() || undefined),
+    biz: auto?.biz ?? (process.env.NEXT_PUBLIC_BACKEND_BIZ_URL?.trim() || undefined),
+    admin: auto?.admin ?? (process.env.NEXT_PUBLIC_BACKEND_ADMIN_URL?.trim() || undefined),
+  };
+}
 
 /** 경로 → 의도된 variant 분류. 매칭 안 되는 경로는 'app'(기본). */
 function classifyPath(pathname: string): Variant {
@@ -101,50 +136,54 @@ function isAlwaysAllowed(pathname: string): boolean {
 export function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // 통합 모드(VARIANT 미지정) — 모든 라우트 통과 (단일 백엔드 / 로컬 dev backwards-compat)
-  if (VARIANT === null) {
+  // host header > 환경변수 override 순서로 variant 결정
+  const variant = detectVariantFromHost(req.headers.get('host')) ?? detectVariantFromEnv();
+
+  // 통합 모드(매칭 안 되는 호스트, localhost 등) — 모든 라우트 통과 (단일 백엔드 / 로컬 dev backwards-compat)
+  if (variant === null) {
     return NextResponse.next();
   }
 
   // root('/') 특수 처리 — variant별로 적절한 시작 화면으로 redirect
   if (pathname === '/') {
-    if (VARIANT === 'biz') {
+    if (variant === 'biz') {
       const url = req.nextUrl.clone();
       url.pathname = '/login/business';
       return NextResponse.redirect(url, 307);
     }
-    if (VARIANT === 'admin') {
+    if (variant === 'admin') {
       const url = req.nextUrl.clone();
       url.pathname = '/platform-login';
       return NextResponse.redirect(url, 307);
     }
     // app variant — 기존 dispatcher 통과
     const res = NextResponse.next();
-    applyRobotsHeader(res);
+    applyRobotsHeader(res, variant);
     return res;
   }
 
   if (isAlwaysAllowed(pathname)) {
     const res = NextResponse.next();
-    applyRobotsHeader(res);
+    applyRobotsHeader(res, variant);
     return res;
   }
 
   const intended = classifyPath(pathname);
 
   // 의도 백엔드와 현재 백엔드 일치 → 통과
-  if (intended === VARIANT) {
+  if (intended === variant) {
     const res = NextResponse.next();
-    applyRobotsHeader(res);
+    applyRobotsHeader(res, variant);
     return res;
   }
 
-  // 잘못된 도메인 — 의도 백엔드 URL이 있으면 redirect, 없으면 차단 안내
-  const target = BACKEND_URLS[intended];
+  // 잘못된 도메인 — 의도 백엔드 URL로 redirect
+  const backendUrls = getBackendUrls(req);
+  const target = backendUrls[intended];
   if (target) {
     try {
       const url = new URL(pathname + search, target);
-      url.searchParams.set('from', VARIANT);
+      url.searchParams.set('from', variant);
       return NextResponse.redirect(url, 307);
     } catch {
       // URL 파싱 실패 시 안내 페이지로
@@ -155,16 +194,16 @@ export function proxy(req: NextRequest) {
   const blocked = req.nextUrl.clone();
   blocked.pathname = '/_blocked';
   blocked.searchParams.set('intended', intended);
-  blocked.searchParams.set('current', VARIANT);
+  blocked.searchParams.set('current', variant);
   blocked.searchParams.set('path', pathname);
   const res = NextResponse.rewrite(blocked);
   res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   return res;
 }
 
-function applyRobotsHeader(res: NextResponse) {
+function applyRobotsHeader(res: NextResponse, variant: Variant) {
   // app variant만 색인 허용. biz/admin은 noindex.
-  if (VARIANT === 'biz' || VARIANT === 'admin') {
+  if (variant === 'biz' || variant === 'admin') {
     res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
 }
