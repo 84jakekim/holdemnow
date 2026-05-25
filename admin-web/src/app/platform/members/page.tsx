@@ -273,12 +273,13 @@ function MembersPageInner() {
     <div>
       {/* 페이지 헤더 */}
       <div className="mb-6">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">회원 관리</h1>
-        <p className="text-sm text-gray-500 mt-1">본사 어드민, 일반 사용자, 매장, 대회사 통합 관리</p>
+        <div className="section-title" style={{ color: 'var(--gold)' }}>MEMBER MANAGEMENT</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>👥 회원 관리</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>본사 어드민, 일반 사용자, 매장, 대회사 통합 관리</p>
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-1.5 mb-6 border-b border-gray-100 pb-0">
+      <div className="flex gap-1.5 mb-6 pb-0" style={{ borderBottom: '1px solid var(--border)' }}>
         {(
           [
             { id: 'admins' as Tab, label: '본사 어드민', count: admins.length, badge: 0 },
@@ -290,11 +291,12 @@ function MembersPageInner() {
           <button
             key={t.id}
             onClick={() => switchTab(t.id)}
-            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-lg border-b-2 transition ${
+            className="relative px-5 py-2.5 text-sm font-bold rounded-t-lg transition tap"
+            style={
               activeTab === t.id
-                ? 'text-gray-900 border-gray-900'
-                : 'text-gray-500 border-transparent hover:text-gray-700'
-            }`}
+                ? { color: 'var(--gold)', borderBottom: '2px solid var(--gold)' }
+                : { color: 'var(--text-3)', borderBottom: '2px solid transparent' }
+            }
           >
             {t.label}
             <span className="ml-1.5 text-[10px] text-gray-400">({t.count})</span>

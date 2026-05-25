@@ -242,10 +242,8 @@ export default function PlatformUsersPage() {
     <div>
       {/* 상단 타이틀 */}
       <div className="mb-5">
-        <h1
-          className="text-2xl font-extrabold tracking-tight"
-          style={{ color: 'var(--text-1)' }}
-        >
+        <div className="section-title" style={{ color: 'var(--gold)' }}>USER MANAGEMENT</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>
           👥 사용자 관리
         </h1>
         <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>

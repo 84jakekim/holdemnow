@@ -45,16 +45,18 @@ export default function PlatformNoticesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">📢 팝업 공지</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            모바일 앱 진입 시 팝업으로 노출. 활성 {activeCount}건이 현재 사용자에게 보임.
+          <div className="section-title" style={{ color: 'var(--gold)' }}>POPUP NOTICES</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>📢 팝업 공지</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+            모바일 앱 진입 시 팝업으로 노출. 활성 <b style={{ color: 'var(--gold)' }}>{activeCount}</b>건이 현재 사용자에게 보임.
           </p>
         </div>
         <button
           onClick={() => setEditing('new')}
-          className="bg-black text-white px-4 py-2.5 rounded-xl font-bold text-sm"
+          className="px-4 py-2.5 text-sm font-bold tap"
+          style={{ background: 'var(--gold)', color: '#0F1419', borderRadius: 'var(--r-md)', boxShadow: '0 2px 12px rgba(245,158,11,0.30)' }}
         >
           + 새 공지
         </button>

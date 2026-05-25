@@ -118,8 +118,9 @@ export default function AuditLogPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900">감사 로그 (Audit Log)</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <div className="section-title" style={{ color: 'var(--gold)' }}>AUDIT LOG</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>📋 감사 로그</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
           본사 관리자(platform_admin) 행위 기록. 위변조 불가(create-only) — 분쟁·법적 증빙용.
         </p>
       </div>

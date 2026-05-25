@@ -33,17 +33,19 @@ export default function PlatformPinnedPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">📌 홈 고정 공지</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            모바일 홈 &quot;오늘의 매장 소식&quot; 섹션 최상단에 고정 노출. 활성 {activeCount}건이 사용자에게 보임.
+          <div className="section-title" style={{ color: 'var(--gold)' }}>PINNED POSTS</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>📌 홈 고정 공지</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+            모바일 홈 &quot;오늘의 매장 소식&quot; 섹션 최상단에 고정 노출. 활성 <b style={{ color: 'var(--gold)' }}>{activeCount}</b>건이 사용자에게 보임.
             <br />팝업으로 띄울 공지는 좌측 메뉴 <b>📢 팝업 공지</b>에서 관리.
           </p>
         </div>
         <button
           onClick={() => setEditing('new')}
-          className="bg-black text-white px-4 py-2.5 rounded-xl font-bold text-sm"
+          className="px-4 py-2.5 text-sm font-bold tap"
+          style={{ background: 'var(--gold)', color: '#0F1419', borderRadius: 'var(--r-md)', boxShadow: '0 2px 12px rgba(245,158,11,0.30)' }}
         >
           + 새 고정 공지
         </button>

@@ -129,13 +129,14 @@ export default function PlatformModerationKeywordsPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-1)' }}>
+          <div className="section-title" style={{ color: 'var(--gold)' }}>MODERATION DICTIONARY</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>
             🚫 금지어 사전
           </h1>
-          <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>
             매장 글·리뷰·커뮤니티 작성 시 자동 차단됩니다. 변경은 사용자 앱에 즉시 반영.
             <br />
-            <span style={{ color: 'var(--gold)' }}>본사 등록 {enabledTotal}개</span>
+            <span style={{ color: 'var(--gold)', fontWeight: 700 }}>본사 등록 {enabledTotal}개</span>
             <span style={{ color: 'var(--text-3)' }}> / 전체 {items.length}개</span>
             <span style={{ color: 'var(--text-3)' }}> · 법적 차단 {LEGAL_BLOCKED_KEYWORDS.length}개(자동)</span>
           </p>

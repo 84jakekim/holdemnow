@@ -92,12 +92,13 @@ export default function ModerationPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900">모더레이션</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <div className="section-title" style={{ color: 'var(--gold)' }}>MODERATION</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>🛡️ 모더레이션</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
           매장·사용자가 작성한 모든 게시물을 한 곳에서 점검·차단합니다.
           신고 누적(flagCount) 기준 정렬로 위험 글을 먼저 확인하세요.
           상세 신고 흐름은{' '}
-          <Link href="/platform/reviews" className="text-pink-600 font-bold hover:underline">
+          <Link href="/platform/reviews" className="font-bold hover:underline" style={{ color: 'var(--brand)' }}>
             리뷰 관리
           </Link>{' '}
           페이지에도 별도 도구 제공.

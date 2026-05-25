@@ -12,8 +12,9 @@ export default function PlatformDemoPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">🛠 데모 데이터 관리</h1>
-        <p className="text-sm text-gray-500 mt-1">카톡방 사장님 가입 전 임시 매장·데이터</p>
+        <div className="section-title" style={{ color: 'var(--gold)' }}>DEMO DATA</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>🛠 데모 데이터 관리</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>카톡방 사장님 가입 전 임시 매장·데이터</p>
       </div>
 
       <BackfillRegionCodeCard />

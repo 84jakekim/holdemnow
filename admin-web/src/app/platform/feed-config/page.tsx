@@ -199,10 +199,11 @@ export default function FeedConfigPage() {
     <div className="space-y-6 max-w-3xl">
       {/* 헤더 */}
       <header>
-        <h1 className="text-xl font-extrabold mb-1" style={{ color: 'var(--text-1)' }}>
+        <div className="section-title" style={{ color: 'var(--gold)' }}>FEED RADIUS</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>
           📍 반경 설정
         </h1>
-        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+        <p className="text-xs leading-relaxed mt-1" style={{ color: 'var(--text-2)' }}>
           채팅방 · 내 주변 인기 매장 · 내 주변 매장 — 모바일 사용자에게 노출되는 거리 정책을
           한 곳에서 관리합니다. 저장 즉시 모든 클라이언트에 반영.
         </p>

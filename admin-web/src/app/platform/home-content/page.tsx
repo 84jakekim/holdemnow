@@ -84,8 +84,9 @@ export default function HomeContentPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900">홈 콘텐츠 관리</h1>
-        <p className="text-sm text-gray-500 mt-1">모바일 홈 화면에 노출되는 광고, 유튜브 영상, 유튜버 채널을 관리합니다.</p>
+        <div className="section-title" style={{ color: 'var(--gold)' }}>HOME CONTENT</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>📺 홈 콘텐츠 관리</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>모바일 홈 화면에 노출되는 광고, 유튜브 영상, 유튜버 채널을 관리합니다.</p>
       </div>
 
       {/* 탭 */}

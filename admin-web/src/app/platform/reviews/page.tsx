@@ -176,17 +176,11 @@ export default function PlatformReviewsPage() {
       {/* 헤더 */}
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1
-            style={{
-              fontSize: 28,
-              fontWeight: 800,
-              color: 'var(--text-1)',
-              letterSpacing: '-0.02em',
-            }}
-          >
+          <div className="section-title" style={{ color: 'var(--gold)' }}>REVIEW MODERATION</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>
             ⭐ 리뷰 관리
           </h1>
-          <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>
             최근 100건 실시간 · 부적절 리뷰는 숨김 처리하여 모바일 노출을 차단합니다.
           </p>
         </div>

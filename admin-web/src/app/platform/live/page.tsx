@@ -114,14 +114,16 @@ export default function PlatformLivePage() {
       {/* 헤더 */}
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🎬 전국 LIVE 모니터링</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <div className="section-title" style={{ color: 'var(--gold)' }}>NATIONWIDE LIVE</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>🎬 전국 LIVE 모니터링</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
             모든 매장의 진행 중인 LIVE 세션을 본사가 직접 모니터링·제어합니다.
           </p>
         </div>
         <button
           onClick={() => setShowStartModal(true)}
-          className="bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-red-600"
+          className="px-4 py-2.5 text-sm font-bold tap"
+          style={{ background: 'var(--live)', color: '#fff', borderRadius: 'var(--r-md)', boxShadow: '0 2px 12px rgba(229,62,62,0.30)' }}
         >
           + 새 LIVE 시작
         </button>

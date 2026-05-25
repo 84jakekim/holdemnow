@@ -135,7 +135,8 @@ export default function PlatformMarketingPage() {
       {/* 헤더 */}
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+          <div className="section-title" style={{ color: 'var(--gold)' }}>MARKETING PUSH</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>
             📣 마케팅 푸시
           </h1>
           <p className="text-xs mt-1.5" style={{ color: 'var(--text-3)' }}>

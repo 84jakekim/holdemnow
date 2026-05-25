@@ -67,17 +67,18 @@ export default function PlatformAdsPage() {
     <div>
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+          <div className="section-title" style={{ color: 'var(--gold)' }}>AD SLOTS</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>
             💰 광고 슬롯 관리
           </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-3)' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
             매장에 광고 노출권을 수동으로 부여합니다. v0.1은 결제 없이 발급, v0.2에서 PG 어댑터 추가 예정.
           </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="px-4 py-2.5 rounded-xl font-bold text-sm"
-          style={{ background: 'var(--gold)', color: '#0F1419' }}
+          className="px-4 py-2.5 text-sm font-bold tap"
+          style={{ background: 'var(--gold)', color: '#0F1419', borderRadius: 'var(--r-md)', boxShadow: '0 2px 12px rgba(245,158,11,0.30)' }}
         >
           + 새 광고 발급
         </button>
