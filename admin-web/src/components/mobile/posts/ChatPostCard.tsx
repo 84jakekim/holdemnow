@@ -95,13 +95,14 @@ export default function ChatPostCard({ post, distanceMeters, now, onImageClick }
               handleCardClick();
             }
           }}
-          className="block rounded-2xl transition active:opacity-75 cursor-pointer"
+          className="block rounded-2xl transition active:opacity-75 cursor-pointer tap"
           style={{
             background: style.surface,
             border: `1px solid ${style.border}`,
             borderLeft: `3px solid ${style.accent}`,
             padding: '10px 12px 10px',
             borderTopLeftRadius: '6px', // 말풍선 꼬리 효과
+            boxShadow: 'var(--shadow-card)',
           }}
           aria-label={`${post.storeName ?? '매장'} 소식 보기`}
         >

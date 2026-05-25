@@ -1411,7 +1411,7 @@ function ActivePostCard({ post }: { post: StorePost }) {
         </span>
       </div>
 
-      <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
+      <div className="rounded-2xl overflow-hidden lift" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
         {post.imageUrls.length > 0 && (
           <div className="relative">
             <div ref={scrollRef} className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none" style={{ aspectRatio: '4/3' }}>
