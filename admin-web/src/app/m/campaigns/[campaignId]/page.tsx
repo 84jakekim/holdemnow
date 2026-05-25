@@ -47,26 +47,28 @@ export default function CampaignDetailPage({
 
   if (campaign === undefined) {
     return (
-      <div className="p-10 text-center text-sm text-gray-500">
-        불러오는 중…
+      <div className="p-5 space-y-3">
+        <div className="skel h-14 rounded-r-md" />
+        <div className="skel h-48 rounded-r-xl" />
       </div>
     );
   }
 
   if (campaign === null) {
     return (
-      <div className="p-10 text-center">
-        <div className="text-4xl mb-3">📭</div>
-        <div className="font-bold mb-2">공지를 찾을 수 없습니다</div>
-        <div className="text-xs text-gray-500 mb-4">
-          이미 삭제되었거나 잘못된 링크일 수 있어요.
+      <div className="p-6">
+        <div className="empty-state">
+          <div className="empty-state-icon" aria-hidden>📭</div>
+          <div>
+            <div className="empty-state-title">공지를 찾을 수 없어요</div>
+            <div className="empty-state-desc" style={{ marginTop: 6 }}>
+              이미 삭제되었거나 잘못된 링크일 수 있어요.
+            </div>
+          </div>
+          <button onClick={() => router.replace('/m')} className="btn-brand tap px-5 py-2.5 text-[13px]">
+            홈으로
+          </button>
         </div>
-        <button
-          onClick={() => router.replace('/m')}
-          className="text-xs text-gray-500 underline"
-        >
-          홈으로 가기
-        </button>
       </div>
     );
   }
@@ -91,19 +93,22 @@ export default function CampaignDetailPage({
 
   return (
     <div className="min-h-screen bg-white pb-24">
-      {/* 상단 헤더 */}
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur px-4 h-14 flex items-center justify-between border-b border-gray-100">
+      {/* 상단 헤더 — 핑크 액센트 라인 */}
+      <div
+        className="sticky top-0 z-10 bg-white/95 backdrop-blur px-4 h-14 flex items-center justify-between"
+        style={{ borderBottom: '2px solid rgba(255,31,143,0.18)' }}
+      >
         <button
           onClick={() => {
             if (window.history.length > 1) router.back();
             else router.replace('/m');
           }}
-          className="text-xl w-10 h-10 -ml-2 flex items-center justify-center"
+          className="text-xl w-10 h-10 -ml-2 flex items-center justify-center tap"
           aria-label="뒤로"
         >
           ←
         </button>
-        <div className="text-xs font-bold text-gray-500">본사 공지</div>
+        <div className="section-title" style={{ margin: 0 }}>📢 본사 공지</div>
         <button
           onClick={() =>
             shareContent({
@@ -111,8 +116,8 @@ export default function CampaignDetailPage({
               text: campaign.body.slice(0, 80),
             })
           }
-          className="text-lg w-10 h-10 -mr-2 flex items-center justify-center"
-          style={{ color: '#E01077' }}
+          className="text-lg w-10 h-10 -mr-2 flex items-center justify-center tap"
+          style={{ color: 'var(--brand)' }}
           aria-label="공유"
         >
           ↗
