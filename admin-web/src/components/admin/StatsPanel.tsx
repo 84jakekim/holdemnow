@@ -62,8 +62,9 @@ export default function StatsPanel({ storeId }: { storeId: string }) {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="h2 text-gray-900">📈 통계 리포트</h1>
-        <p className="text-sm text-gray-500 mt-1">실시간 누적 지표 · 일별/주별 추이는 v0.2</p>
+        <div className="section-title" style={{ color: 'var(--brand)' }}>STORE METRICS</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>📈 통계 리포트</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>실시간 누적 지표 · 일별/주별 추이는 v0.2</p>
       </div>
 
       {/* CTR 카드 — 핸드오프 KPI signature 톤 (r-2xl + shadow-hero) */}

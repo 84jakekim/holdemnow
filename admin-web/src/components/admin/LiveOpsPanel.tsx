@@ -67,7 +67,8 @@ export default function LiveOpsPanel({ storeId, storeName }: Props) {
     <div>
       {/* 통합 헤더 + sub-tab */}
       <div className="mb-5">
-        <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+        <div className="section-title" style={{ color: 'var(--brand)' }}>LIVE OPERATIONS</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>
           🎬 LIVE & 토너
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>

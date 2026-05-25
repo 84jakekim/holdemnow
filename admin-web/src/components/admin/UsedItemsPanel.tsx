@@ -219,15 +219,16 @@ export default function UsedItemsPanel({ storeId, storeName, storePhotoUrl }: Us
   return (
     <div>
       {/* ── 패널 헤더 ── */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🛒 중고거래 관리</h1>
-          <p className="text-sm text-gray-500 mt-1">{storeName} · 매장 비품 판매</p>
+          <div className="section-title" style={{ color: 'var(--brand)' }}>USED MARKET</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>🛒 중고거래 관리</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>{storeName} · 매장 비품 판매</p>
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-sm font-bold text-white transition hover:opacity-90 active:opacity-75"
-          style={{ background: '#FF1F8F' }}
+          className="btn-brand flex items-center gap-1.5 px-4 h-10 text-sm tap"
+          style={{ borderRadius: 'var(--r-md)' }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>

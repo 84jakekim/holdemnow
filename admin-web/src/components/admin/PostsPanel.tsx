@@ -140,19 +140,21 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📢 오늘의 소식</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <div className="section-title" style={{ color: 'var(--brand)' }}>STORE POSTS</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>📢 오늘의 소식</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
             매일 새 글을 올려 단골에게 오늘 운영 정보를 전달하세요. 24시간 자동 만료.
-            현재 활성 {activeCount}건.
+            현재 활성 <b style={{ color: 'var(--brand)' }}>{activeCount}</b>건.
           </p>
         </div>
         <button
           onClick={() => setEditing('new')}
           disabled={!canWrite}
           title={!canWrite ? '매장 활성 상태에서만 글을 작성할 수 있습니다' : undefined}
-          className="bg-black text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="btn-brand px-4 py-2.5 text-sm tap disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ borderRadius: 'var(--r-md)' }}
         >
           + 새 소식
         </button>
