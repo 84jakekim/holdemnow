@@ -410,12 +410,12 @@ function QuickNavCards() {
         <Link
           href="/m/events"
           aria-label="대회정보"
-          className="pr-card lift tap relative overflow-hidden flex flex-col justify-between"
+          className="pr-card lift tap relative overflow-hidden flex items-center gap-2.5"
           style={{
             background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 60%, #FCD34D 100%)',
             border: 'none',
-            padding: 18,
-            minHeight: 116,
+            padding: '14px 14px',
+            minHeight: 72,
             color: '#fff',
           }}
         >
@@ -424,39 +424,37 @@ function QuickNavCards() {
             aria-hidden="true"
             className="absolute pointer-events-none"
             style={{
-              top: -28,
-              right: -28,
-              width: 110,
-              height: 110,
+              top: -24,
+              right: -24,
+              width: 90,
+              height: 90,
               background: 'radial-gradient(circle, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 70%)',
             }}
           />
-          <div className="flex items-start justify-between relative z-10">
-            <span className="text-[34px] leading-none" aria-hidden="true">🏆</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.9 }}>
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </div>
-          <div className="relative z-10">
-            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
+          <span className="text-[28px] leading-none flex-shrink-0 relative z-10" aria-hidden="true">🏆</span>
+          <div className="flex-1 min-w-0 relative z-10">
+            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>
               TOURNAMENT
             </div>
-            <div className="h3" style={{ color: '#fff', fontSize: 19 }}>
+            <div className="h3" style={{ color: '#fff', fontSize: 17, lineHeight: 1.1 }}>
               대회정보
             </div>
           </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 relative z-10" style={{ opacity: 0.9 }}>
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
         </Link>
 
         {/* 커뮤니티 — 핫핑크 시그니처 */}
         <Link
           href="/m/community"
           aria-label="커뮤니티"
-          className="pr-card lift tap relative overflow-hidden flex flex-col justify-between"
+          className="pr-card lift tap relative overflow-hidden flex items-center gap-2.5"
           style={{
             background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 60%, #FFB3D4 100%)',
             border: 'none',
-            padding: 18,
-            minHeight: 116,
+            padding: '14px 14px',
+            minHeight: 72,
             color: '#fff',
           }}
         >
@@ -465,27 +463,25 @@ function QuickNavCards() {
             aria-hidden="true"
             className="absolute pointer-events-none"
             style={{
-              top: -28,
-              right: -28,
-              width: 110,
-              height: 110,
+              top: -24,
+              right: -24,
+              width: 90,
+              height: 90,
               background: 'radial-gradient(circle, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 70%)',
             }}
           />
-          <div className="flex items-start justify-between relative z-10">
-            <span className="text-[34px] leading-none" aria-hidden="true">💬</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.9 }}>
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </div>
-          <div className="relative z-10">
-            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
+          <span className="text-[28px] leading-none flex-shrink-0 relative z-10" aria-hidden="true">💬</span>
+          <div className="flex-1 min-w-0 relative z-10">
+            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>
               COMMUNITY
             </div>
-            <div className="h3" style={{ color: '#fff', fontSize: 19 }}>
+            <div className="h3" style={{ color: '#fff', fontSize: 17, lineHeight: 1.1 }}>
               커뮤니티
             </div>
           </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 relative z-10" style={{ opacity: 0.9 }}>
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
         </Link>
       </div>
     </section>
