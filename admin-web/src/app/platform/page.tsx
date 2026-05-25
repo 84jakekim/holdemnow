@@ -1404,13 +1404,13 @@ function KpiCard({
       className="lift kpi-signature-dark"
       style={{
         border: '1px solid var(--border)',
-        borderRadius: 'var(--r-md)',
-        padding: '16px 18px',
-        minHeight: 140,
+        borderRadius: 'var(--r-xl)',
+        padding: '18px 20px',
+        minHeight: 148,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        boxShadow: 'var(--shadow-card)',
+        boxShadow: 'var(--shadow-float)',
       }}
     >
       <div className="flex items-center justify-between gap-2">
