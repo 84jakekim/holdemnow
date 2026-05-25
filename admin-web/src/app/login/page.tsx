@@ -302,25 +302,55 @@ function LoginPageInner() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
-        {/* 로고 — Pink Rabbit handoff: badge variant + glow */}
-        <div className="flex flex-col items-center mb-8 mt-6">
-          <RabbitLogo size={96} variant="badge" glow aria-label="Pink Rabbit" />
+      <div className="flex-1 flex flex-col items-center justify-center px-5 py-10">
+        {/* Hero 스플래시 — Pink Rabbit handoff: 핑크 hero 카드 + rabbit backdrop + glow */}
+        <div
+          className="relative overflow-hidden w-full max-w-sm mb-8 mt-2"
+          style={{
+            borderRadius: 28,
+            padding: '32px 24px 28px',
+            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 50%, #FFB3D4 100%)',
+            color: '#ffffff',
+            boxShadow: '0 18px 48px rgba(255,31,143,0.30), 0 4px 14px rgba(0,0,0,0.10)',
+          }}
+        >
+          {/* Rabbit backdrop — opacity .16 핸드오프 명세 */}
           <div
-            className="mt-3 font-black"
-            style={{
-              fontSize: 22,
-              letterSpacing: '-0.03em',
-              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              color: 'transparent',
-            }}
+            aria-hidden
+            style={{ position: 'absolute', top: -36, right: -42, opacity: 0.18, pointerEvents: 'none' }}
           >
-            Pink Rabbit
+            <RabbitLogo size={220} variant="mark" />
           </div>
-          <p className="text-xs text-gray-500 mt-1">전국 홀덤펍 · 토너먼트 디스커버리</p>
+          {/* 우상단 글로우 원 */}
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute', top: -20, right: -20, width: 96, height: 96,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+          <div className="relative flex flex-col items-center" style={{ zIndex: 1 }}>
+            <RabbitLogo size={88} variant="badge" glow aria-label="Pink Rabbit" />
+            <div
+              className="mt-3 font-black"
+              style={{
+                fontSize: 24,
+                letterSpacing: '-0.03em',
+                color: '#ffffff',
+                textShadow: '0 2px 10px rgba(0,0,0,0.18)',
+              }}
+            >
+              Pink Rabbit
+            </div>
+            <p
+              className="text-[12px] mt-1.5 font-semibold"
+              style={{ color: 'rgba(255,255,255,0.94)', letterSpacing: '-0.005em' }}
+            >
+              전국 홀덤펍 · 토너먼트 디스커버리
+            </p>
+          </div>
         </div>
 
         <div className="w-full max-w-sm">

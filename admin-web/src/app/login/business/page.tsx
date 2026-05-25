@@ -156,30 +156,63 @@ export default function BusinessLoginPage() {
         ← 일반 로그인으로
       </Link>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
-        {/* 로고 — Pink Rabbit handoff: badge variant + glow */}
-        <div className="flex flex-col items-center mb-8 mt-6">
-          <RabbitLogo size={88} variant="badge" glow aria-label="Pink Rabbit Business" />
+      <div className="flex-1 flex flex-col items-center justify-center px-5 py-10">
+        {/* Hero 스플래시 — Pink Rabbit handoff: 핑크 hero 카드 (Business) */}
+        <div
+          className="relative overflow-hidden w-full max-w-sm mb-8 mt-2"
+          style={{
+            borderRadius: 28,
+            padding: '30px 24px 26px',
+            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 50%, #FFB3D4 100%)',
+            color: '#ffffff',
+            boxShadow: '0 18px 48px rgba(255,31,143,0.30), 0 4px 14px rgba(0,0,0,0.10)',
+          }}
+        >
           <div
-            className="mt-3 font-black"
-            style={{
-              fontSize: 20,
-              letterSpacing: '-0.03em',
-              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              color: 'transparent',
-            }}
+            aria-hidden
+            style={{ position: 'absolute', top: -34, right: -40, opacity: 0.18, pointerEvents: 'none' }}
           >
-            Pink Rabbit
+            <RabbitLogo size={200} variant="mark" />
           </div>
-          <div className="flex items-center gap-1.5 mt-2">
-            <span className="text-[10px] font-bold text-[#FF1F8F] bg-[#FF1F8F]/10 px-2 py-0.5 rounded-full tracking-widest">
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute', top: -18, right: -18, width: 90, height: 90,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+          <div className="relative flex flex-col items-center" style={{ zIndex: 1 }}>
+            <RabbitLogo size={80} variant="badge" glow aria-label="Pink Rabbit Business" />
+            <div
+              className="mt-3 font-black"
+              style={{
+                fontSize: 22,
+                letterSpacing: '-0.03em',
+                color: '#ffffff',
+                textShadow: '0 2px 10px rgba(0,0,0,0.18)',
+              }}
+            >
+              Pink Rabbit
+            </div>
+            <span
+              className="mt-2 text-[10px] font-extrabold px-2.5 py-1 rounded-full"
+              style={{
+                background: 'rgba(255,255,255,0.22)',
+                border: '1px solid rgba(255,255,255,0.32)',
+                color: '#ffffff',
+                letterSpacing: '0.10em',
+                backdropFilter: 'blur(4px)',
+                WebkitBackdropFilter: 'blur(4px)',
+              }}
+            >
               매장·대회사 전용
             </span>
+            <p className="text-[12px] mt-2 font-semibold" style={{ color: 'rgba(255,255,255,0.94)' }}>
+              홀덤펍 사장님 · 대회사 관계자 로그인
+            </p>
           </div>
-          <p className="text-xs text-gray-500 mt-2">홀덤펍 사장님·대회사 관계자 로그인</p>
         </div>
 
         <div className="w-full max-w-sm">
