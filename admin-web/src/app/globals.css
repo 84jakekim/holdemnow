@@ -781,3 +781,147 @@ html[data-theme="dark"] .skel {
   .tap:active { transform: none !important; }
   .skel { animation: none !important; }
 }
+
+/* ─────────────────────────────────────────────────────────
+ * Pink Rabbit handoff — Typography 위계 utility (v2.0, 2026-05-25)
+ * 핸드오프 디자인 시스템 명세에 따른 표준 4단 위계.
+ * 새 페이지/섹션에서는 className="h1"/"h2"/"h3"/"section-title" 우선 사용.
+ * (기존 인라인 fontSize/fontWeight 페이지는 점진 마이그레이션.)
+ * ───────────────────────────────────────────────────────── */
+.h1 {
+  font-weight: 900;
+  font-size: 40px;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+.h2 {
+  font-weight: 900;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.h3 {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 12px;
+}
+
+/* 모바일 폭 보정: h1/h2 살짝 축소 (392px 폰 폭에서 줄바꿈 자연스럽게) */
+@media (max-width: 480px) {
+  .h1 { font-size: 32px; line-height: 1.12; }
+  .h2 { font-size: 24px; line-height: 1.18; }
+}
+
+/* ─────────────────────────────────────────────────────────
+ * ds-card — 핸드오프 카드 베이스 (handoff index.html 명세)
+ * 사용: <div className="ds-card" style={{ padding: 20 }}>
+ * 기존 .card(r-lg)와 별도. ds-card는 더 큰 라운드(r-xl=22px).
+ * ───────────────────────────────────────────────────────── */
+.ds-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+}
+
+/* 시그니처 카드 — 핑크 틴트 그라데이션 (브랜드 강조 카드)
+ * 사용: <div className="ds-card ds-card-signature">
+ */
+.ds-card-signature {
+  background: linear-gradient(160deg, var(--surface-1) 0%, rgba(255, 31, 143, 0.04) 100%);
+}
+
+/* ─────────────────────────────────────────────────────────
+ * 시그니처 Hero 그라데이션 — 핸드오프 명세
+ *   배경 = linear-gradient(135deg, #FF1F8F → #FF6BAA → #FFB3D4)
+ *   라운드 = r-2xl(28px) / 그림자 = shadow-hero
+ * 사용 위치: 디자인 카탈로그 hero / 로그인 스플래시 / TV 진입 안내 등
+ * 데이터·이벤트 핸들러는 절대 변경 X. 시각 표면만 강화.
+ * ───────────────────────────────────────────────────────── */
+.hero-pink {
+  background: linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 50%, #FFB3D4 100%);
+  border-radius: var(--r-2xl);
+  color: #ffffff;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-brand), var(--shadow-hero);
+}
+/* hero 내부 토끼 backdrop layer — opacity .14 (핸드오프 명세) */
+.hero-pink-rabbit-backdrop {
+  position: absolute;
+  top: -30px;
+  right: -40px;
+  opacity: 0.16;
+  pointer-events: none;
+  z-index: 0;
+}
+/* hero 내부 콘텐츠 — z-index lift */
+.hero-pink-content {
+  position: relative;
+  z-index: 1;
+}
+/* hero 내부 흰 액션 버튼 (검색·알림 등) */
+.hero-pink-action {
+  background: rgba(255, 255, 255, 0.20);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background 100ms, transform 80ms;
+  color: #ffffff;
+}
+.hero-pink-action:active {
+  background: rgba(255, 255, 255, 0.32);
+  transform: scale(0.92);
+}
+
+/* ─────────────────────────────────────────────────────────
+ * KPI 시그니처 그라데이션 카드 — 다크 어드민 (관제센터)
+ * 본사 어드민 KpiCard 강조용. 톤은 그대로(다크), 미세 핑크 글로우.
+ * 사용: <div className="ds-card kpi-signature-dark">
+ * ───────────────────────────────────────────────────────── */
+.kpi-signature-dark {
+  background: linear-gradient(160deg, var(--surface-1) 0%, rgba(255, 31, 143, 0.06) 100%);
+  border-color: var(--border-strong);
+}
+
+/* ─────────────────────────────────────────────────────────
+ * 빈 상태(empty-state) 컨테이너 — 카드 안에서 사용
+ * 사용: EmptyState 컴포넌트가 이 클래스를 wrap에 부착.
+ * ───────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 32px 20px;
+  background: var(--surface-1);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--r-lg);
+}
+.empty-state-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+.empty-state-desc {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  line-height: 1.55;
+  max-width: 260px;
+}

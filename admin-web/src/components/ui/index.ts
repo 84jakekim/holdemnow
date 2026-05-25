@@ -13,3 +13,5 @@ export type { ButtonVariant, ButtonSize } from './Button';
 export { default as BottomSheet } from './BottomSheet';
 export { default as RabbitLogo } from './RabbitLogo';
 export type { RabbitLogoVariant } from './RabbitLogo';
+export { default as EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';
