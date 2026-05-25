@@ -12,6 +12,7 @@ import {
   formatRelativeTime,
   subscribeActiveUsedListings,
 } from '@/lib/community';
+import EmptyState from '@/components/ui/EmptyState';
 
 /* ============================================================
  * /m/community/used — 중고거래 리스트
@@ -68,38 +69,47 @@ export default function UsedListPage() {
 
   return (
     <div style={{ background: 'var(--bg-sub)', minHeight: '100vh' }}>
-      {/* ── 헤더 ── */}
+      {/* ── 앰버 hero ── */}
       <header
-        className="sticky top-0 z-30 flex items-center h-14 px-4 gap-3"
+        className="px-5 pt-5 pb-6 text-white relative overflow-hidden"
         style={{
-          background: 'rgba(255,255,255,0.94)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid var(--border)',
+          background: 'linear-gradient(135deg, #B45309 0%, #F59E0B 55%, #FCD34D 100%)',
         }}
       >
-        <button
-          onClick={() => router.back()}
-          aria-label="뒤로"
-          className="w-9 h-9 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)] flex-shrink-0"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6"/>
-          </svg>
-        </button>
-        <h1 className="flex-1 text-center text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-          🛒 중고거래
-        </h1>
-        <div className="w-9 h-9 flex-shrink-0" aria-hidden="true" />
+        <div
+          aria-hidden
+          className="absolute top-[-40px] right-[-40px] w-[220px] h-[220px] rounded-full pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 65%)',
+          }}
+        />
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <button
+            onClick={() => router.back()}
+            aria-label="뒤로"
+            className="hero-pink-action w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 tap"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">
+              USED MARKET
+            </div>
+            <h1 className="h2 font-serif mt-1.5">🛒 중고거래</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">
+              매장 비품 직거래 (칩·카드·타이머)
+            </p>
+          </div>
+          <div className="w-9 h-9 flex-shrink-0" aria-hidden="true" />
+        </div>
       </header>
 
       {/* ── 필터바 ── */}
-      <div
-        className="sticky z-20 bg-white px-4 pt-3 pb-2 flex flex-col gap-2"
-        style={{ top: 56, borderBottom: '1px solid var(--border)' }}
-      >
-        {/* 카테고리 칩 */}
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="카테고리 필터">
+      <div className="bg-white px-4 pt-3 pb-2 flex flex-col gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar" role="group" aria-label="카테고리 필터">
           {CATEGORY_FILTERS.map((f) => {
             const active = categoryFilter === f.key;
             return (
@@ -107,11 +117,12 @@ export default function UsedListPage() {
                 key={f.key}
                 onClick={() => setCategoryFilter(f.key)}
                 aria-pressed={active}
-                className="flex-shrink-0 px-3 h-8 rounded-full text-[12px] font-bold transition active:scale-95"
-                style={{
-                  background: active ? '#FF1F8F' : 'var(--surface-2)',
-                  color: active ? '#fff' : 'var(--text-2)',
-                }}
+                className={`tap ${active ? 'pr-pill-brand' : 'pr-pill'}`}
+                style={
+                  active
+                    ? { background: 'var(--gold)', borderColor: 'var(--gold)', boxShadow: '0 2px 12px rgba(245,158,11,0.25)' }
+                    : undefined
+                }
               >
                 {f.label}
               </button>
@@ -119,7 +130,6 @@ export default function UsedListPage() {
           })}
         </div>
 
-        {/* 지역 */}
         <div className="flex gap-1.5" role="group" aria-label="지역 필터">
           {REGIONS.map((r) => {
             const active = regionFilter === r;
@@ -128,12 +138,12 @@ export default function UsedListPage() {
                 key={r}
                 onClick={() => setRegionFilter(r)}
                 aria-pressed={active}
-                className="flex-shrink-0 px-3 h-7 rounded-full text-[11px] font-semibold transition active:scale-95"
-                style={{
-                  background: active ? 'rgba(255,31,143,0.10)' : 'var(--surface-2)',
-                  color: active ? '#FF1F8F' : 'var(--text-3)',
-                  border: active ? '1px solid rgba(255,31,143,0.25)' : '1px solid transparent',
-                }}
+                className={`tap ${active ? 'pr-pill-brand' : 'pr-pill'}`}
+                style={
+                  active
+                    ? { background: 'var(--gold)', borderColor: 'var(--gold)', boxShadow: '0 2px 12px rgba(245,158,11,0.25)' }
+                    : undefined
+                }
               >
                 {r}
               </button>
@@ -144,21 +154,27 @@ export default function UsedListPage() {
 
       {/* ── 안내 배너 ── */}
       <div
-        className="mx-4 mt-3 px-3 py-2.5 rounded-xl text-[11px] leading-relaxed"
-        style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}
+        className="mx-4 mt-3 px-3 py-2.5 rounded-r-md text-[11px] leading-relaxed"
+        style={{ background: 'rgba(245,158,11,0.08)', color: 'var(--text-2)', border: '1px solid rgba(245,158,11,0.18)' }}
         role="note"
       >
-        매장 비품 직거래 공간입니다. 등록은 매장 어드민에서 가능합니다.
+        💡 매장 비품 직거래 공간입니다. 등록은 매장 어드민에서 가능합니다.
       </div>
 
       {/* ── 2열 그리드 ── */}
       <div className="pb-24 pt-2">
         {!loaded ? (
-          <div className="py-12 text-center text-[12px]" style={{ color: 'var(--text-3)' }}>
-            불러오는 중…
+          <div className="grid grid-cols-2 gap-3 px-4 pt-2">
+            {[0,1,2,3].map((i) => <div key={i} className="skel aspect-square rounded-r-xl" />)}
           </div>
         ) : filtered.length === 0 ? (
-          <EmptyUsedState />
+          <div className="px-4 pt-6">
+            <EmptyState
+              icon="🛒"
+              title="아직 등록된 매물이 없어요"
+              desc="매장 어드민에서 비품을 등록할 수 있어요."
+            />
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 px-4 pt-2">
             {filtered.map((item) => (
@@ -262,17 +278,3 @@ function UsedGridCard({ item }: { item: UsedListing }) {
   );
 }
 
-/* ── 빈 상태 ── */
-function EmptyUsedState() {
-  return (
-    <div className="flex flex-col items-center justify-center px-8 py-20 text-center">
-      <div className="text-5xl mb-4" aria-hidden="true">🛒</div>
-      <p className="text-[16px] font-bold mb-2" style={{ color: 'var(--text-1)' }}>
-        아직 등록된 매물이 없습니다
-      </p>
-      <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
-        매장 어드민에서 비품을 등록할 수 있어요
-      </p>
-    </div>
-  );
-}

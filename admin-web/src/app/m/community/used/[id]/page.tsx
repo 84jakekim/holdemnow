@@ -42,20 +42,29 @@ export default function UsedDetailPage({ params }: { params: Promise<{ id: strin
 
   if (item === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
-        <div className="text-[12px]" style={{ color: 'var(--text-3)' }}>불러오는 중…</div>
+      <div className="min-h-screen p-5 space-y-3" style={{ background: 'var(--bg)' }}>
+        <div className="skel h-14 rounded-r-md" />
+        <div className="skel h-64 rounded-r-xl" />
+        <div className="skel h-24 rounded-r-xl" />
       </div>
     );
   }
 
   if (item === null) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: 'var(--bg)' }}>
-        <div className="text-5xl mb-4" aria-hidden="true">🛒</div>
-        <p className="text-[16px] font-bold mb-2" style={{ color: 'var(--text-1)' }}>글을 찾을 수 없습니다</p>
-        <button onClick={() => router.back()} className="mt-4 text-[13px] font-bold" style={{ color: '#FF1F8F' }}>
-          돌아가기
-        </button>
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: 'var(--bg)' }}>
+        <div className="empty-state w-full max-w-sm">
+          <div className="empty-state-icon" aria-hidden>🛒</div>
+          <div>
+            <div className="empty-state-title">글을 찾을 수 없어요</div>
+            <div className="empty-state-desc" style={{ marginTop: 6 }}>
+              삭제되었거나 거래완료된 매물일 수 있어요.
+            </div>
+          </div>
+          <button onClick={() => router.back()} className="btn-brand tap px-5 py-2.5 text-[13px]">
+            돌아가기
+          </button>
+        </div>
       </div>
     );
   }
