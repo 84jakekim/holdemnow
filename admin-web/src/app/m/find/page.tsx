@@ -404,48 +404,88 @@ function ListMode() {
 
 function QuickNavCards() {
   return (
-    <section aria-label="빠른 이동" className="px-4 py-2">
-      <div className="flex gap-3">
-        {/* 대회정보 — 골드 톤 (게런티·트로피 컨셉) */}
+    <section aria-label="빠른 이동" className="px-4 py-3">
+      <div className="grid grid-cols-2 gap-3">
+        {/* 대회정보 — 골드 시그니처 */}
         <Link
           href="/m/events"
-          className="flex-1 rounded-xl px-4 flex items-center gap-2.5 transition active:scale-[0.97] group"
-          style={{
-            background: 'linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(245,158,11,0.04) 100%)',
-            border: '1.5px solid rgba(245,158,11,0.32)',
-            boxShadow: '0 2px 8px rgba(245,158,11,0.12)',
-            height: 56,
-          }}
           aria-label="대회정보"
+          className="pr-card lift tap relative overflow-hidden flex flex-col justify-between"
+          style={{
+            background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 60%, #FCD34D 100%)',
+            border: 'none',
+            padding: 18,
+            minHeight: 116,
+            color: '#fff',
+          }}
         >
-          <span className="text-[22px] leading-none flex-shrink-0" aria-hidden="true">🏆</span>
-          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--gold)' }}>
-            대회정보
-          </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
+          {/* 우상단 backdrop 글로우 */}
+          <span
+            aria-hidden="true"
+            className="absolute pointer-events-none"
+            style={{
+              top: -28,
+              right: -28,
+              width: 110,
+              height: 110,
+              background: 'radial-gradient(circle, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 70%)',
+            }}
+          />
+          <div className="flex items-start justify-between relative z-10">
+            <span className="text-[34px] leading-none" aria-hidden="true">🏆</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.9 }}>
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </div>
+          <div className="relative z-10">
+            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
+              TOURNAMENT
+            </div>
+            <div className="h3" style={{ color: '#fff', fontSize: 19 }}>
+              대회정보
+            </div>
+          </div>
         </Link>
 
-        {/* 커뮤니티 — 핫핑크 톤 (브랜드 톤) */}
+        {/* 커뮤니티 — 핫핑크 시그니처 */}
         <Link
           href="/m/community"
-          className="flex-1 rounded-xl px-4 flex items-center gap-2.5 transition active:scale-[0.97] group"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,31,143,0.10) 0%, rgba(255,31,143,0.04) 100%)',
-            border: '1.5px solid rgba(255,31,143,0.32)',
-            boxShadow: '0 2px 8px rgba(255,31,143,0.12)',
-            height: 56,
-          }}
           aria-label="커뮤니티"
+          className="pr-card lift tap relative overflow-hidden flex flex-col justify-between"
+          style={{
+            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 60%, #FFB3D4 100%)',
+            border: 'none',
+            padding: 18,
+            minHeight: 116,
+            color: '#fff',
+          }}
         >
-          <span className="text-[22px] leading-none flex-shrink-0" aria-hidden="true">💬</span>
-          <span className="text-[15px] font-extrabold leading-tight tracking-tight flex-1 min-w-0" style={{ color: 'var(--brand)' }}>
-            커뮤니티
-          </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
+          {/* 우상단 backdrop 글로우 */}
+          <span
+            aria-hidden="true"
+            className="absolute pointer-events-none"
+            style={{
+              top: -28,
+              right: -28,
+              width: 110,
+              height: 110,
+              background: 'radial-gradient(circle, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 70%)',
+            }}
+          />
+          <div className="flex items-start justify-between relative z-10">
+            <span className="text-[34px] leading-none" aria-hidden="true">💬</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.9 }}>
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </div>
+          <div className="relative z-10">
+            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
+              COMMUNITY
+            </div>
+            <div className="h3" style={{ color: '#fff', fontSize: 19 }}>
+              커뮤니티
+            </div>
+          </div>
         </Link>
       </div>
     </section>
