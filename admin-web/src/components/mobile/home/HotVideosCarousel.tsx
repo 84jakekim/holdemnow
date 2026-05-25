@@ -144,7 +144,7 @@ function BigCard({ video }: { video: HotYoutubeVideo }) {
       href={youtubeUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="block rounded-2xl overflow-hidden transition active:scale-[0.98]"
+      className="block rounded-2xl overflow-hidden transition active:scale-[0.98] lift tap"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
@@ -191,7 +191,7 @@ function SmallCard({ video }: { video: HotYoutubeVideo }) {
       href={youtubeUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="block rounded-2xl overflow-hidden transition active:scale-[0.98]"
+      className="block rounded-2xl overflow-hidden transition active:scale-[0.98] lift tap"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
@@ -252,12 +252,10 @@ export default function HotVideosCarousel() {
   // 본 컴포넌트는 카드 width와 스크롤만 책임 — 좌측 끝선 일치 보장.
   return (
     <>
-      {/* 섹션 헤더 — 모든 섹션과 동일한 톤 */}
+      {/* 섹션 헤더 — DS v2.0: section-title(영문 라벨) + h3(한글 제목) 통일 */}
       <div className="mb-3">
-        <div
-          className="text-[17px] font-extrabold tracking-tight"
-          style={{ color: 'var(--text-1)' }}
-        >
+        <div className="section-title" style={{ marginBottom: 4 }}>HOT VIDEOS</div>
+        <div className="h3" style={{ color: 'var(--text-1)' }}>
           홀덤 관련{' '}
           <span style={{ color: 'var(--brand)' }}>인기 영상</span>
         </div>

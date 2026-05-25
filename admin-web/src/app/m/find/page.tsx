@@ -956,7 +956,8 @@ function DailyPostsFeed() {
     <section aria-label="오늘의 매장 소식" className="py-5">
       <div className="px-4 flex items-end justify-between mb-3">
         <div>
-          <div className="text-[17px] font-extrabold tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
+          <div className="section-title" style={{ marginBottom: 2 }}>TODAY'S NEWS</div>
+          <div className="h3 flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
             <span>오늘의 매장 소식</span>
           </div>
         </div>
@@ -1291,7 +1292,8 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
     <section aria-label="내 주변 인기 매장" className="py-5">
       <div className="px-4 flex items-end justify-between mb-3">
         <div>
-          <div className="text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>내 주변 인기 매장</div>
+          <div className="section-title" style={{ marginBottom: 2 }}>POPULAR NEARBY</div>
+          <div className="h3" style={{ color: 'var(--text-1)' }}>내 주변 인기 매장</div>
           {appliedRadiusKm != null && (
             <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
               {expanded ? `주변 매장이 적어 ${appliedRadiusKm}km까지 범위를 넓혔어요` : `반경 ${appliedRadiusKm}km · LIVE 운영 활발한 매장 우선`}
@@ -1358,7 +1360,8 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
     <section aria-label="새로 합류한 매장" className="py-5">
       <div className="px-4 flex items-end justify-between mb-3">
         <div>
-          <div className="text-[17px] font-extrabold tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
+          <div className="section-title" style={{ marginBottom: 2 }}>NEW STORES</div>
+          <div className="h3 flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
             <span>새로 합류한 매장</span>
           </div>
           <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>최근 30일 가입 · {userLocation ? '거리순' : '가입 최신순'}</div>
@@ -1466,7 +1469,8 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
     <section aria-label="내 주변 매장" className="pt-5">
       <div className="px-4 flex items-end justify-between mb-4">
         <div>
-          <div className="text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>내 주변 매장</div>
+          <div className="section-title" style={{ marginBottom: 2 }}>NEARBY</div>
+          <div className="h3" style={{ color: 'var(--text-1)' }}>내 주변 매장</div>
           <div className="text-[12px] mt-0.5" style={{ color: 'var(--text-3)' }}>
             {userLocation ? `현재 위치 기준 · 반경 ${radiusKm}km · ` : '위치 권한 허용 시 거리 표시'}
             {userLocation && <span className="font-bold stat-number" style={{ color: 'var(--brand)' }}>{visible.length}개</span>}
