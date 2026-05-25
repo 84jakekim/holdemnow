@@ -485,7 +485,7 @@ function SlimPostCard({
   return (
     <Link
       href={`/m/store/${post.storeId}`}
-      className="block w-full rounded-xl transition active:opacity-80 overflow-hidden"
+      className="block w-full rounded-xl transition active:opacity-80 overflow-hidden tap"
       style={{
         height: `${height}px`,
         background: style.surface,

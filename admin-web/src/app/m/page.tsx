@@ -257,10 +257,11 @@ export default function MobileHome() {
       {!isPlatformAdmin && allEmpty === true && (
         <section className="px-4 py-5">
           <div
-            className="rounded-2xl px-5 py-6 flex flex-col items-center text-center gap-3"
+            className="rounded-2xl px-5 py-6 flex flex-col items-center text-center gap-3 lift"
             style={{
               background: 'var(--surface-1)',
               border: '1.5px solid var(--border)',
+              boxShadow: 'var(--shadow-card)',
             }}
             role="status"
           >
@@ -281,7 +282,7 @@ export default function MobileHome() {
             </div>
             <Link
               href="/m/find"
-              className="text-[13px] font-bold px-4 py-2 rounded-xl transition active:opacity-70"
+              className="text-[13px] font-bold px-4 py-2 rounded-xl transition active:opacity-70 tap"
               style={{
                 background: 'var(--surface-2)',
                 color: 'var(--text-1)',
@@ -298,10 +299,11 @@ export default function MobileHome() {
       {isPlatformAdmin && allEmpty === true && (
         <section className="px-4 py-5">
           <div
-            className="rounded-2xl px-5 py-4 flex flex-col gap-3"
+            className="rounded-2xl px-5 py-4 flex flex-col gap-3 lift"
             style={{
               background: 'var(--surface-1)',
               border: '1.5px solid var(--border)',
+              boxShadow: 'var(--shadow-card)',
             }}
             role="status"
           >
@@ -324,7 +326,7 @@ export default function MobileHome() {
             </div>
             <Link
               href="/platform/home-content"
-              className="self-start text-[12px] font-bold px-3 py-1.5 rounded-xl transition active:opacity-70"
+              className="self-start text-[12px] font-bold px-3 py-1.5 rounded-xl transition active:opacity-70 tap"
               style={{
                 background: '#FF1F8F',
                 color: '#fff',

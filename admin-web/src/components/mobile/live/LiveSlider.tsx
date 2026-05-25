@@ -73,7 +73,7 @@ function SmallCard({ session, thumbnail }: { session: LiveSession; thumbnail?: s
   return (
     <Link
       href={`/m/store/${session.storeId}`}
-      className="flex-shrink-0 rounded-xl overflow-hidden transition active:scale-[0.97] block relative"
+      className="flex-shrink-0 rounded-xl overflow-hidden transition active:scale-[0.97] block relative tap"
       style={{
         /* 한 화면 3개 + peek: (뷰포트 - 좌패딩16 - 우여백16 - gap12×2) / 3.3 */
         width: 'calc((100vw - 32px - 24px) / 3.3)',

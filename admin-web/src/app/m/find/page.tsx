@@ -1369,7 +1369,7 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
           const isLive = (liveByStore[st.id] || 0) > 0;
           const photo = st.photoUrls[0];
           return (
-            <Link key={st.id} href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
+            <Link key={st.id} href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover lift tap" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
               <div className="relative overflow-hidden" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
                 {photo
                   // eslint-disable-next-line @next/next/no-img-element
@@ -1520,7 +1520,7 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
 function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: number }) {
   useEffect(() => { trackImpressionOnce(st.id, 'find-nearby'); }, [st.id]);
   return (
-    <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
+    <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover lift tap" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
       <div className="relative overflow-hidden" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
         {st.photoUrl ? <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[24px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.4 }}>{st.name.charAt(0)}</span></div>}
         <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
@@ -1541,7 +1541,7 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
 function NearbyStoreListRow({ store: st, live, rank }: { store: NearbyStore; live: number; rank: number }) {
   useEffect(() => { trackImpressionOnce(st.id, 'find-nearby-list'); }, [st.id]);
   return (
-    <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="flex items-center gap-3 px-4 py-3 transition active:bg-gray-50" style={{ borderBottom: '1px solid var(--border)' }}>
+    <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="flex items-center gap-3 px-4 py-3 transition active:bg-gray-50 tap" style={{ borderBottom: '1px solid var(--border)' }}>
       <span className="w-6 text-center text-[13px] font-extrabold flex-shrink-0 stat-number" style={{ color: rank <= 3 ? 'var(--brand)' : 'var(--text-3)' }}>{rank}</span>
       <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden" style={{ background: 'var(--surface-2)' }}>
         {st.photoUrl ? <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[14px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.5 }}>{st.name.charAt(0)}</span></div>}
@@ -1570,7 +1570,7 @@ function LiveHeroCard({ group, thumbnail }: { group: StoreGroup; thumbnail?: str
   const totalPlayers = group.sessions.reduce((s, x) => s + (x.playersRemaining || 0), 0);
   useEffect(() => { trackImpressionOnce(group.storeId, 'find-live'); }, [group.storeId]);
   return (
-    <Link href={`/m/store/${group.storeId}`} onClick={() => bumpStoreMetric(group.storeId, 'cardClicks')} className="w-[220px] flex-shrink-0 overflow-hidden card-hover hero-dark-card" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.22), 0 1px 6px rgba(229,62,62,0.18)' }}>
+    <Link href={`/m/store/${group.storeId}`} onClick={() => bumpStoreMetric(group.storeId, 'cardClicks')} className="w-[220px] flex-shrink-0 overflow-hidden card-hover hero-dark-card lift tap" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.22), 0 1px 6px rgba(229,62,62,0.18)' }}>
       <div className="relative overflow-hidden" style={{ aspectRatio: '16/9', background: poster.bg }}>
         {thumbnail ? (
           <>
@@ -1677,7 +1677,7 @@ function SeriesPosterCard({ series }: { series: Series }) {
   const statusLabel = series.status === 'active' ? '진행 중' : series.status === 'upcoming' ? '예정' : '종료';
   const statusBg = series.status === 'active' ? 'var(--live)' : series.status === 'upcoming' ? 'var(--brand)' : 'var(--text-3)';
   return (
-    <Link href={`/m/series/${series.id}`} className="w-[220px] flex-shrink-0 rounded-2xl overflow-hidden card-hover" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
+    <Link href={`/m/series/${series.id}`} className="w-[220px] flex-shrink-0 rounded-2xl overflow-hidden card-hover lift tap" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
       <div className="h-[120px] relative" style={{ background: poster.bg, color: poster.color }}>
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
           <span className="text-[10px] font-extrabold rounded-full px-2.5 py-1" style={{ background: statusBg, color: '#fff' }}>{statusLabel}</span>
