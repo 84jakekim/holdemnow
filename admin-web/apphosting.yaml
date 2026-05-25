@@ -20,10 +20,11 @@ runConfig:
 
 env:
   # App Hosting 백엔드 분할 (2026-05-26)
-  # 이 백엔드는 일반 사용자 앱(/m/*, /login, /onboarding/*, /signup/player) 전용.
-  # biz/admin 라우트로 진입하면 middleware가 해당 백엔드로 redirect (URL이 설정돼 있으면).
+  # ⚠ 핫픽스 2026-05-26: biz/admin 신규 백엔드의 첫 rollout이 콘솔에서 아직 완료되지 않았는데
+  # variant=app으로 가드를 활성화해 /login/business·/platform-login 등이 placeholder 백엔드로
+  # 잘못 redirect되는 문제. biz/admin 백엔드 GitHub 연결+첫 rollout 완료 후 value를 "app"으로 복귀.
   - variable: NEXT_PUBLIC_APP_VARIANT
-    value: app
+    value: ""
     availability:
       - BUILD
       - RUNTIME
