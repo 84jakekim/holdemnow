@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { subscribeAllLiveSessions, type LiveSession } from '@/lib/live';
 import { RatingChip } from '@/components/mobile/RatingChip';
+import { EmptyState } from '@/components/ui';
 
 interface FavoriteDoc {
   storeId: string;
@@ -127,18 +128,13 @@ export default function FavoritesPage() {
       {loading ? (
         <div className="p-8 text-center text-sm" style={{ color: 'var(--text-3)' }}>로딩 중…</div>
       ) : sorted.length === 0 ? (
-        <div className="p-8 text-center">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4"
-            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-          >
-            ♡
-          </div>
-          <div className="font-bold mb-2" style={{ color: 'var(--text-1)' }}>즐겨찾기한 매장이 없습니다</div>
-          <div className="text-xs leading-relaxed mb-6" style={{ color: 'var(--text-3)' }}>
-            매장 상세 화면의 ♡ 버튼을 눌러<br />즐겨찾기하고 LIVE 알림을 받으세요
-          </div>
-          <DemoAddFavorite uid={authState.user.uid} />
+        <div className="p-4">
+          <EmptyState
+            icon="♡"
+            title="즐겨찾기한 매장이 없습니다"
+            desc="매장 상세 화면의 ♡ 버튼을 눌러 즐겨찾기하고 LIVE 알림을 받으세요."
+            action={<DemoAddFavorite uid={authState.user.uid} />}
+          />
         </div>
       ) : (
         <>

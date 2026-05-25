@@ -23,6 +23,7 @@ import {
 import { CARD_STYLES, resolveCardVisual } from '@/lib/postCardStyle';
 import { formatRelativeKo } from '@/lib/relativeTime';
 import { useAuth, useStoreDoc } from '@/lib/hooks';
+import { EmptyState } from '@/components/ui';
 import { primeModerationKeywordsCache } from '@/lib/moderationKeywords';
 
 interface Props {
@@ -211,13 +212,11 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
       {loading ? (
         <div className="text-sm text-gray-500">로딩 중…</div>
       ) : posts.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-10 text-center">
-          <div className="text-3xl mb-2">📢</div>
-          <div className="font-bold text-gray-900 mb-1">아직 소식이 없습니다</div>
-          <div className="text-xs text-gray-500">
-            카톡방에 올리던 홍보글을 그대로 붙여넣어 시작해보세요.
-          </div>
-        </div>
+        <EmptyState
+          icon="📢"
+          title="아직 소식이 없습니다"
+          desc="카톡방에 올리던 홍보글을 그대로 붙여넣어 시작해보세요."
+        />
       ) : (
         <div className="space-y-2">
           {posts.map((p) => (

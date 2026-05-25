@@ -19,6 +19,7 @@ import {
   hasBannedKeyword,
 } from '@/lib/community';
 import { useAuth } from '@/lib/hooks';
+import { EmptyState } from '@/components/ui';
 
 /* ============================================================
  * UsedItemsPanel — 매장 어드민 중고거래 관리 패널
@@ -244,11 +245,11 @@ export default function UsedItemsPanel({ storeId, storeName, storePhotoUrl }: Us
 
       {/* ── 글 리스트 ── */}
       {items.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-          <div className="text-4xl mb-3">🛒</div>
-          <p className="font-bold text-gray-700">등록된 중고 매물이 없습니다</p>
-          <p className="text-sm text-gray-400 mt-1">우상단 &apos;새 매물&apos; 버튼으로 비품을 등록하세요.</p>
-        </div>
+        <EmptyState
+          icon="🛒"
+          title="등록된 중고 매물이 없습니다"
+          desc="우상단 &apos;새 매물&apos; 버튼으로 비품을 등록하세요."
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {items.map((item) => {

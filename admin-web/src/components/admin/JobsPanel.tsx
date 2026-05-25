@@ -14,6 +14,7 @@ import {
   updateJob,
   deleteJob,
 } from '@/lib/community';
+import { EmptyState } from '@/components/ui';
 import { useAuth } from '@/lib/hooks';
 
 /* ============================================================
@@ -225,11 +226,11 @@ export default function JobsPanel({ storeId, storeName }: JobsPanelProps) {
 
       {/* ── 공고 리스트 ── */}
       {jobs.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-          <div className="text-4xl mb-3">📭</div>
-          <p className="font-bold text-gray-700">등록된 구인 공고가 없습니다</p>
-          <p className="text-sm text-gray-400 mt-1">우상단 &apos;새 구인&apos; 버튼으로 공고를 등록하세요.</p>
-        </div>
+        <EmptyState
+          icon="📭"
+          title="등록된 구인 공고가 없습니다"
+          desc="우상단 &apos;새 구인&apos; 버튼으로 공고를 등록하세요."
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {jobs.map((job) => (
