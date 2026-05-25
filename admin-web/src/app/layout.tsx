@@ -5,6 +5,8 @@ import PWAUpdateManager from '@/components/PWAUpdateManager';
 import './globals.css';
 
 const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? '';
+const APP_VARIANT = (process.env.NEXT_PUBLIC_APP_VARIANT ?? 'app').trim().toLowerCase();
+const NOINDEX = APP_VARIANT === 'biz' || APP_VARIANT === 'admin';
 
 const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
@@ -19,9 +21,18 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: 'Pink Rabbit · 내 주변 홀덤펍',
+  title:
+    APP_VARIANT === 'admin'
+      ? 'Pink Rabbit · 본사 콘솔'
+      : APP_VARIANT === 'biz'
+        ? 'Pink Rabbit · 매장/대회사 어드민'
+        : 'Pink Rabbit · 내 주변 홀덤펍',
   description: '내 주변 홀덤펍 정보는 Pink Rabbit · 전국 홀덤펍·토너먼트 디스커버리',
   applicationName: 'Pink Rabbit',
+  // variant별 색인 정책 (app만 색인, biz/admin은 검색엔진 차단)
+  robots: NOINDEX
+    ? { index: false, follow: false, googleBot: { index: false, follow: false } }
+    : undefined,
   appleWebApp: {
     capable: true,
     title: 'Pink Rabbit',
