@@ -12,6 +12,7 @@ import {
   formatEventDateRange,
   daysFromNow,
 } from '@/lib/events';
+import EmptyState from '@/components/ui/EmptyState';
 
 type ViewMode = 'list' | 'large' | 'album';
 
@@ -70,101 +71,129 @@ export default function EventsPage() {
 
   return (
     <div className="pb-24">
-      {/* 헤더 */}
-      <div className="px-5 h-14 flex items-center justify-between border-b border-gray-100 sticky top-0 bg-white z-10">
-        <span className="text-xl font-extrabold tracking-tight font-serif">대회</span>
-        <ViewModeToggle value={viewMode} onChange={setViewMode} />
-      </div>
+      {/* 골드 톤 hero — 대회 = 트로피·게런티 컨셉 */}
+      <header
+        className="px-5 pt-5 pb-6 text-white relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, #B8860B 0%, #F59E0B 55%, #FCD34D 100%)',
+        }}
+      >
+        <div
+          aria-hidden
+          className="absolute top-[-40px] right-[-40px] w-[220px] h-[220px] rounded-full pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 65%)',
+          }}
+        />
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">
+              TOURNAMENTS
+            </div>
+            <h1 className="h2 font-serif mt-1.5">대회 정보</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">
+              국내·해외 메이저 대회 일정과 게런티
+            </p>
+          </div>
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
+        </div>
+      </header>
 
-      {/* 카테고리 필터 (chip) */}
-      <div className="px-5 py-3 flex gap-1.5 overflow-x-auto scrollbar-none">
-        {([
-          { id: 'all', label: '전체' },
-          { id: 'domestic', label: EVENT_CATEGORY_LABEL.domestic },
-          { id: 'international', label: EVENT_CATEGORY_LABEL.international },
-        ] as { id: EventCategory | 'all'; label: string }[]).map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setCategory(c.id)}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap flex-shrink-0 border ${
-              category === c.id ? 'bg-black text-white border-black' : 'bg-white text-gray-900 border-gray-200'
-            }`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 상태 필터 (chip) */}
-      <div className="px-5 pb-3 flex gap-1.5 overflow-x-auto scrollbar-none">
-        {([
-          { id: 'upcoming', label: EVENT_STATUS_LABEL.upcoming },
-          { id: 'ongoing', label: EVENT_STATUS_LABEL.ongoing },
-          { id: 'completed', label: EVENT_STATUS_LABEL.completed },
-          { id: 'all', label: '전체 상태' },
-        ] as { id: EventStatus | 'all'; label: string }[]).map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setStatus(s.id)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap flex-shrink-0 border ${
-              status === s.id ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-700 border-gray-200'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 도시 필터 — 등록된 도시가 있을 때만 표시 */}
-      {availableCities.length > 0 && (
-        <div className="px-5 pb-3 flex gap-1.5 overflow-x-auto scrollbar-none">
-          <button
-            onClick={() => setCityFilter('all')}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap flex-shrink-0 border ${
-              cityFilter === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200'
-            }`}
-          >
-            전체 지역
-          </button>
-          {availableCities.map((c) => (
+      {/* 필터 카드 */}
+      <section className="px-5 pt-4 space-y-3">
+        <div className="section-title">CATEGORY</div>
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mt-1">
+          {([
+            { id: 'all', label: '전체' },
+            { id: 'domestic', label: EVENT_CATEGORY_LABEL.domestic },
+            { id: 'international', label: EVENT_CATEGORY_LABEL.international },
+          ] as { id: EventCategory | 'all'; label: string }[]).map((c) => (
             <button
-              key={c}
-              onClick={() => setCityFilter(c)}
-              className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap flex-shrink-0 border ${
-                cityFilter === c ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200'
-              }`}
+              key={c.id}
+              onClick={() => setCategory(c.id)}
+              className={`tap ${category === c.id ? 'pr-pill-brand' : 'pr-pill'}`}
+              style={
+                category === c.id
+                  ? { background: 'var(--gold)', borderColor: 'var(--gold)', boxShadow: '0 2px 12px rgba(245,158,11,0.25)' }
+                  : undefined
+              }
             >
-              📍 {c}
+              {c.label}
             </button>
           ))}
         </div>
-      )}
+
+        <div className="section-title pt-1">STATUS</div>
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mt-1">
+          {([
+            { id: 'upcoming', label: EVENT_STATUS_LABEL.upcoming },
+            { id: 'ongoing', label: EVENT_STATUS_LABEL.ongoing },
+            { id: 'completed', label: EVENT_STATUS_LABEL.completed },
+            { id: 'all', label: '전체 상태' },
+          ] as { id: EventStatus | 'all'; label: string }[]).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setStatus(s.id)}
+              className={`tap ${status === s.id ? 'pr-pill-brand' : 'pr-pill'}`}
+              style={
+                status === s.id
+                  ? { background: 'var(--gold)', borderColor: 'var(--gold)', boxShadow: '0 2px 12px rgba(245,158,11,0.25)' }
+                  : undefined
+              }
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {availableCities.length > 0 && (
+          <>
+            <div className="section-title pt-1">REGION</div>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mt-1 pb-1">
+              <button
+                onClick={() => setCityFilter('all')}
+                className={`tap ${cityFilter === 'all' ? 'pr-pill-brand' : 'pr-pill'}`}
+              >
+                전체 지역
+              </button>
+              {availableCities.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCityFilter(c)}
+                  className={`tap ${cityFilter === c ? 'pr-pill-brand' : 'pr-pill'}`}
+                >
+                  📍 {c}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
 
       {/* 결과 */}
-      {loading ? (
-        <div className="py-10 text-center text-sm text-gray-500">로딩 중…</div>
-      ) : sortedEvents.length === 0 ? (
-        <div className="py-16 px-6 text-center">
-          <div className="text-4xl mb-3">🏆</div>
-          <div className="font-bold text-gray-900 mb-2">조건에 맞는 대회가 없습니다</div>
-          <div className="text-xs text-gray-500 leading-relaxed">
-            카테고리·상태 필터를 바꿔보세요.
-            <br />
-            대회사·본사가 등록한 메이저 대회만 표시됩니다.
+      <section className="pt-4">
+        {loading ? (
+          <div className="px-5 space-y-3">
+            <div className="skel h-32 rounded-r-xl" />
+            <div className="skel h-32 rounded-r-xl" />
           </div>
-        </div>
-      ) : viewMode === 'list' ? (
+        ) : sortedEvents.length === 0 ? (
+          <div className="px-5">
+            <EmptyState
+              icon="🏆"
+              title="조건에 맞는 대회가 없어요"
+              desc="카테고리·상태 필터를 바꿔보세요. 대회사·본사가 등록한 메이저 대회만 표시됩니다."
+            />
+          </div>
+        ) : viewMode === 'list' ? (
         <CompactList items={sortedEvents} />
-      ) : viewMode === 'large' ? (
-        <LargeList items={sortedEvents} />
-      ) : (
-        <AlbumGrid items={sortedEvents} />
-      )}
-
-      <style jsx global>{`
-        .scrollbar-none::-webkit-scrollbar { display: none; }
-        .scrollbar-none { scrollbar-width: none; }
-      `}</style>
+        ) : viewMode === 'large' ? (
+          <LargeList items={sortedEvents} />
+        ) : (
+          <AlbumGrid items={sortedEvents} />
+        )}
+      </section>
     </div>
   );
 }
@@ -273,7 +302,7 @@ function LargeList({ items }: { items: EventDoc[] }) {
           <Link
             key={e.id}
             href={`/m/events/${e.id}`}
-            className="block bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-gray-400 active:scale-[0.99] transition"
+            className="block pr-card overflow-hidden lift tap"
           >
             <div className="flex">
               {/* 포스터 */}
@@ -345,7 +374,7 @@ function AlbumGrid({ items }: { items: EventDoc[] }) {
           <Link
             key={e.id}
             href={`/m/events/${e.id}`}
-            className="block bg-white border border-gray-200 rounded-xl overflow-hidden active:scale-[0.98] transition"
+            className="block pr-card overflow-hidden lift tap"
           >
             <div className="aspect-[3/4] bg-gray-100 relative overflow-hidden flex items-center justify-center">
               {e.posterUrl ? (

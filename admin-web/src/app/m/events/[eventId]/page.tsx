@@ -27,16 +27,31 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
   }, [eventId]);
 
   if (event === undefined) {
-    return <div className="p-10 text-center text-sm text-gray-500">로딩 중…</div>;
+    return (
+      <div className="p-5 space-y-3">
+        <div className="skel h-14 rounded-r-md" />
+        <div className="skel h-80 rounded-r-xl" />
+      </div>
+    );
   }
   if (event === null) {
     return (
-      <div className="p-10 text-center">
-        <div className="text-4xl mb-3">⚠️</div>
-        <div className="font-bold mb-2">대회를 찾을 수 없습니다</div>
-        <button onClick={() => router.replace('/m/events')} className="text-xs text-gray-500 underline">
-          대회 목록으로
-        </button>
+      <div className="p-6">
+        <div className="empty-state">
+          <div className="empty-state-icon" aria-hidden>⚠️</div>
+          <div>
+            <div className="empty-state-title">대회를 찾을 수 없어요</div>
+            <div className="empty-state-desc" style={{ marginTop: 6 }}>
+              삭제되었거나 비공개 처리된 대회일 수 있어요.
+            </div>
+          </div>
+          <button
+            onClick={() => router.replace('/m/events')}
+            className="btn-brand tap px-4 py-2 text-xs"
+          >
+            대회 목록으로
+          </button>
+        </div>
       </div>
     );
   }
@@ -45,13 +60,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
 
   return (
     <div className="pb-24">
-      {/* 상단 */}
-      <div className="sticky top-0 z-10 bg-white px-5 h-14 flex items-center justify-between border-b border-gray-100">
-        <Link href="/m/events" className="text-xl">←</Link>
-        <div className="text-xs font-bold text-gray-500">대회 정보</div>
+      {/* 상단 — 골드 라인 헤더 */}
+      <div
+        className="sticky top-0 z-10 px-5 h-14 flex items-center justify-between bg-white"
+        style={{ borderBottom: '2px solid rgba(245,158,11,0.18)' }}
+      >
+        <Link href="/m/events" className="text-xl tap" aria-label="뒤로">←</Link>
+        <div className="section-title" style={{ margin: 0 }}>대회 정보</div>
         <button
           onClick={() => shareContent({ title: event.name, text: `${event.name} · ${formatEventDateRange(event.startDate, event.endDate)}` })}
-          className="text-lg"
+          className="text-lg tap"
           title="공유"
         >
           ↗
@@ -142,14 +160,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
         )}
       </div>
 
-      {/* 등록 CTA */}
+      {/* 등록 CTA — 골드 강조 */}
       {event.registrationUrl && event.status !== 'completed' && (
         <div className="px-5 py-4 border-b-[6px] border-gray-50">
           <a
             href={event.registrationUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block w-full bg-black text-white py-3.5 rounded-xl font-bold text-sm text-center"
+            className="block w-full text-white py-3.5 rounded-r-md font-bold text-sm text-center tap"
+            style={{
+              background: 'linear-gradient(135deg, #B8860B 0%, #F59E0B 100%)',
+              boxShadow: '0 2px 12px rgba(245,158,11,0.30)',
+            }}
           >
             🎟 대회 등록하기
           </a>
@@ -160,7 +182,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
       {/* 장소 + 지도 */}
       {(event.venueName || event.venueAddress) && (
         <div className="px-5 py-4 border-b-[6px] border-gray-50">
-          <div className="text-xs font-bold text-gray-500 tracking-wider mb-2">📍 대회장</div>
+          <div className="section-title">📍 대회장</div>
           {event.venueName && (
             <div className="text-base font-bold text-gray-900">{event.venueName}</div>
           )}
@@ -184,7 +206,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
       {/* 담당자 */}
       {(event.contactName || event.contactPhone || event.contactEmail) && (
         <div className="px-5 py-4 border-b-[6px] border-gray-50">
-          <div className="text-xs font-bold text-gray-500 tracking-wider mb-2">👤 대회 담당자</div>
+          <div className="section-title">👤 대회 담당자</div>
           {event.contactName && (
             <div className="text-base font-bold text-gray-900">{event.contactName}</div>
           )}
@@ -244,9 +266,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
 
 function InfoCell({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-3">
-      <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">{label}</div>
-      <div className={`text-sm font-extrabold ${highlight ? 'text-red-600' : 'text-gray-900'}`}>
+    <div className="pr-card p-3 lift">
+      <div className="text-[10px] font-extrabold tracking-[0.12em] uppercase mb-1.5" style={{ color: 'var(--text-2)' }}>{label}</div>
+      <div className={`text-sm font-extrabold ${highlight ? 'text-red-600' : ''}`} style={{ color: highlight ? undefined : 'var(--text-1)' }}>
         {value}
       </div>
     </div>
