@@ -1401,6 +1401,7 @@ function KpiCard({
 }) {
   return (
     <div
+      className="lift"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
@@ -1410,6 +1411,7 @@ function KpiCard({
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       <div className="flex items-center justify-between gap-2">
@@ -2361,6 +2363,7 @@ function SubCard({
             : 'var(--text-3)';
   return (
     <div
+      className="lift"
       style={{
         background: 'var(--surface-1)',
         border: '1px solid var(--border)',
@@ -2372,6 +2375,7 @@ function SubCard({
         flexDirection: 'column',
         justifyContent: 'space-between',
         gap: 4,
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       <div
