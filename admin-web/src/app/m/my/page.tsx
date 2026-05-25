@@ -173,63 +173,87 @@ export default function MyPage() {
         </button>
       </header>
 
-      {/* ── 프로필 ── */}
-      <div className="px-5 py-6 flex items-start gap-4" style={{ borderBottom: '6px solid var(--surface-2)' }}>
+      {/* ── 프로필 카드 — 핑크 hero 그라데이션 (handoff ScreenMy 패턴) ── */}
+      <div className="px-4 pt-4 pb-3">
         <div
-          className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-dim) 100%)', boxShadow: 'var(--shadow-brand)' }}
+          className="relative overflow-hidden lift"
+          style={{
+            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+            borderRadius: 22,
+            padding: '18px 16px',
+            color: '#fff',
+            boxShadow: 'var(--shadow-hero)',
+          }}
         >
-          {initials}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-lg font-bold truncate" style={{ color: 'var(--text-1)' }}>
-              {displayName}
-            </div>
-            <button
-              onClick={() => setEditOpen(true)}
-              className="text-[10px] font-extrabold px-2 py-0.5 rounded-full transition active:scale-95"
-              style={{
-                background: 'var(--brand)',
-                color: '#fff',
-                boxShadow: 'var(--shadow-brand)',
-              }}
-            >
-              ✎ 정보변경
-            </button>
-          </div>
-          <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>{user.email}</div>
-          {profile.bio && (
-            <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-2)' }}>{profile.bio}</div>
-          )}
+          {/* 우상단 흰 글로우 */}
           <div
-            className="inline-flex items-center text-[10px] font-bold mt-1.5 px-2 py-0.5 rounded-full"
-            style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-3)' }}
-          >
-            일반 회원
+            style={{
+              position: 'absolute', top: -28, right: -28,
+              width: 160, height: 160, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 65%)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <div className="relative flex items-center gap-3">
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center text-white text-2xl font-black flex-shrink-0"
+              style={{ background: 'rgba(255,255,255,0.25)', border: '2px solid rgba(255,255,255,0.35)' }}
+            >
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-[17px] font-black tracking-tight truncate" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>
+                  {displayName}
+                </div>
+                <button
+                  onClick={() => setEditOpen(true)}
+                  className="text-[10px] font-extrabold px-2 py-0.5 rounded-full transition active:scale-95"
+                  style={{
+                    background: 'rgba(255,255,255,0.25)',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.35)',
+                  }}
+                >
+                  ✎ 정보변경
+                </button>
+              </div>
+              <div className="text-[11px] mt-1 truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>{user.email}</div>
+              {profile.bio && (
+                <div className="text-[11px] mt-1 line-clamp-2" style={{ color: 'rgba(255,255,255,0.95)' }}>{profile.bio}</div>
+              )}
+            </div>
+          </div>
+
+          {/* 통계 4종 — hero 내부 grid */}
+          <div className="relative grid grid-cols-4 gap-1.5 mt-3">
+            {[
+              { label: '즐겨찾기', value: favCount, go: '/m/favorites' },
+              { label: '관심 토너', value: interestCount, go: '/m/interests' },
+              { label: '내 예약', value: reservationActiveCount, go: '/m/reservations' },
+              { label: '시리즈 구독', value: seriesSubCount, go: '/m/subscriptions' },
+            ].map((k) => (
+              <button
+                key={k.label}
+                onClick={() => router.push(k.go)}
+                className="tap"
+                style={{
+                  background: 'rgba(255,255,255,0.18)',
+                  borderRadius: 12,
+                  padding: '8px 0',
+                  textAlign: 'center',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                <div className="mono text-[18px] font-extrabold" style={{ color: '#fff' }}>{k.value}</div>
+                <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>{k.label}</div>
+              </button>
+            ))}
           </div>
         </div>
       </div>
-
-      {/* ── 통계 ── */}
-      <div className="px-4 py-5 grid grid-cols-4 gap-2" style={{ borderBottom: '6px solid var(--surface-2)' }}>
-        {[
-          { label: '즐겨찾기', value: favCount, go: '/m/favorites' },
-          { label: '관심 토너', value: interestCount, go: '/m/interests' },
-          { label: '내 예약', value: reservationActiveCount, go: '/m/reservations' },
-          { label: '시리즈 구독', value: seriesSubCount, go: '/m/subscriptions' },
-        ].map((k) => (
-          <button
-            key={k.label}
-            onClick={() => router.push(k.go)}
-            className="rounded-xl py-4 text-center transition active:scale-[0.97] tap"
-            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-          >
-            <div className="font-mono text-xl font-extrabold" style={{ color: 'var(--brand)' }}>{k.value}</div>
-            <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>{k.label}</div>
-          </button>
-        ))}
-      </div>
+      <div style={{ borderBottom: '6px solid var(--surface-2)' }} />
 
       {/* ── 알림 설정 ── */}
       <div className="px-5 py-5" style={{ borderBottom: '6px solid var(--surface-2)' }}>

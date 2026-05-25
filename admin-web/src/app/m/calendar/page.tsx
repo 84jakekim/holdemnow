@@ -124,19 +124,22 @@ export default function CalendarPage() {
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
 
-      {/* ── 헤더 ── */}
-      <header
-        className="px-5 h-14 flex items-center justify-between"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
-        <span className="text-xl font-extrabold tracking-tight font-serif" style={{ color: 'var(--text-1)' }}>
-          토너 캘린더
-        </span>
-        <Link href="/m/search" aria-label="검색">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }}>
-            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-          </svg>
-        </Link>
+      {/* ── 헤더 — 핑크 hero 그라데이션 (handoff v3.0) ── */}
+      <header className="pr-home-hero">
+        <div className="pr-home-hero-content px-5 h-14 flex items-center justify-between">
+          <span className="text-[19px] font-black tracking-tight" style={{ color: '#FFFFFF', textShadow: '0 1px 4px rgba(0,0,0,0.18)' }}>
+            📅 토너 캘린더
+          </span>
+          <Link
+            href="/m/search"
+            aria-label="검색"
+            className="hero-pink-action w-9 h-9 flex items-center justify-center rounded-full"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+          </Link>
+        </div>
       </header>
 
       {/* ── 위치 범위 안내 ── */}
