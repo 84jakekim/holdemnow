@@ -894,6 +894,101 @@ html[data-theme="dark"] .skel {
 }
 
 /* ─────────────────────────────────────────────────────────
+ * Pink Rabbit handoff v3.0 — 카드 깊이 강화 utility (2026-05-25)
+ * 핸드오프 패턴: r-xl(22) 기본 / r-2xl(28) signature + shadow-card / shadow-float
+ *
+ *  · .pr-card            — 기본 카드 (r-xl + surface-1 + shadow-card)
+ *  · .pr-card-lg         — 큰 카드 (r-2xl + signature gradient + shadow-hero)
+ *  · .pr-card-signature  — 핑크 틴트 카드 (브랜드 강조 카드)
+ *  · .pr-card-photo      — 사진 hero 카드 (라운드 28 + overflow hidden + 그라데이션 오버레이)
+ *  · .pr-pill            — 라운드 99 칩 (surface-2 배경)
+ *  · .pr-pill-brand      — 핑크 활성 칩 (brand 배경, 흰 글자)
+ *  · .pr-hero-overlay    — 사진 카드 위 텍스트 가독성 그라데이션 오버레이
+ *
+ * 모든 카드 자동 .lift .tap 추가 권장 (마이크로 인터랙션).
+ * ───────────────────────────────────────────────────────── */
+.pr-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+}
+.pr-card-lg {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-hero);
+}
+.pr-card-signature {
+  background: linear-gradient(160deg, var(--surface-1) 0%, rgba(255, 31, 143, 0.04) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+}
+.pr-card-photo {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-hero);
+}
+.pr-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 40%,
+    rgba(0, 0, 0, 0.65) 100%
+  );
+  pointer-events: none;
+}
+.pr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.pr-pill-brand {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  box-shadow: var(--shadow-brand);
+}
+
+/* ─────────────────────────────────────────────────────────
+ * Home Hero 핑크 그라데이션 헤더 (handoff screens-user 패턴)
+ * 사용: <header className="pr-home-hero">...</header>
+ * 핸드오프 명세 그대로 — 사용자 앱 홈 상단 (1단 헤더 → 그라데이션 카드형)
+ * ───────────────────────────────────────────────────────── */
+.pr-home-hero {
+  background: linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 55%, #FFB3D4 100%);
+  color: #ffffff;
+  position: relative;
+  overflow: hidden;
+}
+.pr-home-hero::after {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 65%);
+  pointer-events: none;
+}
+.pr-home-hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─────────────────────────────────────────────────────────
  * 빈 상태(empty-state) 컨테이너 — 카드 안에서 사용
  * 사용: EmptyState 컴포넌트가 이 클래스를 wrap에 부착.
  * ───────────────────────────────────────────────────────── */

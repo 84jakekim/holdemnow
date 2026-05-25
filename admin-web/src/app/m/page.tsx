@@ -148,12 +148,14 @@ export default function MobileHome() {
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          1. 헤더 — 기존 디자인 그대로 재사용
+          1. 헤더 — Pink Rabbit hero 그라데이션 (handoff v2.1)
+          핸드오프 패턴: 핑크 → 라이트 핑크 그라데이션 + 토끼 backdrop +
+          흰 워드마크 + 흰 액션 버튼 (검색·알림)
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <header className="sticky top-0 z-30 header-minimal">
-        <div className="px-4 h-16 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-30 pr-home-hero">
+        <div className="pr-home-hero-content px-4 h-16 flex items-center justify-between gap-3">
 
-          {/* 좌: Pink Rabbit 로고 + 워드마크 (브랜드 정체성 강화) */}
+          {/* 좌: Pink Rabbit 로고 + 워드마크 (흰색 워드마크) */}
           <Link
             href="/m"
             aria-label="Pink Rabbit 홈"
@@ -163,61 +165,74 @@ export default function MobileHome() {
             <img
               src="/logo.png"
               alt=""
-              width={52}
-              height={52}
-              style={{ display: 'block', width: 52, height: 52, objectFit: 'contain' }}
+              width={44}
+              height={44}
+              style={{
+                display: 'block', width: 44, height: 44, objectFit: 'contain',
+                filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.18))',
+              }}
             />
             <span
               className="font-black leading-none whitespace-nowrap"
               style={{
                 fontSize: 19,
                 letterSpacing: '-0.03em',
-                background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
-                WebkitBackgroundClip: 'text',
-                backgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                color: 'transparent',
+                color: '#FFFFFF',
+                textShadow: '0 1px 6px rgba(0,0,0,0.18)',
               }}
             >
               Pink Rabbit
             </span>
           </Link>
 
-          {/* 중앙: 환영 + 위치 */}
+          {/* 중앙: 환영 + 위치 (흰 텍스트) */}
           <div className="flex-1 min-w-0 flex flex-col items-center justify-center leading-tight">
-            <div className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-1)' }}>
+            <div
+              className="text-[12px] font-bold truncate"
+              style={{ color: '#FFFFFF', textShadow: '0 1px 3px rgba(0,0,0,0.18)' }}
+            >
               {displayName ? `${displayName}님 환영합니다` : '오늘도 환영합니다'}
             </div>
             <button aria-label="위치 변경" className="flex items-center gap-0.5 mt-0.5 max-w-full transition active:opacity-60">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
                 <circle cx="12" cy="10" r="3"/>
               </svg>
-              <span className="text-[11px] font-normal truncate" style={{ color: 'var(--text-2)' }}>
+              <span
+                className="text-[11px] font-semibold truncate"
+                style={{ color: 'rgba(255,255,255,0.92)' }}
+              >
                 {regionLabel ?? '위치 확인 중'}
               </span>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
                 <path d="M6 9l6 6 6-6"/>
               </svg>
             </button>
           </div>
 
-          {/* 우: 검색 + 알림 */}
+          {/* 우: 검색 + 알림 (흰 액션 버튼) */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <Link href="/m/search" aria-label="검색" className="w-10 h-10 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)]">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <Link
+              href="/m/search"
+              aria-label="검색"
+              className="hero-pink-action w-10 h-10 flex items-center justify-center rounded-full"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
             </Link>
-            <button aria-label="알림" className="w-10 h-10 flex items-center justify-center rounded-full relative transition active:bg-[var(--surface-2)]">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <button
+              aria-label="알림"
+              className="hero-pink-action w-10 h-10 flex items-center justify-center rounded-full relative"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                 <path d="M13.73 21a2 2 0 01-3.46 0"/>
               </svg>
+              <span style={{ position:'absolute', top:8, right:9, width:6, height:6, borderRadius:99, background:'#FFFFFF' }} />
             </button>
           </div>
         </div>
-        <div className="header-minimal-line" aria-hidden="true" />
       </header>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
