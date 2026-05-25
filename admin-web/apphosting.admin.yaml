@@ -1,17 +1,19 @@
-# Firebase App Hosting 설정
-# 참고: https://firebase.google.com/docs/app-hosting/configure
+# Firebase App Hosting 설정 — admin 백엔드 (본사 운영 콘솔)
 #
-# - runConfig: 서버 런타임 리소스/스케일링
-# - env: 빌드/런타임에 노출되는 환경변수
-#   - value: 평문 (NEXT_PUBLIC_* 처럼 어차피 브라우저에 노출되는 값)
-#   - secret: Secret Manager 시크릿 참조 (서버용 키)
+# 사용법:
+#   1) Firebase 콘솔 또는 CLI로 백엔드 신설(이름 권장: holdemnow-admin, region: us-east4)
+#   2) 백엔드의 `apphosting.yaml` 경로를 `apphosting.admin.yaml`로 지정
+#   3) 시크릿 등록 + 권한 부여:
+#        firebase apphosting:secrets:grantaccess <secretName> --backend holdemnow-admin
+#   4) URL 받으면 ALL 3개 yaml의 NEXT_PUBLIC_BACKEND_ADMIN_URL 채우기
 #
-# 시크릿 등록 명령:
-#   firebase apphosting:secrets:set <secretName>
-#   firebase apphosting:secrets:grantaccess <secretName>
+# 이 백엔드의 역할(middleware로 enforce):
+#   - 허용: /platform-login, /platform/*
+#   - 차단: /m/*, /admin/*, /login/business, /signup/* (해당 백엔드로 redirect)
+#   - root('/') → /platform-login 로 자동 redirect
+#   - SEO: 전체 noindex + robots Disallow: /
 
 runConfig:
-  # 처음엔 보수적으로 (베타 무료 한도 안에서 운영)
   minInstances: 0
   maxInstances: 1
   concurrency: 80
@@ -19,17 +21,12 @@ runConfig:
   memoryMiB: 512
 
 env:
-  # App Hosting 백엔드 분할 (2026-05-26)
-  # 이 백엔드는 일반 사용자 앱(/m/*, /login, /onboarding/*, /signup/player) 전용.
-  # biz/admin 라우트로 진입하면 middleware가 해당 백엔드로 redirect (URL이 설정돼 있으면).
   - variable: NEXT_PUBLIC_APP_VARIANT
-    value: app
+    value: admin
     availability:
       - BUILD
       - RUNTIME
 
-  # 다른 백엔드 URL — BACKEND_SETUP.md 참고하여 백엔드 생성 후 채워 넣을 것.
-  # 빈 값일 때는 middleware가 /_blocked 안내 페이지로 rewrite (정보 누설 방지).
   - variable: NEXT_PUBLIC_BACKEND_APP_URL
     value: ""
     availability:
@@ -48,9 +45,6 @@ env:
       - BUILD
       - RUNTIME
 
-  # Firebase Web SDK config — 모두 NEXT_PUBLIC_*로 클라이언트에 노출되는 값.
-  # 보안은 firestore.rules / storage.rules / Auth 도메인 화이트리스트로 처리.
-  # 평문 value로 저장해도 됨 (이 값들은 결국 브라우저에 들어감).
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: AIzaSyC3WVSca1WpLk8O81cS8JqNWELBDj_Jocg
     availability:
@@ -93,21 +87,17 @@ env:
       - BUILD
       - RUNTIME
 
-  # Kakao Maps JS SDK key — 도메인 화이트리스트로 보호되므로 평문 노출 OK
   - variable: NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY
     value: 561209a03c266b3fd09f2f41913c60c2
     availability:
       - BUILD
       - RUNTIME
 
-  # Kakao REST API key — 서버 사이드 전용. NEXT_PUBLIC_ 접두사 X.
-  # 현재 사용처: Cloud Functions의 일괄 geocoding (예정). 클라이언트로 절대 안 새어나감.
   - variable: KAKAO_REST_API_KEY
     value: 5c8f24f9ea35302bdf7b23c813f686c6
     availability:
       - RUNTIME
 
-  # FCM Web Push VAPID 공개 키 (브라우저에서 토큰 발급 시 사용)
   - variable: NEXT_PUBLIC_FIREBASE_VAPID_KEY
     value: BHo1YyO4gWmoeKBFxYR7D91bXRCYKl7a61SvILrrnYTGR3jgv9Nnu32bpGa3pR80jnbhjrv0gpYn46c18o4GwW0
     availability:
