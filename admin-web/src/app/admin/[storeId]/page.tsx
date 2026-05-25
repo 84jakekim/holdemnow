@@ -484,17 +484,18 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
     { label: '전화', value: fmt(metrics.phoneClicks), tag: 'tel: 호출' },
   ];
 
-  // 카드 공통 — 매장 톤(--r-lg, 18px) + surface 토큰
+  // 카드 공통 — 핸드오프 v3.0: r-xl(22px) + shadow-card + lift
   const cardStyle = {
     background: 'var(--surface-1)',
     border: '1px solid var(--border)',
-    borderRadius: 'var(--r-lg)',
+    borderRadius: 'var(--r-xl)',
+    boxShadow: 'var(--shadow-card)',
   } as const;
 
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>
           📊 대시보드
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
@@ -502,15 +503,17 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
         </p>
       </div>
 
+      {/* 환영 카드 — 시그니처 핑크 그라데이션 (handoff ds-card-signature) */}
       <div
-        className="p-5 mb-6"
+        className="p-5 mb-6 lift"
         style={{
           background: 'linear-gradient(135deg, rgba(255,31,143,0.10) 0%, rgba(255,31,143,0.03) 100%)',
           border: '1px solid rgba(255,31,143,0.25)',
-          borderRadius: 'var(--r-lg)',
+          borderRadius: 'var(--r-xl)',
+          boxShadow: 'var(--shadow-card)',
         }}
       >
-        <div className="text-xs font-bold tracking-wider mb-1" style={{ color: 'var(--brand)' }}>
+        <div className="text-xs font-extrabold tracking-wider mb-1" style={{ color: 'var(--brand)' }}>
           🎉 환영합니다
         </div>
         <div className="font-bold mb-2" style={{ color: 'var(--text-1)' }}>매장 가입이 완료되었습니다.</div>
@@ -521,9 +524,9 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {kpis.map((k) => (
-          <div key={k.label} className="p-4" style={cardStyle}>
-            <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: 'var(--text-2)' }}>{k.label}</div>
-            <div className="font-mono text-xl font-extrabold" style={{ color: 'var(--text-1)' }}>{k.value}</div>
+          <div key={k.label} className="p-4 lift" style={cardStyle}>
+            <div className="text-[10px] font-extrabold tracking-wider mb-1.5" style={{ color: 'var(--text-2)' }}>{k.label}</div>
+            <div className="mono text-xl font-extrabold" style={{ color: 'var(--text-1)' }}>{k.value}</div>
             <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>{k.tag}</div>
           </div>
         ))}
@@ -534,9 +537,9 @@ function DashboardContent({ storeId, storeName }: { storeId: string; storeName: 
           { label: 'LIVE 풀스크린 열기', value: fmt(metrics.liveOpens) },
           { label: '즐겨찾기 추가', value: fmt(metrics.favoriteAdds) },
         ].map((k) => (
-          <div key={k.label} className="p-4" style={cardStyle}>
-            <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: 'var(--text-2)' }}>{k.label}</div>
-            <div className="font-mono text-xl font-extrabold" style={{ color: 'var(--text-1)' }}>{k.value}</div>
+          <div key={k.label} className="p-4 lift" style={cardStyle}>
+            <div className="text-[10px] font-extrabold tracking-wider mb-1.5" style={{ color: 'var(--text-2)' }}>{k.label}</div>
+            <div className="mono text-xl font-extrabold" style={{ color: 'var(--text-1)' }}>{k.value}</div>
           </div>
         ))}
       </div>
