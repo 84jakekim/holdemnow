@@ -90,6 +90,11 @@ export default function PlatformAdsPage() {
         </div>
       )}
 
+      {/* Phase 13 — 4-tier 시그니처 카드 (PLAT/GOLD/SILV/BASE).
+          현 시스템은 premium·standard 2-tier — premium→GOLD, standard→SILV 매핑.
+          PLAT/BASE는 v0.2 PG 도입 이후 도입 예정으로 0건 표시. */}
+      <TierSignatureGrid slots={slots} />
+
       <RegionCapTable slots={slots} />
 
       {/* 활성 */}
@@ -128,6 +133,57 @@ export default function PlatformAdsPage() {
           onClose={() => setShowCreate(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 4-tier 시그니처 카드 grid — Phase 13 (2026-05-26)
+// 핸드오프 mock(screens-others.jsx 본사 KPI grid) 응용.
+// PLAT(보라) / GOLD(앰버) / SILV(슬레이트) / BASE(에메랄드) — 톤 분리.
+// ─────────────────────────────────────────────────────────────
+
+function TierSignatureGrid({ slots }: { slots: AdSlot[] }) {
+  const active = slots.filter((s) => s.status === 'active');
+  // 단가 추정: premium 30k/일, standard 10k/일 (v0.2 PG 도입 시 정식화)
+  const stats = {
+    PLAT: { count: 0, rev: 0, label: 'PLATINUM' },
+    GOLD: { count: active.filter((s) => s.tier === 'premium').length, rev: 0, label: 'GOLD' },
+    SILV: { count: active.filter((s) => s.tier === 'standard').length, rev: 0, label: 'SILVER' },
+    BASE: { count: 0, rev: 0, label: 'BASE' },
+  };
+  // 활성 슬롯의 일수를 단가에 곱해 누적 매출 추정
+  for (const s of active) {
+    const startMs = s.startAt?.toMillis?.() ?? 0;
+    const endMs = s.endAt?.toMillis?.() ?? 0;
+    const totalDays = Math.max(1, Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)));
+    if (s.tier === 'premium') stats.GOLD.rev += totalDays * 30000;
+    else stats.SILV.rev += totalDays * 10000;
+  }
+
+  const Card = ({ tier, data }: { tier: keyof typeof stats; data: typeof stats.GOLD }) => {
+    const cls =
+      tier === 'PLAT' ? 'pr-tier-card pr-tier-card-plat'
+      : tier === 'GOLD' ? 'pr-tier-card pr-tier-card-gold'
+      : tier === 'SILV' ? 'pr-tier-card pr-tier-card-silv'
+      : 'pr-tier-card pr-tier-card-base';
+    return (
+      <div className={cls}>
+        <div className="pr-tier-card-label">{data.label}</div>
+        <div className="pr-tier-card-count">{data.count}</div>
+        <div className="pr-tier-card-rev">
+          {data.rev > 0 ? `${(data.rev / 10000).toLocaleString()}만원` : '— '}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+      <Card tier="PLAT" data={stats.PLAT} />
+      <Card tier="GOLD" data={stats.GOLD} />
+      <Card tier="SILV" data={stats.SILV} />
+      <Card tier="BASE" data={stats.BASE} />
     </div>
   );
 }
