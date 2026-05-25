@@ -72,18 +72,16 @@ export default function DealerPoolPanel({ storeName }: DealerPoolPanelProps) {
       {/* ── 헤더 ── */}
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">
-            딜러 풀
+          <div className="section-title" style={{ color: 'var(--brand)' }}>DEALER POOL</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>
+            🃏 딜러 풀
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {storeName} · 활성 {profiles.length}명 · {loaded ? `필터 ${filtered.length}명` : '불러오는 중…'}
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+            {storeName} · 활성 <b style={{ color: 'var(--brand)' }}>{profiles.length}</b>명 · {loaded ? `필터 ${filtered.length}명` : '불러오는 중…'}
           </p>
         </div>
-        <div
-          className="px-3 py-1.5 rounded-full text-xs font-bold"
-          style={{ background: 'rgba(255,31,143,0.08)', color: '#FF1F8F', border: '1px solid rgba(255,31,143,0.20)' }}
-        >
-          매장 대표 전용
+        <div className="pr-pill" style={{ background: 'var(--brand-pale)', color: 'var(--brand)', borderColor: 'rgba(255,31,143,0.30)' }}>
+          🔒 매장 대표 전용
         </div>
       </div>
 

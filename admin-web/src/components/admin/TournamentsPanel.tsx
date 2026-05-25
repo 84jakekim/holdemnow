@@ -128,15 +128,17 @@ export default function TournamentsPanel({ storeId, storeName }: Props) {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📅 예정 토너</h1>
-          <p className="text-sm text-gray-500 mt-1">시작 시간 지정 후 모바일 캘린더에 즉시 노출</p>
+          <div className="section-title" style={{ color: 'var(--brand)' }}>SCHEDULED TOURNAMENTS</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>📅 예정 토너</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>시작 시간 지정 후 모바일 캘린더에 즉시 노출</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
           disabled={templates.length === 0}
-          className="bg-black text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-900 disabled:opacity-40"
+          className="btn-brand px-4 py-2.5 text-sm tap disabled:opacity-40"
+          style={{ borderRadius: 'var(--r-md)' }}
         >
           + 토너 등록
         </button>

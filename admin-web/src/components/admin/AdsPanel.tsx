@@ -50,9 +50,10 @@ export default function AdsPanel({ storeId, storeName }: Props) {
     <div className="max-w-4xl">
       {/* 헤더 */}
       <div className="mb-5">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">📣 광고 / 플랜</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {storeName}의 노출을 더 강화할 수 있는 플랜이에요. 부담 없이 시작 가능합니다.
+        <div className="section-title" style={{ color: 'var(--brand)' }}>ADS &amp; PLANS</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>📣 광고 / 플랜</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+          <b style={{ color: 'var(--text-1)' }}>{storeName}</b>의 노출을 더 강화할 수 있는 플랜이에요. 부담 없이 시작 가능합니다.
         </p>
       </div>
 

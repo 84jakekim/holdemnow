@@ -104,7 +104,8 @@ export default function ReservationsPanel({ storeId }: Props) {
     <div>
       {/* 헤더 */}
       <div className="mb-5">
-        <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+        <div className="section-title" style={{ color: 'var(--brand)' }}>RESERVATIONS</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>
           📅 예약 관리
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>

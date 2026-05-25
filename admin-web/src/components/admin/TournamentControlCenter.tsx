@@ -213,17 +213,18 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
       {/* 헤더 — 모바일: 세로 stack / 데스크탑: 기존 가로 */}
       <div className="mb-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 lg:gap-4">
         <div>
-          <h1 className="text-xl lg:text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
+          <div className="section-title" style={{ color: 'var(--brand)' }}>TOURNAMENT CONTROL</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>
             🎬 토너 운영
           </h1>
           <p className="text-xs lg:text-sm mt-1" style={{ color: 'var(--text-2)' }}>
-            템플릿·LIVE·TV 송출·디스플레이 설정을 한 페이지에서 — {storeName}
+            템플릿·LIVE·TV 송출·디스플레이 설정을 한 페이지에서 — <b style={{ color: 'var(--text-1)' }}>{storeName}</b>
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowTemplateEditor(true)}
-            className="flex-1 lg:flex-none text-xs font-bold rounded-lg px-3 py-2.5 lg:py-2"
+            className="flex-1 lg:flex-none text-xs font-bold rounded-lg px-3 py-2.5 lg:py-2 tap"
             style={{ background: 'var(--surface-1)', color: 'var(--text-1)', border: '1px solid var(--border)', minHeight: 44 }}
           >
             🎲 템플릿 만들기
@@ -231,8 +232,8 @@ export default function TournamentControlCenter({ storeId, storeName }: Props) {
           <button
             onClick={() => setPickTemplateOpen(true)}
             disabled={templates.length === 0}
-            className="flex-1 lg:flex-none text-xs font-bold rounded-lg px-4 py-2.5 lg:py-2 text-white disabled:opacity-40"
-            style={{ background: '#FF1F8F', minHeight: 44 }}
+            className="btn-brand flex-1 lg:flex-none text-xs px-4 py-2.5 lg:py-2 tap disabled:opacity-40"
+            style={{ minHeight: 44, borderRadius: 'var(--r-md)' }}
           >
             ▶ 새 LIVE 시작
           </button>

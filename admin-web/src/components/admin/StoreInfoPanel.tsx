@@ -136,10 +136,11 @@ export default function StoreInfoPanel({ storeId }: Props) {
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🏬 매장 정보</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <div className="section-title" style={{ color: 'var(--brand)' }}>STORE PROFILE</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>🏬 매장 정보</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
           여기서 수정한 내용은 모바일 앱에 즉시 반영됩니다 ·{' '}
-          <span className="font-mono text-[11px]">{store.status ?? 'pending'}</span>
+          <span className="mono pill" style={{ fontSize: 10 }}>{store.status ?? 'pending'}</span>
         </p>
       </div>
 

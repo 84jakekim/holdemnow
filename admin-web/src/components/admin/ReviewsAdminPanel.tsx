@@ -55,9 +55,10 @@ export default function ReviewsAdminPanel({ storeId, storeName }: Props) {
     <div>
       <div className="mb-6 flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">⭐ 리뷰 답글</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {storeName}에 작성된 리뷰에 답글을 남겨 단골과 소통하세요. 답글은 사용자에게도 매장 상세에서 인라인으로 노출됩니다.
+          <div className="section-title" style={{ color: 'var(--brand)' }}>REVIEW REPLIES</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>⭐ 리뷰 답글</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
+            <b style={{ color: 'var(--text-1)' }}>{storeName}</b>에 작성된 리뷰에 답글을 남겨 단골과 소통하세요. 답글은 사용자에게도 매장 상세에서 인라인으로 노출됩니다.
           </p>
         </div>
       </div>
@@ -71,9 +72,12 @@ export default function ReviewsAdminPanel({ storeId, storeName }: Props) {
           <button
             key={t.id}
             onClick={() => setFilter(t.id)}
-            className={`px-3 py-1.5 text-[12px] font-bold rounded-md transition ${
-              filter === t.id ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className="tap"
+            style={
+              filter === t.id
+                ? { padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 999, background: 'var(--brand)', color: '#fff', border: '1px solid var(--brand)', boxShadow: 'var(--shadow-brand)' }
+                : { padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 999, background: 'var(--surface-1)', color: 'var(--text-2)', border: '1px solid var(--border)' }
+            }
           >
             {t.label}
           </button>
