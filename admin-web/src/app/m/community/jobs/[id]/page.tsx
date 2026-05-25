@@ -32,24 +32,32 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   if (job === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
-        <div className="text-[13px]" style={{ color: 'var(--text-3)' }}>불러오는 중…</div>
+      <div className="min-h-screen p-5 space-y-3" style={{ background: 'var(--bg)' }}>
+        <div className="skel h-14 rounded-r-md" />
+        <div className="skel h-48 rounded-r-xl" />
+        <div className="skel h-24 rounded-r-xl" />
       </div>
     );
   }
 
   if (!job) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-8 text-center gap-4" style={{ background: 'var(--bg)' }}>
-        <div className="text-5xl" aria-hidden="true">🔍</div>
-        <p className="text-[16px] font-bold" style={{ color: 'var(--text-1)' }}>구인 공고를 찾을 수 없습니다</p>
-        <button
-          onClick={() => router.back()}
-          className="h-11 px-6 rounded-2xl text-[14px] font-bold text-white"
-          style={{ background: '#FF1F8F' }}
-        >
-          돌아가기
-        </button>
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: 'var(--bg)' }}>
+        <div className="empty-state w-full max-w-sm">
+          <div className="empty-state-icon" aria-hidden>🔍</div>
+          <div>
+            <div className="empty-state-title">구인 공고를 찾을 수 없어요</div>
+            <div className="empty-state-desc" style={{ marginTop: 6 }}>
+              삭제되었거나 마감된 공고일 수 있어요.
+            </div>
+          </div>
+          <button
+            onClick={() => router.back()}
+            className="btn-brand tap px-5 py-2.5 text-[13px]"
+          >
+            돌아가기
+          </button>
+        </div>
       </div>
     );
   }
@@ -72,28 +80,28 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: hasContact ? 88 : 32 }}>
-      {/* ── 헤더 ── */}
+      {/* ── 헤더 (핑크 액센트 라인) ── */}
       <header
         className="sticky top-0 z-30 flex items-center h-14 px-4 gap-3"
         style={{
           background: 'rgba(255,255,255,0.94)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '2px solid rgba(255,31,143,0.18)',
         }}
       >
         <button
           onClick={() => router.back()}
           aria-label="뒤로"
-          className="w-9 h-9 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)] flex-shrink-0"
+          className="w-9 h-9 flex items-center justify-center rounded-full tap active:bg-[var(--surface-2)] flex-shrink-0"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
-        <h1 className="flex-1 text-center text-[16px] font-bold truncate" style={{ color: 'var(--text-1)' }}>
-          구인 상세
-        </h1>
+        <div className="flex-1 text-center section-title" style={{ margin: 0 }}>
+          💼 구인 상세
+        </div>
         {/* 공유 */}
         <button
           aria-label="공유"

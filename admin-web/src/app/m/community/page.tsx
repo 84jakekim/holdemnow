@@ -50,37 +50,30 @@ export default function CommunityIndexPage() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      {/* ── 헤더 ── */}
-      <header
-        className="sticky top-0 z-30 flex items-center h-14 px-4 gap-3"
-        style={{
-          background: 'rgba(255,255,255,0.94)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <button
-          onClick={() => router.back()}
-          aria-label="뒤로"
-          className="w-9 h-9 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)] flex-shrink-0"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6"/>
-          </svg>
-        </button>
-        <h1 className="flex-1 text-center text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-          커뮤니티
-        </h1>
-        <div className="w-9 h-9 flex-shrink-0" aria-hidden="true" />
+      {/* ── 핑크 그라데이션 hero ── */}
+      <header className="pr-home-hero px-5 pt-5 pb-7">
+        <div className="pr-home-hero-content flex items-start justify-between gap-3">
+          <button
+            onClick={() => router.back()}
+            aria-label="뒤로"
+            className="hero-pink-action w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 tap"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+          <div className="flex-1 min-w-0 text-center">
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">
+              COMMUNITY
+            </div>
+            <h1 className="h2 font-serif mt-1.5">커뮤니티</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">
+              홀덤펍 종사자와 매장을 잇는 공간
+            </p>
+          </div>
+          <div className="w-9 h-9 flex-shrink-0" aria-hidden="true" />
+        </div>
       </header>
-
-      {/* ── 안내 문구 ── */}
-      <div className="px-4 pt-5 pb-3">
-        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-2)' }}>
-          홀덤펍 종사자와 매장을 연결하는 공간입니다.
-        </p>
-      </div>
 
       {/* ── 카드 리스트 ── */}
       <div className="px-4 flex flex-col gap-3 pb-8">

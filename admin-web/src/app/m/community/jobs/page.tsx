@@ -12,6 +12,7 @@ import {
   formatRelativeTime,
   subscribeActiveJobs,
 } from '@/lib/community';
+import EmptyState from '@/components/ui/EmptyState';
 
 /* ============================================================
  * /m/community/jobs — 구인 리스트
@@ -64,46 +65,45 @@ export default function JobsListPage() {
 
   return (
     <div style={{ background: 'var(--bg-sub)', minHeight: '100vh' }}>
-      {/* ── 헤더 ── */}
-      <header
-        className="sticky top-0 z-30 flex items-center h-14 px-4 gap-3"
-        style={{
-          background: 'rgba(255,255,255,0.94)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <button
-          onClick={() => router.back()}
-          aria-label="뒤로"
-          className="w-9 h-9 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)] flex-shrink-0"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6"/>
-          </svg>
-        </button>
-        <h1 className="flex-1 text-center text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-          💼 구인
-        </h1>
-        {/* 검색 (UI 자리만 — 기능 추후) */}
-        <button
-          aria-label="검색"
-          className="w-9 h-9 flex items-center justify-center rounded-full transition active:bg-[var(--surface-2)] flex-shrink-0"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-          </svg>
-        </button>
+      {/* ── 핑크 hero ── */}
+      <header className="pr-home-hero px-5 pt-5 pb-6">
+        <div className="pr-home-hero-content flex items-start justify-between gap-3">
+          <button
+            onClick={() => router.back()}
+            aria-label="뒤로"
+            className="hero-pink-action w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 tap"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase opacity-90">
+              JOBS
+            </div>
+            <h1 className="h2 font-serif mt-1.5">💼 구인</h1>
+            <p className="text-[13px] font-semibold opacity-90 mt-1.5">
+              부산·경남 홀덤펍 채용 공고
+            </p>
+          </div>
+          <button
+            aria-label="검색"
+            className="hero-pink-action w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 tap"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* ── 필터바 ── */}
       <div
-        className="sticky z-20 bg-white px-4 pt-3 pb-2 flex flex-col gap-2"
-        style={{ top: 56, borderBottom: '1px solid var(--border)' }}
+        className="bg-white px-4 pt-3 pb-2 flex flex-col gap-2"
+        style={{ borderBottom: '1px solid var(--border)' }}
       >
         {/* 직무 칩 */}
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="직무 필터">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar" role="group" aria-label="직무 필터">
           {ROLE_FILTERS.map((f) => {
             const active = roleFilter === f.key;
             return (
@@ -111,11 +111,7 @@ export default function JobsListPage() {
                 key={f.key}
                 onClick={() => setRoleFilter(f.key)}
                 aria-pressed={active}
-                className="flex-shrink-0 px-3 h-8 rounded-full text-[12px] font-bold transition active:scale-95"
-                style={{
-                  background: active ? '#FF1F8F' : 'var(--surface-2)',
-                  color: active ? '#fff' : 'var(--text-2)',
-                }}
+                className={`tap ${active ? 'pr-pill-brand' : 'pr-pill'}`}
               >
                 {f.label}
               </button>
@@ -147,11 +143,19 @@ export default function JobsListPage() {
       {/* ── 리스트 ── */}
       <div className="pb-24">
         {!loaded ? (
-          <div className="py-12 text-center text-[12px]" style={{ color: 'var(--text-3)' }}>
-            불러오는 중…
+          <div className="px-4 pt-3 space-y-2">
+            <div className="skel h-24 rounded-r-xl" />
+            <div className="skel h-24 rounded-r-xl" />
+            <div className="skel h-24 rounded-r-xl" />
           </div>
         ) : filtered.length === 0 ? (
-          <EmptyJobsState />
+          <div className="px-4 pt-6">
+            <EmptyState
+              icon="📭"
+              title="아직 등록된 구인이 없어요"
+              desc="카톡방 사장님들이 곧 올릴 거예요."
+            />
+          </div>
         ) : (
           <div className="flex flex-col gap-2 px-4 pt-3">
             {filtered.map((job) => (
@@ -282,17 +286,3 @@ function JobListCard({ job }: { job: JobOffer }) {
   );
 }
 
-/* ── 빈 상태 ── */
-function EmptyJobsState() {
-  return (
-    <div className="flex flex-col items-center justify-center px-8 py-20 text-center">
-      <div className="text-5xl mb-4" aria-hidden="true">📭</div>
-      <p className="text-[16px] font-bold mb-2" style={{ color: 'var(--text-1)' }}>
-        아직 등록된 구인이 없습니다
-      </p>
-      <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
-        카톡방 사장님들이 곧 올릴 거예요
-      </p>
-    </div>
-  );
-}
