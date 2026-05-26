@@ -1752,3 +1752,27 @@ textarea:not(.no-pr-focus):focus {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40%           { transform: scale(1);   opacity: 1; }
 }
+
+/* ─── 다크모드 — Tailwind 하드코딩 색상 일괄 override (2026-05-27)
+ * 매장 어드민·본사 어드민·기타 페이지의 text-gray-*/bg-white 등이
+ * 다크모드에서 검정 폰트로 보이지 않는 문제 차단. */
+html[data-theme="dark"] .bg-white            { background-color: var(--bg) !important; }
+html[data-theme="dark"] .bg-gray-50          { background-color: var(--bg-sub) !important; }
+html[data-theme="dark"] .bg-gray-100         { background-color: var(--surface-1) !important; }
+html[data-theme="dark"] .bg-gray-200         { background-color: var(--surface-2) !important; }
+
+html[data-theme="dark"] .text-black          { color: var(--text-1) !important; }
+html[data-theme="dark"] .text-gray-900       { color: var(--text-1) !important; }
+html[data-theme="dark"] .text-gray-800       { color: var(--text-1) !important; }
+html[data-theme="dark"] .text-gray-700       { color: var(--text-2) !important; }
+html[data-theme="dark"] .text-gray-600       { color: var(--text-2) !important; }
+html[data-theme="dark"] .text-gray-500       { color: var(--text-3) !important; }
+html[data-theme="dark"] .text-gray-400       { color: var(--text-3) !important; }
+
+html[data-theme="dark"] .border-gray-100     { border-color: var(--border) !important; }
+html[data-theme="dark"] .border-gray-200     { border-color: var(--border) !important; }
+html[data-theme="dark"] .border-gray-300     { border-color: var(--border-strong) !important; }
+
+/* divide-* (Tailwind 자식 분리선) — admin 테이블/리스트에서 자주 사용 */
+html[data-theme="dark"] .divide-gray-100 > * + * { border-color: var(--border) !important; }
+html[data-theme="dark"] .divide-gray-200 > * + * { border-color: var(--border) !important; }

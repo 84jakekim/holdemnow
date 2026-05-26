@@ -290,7 +290,7 @@ function SectionHeader({
       ? { color: '#dc2626' }
       : tone === 'warn'
         ? { color: '#b45309' }
-        : { color: '#111827' };
+        : { color: 'var(--text-1)' };
   return (
     <div className="mb-3 flex items-baseline gap-2">
       <span className="text-sm font-extrabold" style={toneStyle}>
