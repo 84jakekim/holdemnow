@@ -92,6 +92,14 @@
       ]
     },
     {
+      "collectionGroup": "seriesSubscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "seriesId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "events",
       "queryScope": "COLLECTION",
       "fields": [

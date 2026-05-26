@@ -37,6 +37,8 @@ export { autoImportYoutubers } from './youtube/autoImportYoutubers';
 export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';
 export { notifyTournamentStart } from './notifications/notifyTournamentStart';
 export { notifyLateRegImminent } from './notifications/notifyLateRegImminent';
+// 시리즈 본선 D-7/D-3/D-1 카운트다운 (매일 09:00 KST) — seriesSubscriptions 구독자에게 FCM
+export { notifySeriesCountdown } from './notifications/notifySeriesCountdown';
 export { marketingBroadcast } from './notifications/marketingBroadcast';
 export { processScheduledCampaigns } from './notifications/processScheduledCampaigns';
 // 새 예약 생성 시 매장 owner에게 FCM 푸시.

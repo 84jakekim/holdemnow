@@ -278,7 +278,7 @@ export default function SeriesPage({ params }: { params: Promise<{ seriesId: str
                 : '🔔 로그인 + 시리즈 구독'}
         </button>
         <div className="text-[10px] text-gray-400 text-center mt-2">
-          v0.2: FCM 푸시 자동 발송 연동 예정
+          본선 D-7 · D-3 · D-1 매일 오전 9시 FCM 푸시 자동 발송
         </div>
       </div>
     </div>

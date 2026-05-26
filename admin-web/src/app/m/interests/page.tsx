@@ -128,7 +128,7 @@ export default function InterestsPage() {
       )}
 
       <div className="px-5 py-6 text-center text-[10px] text-gray-400">
-        💡 시작 1시간 전, 늦은 등록 30분 전 푸시 알림은 v0.2 (FCM)에서 자동 발송
+        💡 시작 1시간 전, 늦은 등록 30분 전 FCM 푸시 자동 발송됩니다
       </div>
     </div>
   );
