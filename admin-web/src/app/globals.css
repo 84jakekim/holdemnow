@@ -1563,3 +1563,166 @@ textarea:not(.no-pr-focus):focus {
   font-weight: 700;
   letter-spacing: 0.08em;
 }
+
+/* ─────────────────────────────────────────────────────────
+ * Pink Rabbit handoff v3.1 — 채팅방 톤 토큰 (2026-05-26)
+ * /m/posts 채팅방 + 홈 상단 "오늘의 매장 소식" 띠 공통 디자인.
+ * 핸드오프 screens-user.jsx ScreenPosts 시그니처를 그대로 토큰화.
+ *
+ *  · .pr-chat-row        — 한 메시지 단위 (아바타 + 본문) — flex row, gap 8
+ *  · .pr-chat-avatar     — 36px 원형 아바타 (매장 컬러 bg + 1px border + 이모지)
+ *  · .pr-chat-meta       — 매장명 · 거리 · 시간 (말풍선 위 작은 행)
+ *  · .pr-chat-bubble     — 말풍선 (꼬리 좌측 아래: radius 14/14/14/4) + 매장 컬러
+ *  · .pr-chat-bubble-pin — 핑크 본사 pinned 강조 (그라데이션 + 보더 ↑)
+ *  · .pr-chat-time       — 우측 외부 작은 시간 라벨 (mono)
+ *  · .pr-chat-divider    — "오늘 20:00" 시간 그룹 디바이더 (수평선 + pill)
+ *  · .pr-chat-tape       — 홈 상단 띠 (말풍선 1줄 톤, 좌측 mini-avatar + 본문)
+ *
+ * 색상은 매장별로 cardColor → resolveCardVisual에서 surface/border/accent로 풀린 값을 inline.
+ * 토큰은 구조·간격·라운드·shadow만 고정.
+ * ───────────────────────────────────────────────────────── */
+.pr-chat-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: flex-end;
+  animation: pr-chat-fadein 240ms ease-out;
+}
+.pr-chat-row + .pr-chat-row.pr-chat-row-grouped {
+  margin-top: -4px; /* 같은 매장 연속 시 살짝 붙임 */
+}
+.pr-chat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  border: 1px solid;
+  /* bg + borderColor는 inline에서 매장 컬러 주입 */
+}
+.pr-chat-avatar-spacer {
+  width: 36px;
+  flex-shrink: 0;
+  /* 같은 매장 연속 행에서 아바타 자리만 비워두는 placeholder */
+}
+.pr-chat-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+.pr-chat-meta-store {
+  font-weight: 800;
+  color: var(--text-1);
+}
+.pr-chat-meta-info {
+  font-size: 10px;
+  color: var(--text-3);
+}
+.pr-chat-bubble {
+  border-radius: 14px 14px 14px 4px; /* 좌측 아래 꼬리 */
+  border: 1px solid;
+  overflow: hidden;
+  display: inline-block;
+  max-width: 100%;
+  box-shadow: var(--shadow-card);
+  /* background + borderColor는 inline (매장 컬러) */
+}
+.pr-chat-bubble-pin {
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(255,31,143,0.12) 0%, rgba(255,31,143,0.02) 100%);
+  border: 1px solid rgba(255,31,143,0.25);
+}
+.pr-chat-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 9.5px;
+  color: var(--text-3);
+  padding-bottom: 4px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.pr-chat-time-rel {
+  font-weight: 600;
+}
+.pr-chat-time-hhmm {
+  opacity: 0.7;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.pr-chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+.pr-chat-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.pr-chat-divider-text {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 99px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.pr-chat-tape {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 8px;
+  border-radius: 14px 14px 14px 4px;
+  border: 1px solid;
+  box-shadow: 0 2px 8px -6px rgba(0,0,0,0.25);
+  /* background + borderColor inline (매장 컬러) */
+}
+.pr-chat-tape-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 1px solid;
+}
+.pr-chat-tape-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pr-chat-tape-headline {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pr-chat-tape-meta {
+  font-size: 10.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+@keyframes pr-chat-fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

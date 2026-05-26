@@ -386,8 +386,6 @@ export default function PostsPage() {
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      {/* 새 카드 페이드인 keyframes — 카톡방 톤 (ChatPostCard에서 참조) */}
-      <style>{`@keyframes m-posts-fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
       {/* 헤더 */}
       <header
         className="flex items-center gap-2 px-3"
@@ -523,19 +521,23 @@ export default function PostsPage() {
           groupedItems.map((g) => (
             <div key={g.bucket}>
               <TimeDivider label={g.label} />
-              {g.items.map((p) => {
+              {g.items.map((p, idx, arr) => {
                 const c = storeCoords.get(p.storeId);
                 const dist = c && userLocation
                   ? haversineMeters(userLocation, { lat: c.lat, lng: c.lng })
                   : undefined;
                 // 매장명 fallback (post 본문에 없으면 stores 캐시에서)
                 const name = p.storeName || c?.name;
+                // 같은 매장이 직전 행에 있으면 아바타/메타 생략 (카톡 그룹핑 패턴)
+                const prev = idx > 0 ? arr[idx - 1] : null;
+                const groupedWithPrev = !!prev && prev.storeId === p.storeId;
                 return (
                   <ChatPostCard
                     key={p.id}
                     post={{ ...p, storeName: name } as StorePost}
                     distanceMeters={dist}
                     now={now}
+                    groupedWithPrev={groupedWithPrev}
                     onImageClick={(url, all) =>
                       setLightbox({ url, all, idx: all.indexOf(url) })
                     }
@@ -566,20 +568,12 @@ export default function PostsPage() {
 // ─────────────────────────────────────────────────────────────
 
 function TimeDivider({ label }: { label: string }) {
+  // 핸드오프 v3.1 — pr-chat-divider 토큰 사용 (수평선 + pill)
   return (
-    <div className="flex items-center gap-2 my-2.5">
-      <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-      <div
-        className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-        style={{
-          color: 'var(--text-3)',
-          background: 'var(--surface-2)',
-          border: '1px solid var(--border)',
-        }}
-      >
-        {label}
-      </div>
-      <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+    <div className="pr-chat-divider">
+      <div className="pr-chat-divider-line" />
+      <div className="pr-chat-divider-text">{label}</div>
+      <div className="pr-chat-divider-line" />
     </div>
   );
 }
@@ -600,18 +594,13 @@ function formatBucket(bucket: number, now: number): string {
 // ─────────────────────────────────────────────────────────────
 
 function PinnedBox({ item }: { item: PinnedPost }) {
+  // 핸드오프 v3.1 — pr-chat-bubble-pin 토큰 (핑크 그라데이션 강조)
   const inner = (
-    <div
-      className="rounded-xl px-3 py-2.5"
-      style={{
-        background: 'linear-gradient(135deg, rgba(255,31,143,0.12) 0%, rgba(255,31,143,0.04) 100%)',
-        border: '1px solid rgba(255,31,143,0.25)',
-      }}
-    >
+    <div className="pr-chat-bubble-pin">
       <div className="flex items-center gap-1.5 mb-0.5">
         <span
           className="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded"
-          style={{ background: '#FF1F8F', color: '#fff' }}
+          style={{ background: '#FF1F8F', color: '#fff', letterSpacing: '0.04em' }}
         >
           공지
         </span>
@@ -620,7 +609,7 @@ function PinnedBox({ item }: { item: PinnedPost }) {
         </span>
       </div>
       {item.body && (
-        <div className="text-[11px] line-clamp-2" style={{ color: 'var(--text-2)' }}>
+        <div className="text-[11px] line-clamp-2" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
           {item.body}
         </div>
       )}

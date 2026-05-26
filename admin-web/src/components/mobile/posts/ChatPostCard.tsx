@@ -3,20 +3,22 @@
 /**
  * ChatPostCard — /m/posts 채팅방 페이지의 매장 카드.
  *
- * 디자인 결정 (2026-05-22, PM 단독 — 2차 정정):
- *  - 매장 사장은 카톡방에 세로형 포스터(2:3, 3:4, 9:16)를 자주 올린다.
- *    이전 16:9 cover 렌더링은 포스터를 잘라먹어 정보 손실.
- *  - 카드 구조: 헤더(매장+거리+상대시각) → 헤드라인(강조) → 본문(상세, clamp 5줄+더보기)
- *    → 이미지(원본비율, 폭 60% 가운데) → 태그(eventTags).
- *  - 이미지는 object-fit: contain + 원본 비율 유지로 세로 포스터 잘림 방지.
- *  - 다중 이미지는 첫 장만 노출 + 우측 하단 "+N" 배지, 클릭 시 라이트박스에서 전체 스와이프.
- *  - 헤드라인/본문은 카드 표면(말풍선) 안에서 카톡 톤 유지 — 좌측 액센트 보더 + cardColor surface.
- *  - 본문이 비면 헤드라인만, 이미지가 없으면 텍스트만으로 가볍게 동작.
- *  - 카드 전체 클릭 → 매장 상세. 이미지 클릭 → 라이트박스. "더보기"/태그 클릭은 stopPropagation.
+ * 디자인 결정 (2026-05-26, PM 단독 — 3차 정정 · 핸드오프 v3.1):
+ *  - claude-design/login-handoff/pimk-rabbit/project/screens-user.jsx
+ *    ScreenPosts(화면 3 채팅방) 시그니처 100% 매칭.
+ *  - 구조: [아바타] · [매장명/거리 메타 + 말풍선] · [시간 라벨]
+ *      말풍선 좌측 외부에 36px 원형 아바타(매장 컬러 bg/border + 이모지).
+ *      말풍선 위에 매장명 · 메타가 한 줄로 inline (작은 글씨).
+ *      말풍선 우측 외부에 상대 시각 + HH:MM mono.
+ *  - 말풍선 라운드: 14/14/14/4 (좌측 아래 꼬리). 이전 좌측 accent border 폐기.
+ *  - 같은 매장 연속 행은 아바타 자리만 placeholder (page.tsx 그룹핑에서 결정).
+ *  - 본문(상세) clamp 5줄 + 더보기, 세로 포스터 폭 60% maxH 60vh contain (기존 유지).
+ *  - 이미지 다중일 때 첫 장만 + 우측 하단 "+N" 배지, 클릭 시 라이트박스 (기존 유지).
+ *  - 카드 전체 클릭 → 매장 상세. 이미지/더보기/태그 클릭은 stopPropagation.
  *
- * 정정 사유 (사용자 피드백 2026-05-22):
- *  - "세로형 포스터를 축소해서 올려주되 터치하면 확대된내용도 볼수있어야"
- *  - "상세본문과 카드노출 한줄도 보여야해"
+ * 정책:
+ *  - 사용자 앱 상금 노출 금지: prizeOverride 등 미사용. tags만 (eventTags).
+ *  - 카톡 톤 일관성: animation pr-chat-fadein, mono 시간, 매장 컬러 surface.
  */
 
 import { useMemo, useState } from 'react';
@@ -30,12 +32,20 @@ interface Props {
   post: StorePost;
   distanceMeters?: number;
   now: number;
+  /** 같은 매장이 직전 행에 있어 아바타를 placeholder로 처리할지 여부 (page.tsx에서 결정) */
+  groupedWithPrev?: boolean;
   onImageClick?: (url: string, allUrls: string[]) => void;
 }
 
 const BODY_CLAMP_LINES = 5;
 
-export default function ChatPostCard({ post, distanceMeters, now, onImageClick }: Props) {
+export default function ChatPostCard({
+  post,
+  distanceMeters,
+  now,
+  groupedWithPrev = false,
+  onImageClick,
+}: Props) {
   const router = useRouter();
   const { style, emojis } = useMemo(() => resolveCardVisual(post), [post]);
   const relative = useMemo(() => formatRelativeKo(post.createdAt, now), [post.createdAt, now]);
@@ -54,11 +64,9 @@ export default function ChatPostCard({ post, distanceMeters, now, onImageClick }
     return firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine;
   }, [post.headline, post.body]);
 
-  // 본문은 헤드라인과 같으면 중복 노출하지 않는다 (헤드라인이 body 첫 줄 fallback인 경우).
   const bodyText = useMemo(() => {
     const b = (post.body || '').trim();
     if (!b) return '';
-    // 헤드라인이 body 첫 줄과 동일하고 본문이 한 줄짜리면 중복 → 본문 생략
     const firstLine = b.split('\n')[0]?.trim() ?? '';
     if (firstLine === headline && b === firstLine) return '';
     return b;
@@ -71,20 +79,46 @@ export default function ChatPostCard({ post, distanceMeters, now, onImageClick }
   const extraCount = Math.max(0, images.length - 1);
   const tags = post.eventTags ?? [];
 
+  // 매장명 표시값 (메타 행에서 사용)
+  const storeName = post.storeName || '매장';
+  // 아바타 표시 이모지 — 카드 이모지 1순위, fallback은 매장 컬러 defaultEmoji
+  const avatarEmoji = emojis[0] || '🃏';
+
   const handleCardClick = () => {
     router.push(`/m/store/${post.storeId}`);
   };
 
   return (
-    <div
-      className="flex items-end gap-1.5 mb-2.5"
-      style={{
-        maxWidth: '85%',
-        animation: 'm-posts-fadein 240ms ease-out',
-      }}
-    >
-      {/* 말풍선 본체 */}
+    <div className={'pr-chat-row' + (groupedWithPrev ? ' pr-chat-row-grouped' : '')}>
+      {/* 좌측 아바타 (or placeholder for grouped) */}
+      {groupedWithPrev ? (
+        <div className="pr-chat-avatar-spacer" aria-hidden />
+      ) : (
+        <div
+          className="pr-chat-avatar"
+          style={{ background: style.surface, borderColor: style.border }}
+          aria-hidden
+        >
+          {avatarEmoji}
+        </div>
+      )}
+
+      {/* 본문 (메타 + 말풍선) */}
       <div className="min-w-0 flex-1">
+        {/* 메타 — 같은 매장 연속 시 생략 (카톡 패턴) */}
+        {!groupedWithPrev && (
+          <div className="pr-chat-meta">
+            <span className="pr-chat-meta-store" style={{ color: 'var(--text-1)' }}>
+              {storeName}
+            </span>
+            {typeof distanceMeters === 'number' && (
+              <span className="pr-chat-meta-info">· {formatDistance(distanceMeters)}</span>
+            )}
+            {relative && <span className="pr-chat-meta-info">· {relative}</span>}
+          </div>
+        )}
+
+        {/* 말풍선 */}
         <div
           role="button"
           tabIndex={0}
@@ -95,94 +129,88 @@ export default function ChatPostCard({ post, distanceMeters, now, onImageClick }
               handleCardClick();
             }
           }}
-          className="block rounded-2xl transition active:opacity-75 cursor-pointer tap"
+          className="pr-chat-bubble tap cursor-pointer"
           style={{
             background: style.surface,
-            border: `1px solid ${style.border}`,
-            borderLeft: `3px solid ${style.accent}`,
-            padding: '10px 12px 10px',
-            borderTopLeftRadius: '6px', // 말풍선 꼬리 효과
-            boxShadow: 'var(--shadow-card)',
+            borderColor: style.border,
+            maxWidth: '100%',
           }}
-          aria-label={`${post.storeName ?? '매장'} 소식 보기`}
+          aria-label={`${storeName} 소식 보기`}
         >
-          {/* 상단: 매장명 + 거리 + 이모지 */}
-          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-            <div
-              className="text-[11.5px] font-extrabold truncate"
-              style={{ color: style.textPrimary, maxWidth: '180px' }}
-            >
-              {post.storeName || '매장'}
-            </div>
-            {typeof distanceMeters === 'number' && (
+          {/* 헤드라인 (강조) */}
+          <div style={{ padding: '10px 12px 4px' }}>
+            {headline && (
               <div
-                className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                className="text-[14px] font-bold leading-snug"
                 style={{
-                  background: 'rgba(0,0,0,0.06)',
-                  color: style.textSecondary,
+                  color: style.textPrimary,
+                  letterSpacing: '-0.015em',
+                  wordBreak: 'break-word',
                 }}
               >
-                📍 {formatDistance(distanceMeters)}
+                {headline}
               </div>
             )}
-            {emojis.length > 0 && (
-              <div className="flex items-center gap-0.5 ml-auto" aria-hidden>
-                {emojis.slice(0, 3).map((e, i) => (
-                  <span key={`${e}_${i}`} style={{ fontSize: 14, lineHeight: 1 }}>{e}</span>
+
+            {/* 본문 (상세) */}
+            {bodyText && (
+              <div
+                className="text-[12.5px] mt-1.5"
+                style={{
+                  color: style.textSecondary,
+                  lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  ...(bodyExpanded
+                    ? {}
+                    : {
+                        display: '-webkit-box',
+                        WebkitBoxOrient: 'vertical',
+                        WebkitLineClamp: BODY_CLAMP_LINES,
+                        overflow: 'hidden',
+                      }),
+                }}
+              >
+                {bodyText}
+              </div>
+            )}
+            {bodyText && needsClamp(bodyText, BODY_CLAMP_LINES) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBodyExpanded((v) => !v);
+                }}
+                className="text-[11px] font-semibold mt-1 active:opacity-60"
+                style={{ color: style.accent }}
+                aria-expanded={bodyExpanded}
+              >
+                {bodyExpanded ? '접기' : '더보기'}
+              </button>
+            )}
+
+            {/* 이벤트 태그 */}
+            {tags.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {tags.slice(0, 6).map((tag, i) => (
+                  <span
+                    key={`${tag}_${i}`}
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                    style={{
+                      background: 'rgba(255,255,255,0.7)',
+                      color: '#111827',
+                    }}
+                  >
+                    #{tag}
+                  </span>
                 ))}
               </div>
             )}
           </div>
 
-          {/* 헤드라인 (강조) */}
-          {headline && (
-            <div
-              className="text-[15px] font-bold leading-snug"
-              style={{ color: style.textPrimary, wordBreak: 'break-word' }}
-            >
-              {headline}
-            </div>
-          )}
-
-          {/* 본문 (상세) */}
-          {bodyText && (
-            <div
-              className="text-[13px] leading-relaxed mt-1.5"
-              style={{
-                color: style.textSecondary,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                ...(bodyExpanded
-                  ? {}
-                  : {
-                      display: '-webkit-box',
-                      WebkitBoxOrient: 'vertical',
-                      WebkitLineClamp: BODY_CLAMP_LINES,
-                      overflow: 'hidden',
-                    }),
-              }}
-            >
-              {bodyText}
-            </div>
-          )}
-          {bodyText && needsClamp(bodyText, BODY_CLAMP_LINES) && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setBodyExpanded((v) => !v);
-              }}
-              className="text-[11.5px] font-semibold mt-1 active:opacity-60"
-              style={{ color: style.accent }}
-              aria-expanded={bodyExpanded}
-            >
-              {bodyExpanded ? '접기' : '더보기'}
-            </button>
-          )}
-
           {/* 세로 포스터 이미지 — 폭 60% 가운데, 원본 비율 유지 */}
           {firstImage && (
-            <div className="mt-2.5 flex justify-center">
+            <div style={{ padding: '0 12px 10px' }} className="flex justify-center">
               <button
                 type="button"
                 onClick={(e) => {
@@ -195,7 +223,6 @@ export default function ChatPostCard({ post, distanceMeters, now, onImageClick }
                   maxWidth: 240,
                   minWidth: 160,
                   background: 'rgba(0,0,0,0.06)',
-                  // 비율은 이미지가 결정 — 컨테이너는 width만 고정, 높이는 auto
                 }}
                 aria-label="이미지 확대"
               >
@@ -227,46 +254,24 @@ export default function ChatPostCard({ post, distanceMeters, now, onImageClick }
               </button>
             </div>
           )}
-
-          {/* 이벤트 태그 */}
-          {tags.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {tags.slice(0, 6).map((tag, i) => (
-                <span
-                  key={`${tag}_${i}`}
-                  className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded"
-                  style={{
-                    background: 'rgba(0,0,0,0.05)',
-                    color: style.textSecondary,
-                  }}
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
       {/* 시간 라벨 (말풍선 우측 외부) — 카톡 룩 */}
-      <div className="flex flex-col items-start text-[9.5px] pb-1 flex-shrink-0" style={{ color: 'var(--text-3)' }}>
-        {relative && <span className="font-semibold">{relative}</span>}
-        {hhmm && <span style={{ opacity: 0.7 }}>{hhmm}</span>}
+      <div className="pr-chat-time" aria-hidden>
+        {hhmm && <span className="pr-chat-time-hhmm">{hhmm}</span>}
       </div>
     </div>
   );
 }
 
 /**
- * 본문이 clamp 줄수를 넘는지 휴리스틱으로 판정.
- * - 줄바꿈 수 또는 평균 글자 폭 기반 추정 (정확한 측정은 layout 후에야 가능하므로 근사).
- * - 보수적으로 판정해서 짧은 글에는 "더보기" 안 띄움.
+ * 본문이 clamp 줄수를 넘는지 휴리스틱으로 판정 — 정확한 측정은 layout 이후에야 가능.
  */
 function needsClamp(text: string, lines: number): boolean {
   if (!text) return false;
   const newlines = (text.match(/\n/g) || []).length;
   if (newlines >= lines) return true;
-  // 모바일 카드 가로폭 ~270px, 13px 한글 한 줄 ~20자 가정
   const approxCharsPerLine = 20;
   return text.length > approxCharsPerLine * lines;
 }
