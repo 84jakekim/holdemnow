@@ -45,8 +45,12 @@ export { processScheduledCampaigns } from './notifications/processScheduledCampa
 export { notifyStoreOnReservation } from './notifications/notifyStoreOnReservation';
 // 예약 확정 시 예약자에게 FCM 푸시 (pending → confirmed).
 export { notifyUserOnReservationConfirmed } from './notifications/notifyUserOnReservationConfirmed';
-// 매장 측 예약 취소 시 예약자에게 FCM 푸시 (cancelledBy='store').
+// 매장 측 예약 취소 시 예약자에게 FCM 푸시 (cancelledBy='store' 또는 'store_approved').
 export { notifyUserOnReservationCancelledByStore } from './notifications/notifyUserOnReservationCancelledByStore';
+// 사용자 발의 취소 신청 시 매장 owner에게 FCM 푸시 (cancelRequested false→true).
+export { notifyStoreOnCancelRequest } from './notifications/notifyStoreOnCancelRequest';
+// 매장이 사용자 취소 신청을 거절했을 때 사용자에게 FCM 푸시 (cancelRequested true→false + declinedAt).
+export { notifyUserOnCancelRequestDeclined } from './notifications/notifyUserOnCancelRequestDeclined';
 // 예약 방문 10분 전 사용자에게 리마인더 FCM 푸시 (1분 cron).
 export { notifyReservationReminder } from './notifications/notifyReservationReminder';
 // 입장시간+2h 지난 pending/confirmed 예약 자동 completed (30분 cron) — 2026-05-27

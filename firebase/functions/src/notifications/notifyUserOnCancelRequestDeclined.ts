@@ -1,23 +1,22 @@
 /**
- * 매장 측 예약 취소 시 예약자에게 FCM 푸시 발송.
+ * 매장이 사용자 취소 신청을 거절했을 때 예약자에게 FCM 푸시 발송.
  *
  * 트리거: stores/{storeId}/reservations/{rid} onDocumentUpdated
  * 조건:
- *  - before.status !== 'cancelled' (신규 cancelled 전이)
- *  - after.status === 'cancelled'
- *  - after.cancelledBy === 'store' OR 'store_approved'
+ *  - before.cancelRequested === true && after.cancelRequested === false
+ *  - after.cancelRequestDeclinedAt 신규 (= before에는 없거나 다른 값)
+ *  - after.status === 'confirmed' (승인이 아닌 거절 케이스만)
  *
  * 흐름:
- * 1. before/after status + cancelledBy 검사
- * 2. 예약자 authorUid → users/{uid}/fcmTokens 전체 조회
- * 3. admin.messaging().sendEach() 멀티캐스트
- * 4. data: type=reservation_cancelled_by_store, storeId, reservationId, deepLink
+ * 1. before/after 검사 — 거절 케이스만 통과
+ * 2. 예약자 authorUid → FCM 토큰 일괄 발송
+ * 3. data: type=reservation_cancel_request_declined, storeId, reservationId
+ * 4. deepLink → /m/reservations
  *
- * PM 결정 2026-05-27:
- * - 'store': 매장 직접 취소 (전화 케이스)
- * - 'store_approved': 사용자 발의 → 매장 승인
- *   두 케이스 모두 사용자가 인지해야 하므로 통합 처리.
- *   메시지 타이틀/본문만 분기.
+ * 승인 케이스는 별도 함수 notifyUserOnReservationCancelledByStore가 처리
+ * (cancelledBy='store_approved' 분기 포함).
+ *
+ * PM 결정 2026-05-27.
  */
 
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
@@ -29,12 +28,11 @@ function pad2(n: number) {
 
 function formatKST(ts: admin.firestore.Timestamp | undefined): string {
   if (!ts) return '';
-  // KST = UTC+9
   const d = new Date(ts.toMillis() + 9 * 3600 * 1000);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
 
-export const notifyUserOnReservationCancelledByStore = onDocumentUpdated(
+export const notifyUserOnCancelRequestDeclined = onDocumentUpdated(
   {
     document: 'stores/{storeId}/reservations/{rid}',
     region: 'asia-northeast3',
@@ -42,33 +40,40 @@ export const notifyUserOnReservationCancelledByStore = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before?.data() as
       | {
+          cancelRequested?: boolean;
           status?: string;
-          cancelledBy?: string;
+          cancelRequestDeclinedAt?: admin.firestore.Timestamp | null;
         }
       | undefined;
 
     const after = event.data?.after?.data() as
       | {
+          cancelRequested?: boolean;
           status?: string;
-          cancelledBy?: string;
+          cancelRequestDeclinedAt?: admin.firestore.Timestamp | null;
+          cancelRequestDeclineReason?: string | null;
           authorUid?: string;
           storeName?: string;
           reservedFor?: admin.firestore.Timestamp;
           partySize?: number;
-          cancelReason?: string | null;
-          cancelRequestReason?: string | null;
         }
       | undefined;
 
     if (!before || !after) return;
 
-    // 조건: status 변화가 cancelled & cancelledBy='store' OR 'store_approved' 신규 진입.
-    // (이미 cancelled 상태였던 doc의 다른 필드 변경은 트리거하지 않음)
-    if (before.status === 'cancelled') return;
-    if (after.status !== 'cancelled') return;
-    const isStoreCancel = after.cancelledBy === 'store';
-    const isApproved = after.cancelledBy === 'store_approved';
-    if (!isStoreCancel && !isApproved) return;
+    // 거절 케이스 정의:
+    // - before.cancelRequested === true (사용자가 신청 상태였음)
+    // - after.cancelRequested === false (매장이 처리)
+    // - after.status === 'confirmed' (취소가 아닌 유지 케이스)
+    // - cancelRequestDeclinedAt이 새로 박혔거나 변경됨 (단순 신청 취소 아닌 거절)
+    if (before.cancelRequested !== true) return;
+    if (after.cancelRequested !== false) return;
+    if (after.status !== 'confirmed') return;
+    if (!after.cancelRequestDeclinedAt) return;
+    // 이미 있던 declinedAt이면 중복 발송 방지 (값 비교)
+    const beforeMs = before.cancelRequestDeclinedAt?.toMillis?.() ?? 0;
+    const afterMs = after.cancelRequestDeclinedAt?.toMillis?.() ?? 0;
+    if (beforeMs && beforeMs === afterMs) return;
 
     const authorUid = after.authorUid;
     if (!authorUid) return;
@@ -77,32 +82,19 @@ export const notifyUserOnReservationCancelledByStore = onDocumentUpdated(
     const storeName = after.storeName ?? '매장';
     const timeStr = formatKST(after.reservedFor);
     const partySize = after.partySize ?? 1;
-    // 사용자 신청 사유(승인 케이스) > 매장 입력 사유(직접 취소 케이스)
-    const reason = (
-      (isApproved ? after.cancelRequestReason : after.cancelReason) ?? ''
-    ).trim();
-
-    const reasonSuffix = reason ? ` (사유: ${reason})` : '';
-    const titleText = isApproved
-      ? '✅ 취소 신청이 승인되었습니다'
-      : '예약이 매장에 의해 취소되었습니다';
-    const bodyText = isApproved
-      ? `${storeName} ${timeStr} ${partySize}명 — 매장이 취소 신청을 승인했습니다${reasonSuffix}`
-      : `${storeName} ${timeStr} ${partySize}명 예약이 매장에 의해 취소되었습니다${reasonSuffix}`;
+    const declineReason = (after.cancelRequestDeclineReason ?? '').trim();
 
     const db = admin.firestore();
     const messaging = admin.messaging();
 
-    // 예약자 FCM 토큰 전체 조회
     const tokenSnap = await db
       .collection('users')
       .doc(authorUid)
       .collection('fcmTokens')
       .get();
-
     if (tokenSnap.empty) {
       console.log(
-        `[notifyUserOnReservationCancelledByStore] no tokens uid=${authorUid} rid=${rid}`,
+        `[notifyUserOnCancelRequestDeclined] no tokens uid=${authorUid} rid=${rid}`,
       );
       return;
     }
@@ -110,19 +102,19 @@ export const notifyUserOnReservationCancelledByStore = onDocumentUpdated(
     const tokens = tokenSnap.docs
       .map((d) => (d.data() as { token?: string }).token)
       .filter((t): t is string => Boolean(t));
-
     if (tokens.length === 0) return;
+
+    const reasonSuffix = declineReason ? ` (사유: ${declineReason})` : '';
+    const bodyText = `${storeName} ${timeStr} ${partySize}명 — 매장이 취소 신청을 거절했습니다${reasonSuffix}`;
 
     const messages: admin.messaging.Message[] = tokens.map((token) => ({
       token,
       notification: {
-        title: titleText,
+        title: '❌ 취소 신청이 거절되었습니다',
         body: bodyText,
       },
       data: {
-        type: isApproved
-          ? 'reservation_cancel_request_approved'
-          : 'reservation_cancelled_by_store',
+        type: 'reservation_cancel_request_declined',
         storeId,
         reservationId: rid,
         deepLink: '/m/reservations',
@@ -134,10 +126,10 @@ export const notifyUserOnReservationCancelledByStore = onDocumentUpdated(
 
     const resp = await messaging.sendEach(messages);
     console.log(
-      `[notifyUserOnReservationCancelledByStore] uid=${authorUid} store=${storeId} rid=${rid} sent=${resp.successCount} failed=${resp.failureCount}`,
+      `[notifyUserOnCancelRequestDeclined] uid=${authorUid} store=${storeId} rid=${rid} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
 
-    // Invalid/만료 토큰 자동 정리
+    // 토큰 정리
     const invalidTokens: string[] = [];
     resp.responses.forEach((r, i) => {
       if (r.success) return;
@@ -163,7 +155,7 @@ export const notifyUserOnReservationCancelledByStore = onDocumentUpdated(
       });
       await Promise.all(cleanups);
       console.log(
-        `[notifyUserOnReservationCancelledByStore] cleaned up ${invalidTokens.length} invalid tokens for uid=${authorUid}`,
+        `[notifyUserOnCancelRequestDeclined] cleaned up ${invalidTokens.length} invalid tokens for uid=${authorUid}`,
       );
     }
   },
