@@ -605,6 +605,29 @@ service cloud.firestore {
       allow create, update, delete: if isPlatformAdmin();
     }
 
+    // ===== 매장 체크인 (checkIns) — 2026-05-26 소셜 v0.1 =====
+    // memory: project_social_feature_plan / 별도 탭 X, 홈 한 섹션으로만 노출
+    // 도메인: 유저↔유저 영역. posts(매장→유저)와 reviews(유저→매장 정량) 분리.
+    // - read: 누구나 (홈 피드 공개).
+    // - create: 인증 사용자, uid == request.auth.uid, comment 60자 한도 강제.
+    //   1일 1매장 1회는 클라이언트 가드(rule에서 강제 X, 위반 시 v0.5에서 cron으로 정리).
+    // - update: 불가 — 체크인은 불변 이벤트.
+    // - delete: 본인 또는 platform_admin.
+    match /checkIns/{checkInId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.storeId is string
+        && request.resource.data.storeId.size() > 0
+        && request.resource.data.storeName is string
+        && (!('comment' in request.resource.data)
+            || (request.resource.data.comment is string
+                && request.resource.data.comment.size() <= 60));
+      allow update: if false;
+      allow delete: if isSignedIn()
+        && (resource.data.uid == request.auth.uid || isPlatformAdmin());
+    }
+
     // ===== 본사 감사 로그 (adminAuditLog) =====
     // 본사 관리자 행위(비밀번호 재설정 메일 발송 등) 기록.
     // - read: platform_admin만.

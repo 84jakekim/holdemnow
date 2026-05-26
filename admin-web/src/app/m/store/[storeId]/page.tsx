@@ -35,6 +35,8 @@ import {
 import ReviewWriteSheet from '@/components/mobile/ReviewWriteSheet';
 import ReportReviewSheet from '@/components/mobile/ReportReviewSheet';
 import ReservationSheet from '@/components/mobile/ReservationSheet';
+import CheckInSheet from '@/components/mobile/CheckInSheet';
+import { hasRecentCheckIn } from '@/lib/checkIns';
 import { recordRecentVisit } from '@/lib/recentVisits';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -79,6 +81,8 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
   const [reservationOpen, setReservationOpen] = useState(false);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkedInRecently, setCheckedInRecently] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
@@ -98,6 +102,19 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   }, [storeId]);
 
   useEffect(() => { trackImpressionOnce(storeId, 'store-detail'); }, [storeId]);
+
+  // 본인이 이 매장에 24h 이내 체크인했는지 — 체크인 버튼 상태 결정
+  useEffect(() => {
+    if (authState.status !== 'authenticated') {
+      setCheckedInRecently(false);
+      return;
+    }
+    let cancelled = false;
+    hasRecentCheckIn(authState.user.uid, storeId)
+      .then((v) => { if (!cancelled) setCheckedInRecently(v); })
+      .catch(() => { /* 조회 실패 시 false 유지 */ });
+    return () => { cancelled = true; };
+  }, [authState, storeId, checkInOpen]);
 
   // 최근 방문 기록 — 매장 데이터가 로드된 후 1회 기록
   useEffect(() => {
@@ -527,6 +544,31 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           </button>
         </div>
 
+        {/* 체크인 — 소셜 v0.1 / 매장 다녀온 인증, 24h 1회 */}
+        <button
+          onClick={() => {
+            if (!currentUid) {
+              signInWithPopup(auth, new GoogleAuthProvider()).catch(() => {});
+              return;
+            }
+            if (checkedInRecently) {
+              setToast('이 매장은 24시간 이내에 이미 체크인했습니다.');
+              return;
+            }
+            setCheckInOpen(true);
+          }}
+          aria-label={checkedInRecently ? '이미 체크인됨' : '매장 체크인'}
+          className="w-full mb-2 h-12 flex items-center justify-center gap-2 rounded-2xl font-bold text-[14px] transition active:scale-[0.98]"
+          style={
+            checkedInRecently
+              ? { background: 'var(--surface-2)', color: 'var(--text-3)', border: '1.5px solid var(--border)' }
+              : { background: '#FFFFFF', color: '#FF1F8F', border: '1.5px solid #FF1F8F' }
+          }
+        >
+          <span aria-hidden style={{ fontSize: 16 }}>{checkedInRecently ? '☑️' : '✅'}</span>
+          {checkedInRecently ? '오늘 체크인 완료' : '체크인'}
+        </button>
+
         {/* 서브 액션 — 전화 + 공유 */}
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -780,6 +822,22 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
           authorName={authState.status === 'authenticated' ? (authState.user.displayName ?? authState.user.email ?? '플레이어') : '플레이어'}
           defaultPhone={(userDoc as { phone?: string } | null)?.phone ?? ''}
           onClose={() => setReservationOpen(false)}
+        />
+      )}
+
+      {/* 체크인 시트 — 소셜 v0.1 */}
+      {checkInOpen && currentUid && (
+        <CheckInSheet
+          storeId={storeId}
+          storeName={store.name}
+          authorUid={currentUid}
+          authorName={authState.status === 'authenticated' ? (authState.user.displayName ?? authState.user.email?.split('@')[0] ?? '플레이어') : '플레이어'}
+          authorAvatarUrl={authState.status === 'authenticated' ? (authState.user.photoURL ?? undefined) : undefined}
+          onClose={() => setCheckInOpen(false)}
+          onSuccess={() => {
+            setCheckedInRecently(true);
+            setToast('체크인 완료! 홈에 24시간 노출됩니다.');
+          }}
         />
       )}
 
