@@ -59,14 +59,14 @@ function LoginPageInner() {
     email: string;
   } | null>(null);
 
-  // AuthGate가 redirect할 때 붙여주는 `?next=/admin/...` 등 의도된 목적지 우선 존중.
-  // 단, 권한 외 경로로의 오픈 리다이렉트 방지를 위해 안전 prefix만 허용.
+  // 2026-05-27: 사용자 명령 "로그인 후에는 홈화면으로 무조건 이동".
+  // 일반 사용자(player) 로그인은 next 파라미터를 무시하고 항상 /m으로 보낸다.
+  // 매장/대회사/본사 어드민 이메일이 잘못 들어오면 wrongRoleInfo 카드로 분기되므로
+  // next 파라미터를 신뢰할 필요가 없다. 깊은 경로(/m/my 등)로 박힌 next로 인한
+  // "로그인 후 내정보로 이동" 버그 차단.
   const nextParam = searchParams?.get('next') ?? '';
-  const isSafeNext =
-    nextParam.startsWith('/m') ||
-    nextParam.startsWith('/admin') ||
-    nextParam.startsWith('/organizer') ||
-    nextParam.startsWith('/platform');
+  // next는 더 이상 사용하지 않지만, 향후 deep link 복귀가 필요해질 때 참조용으로 보존.
+  void nextParam;
 
   // 로그인 후 role 기반 라우팅
   useEffect(() => {
@@ -87,7 +87,7 @@ function LoginPageInner() {
         return;
       }
       // 카카오 일반 사용자 — next가 안전 경로면 우선, 아니면 /m
-      router.replace(isSafeNext ? nextParam : '/m');
+      router.replace('/m');
       return;
     }
 
@@ -110,7 +110,7 @@ function LoginPageInner() {
         return;
       }
       // 일반 사용자(player) — 정상 라우팅
-      router.replace(isSafeNext ? nextParam : '/m');
+      router.replace('/m');
       return;
     }
 
@@ -141,7 +141,7 @@ function LoginPageInner() {
       },
       { merge: true },
     ).catch(() => {});
-  }, [authState, userDoc, router, isSafeNext, nextParam]);
+  }, [authState, userDoc, router]);
 
   const handleKakaoLogin = async () => {
     try {
