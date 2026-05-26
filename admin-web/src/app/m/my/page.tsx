@@ -273,59 +273,172 @@ export default function MyPage() {
         )}
       </div>
 
-      {/* ── 메뉴 ── */}
+      {/* ── 메뉴 (2026-05-27 핸드오프 톤) ── */}
       <div className="px-5 py-4" style={{ borderBottom: '6px solid var(--surface-2)' }}>
-        {[
-          { label: '즐겨찾기 매장', go: '/m/favorites', icon: '♡' },
-          { label: '관심 토너', go: '/m/interests', icon: '★' },
-          { label: '내 예약', go: '/m/reservations', icon: '📅' },
-          { label: '시리즈 구독', go: '/m/subscriptions', icon: '◎' },
-          { label: '내가 쓴 리뷰', go: '/m/my/reviews', icon: '✎' },
-          { label: '도움말·문의', tag: '', icon: '?' },
-        ].map((m, i) => (
-          <button
-            key={i}
-            onClick={() => m.go && router.push(m.go)}
-            className="w-full px-1 py-4 flex items-center justify-between transition tap"
-            style={{ borderBottom: '1px solid var(--border)' }}
-          >
-            <div className="flex items-center gap-3">
-              <span
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-                style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
+        <div
+          style={{
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 14,
+            overflow: 'hidden',
+          }}
+        >
+          {([
+            { label: '즐겨찾기 매장', go: '/m/favorites', emoji: '⭐' },
+            { label: '관심 토너', go: '/m/interests', emoji: '🏆' },
+            { label: '내 예약', go: '/m/reservations', emoji: '📅' },
+            { label: '시리즈 구독', go: '/m/subscriptions', emoji: '📊' },
+            { label: '내가 쓴 리뷰', go: '/m/my/reviews', emoji: '✍️' },
+            { label: '도움말·문의', go: null, emoji: '💬' },
+          ] as { label: string; go: string | null; emoji: string }[]).map((m, i, arr) => (
+            <button
+              key={m.label}
+              onClick={() => m.go && router.push(m.go)}
+              className="w-full tap"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '12px 14px',
+                borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                textAlign: 'left',
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: 'var(--brand-pale, #FFF0F7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 18,
+                  flexShrink: 0,
+                }}
+                aria-hidden="true"
               >
-                {m.icon}
-              </span>
-              <span className="text-sm" style={{ color: 'var(--text-1)' }}>{m.label}</span>
-            </div>
-            {m.tag ? (
+                {m.emoji}
+              </div>
               <span
-                className="text-[10px] font-bold rounded px-2 py-0.5"
-                style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: '-0.01em',
+                  color: 'var(--text-1)',
+                }}
               >
-                {m.tag}
+                {m.label}
               </span>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)', flexShrink: 0 }} aria-hidden="true">
-                <path d="M9 18l6-6-6-6"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ color: 'var(--text-3)', flexShrink: 0 }}
+                aria-hidden="true"
+              >
+                <path d="M9 18l6-6-6-6" />
               </svg>
-            )}
-          </button>
-        ))}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── 최근 방문 매장 ── */}
       <RecentVisitsSection />
 
-      {/* ── 로그아웃 ── */}
-      <div className="px-5 py-8">
-        <button
-          onClick={() => setLogoutSheetOpen(true)}
-          className="w-full py-3 text-sm transition"
-          style={{ color: 'var(--text-3)', borderRadius: 'var(--r-md)', border: '1px solid var(--border)' }}
+      {/* ── 설정 그룹 (2026-05-27 핸드오프 톤) ── */}
+      <div className="px-5 pt-4 pb-6">
+        <div
+          style={{
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 14,
+            overflow: 'hidden',
+          }}
         >
-          로그아웃
-        </button>
+          {([
+            { label: '약관 및 정책', emoji: '📜', go: '/legal' as const },
+            { label: '로그아웃', emoji: '🚪', action: 'logout' as const },
+          ] as Array<{ label: string; emoji: string; go?: '/legal'; action?: 'logout' }>).map((it, i, arr) => (
+            <button
+              key={it.label}
+              onClick={() => {
+                if (it.action === 'logout') setLogoutSheetOpen(true);
+                else if (it.go) router.push(it.go);
+              }}
+              className="w-full tap"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '12px 14px',
+                borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                textAlign: 'left',
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  fontSize: 16,
+                  textAlign: 'center',
+                  flexShrink: 0,
+                }}
+                aria-hidden="true"
+              >
+                {it.emoji}
+              </div>
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-1)',
+                }}
+              >
+                {it.label}
+              </span>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ color: 'var(--text-3)', flexShrink: 0 }}
+                aria-hidden="true"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          ))}
+        </div>
+
+        <div
+          className="mono"
+          style={{
+            textAlign: 'center',
+            marginTop: 18,
+            fontSize: 10,
+            color: 'var(--text-3)',
+          }}
+        >
+          Pink Rabbit BETA · HoldemNow v0.4
+        </div>
       </div>
 
       {/* 로그아웃 확인 바텀시트 */}
