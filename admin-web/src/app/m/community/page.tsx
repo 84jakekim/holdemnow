@@ -19,6 +19,16 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth, useUserDoc } from '@/lib/hooks';
+import {
   type JobOffer,
   type JobRole,
   JOB_ROLE_LABELS,
@@ -46,11 +56,17 @@ const HIRING_FILTERS: { key: 'all' | JobRole; label: string }[] = [
 
 export default function CommunityIndexPage() {
   const router = useRouter();
+  const authState = useAuth();
+  const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const [tab, setTab] = useState<TabId>('hiring');
   const [q, setQ] = useState('');
   const [hiringFilter, setHiringFilter] = useState<typeof HIRING_FILTERS[number]['key']>('all');
   const [jobs, setJobs] = useState<JobOffer[]>([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
+  const [favoriteJobIds, setFavoriteJobIds] = useState<Set<string>>(new Set());
+
+  // 매장 owner 여부 (구인 FAB 가드)
+  const isStoreOwner = !!userDoc?.storeId;
 
   // 구인 탭 — Firestore 구독
   useEffect(() => {
@@ -62,10 +78,46 @@ export default function CommunityIndexPage() {
     return unsub;
   }, [tab]);
 
+  // 본인 즐겨찾기 잡 ID 집합 구독 (구인 탭에서만 활성)
+  useEffect(() => {
+    if (tab !== 'hiring') return;
+    if (authState.status !== 'authenticated') {
+      setFavoriteJobIds(new Set());
+      return;
+    }
+    const ref = collection(db, 'users', authState.user.uid, 'favoriteJobs');
+    const unsub = onSnapshot(ref, (snap) => {
+      setFavoriteJobIds(new Set(snap.docs.map((d) => d.id)));
+    }, () => {});
+    return unsub;
+  }, [tab, authState]);
+
+  const handleToggleJobFavorite = async (job: JobOffer) => {
+    if (authState.status !== 'authenticated') {
+      router.push('/login');
+      return;
+    }
+    const ref = doc(db, 'users', authState.user.uid, 'favoriteJobs', job.id);
+    if (favoriteJobIds.has(job.id)) {
+      await deleteDoc(ref).catch(() => {});
+    } else {
+      await setDoc(ref, {
+        jobId: job.id,
+        title: job.title,
+        storeName: job.storeName ?? '',
+        storeId: job.storeId ?? '',
+        createdAt: serverTimestamp(),
+      }).catch(() => {});
+    }
+  };
+
   const activeTab = TABS.find((t) => t.id === tab)!;
   const composeHref = tab === 'hiring' ? '/m/community/jobs/new'
     : tab === 'seeking' ? '/m/community/dealers/me'
     : '/m/community'; // 핸드분석은 v0.5 sprint — 일단 인덱스 유지
+
+  // FAB 노출 조건: 구인 탭은 매장 owner만, 구직 탭은 모든 사용자, 핸드분석은 v0.5
+  const showFab = tab === 'seeking' || (tab === 'hiring' && isStoreOwner);
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((j) => {
@@ -167,14 +219,19 @@ export default function CommunityIndexPage() {
             filter={hiringFilter}
             onFilterChange={setHiringFilter}
             totalActive={jobs.filter((j) => j.status === 'active').length}
+            favoriteIds={favoriteJobIds}
+            onToggleFavorite={handleToggleJobFavorite}
           />
         )}
         {tab === 'seeking' && <SeekingTab />}
         {tab === 'hand' && <HandTab />}
       </div>
 
-      {/* ── FAB (구인/구직만, 핸드분석은 v0.5 오픈 후) ──── */}
-      {tab !== 'hand' && (
+      {/* ── FAB ───────────────────────────────────────
+         - 구인: 매장 owner만 (사용자 명령 v0.4)
+         - 구직: 본인 이력서 (모든 사용자)
+         - 핸드분석: v0.5 sprint 오픈 후 활성 */}
+      {showFab && (
         <Link
           href={composeHref}
           aria-label={`${activeTab.label} 등록`}
@@ -206,12 +263,16 @@ function HiringTab({
   filter,
   onFilterChange,
   totalActive,
+  favoriteIds,
+  onToggleFavorite,
 }: {
   jobs: JobOffer[];
   loaded: boolean;
   filter: typeof HIRING_FILTERS[number]['key'];
   onFilterChange: (k: typeof HIRING_FILTERS[number]['key']) => void;
   totalActive: number;
+  favoriteIds: Set<string>;
+  onToggleFavorite: (job: JobOffer) => void;
 }) {
   return (
     <div>
@@ -259,7 +320,14 @@ function HiringTab({
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {jobs.map((j) => <JobCard key={j.id} job={j} />)}
+            {jobs.map((j) => (
+              <JobCard
+                key={j.id}
+                job={j}
+                isFavorite={favoriteIds.has(j.id)}
+                onToggleFavorite={() => onToggleFavorite(j)}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -267,7 +335,15 @@ function HiringTab({
   );
 }
 
-function JobCard({ job }: { job: JobOffer }) {
+function JobCard({
+  job,
+  isFavorite,
+  onToggleFavorite,
+}: {
+  job: JobOffer;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+}) {
   const roleLabel = JOB_ROLE_LABELS[job.role] ?? job.role;
   const wageLabel = formatWage(job.wage);
   const region = job.region ?? '';
@@ -285,6 +361,36 @@ function JobCard({ job }: { job: JobOffer }) {
         display: 'block',
       }}
     >
+      {/* 즐겨찾기 별 (우상단) */}
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggleFavorite();
+        }}
+        aria-label={isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+        aria-pressed={isFavorite}
+        className="tap"
+        style={{
+          position: 'absolute', top: 8, right: 8, zIndex: 2,
+          width: 32, height: 32, borderRadius: 99,
+          background: isFavorite ? 'rgba(255,31,143,0.12)' : 'transparent',
+          border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <svg
+          width="18" height="18" viewBox="0 0 24 24"
+          fill={isFavorite ? '#FF1F8F' : 'none'}
+          stroke={isFavorite ? '#FF1F8F' : 'var(--text-3)'}
+          strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
+      </button>
+
       {/* 매장 행 */}
       <div className="flex items-center gap-2.5 mb-2.5">
         <div

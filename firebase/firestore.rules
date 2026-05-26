@@ -313,6 +313,10 @@ service cloud.firestore {
       match /favorites/{storeId} {
         allow read, write: if uid() == userId;
       }
+      match /favoriteJobs/{jobId} {
+        // 본인만 본인 즐겨찾기 잡을 읽고 쓴다 (2026-05-27 커뮤니티 v0.4 사용자 명령).
+        allow read, write: if uid() == userId;
+      }
       match /interests/{tournamentId} {
         allow read, write: if uid() == userId;
       }
