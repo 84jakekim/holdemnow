@@ -1,26 +1,25 @@
 /**
- * curateHotVideos — 인기 유튜브 영상 자동 큐레이션
+ * curateHotVideos — 인기 유튜브 영상 자동 큐레이션 (Slot 모델)
  *
  * 트리거:
- *  - onSchedule: 매시 정각 KST (config.scheduleHourKst 와 일치할 때만 실제 큐레이션 실행)
- *  - onRequest:  수동 트리거 (관리자 즉시 실행용, secret query param 인증)
+ *  - onSchedule: 매시 정각 KST — 각 슬롯(1/2/3)별로 intervalHours 도달 시에만 큐레이션 실행
+ *  - onRequest:  수동 트리거 (관리자 즉시 실행용, secret query param 인증) — slot=N param 지원
  *  - onCall:     triggerYoutubeCurationNow.ts (platform_admin 어드민 버튼)
  *
- * 흐름:
+ * 슬롯 모델 (2026-05-26 변경):
+ *   - 홈 화면은 슬롯 1(큰 카드) / 슬롯 2(작은 카드 1) / 슬롯 3(작은 카드 2) 항상 다른 영상.
+ *   - 각 슬롯은 platformConfig/youtubeCuration의 slotN_IntervalHours마다 새 영상 1개로 교체.
+ *   - 같은 영상이 여러 슬롯에 들어가지 않도록 다른 슬롯의 videoId는 후보에서 제외.
+ *
+ * 흐름 (각 슬롯별):
  *   0. platformConfig/youtubeCuration doc 읽기 (없으면 default)
- *   1. hotYoutubers 컬렉션에서 isActive=true && channelId!='' 채널 목록 수집
- *   2. 각 채널 RSS feed 파싱 → 최근 15개 videoId 추출
- *   3. YouTube Data API videos.list (50개 batch) 로 메타/통계/duration 보강
- *   4. config 기반 필터:
- *        - maxAgeDays 이내
- *        - 쇼츠 제외 (excludeShorts && duration <= 60s 또는 #shorts/#쇼츠)
- *        - 최소 길이 minDurationSec
- *        - includeKeywords 중 1개 이상 포함
- *        - excludeKeywords 중 1개라도 있으면 제외
- *   5. score = viewCount / daysSincePublished 계산
- *   6. score 내림차순 정렬 → 상위 maxResults 만 hotYoutubeVideos upsert (manual doc 보호)
- *   7. 만료 auto doc 일괄 삭제
- *   8. platformConfig/youtubeCuration.lastRunAt, lastRunResult 기록
+ *   1. 슬롯의 lastFetchedAt + intervalHours 검사 (force=true면 우회)
+ *   2. hotYoutubers 활성 채널에서 RSS feed → videoId 수집
+ *   3. YouTube Data API videos.list 로 메타·통계·duration 보강
+ *   4. config 기반 필터 (쇼츠/길이/키워드/나이)
+ *   5. 이미 다른 슬롯에 있는 videoId 제외 (중복 방지)
+ *   6. score 1위 영상 1개를 slot:N 으로 upsert + 기존 slot:N auto doc 삭제
+ *   7. platformConfig.slotN_LastFetchedAt 갱신
  */
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -38,6 +37,9 @@ const TRIGGER_SECRET = 'holdemnow-trigger-2026';
 const db = () => admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
+
+export type SlotIndex = 1 | 2 | 3;
+const ALL_SLOTS: SlotIndex[] = [1, 2, 3];
 
 // ─── 타입 ─────────────────────────────────────────────────────
 
@@ -73,32 +75,57 @@ export interface CurationFilterStats {
   keywordExcluded: number;
   ageExcluded: number;
   minDurationExcluded: number;
-  maxResultsCut: number;
+  duplicateExcluded: number; // 다른 슬롯에 이미 있는 영상 제외
 }
 
-export interface CurationResult {
+export interface SlotCurationResult {
+  slot: SlotIndex;
   channelsActive: number;
   videoIdsCollected: number;
   apiResponses: number;
+  candidateCount: number; // 필터 통과한 후보 수
+  upserted: number; // 0 또는 1
+  expiredDeleted: number; // 기존 slot doc 삭제
+  durationMs: number;
+  filtered: CurationFilterStats;
+  skippedByInterval?: boolean;
+  pickedVideoId?: string;
+  pickedTitle?: string;
+  message?: string;
+}
+
+export interface CurationResult {
+  slots: SlotCurationResult[];
   upserted: number;
   expiredDeleted: number;
   durationMs: number;
-  filtered: CurationFilterStats;
-  skippedBySchedule?: boolean;
+  channelsActive?: number;
+  videoIdsCollected?: number;
+  apiResponses?: number;
+  filtered?: {
+    shortsExcluded?: number;
+    keywordExcluded?: number;
+    duplicateExcluded?: number;
+  };
   message?: string;
 }
 
 interface YoutubeCurationConfig {
   includeKeywords: string[];
   excludeKeywords: string[];
-  maxResults: number;
-  scheduleHourKst: number;
   excludeShorts: boolean;
   minDurationSec: number;
   maxAgeDays: number;
-  refreshIntervalDays: number;
-  expirePreviousOnRefresh: boolean;
-  autoVideoMaxAgeDays: number;
+  // ─── Slot 모델 (2026-05-26 추가) ───────────────────────────
+  slot1IntervalHours: number;
+  slot2IntervalHours: number;
+  slot3IntervalHours: number;
+  // ─── Legacy (보존, 미사용) ─────────────────────────────────
+  maxResults?: number;
+  scheduleHourKst?: number;
+  refreshIntervalDays?: number;
+  expirePreviousOnRefresh?: boolean;
+  autoVideoMaxAgeDays?: number;
 }
 
 const DEFAULT_CONFIG: YoutubeCurationConfig = {
@@ -114,33 +141,35 @@ const DEFAULT_CONFIG: YoutubeCurationConfig = {
     '베가스', '라스베가스', '마카오',
   ],
   excludeKeywords: [],
-  maxResults: 20,
-  scheduleHourKst: 4,
   excludeShorts: true,
   minDurationSec: 61,
   maxAgeDays: 90,
-  refreshIntervalDays: 1,
-  expirePreviousOnRefresh: true,
-  autoVideoMaxAgeDays: 7,
+  slot1IntervalHours: 6,
+  slot2IntervalHours: 12,
+  slot3IntervalHours: 24,
 };
 
 // ─── 헬퍼 ─────────────────────────────────────────────────────
 
-/**
- * platformConfig/youtubeCuration doc fetch.
- * 없거나 일부 필드가 비면 DEFAULT_CONFIG 값으로 보충.
- * lastRunAt도 함께 반환 (refreshIntervalDays 검사용).
- */
-async function loadCurationConfig(): Promise<{
+interface LoadedConfig {
   config: YoutubeCurationConfig;
-  lastRunAt: admin.firestore.Timestamp | null;
-}> {
+  slotLastFetchedAt: Record<SlotIndex, admin.firestore.Timestamp | null>;
+}
+
+async function loadCurationConfig(): Promise<LoadedConfig> {
+  const empty: LoadedConfig = {
+    config: { ...DEFAULT_CONFIG },
+    slotLastFetchedAt: { 1: null, 2: null, 3: null },
+  };
   try {
     const snap = await db().collection('platformConfig').doc('youtubeCuration').get();
-    if (!snap.exists) return { config: { ...DEFAULT_CONFIG }, lastRunAt: null };
+    if (!snap.exists) return empty;
     const data = snap.data() ?? {};
-    const lastRunAt =
-      data.lastRunAt instanceof Timestamp ? (data.lastRunAt as admin.firestore.Timestamp) : null;
+    const slotLastFetchedAt: Record<SlotIndex, admin.firestore.Timestamp | null> = {
+      1: data.slot1LastFetchedAt instanceof Timestamp ? data.slot1LastFetchedAt : null,
+      2: data.slot2LastFetchedAt instanceof Timestamp ? data.slot2LastFetchedAt : null,
+      3: data.slot3LastFetchedAt instanceof Timestamp ? data.slot3LastFetchedAt : null,
+    };
     return {
       config: {
         includeKeywords: Array.isArray(data.includeKeywords)
@@ -149,37 +178,40 @@ async function loadCurationConfig(): Promise<{
         excludeKeywords: Array.isArray(data.excludeKeywords)
           ? (data.excludeKeywords as string[])
           : DEFAULT_CONFIG.excludeKeywords,
-        maxResults: clampInt(data.maxResults, 5, 50, DEFAULT_CONFIG.maxResults),
-        scheduleHourKst: clampInt(data.scheduleHourKst, 0, 23, DEFAULT_CONFIG.scheduleHourKst),
         excludeShorts:
           typeof data.excludeShorts === 'boolean'
             ? data.excludeShorts
             : DEFAULT_CONFIG.excludeShorts,
         minDurationSec: clampInt(data.minDurationSec, 0, 7200, DEFAULT_CONFIG.minDurationSec),
         maxAgeDays: clampInt(data.maxAgeDays, 1, 365, DEFAULT_CONFIG.maxAgeDays),
-        refreshIntervalDays: clampInt(
-          data.refreshIntervalDays,
+        slot1IntervalHours: clampInt(
+          data.slot1IntervalHours,
           1,
-          90,
-          DEFAULT_CONFIG.refreshIntervalDays,
+          720,
+          DEFAULT_CONFIG.slot1IntervalHours,
         ),
-        expirePreviousOnRefresh:
-          typeof data.expirePreviousOnRefresh === 'boolean'
-            ? data.expirePreviousOnRefresh
-            : DEFAULT_CONFIG.expirePreviousOnRefresh,
-        autoVideoMaxAgeDays: clampInt(
-          data.autoVideoMaxAgeDays,
+        slot2IntervalHours: clampInt(
+          data.slot2IntervalHours,
           1,
-          90,
-          DEFAULT_CONFIG.autoVideoMaxAgeDays,
+          720,
+          DEFAULT_CONFIG.slot2IntervalHours,
         ),
+        slot3IntervalHours: clampInt(
+          data.slot3IntervalHours,
+          1,
+          720,
+          DEFAULT_CONFIG.slot3IntervalHours,
+        ),
+        maxResults: typeof data.maxResults === 'number' ? data.maxResults : undefined,
+        scheduleHourKst:
+          typeof data.scheduleHourKst === 'number' ? data.scheduleHourKst : undefined,
       },
-      lastRunAt,
+      slotLastFetchedAt,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn(`curation config 읽기 실패 — default 사용: ${msg}`);
-    return { config: { ...DEFAULT_CONFIG }, lastRunAt: null };
+    return empty;
   }
 }
 
@@ -187,6 +219,12 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
   const n = typeof v === 'number' ? Math.floor(v) : NaN;
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
+}
+
+function getSlotIntervalHours(cfg: YoutubeCurationConfig, slot: SlotIndex): number {
+  if (slot === 1) return cfg.slot1IntervalHours;
+  if (slot === 2) return cfg.slot2IntervalHours;
+  return cfg.slot3IntervalHours;
 }
 
 /** ISO 8601 duration ("PT1H2M3S") → 초 */
@@ -199,14 +237,6 @@ function parseISO8601DurationToSeconds(iso: string | undefined): number {
     parseInt(m[2] ?? '0', 10) * 60 +
     parseInt(m[3] ?? '0', 10)
   );
-}
-
-/** 현재 시각의 KST 시간(0~23) */
-function currentKstHour(): number {
-  // UTC + 9
-  const nowUtcMs = Date.now();
-  const kstMs = nowUtcMs + 9 * 3600 * 1000;
-  return new Date(kstMs).getUTCHours();
 }
 
 /** RSS feed에서 videoId 목록 추출 (최근 15개) */
@@ -270,9 +300,7 @@ async function fetchVideoDetails(
   return results;
 }
 
-/**
- * channelUrl에서 channelId(UC...) 자동 추출 + hotYoutubers doc 업데이트.
- */
+/** channelUrl에서 channelId(UC...) 자동 추출 + hotYoutubers doc 업데이트. */
 async function backfillChannelId(
   docId: string,
   channelUrl: string,
@@ -322,80 +350,60 @@ function calcScore(viewCount: number, publishedAtMs: number): number {
   return viewCount / daysSince;
 }
 
-/** lastRunAt + lastRunResult 기록 (best-effort) */
-async function writeLastRun(result: CurationResult): Promise<void> {
-  try {
-    await db().collection('platformConfig').doc('youtubeCuration').set(
-      {
-        lastRunAt: FieldValue.serverTimestamp(),
-        lastRunResult: {
-          upserted: result.upserted,
-          expiredDeleted: result.expiredDeleted,
-          durationMs: result.durationMs,
-          channelsActive: result.channelsActive,
-          videoIdsCollected: result.videoIdsCollected,
-          apiResponses: result.apiResponses,
-          filtered: {
-            shortsExcluded: result.filtered.shortsExcluded,
-            keywordExcluded: result.filtered.keywordExcluded,
-            maxResultsCut: result.filtered.maxResultsCut,
-          },
-          message: result.message ?? null,
-        },
-      },
-      { merge: true },
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.warn(`lastRunResult 기록 실패: ${msg}`);
-  }
-}
-
-// ─── 메인 로직 (onSchedule + onRequest + onCall 공용) ───────────────
-
-export async function runCuration(
+/**
+ * 슬롯 1개에 대한 큐레이션 실행.
+ * - opts.force=true 면 interval 검사 우회.
+ * - excludeVideoIds: 다른 슬롯에 이미 채워진 videoId (중복 방지)
+ * - 결과: SlotCurationResult.
+ */
+async function runSlotCuration(
+  slot: SlotIndex,
   apiKey: string,
+  cfg: YoutubeCurationConfig,
+  lastFetchedAt: admin.firestore.Timestamp | null,
+  excludeVideoIds: Set<string>,
   opts: { force?: boolean } = {},
-): Promise<CurationResult> {
+): Promise<SlotCurationResult> {
   const startedAt = Date.now();
   const firestore = db();
-  const { config, lastRunAt } = await loadCurationConfig();
-  const cutoffMs = Date.now() - config.maxAgeDays * 86_400_000;
-
   const filtered: CurationFilterStats = {
     shortsExcluded: 0,
     keywordExcluded: 0,
     ageExcluded: 0,
     minDurationExcluded: 0,
-    maxResultsCut: 0,
+    duplicateExcluded: 0,
   };
 
-  // 0. refreshIntervalDays 검사 — 마지막 실행 이후 N일 안 지났으면 skip
-  //    수동 트리거(force=true)는 무시.
-  if (!opts.force && config.refreshIntervalDays > 1 && lastRunAt) {
-    const intervalMs = config.refreshIntervalDays * 86_400_000;
-    const elapsed = Date.now() - lastRunAt.toMillis();
-    if (elapsed < intervalMs) {
-      const elapsedH = Math.floor(elapsed / 3_600_000);
-      const totalH = config.refreshIntervalDays * 24;
+  const intervalHours = getSlotIntervalHours(cfg, slot);
+
+  // 1. interval 검사
+  if (!opts.force && lastFetchedAt) {
+    const elapsedMs = Date.now() - lastFetchedAt.toMillis();
+    const intervalMs = intervalHours * 3_600_000;
+    if (elapsedMs < intervalMs) {
+      const elapsedH = Math.floor(elapsedMs / 3_600_000);
       logger.info(
-        `[curate] refresh interval not yet elapsed (${elapsedH}h / ${totalH}h) — skip`,
+        `[curate slot${slot}] interval not yet elapsed (${elapsedH}h / ${intervalHours}h) — skip`,
       );
       return {
+        slot,
         channelsActive: 0,
         videoIdsCollected: 0,
         apiResponses: 0,
+        candidateCount: 0,
         upserted: 0,
         expiredDeleted: 0,
         durationMs: Date.now() - startedAt,
         filtered,
-        skippedBySchedule: true,
-        message: `교체 주기 미도달 (${elapsedH}h / ${totalH}h)`,
+        skippedByInterval: true,
+        message: `slot${slot}: 교체 주기 미도달 (${elapsedH}h / ${intervalHours}h)`,
       };
     }
   }
 
-  // 1. 활성 유튜버 channelId 수집
+  const cutoffMs = Date.now() - cfg.maxAgeDays * 86_400_000;
+
+  // 2. 활성 채널 channelId 수집
   const youtubersSnap = await firestore
     .collection('hotYoutubers')
     .where('isActive', '==', true)
@@ -413,22 +421,21 @@ export async function runCuration(
   }
 
   if (channelIds.length === 0) {
-    const result: CurationResult = {
+    return {
+      slot,
       channelsActive: 0,
       videoIdsCollected: 0,
       apiResponses: 0,
+      candidateCount: 0,
       upserted: 0,
       expiredDeleted: 0,
       durationMs: Date.now() - startedAt,
       filtered,
-      message: '활성 채널이 없습니다.',
+      message: 'slot ' + slot + ': 활성 채널이 없습니다.',
     };
-    await writeLastRun(result);
-    return result;
   }
-  logger.info(`활성 채널 ${channelIds.length}개 발견`);
 
-  // 2. RSS → videoId 수집
+  // 3. RSS → videoId 수집
   const allVideoIds: string[] = [];
   await Promise.all(
     channelIds.map(async (cid) => {
@@ -437,28 +444,27 @@ export async function runCuration(
     }),
   );
   const uniqueVideoIds = [...new Set(allVideoIds)];
-  logger.info(`RSS 수집 videoId ${uniqueVideoIds.length}개 (중복 제거)`);
+  logger.info(`[curate slot${slot}] RSS 수집 videoId ${uniqueVideoIds.length}개`);
 
   if (uniqueVideoIds.length === 0) {
-    const result: CurationResult = {
+    return {
+      slot,
       channelsActive: channelIds.length,
       videoIdsCollected: 0,
       apiResponses: 0,
+      candidateCount: 0,
       upserted: 0,
       expiredDeleted: 0,
       durationMs: Date.now() - startedAt,
       filtered,
-      message: 'RSS feed에서 영상이 발견되지 않았습니다.',
+      message: 'slot ' + slot + ': RSS feed에서 영상이 발견되지 않았습니다.',
     };
-    await writeLastRun(result);
-    return result;
   }
 
-  // 3. YouTube API videos.list
+  // 4. YouTube API videos.list
   const items = await fetchVideoDetails(uniqueVideoIds, apiKey);
-  logger.info(`API 응답 ${items.length}개`);
 
-  // 4. 필터링 + 점수 계산
+  // 5. 필터링 + 점수 계산
   interface ScoredVideo {
     item: VideoApiItem;
     publishedMs: number;
@@ -467,10 +473,16 @@ export async function runCuration(
   }
   const scored: ScoredVideo[] = [];
 
-  const includeLower = config.includeKeywords.map((k) => k.toLowerCase());
-  const excludeLower = config.excludeKeywords.map((k) => k.toLowerCase());
+  const includeLower = cfg.includeKeywords.map((k) => k.toLowerCase());
+  const excludeLower = cfg.excludeKeywords.map((k) => k.toLowerCase());
 
   for (const item of items) {
+    // 다른 슬롯 중복 제외
+    if (excludeVideoIds.has(item.id)) {
+      filtered.duplicateExcluded++;
+      continue;
+    }
+
     const publishedMs = new Date(item.snippet.publishedAt).getTime();
     if (isNaN(publishedMs) || publishedMs < cutoffMs) {
       filtered.ageExcluded++;
@@ -482,7 +494,7 @@ export async function runCuration(
     const titleLower = title.toLowerCase();
 
     // 쇼츠 필터
-    if (config.excludeShorts) {
+    if (cfg.excludeShorts) {
       if (durationSec > 0 && durationSec <= 60) {
         filtered.shortsExcluded++;
         continue;
@@ -494,7 +506,7 @@ export async function runCuration(
     }
 
     // 최소 길이
-    if (durationSec > 0 && durationSec < config.minDurationSec) {
+    if (durationSec > 0 && durationSec < cfg.minDurationSec) {
       filtered.minDurationExcluded++;
       continue;
     }
@@ -523,176 +535,240 @@ export async function runCuration(
     scored.push({ item, publishedMs, score, durationSec });
   }
 
-  // 5. 점수 내림차순 + maxResults 컷
   scored.sort((a, b) => b.score - a.score);
-  const beforeCut = scored.length;
-  const top = scored.slice(0, config.maxResults);
-  filtered.maxResultsCut = Math.max(0, beforeCut - top.length);
+  const top = scored[0];
 
+  // 후보 없음 → upsert 안 함, lastFetchedAt도 기록 안 함 (다음 시간에 재시도)
+  if (!top) {
+    return {
+      slot,
+      channelsActive: channelIds.length,
+      videoIdsCollected: uniqueVideoIds.length,
+      apiResponses: items.length,
+      candidateCount: 0,
+      upserted: 0,
+      expiredDeleted: 0,
+      durationMs: Date.now() - startedAt,
+      filtered,
+      message: 'slot ' + slot + ': 필터 통과 영상 없음',
+    };
+  }
+
+  // 6. 기존 slot:N auto doc 삭제 (다른 docId만)
   const videosCol = firestore.collection('hotYoutubeVideos');
-  const BATCH_SIZE = 400;
+  const existingSlotSnap = await videosCol
+    .where('source', '==', 'auto')
+    .where('slot', '==', slot)
+    .get();
 
-  // 6-pre. expirePreviousOnRefresh=true — 새 upsert 직전에 기존 auto doc 전부 삭제.
-  //        source !== 'auto' 또는 manualLocked === true 는 절대 삭제하지 않음.
   let deletedCount = 0;
-  if (config.expirePreviousOnRefresh) {
-    const oldAutoSnap = await videosCol.where('source', '==', 'auto').get();
-    const protectedFilter = (d: admin.firestore.QueryDocumentSnapshot) => {
-      const data = d.data() as { source?: string; manualLocked?: boolean };
-      return data.source === 'auto' && data.manualLocked !== true;
-    };
-    const toWipe = oldAutoSnap.docs.filter(protectedFilter);
-    if (toWipe.length > 0) {
-      let wipeBatch = firestore.batch();
-      let wipeCount = 0;
-      for (const d of toWipe) {
-        wipeBatch.delete(d.ref);
-        wipeCount++;
-        deletedCount++;
-        if (wipeCount >= BATCH_SIZE) {
-          await wipeBatch.commit();
-          wipeBatch = firestore.batch();
-          wipeCount = 0;
-        }
-      }
-      if (wipeCount > 0) await wipeBatch.commit();
-      logger.info(`[curate] expirePreviousOnRefresh — 기존 auto ${deletedCount}개 삭제`);
+  if (!existingSlotSnap.empty) {
+    let delBatch = firestore.batch();
+    let delCount = 0;
+    for (const d of existingSlotSnap.docs) {
+      const data = d.data() as { manualLocked?: boolean };
+      if (data.manualLocked === true) continue;
+      if (d.id === top.item.id) continue; // 같은 영상이면 유지(upsert로 덮어씀)
+      delBatch.delete(d.ref);
+      delCount++;
+      deletedCount++;
     }
+    if (delCount > 0) await delBatch.commit();
   }
 
-  // 6. upsert (manual 보호) — priority 1부터 score 순위대로 부여
-  let upsertedCount = 0;
-  let batch = firestore.batch();
-  let batchCount = 0;
+  // 7. 새 영상 upsert (slot 필드 포함)
+  const item = top.item;
+  const viewCount = parseInt(item.statistics.viewCount ?? '0', 10);
+  const channelId = item.snippet.channelId;
+  const thumbnailUrl =
+    item.snippet.thumbnails.high?.url ??
+    item.snippet.thumbnails.medium?.url ??
+    '';
 
-  const flushBatch = async () => {
-    if (batchCount > 0) {
-      await batch.commit();
-      batch = firestore.batch();
-      batchCount = 0;
-    }
-  };
+  const docRef = videosCol.doc(item.id);
+  const existing = await docRef.get();
 
-  // 상위 항목들의 docId를 모아두고, 큐레이션에서 빠진 auto 항목은 삭제 후보로
-  const keepIds = new Set<string>();
-
-  let autoPriority = 0; // 실제 upsert 직전 +1 — 수동 영상 보호로 skip된 항목 제외하고 1, 2, 3, ...
-  for (const sv of top) {
-    const item = sv.item;
-    const viewCount = parseInt(item.statistics.viewCount ?? '0', 10);
-    const channelId = item.snippet.channelId;
-    const thumbnailUrl =
-      item.snippet.thumbnails.high?.url ??
-      item.snippet.thumbnails.medium?.url ??
-      '';
-
-    const docRef = videosCol.doc(item.id);
-    const existing = await docRef.get();
-    if (existing.exists) {
-      const data = existing.data() as { source?: string; manualLocked?: boolean };
-      // manual doc 보호 — source !== 'auto' 이거나 manualLocked === true
-      if (data.source !== 'auto' || data.manualLocked === true) continue;
-    }
-    keepIds.add(item.id);
-    autoPriority++;
-
-    const isNew = !existing.exists;
-    const payload: Record<string, unknown> = {
-      videoId: item.id,
-      title: item.snippet.title,
-      channelId,
-      channelName: item.snippet.channelTitle,
-      channelUrl: `https://www.youtube.com/channel/${channelId}`,
-      thumbnailUrl,
-      publishedAt: Timestamp.fromMillis(sv.publishedMs),
-      viewCount,
-      score: sv.score,
-      durationSec: sv.durationSec,
-      source: 'auto',
-      // 자동 영상은 score 순위대로 1, 2, 3, ... — 수동 영상(0)이 항상 위에 노출.
-      priority: autoPriority,
-      isActive: true,
-      order: 0,
-      curatedAt: FieldValue.serverTimestamp(),
-      lastCuratedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-    if (isNew) payload.createdAt = FieldValue.serverTimestamp();
-
-    batch.set(docRef, payload, { merge: true });
-    batchCount++;
-    upsertedCount++;
-    if (batchCount >= BATCH_SIZE) await flushBatch();
-  }
-  await flushBatch();
-
-  // 7. 만료 처리
-  //   - expirePreviousOnRefresh=true: 이미 위에서 wipe 했으므로 추가 작업 없음.
-  //   - expirePreviousOnRefresh=false: autoVideoMaxAgeDays 기반 점진 만료.
-  //     manual doc(source !== 'auto' 또는 manualLocked) 은 절대 건드리지 않음.
-  if (!config.expirePreviousOnRefresh) {
-    const maxAgeDays = config.autoVideoMaxAgeDays ?? DEFAULT_CONFIG.autoVideoMaxAgeDays;
-    const ageCutoffMs = Date.now() - maxAgeDays * 86_400_000;
-    const autoSnap = await videosCol.where('source', '==', 'auto').get();
-    const toDelete = autoSnap.docs.filter((d) => {
-      const data = d.data() as {
-        source?: string;
-        manualLocked?: boolean;
-        curatedAt?: admin.firestore.Timestamp;
-        lastCuratedAt?: admin.firestore.Timestamp;
-        publishedAt?: admin.firestore.Timestamp;
+  // manual 보호 — 같은 videoId가 수동으로 이미 등록되어 있으면 덮어쓰지 않음
+  if (existing.exists) {
+    const data = existing.data() as { source?: string; manualLocked?: boolean };
+    if (data.source !== 'auto' || data.manualLocked === true) {
+      logger.info(
+        `[curate slot${slot}] picked videoId=${item.id} 은 수동 영상이라 덮어쓰지 않음`,
+      );
+      // 이번 슬롯은 빈 채로 두고 lastFetchedAt만 갱신 (다음 주기에 다른 영상 시도)
+      await db().collection('platformConfig').doc('youtubeCuration').set(
+        slotLastFetchedAtPayload(slot),
+        { merge: true },
+      );
+      return {
+        slot,
+        channelsActive: channelIds.length,
+        videoIdsCollected: uniqueVideoIds.length,
+        apiResponses: items.length,
+        candidateCount: scored.length,
+        upserted: 0,
+        expiredDeleted: deletedCount,
+        durationMs: Date.now() - startedAt,
+        filtered,
+        message: 'slot ' + slot + ': top 후보가 수동 영상과 충돌 — 다음 주기 재시도',
       };
-      // manual 보호
-      if (data.source !== 'auto' || data.manualLocked === true) return false;
-      // 이번 큐레이션에서 다시 keep 되었으면 유지
-      if (keepIds.has(d.id)) return false;
-      // 큐레이션 시각 기준 점진 만료
-      const refTs = data.curatedAt ?? data.lastCuratedAt ?? data.publishedAt ?? null;
-      if (!refTs) return true; // 시각 없으면 안전하게 정리
-      return refTs.toMillis() < ageCutoffMs;
-    });
-    if (toDelete.length > 0) {
-      let delBatch = firestore.batch();
-      let delCount = 0;
-      for (const d of toDelete) {
-        delBatch.delete(d.ref);
-        delCount++;
-        deletedCount++;
-        if (delCount >= BATCH_SIZE) {
-          await delBatch.commit();
-          delBatch = firestore.batch();
-          delCount = 0;
-        }
-      }
-      if (delCount > 0) await delBatch.commit();
     }
   }
 
-  logger.info(
-    `큐레이션 완료 — upsert ${upsertedCount}개, 삭제 ${deletedCount}개, ` +
-      `필터(쇼츠 ${filtered.shortsExcluded}, 키워드 ${filtered.keywordExcluded}, ` +
-      `나이 ${filtered.ageExcluded}, 길이 ${filtered.minDurationExcluded}, ` +
-      `컷 ${filtered.maxResultsCut})`,
+  const isNew = !existing.exists;
+  const payload: Record<string, unknown> = {
+    videoId: item.id,
+    title: item.snippet.title,
+    channelId,
+    channelName: item.snippet.channelTitle,
+    channelUrl: `https://www.youtube.com/channel/${channelId}`,
+    thumbnailUrl,
+    publishedAt: Timestamp.fromMillis(top.publishedMs),
+    viewCount,
+    score: top.score,
+    durationSec: top.durationSec,
+    source: 'auto',
+    slot,
+    priority: slot, // 슬롯 번호를 priority로 (1,2,3 순)
+    isActive: true,
+    order: 0,
+    curatedAt: FieldValue.serverTimestamp(),
+    lastCuratedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (isNew) payload.createdAt = FieldValue.serverTimestamp();
+
+  await docRef.set(payload, { merge: true });
+
+  // slot lastFetchedAt + 결과 기록
+  await db().collection('platformConfig').doc('youtubeCuration').set(
+    {
+      ...slotLastFetchedAtPayload(slot),
+      [`slot${slot}LastPickedVideoId`]: item.id,
+      [`slot${slot}LastPickedTitle`]: item.snippet.title,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
   );
 
-  const result: CurationResult = {
+  logger.info(
+    `[curate slot${slot}] picked videoId=${item.id} title="${item.snippet.title}" ` +
+      `score=${top.score.toFixed(0)} 후보 ${scored.length}개 중`,
+  );
+
+  return {
+    slot,
     channelsActive: channelIds.length,
     videoIdsCollected: uniqueVideoIds.length,
     apiResponses: items.length,
-    upserted: upsertedCount,
+    candidateCount: scored.length,
+    upserted: 1,
     expiredDeleted: deletedCount,
     durationMs: Date.now() - startedAt,
     filtered,
+    pickedVideoId: item.id,
+    pickedTitle: item.snippet.title,
   };
-  await writeLastRun(result);
+}
+
+function slotLastFetchedAtPayload(slot: SlotIndex): Record<string, unknown> {
+  return { [`slot${slot}LastFetchedAt`]: FieldValue.serverTimestamp() };
+}
+
+/** 슬롯에 이미 채워진(또는 다른 슬롯의) auto videoId 집합. 슬롯간 중복 방지용. */
+async function loadOccupiedVideoIdsByOtherSlots(
+  excludeSlot: SlotIndex,
+): Promise<Set<string>> {
+  const snap = await db()
+    .collection('hotYoutubeVideos')
+    .where('source', '==', 'auto')
+    .get();
+  const result = new Set<string>();
+  for (const d of snap.docs) {
+    const data = d.data() as { slot?: number; videoId?: string };
+    if (typeof data.slot === 'number' && data.slot !== excludeSlot && data.videoId) {
+      result.add(data.videoId);
+    }
+  }
   return result;
+}
+
+/**
+ * 전체 슬롯 큐레이션 실행 (force=true면 모든 슬롯, false면 도래한 슬롯만).
+ * 선택 슬롯만 강제 실행하려면 slotsToRun 지정.
+ */
+export async function runCuration(
+  apiKey: string,
+  opts: { force?: boolean; slotsToRun?: SlotIndex[] } = {},
+): Promise<CurationResult> {
+  const startedAt = Date.now();
+  const { config, slotLastFetchedAt } = await loadCurationConfig();
+
+  const slotsToRun = opts.slotsToRun ?? ALL_SLOTS;
+  const results: SlotCurationResult[] = [];
+
+  for (const slot of slotsToRun) {
+    const occupied = await loadOccupiedVideoIdsByOtherSlots(slot);
+    const slotResult = await runSlotCuration(
+      slot,
+      apiKey,
+      config,
+      slotLastFetchedAt[slot],
+      occupied,
+      { force: opts.force },
+    );
+    results.push(slotResult);
+  }
+
+  const aggregate: CurationResult = {
+    slots: results,
+    upserted: results.reduce((s, r) => s + r.upserted, 0),
+    expiredDeleted: results.reduce((s, r) => s + r.expiredDeleted, 0),
+    durationMs: Date.now() - startedAt,
+    channelsActive: Math.max(0, ...results.map((r) => r.channelsActive)),
+    videoIdsCollected: results.reduce((s, r) => s + r.videoIdsCollected, 0),
+    apiResponses: results.reduce((s, r) => s + r.apiResponses, 0),
+    filtered: {
+      shortsExcluded: results.reduce((s, r) => s + r.filtered.shortsExcluded, 0),
+      keywordExcluded: results.reduce((s, r) => s + r.filtered.keywordExcluded, 0),
+      duplicateExcluded: results.reduce((s, r) => s + r.filtered.duplicateExcluded, 0),
+    },
+  };
+
+  // 마지막 실행 결과 doc 기록 (어드민 UI에서 표시)
+  try {
+    await db().collection('platformConfig').doc('youtubeCuration').set(
+      {
+        lastRunAt: FieldValue.serverTimestamp(),
+        lastRunResult: {
+          upserted: aggregate.upserted,
+          expiredDeleted: aggregate.expiredDeleted,
+          durationMs: aggregate.durationMs,
+          slots: results.map((r) => ({
+            slot: r.slot,
+            upserted: r.upserted,
+            skippedByInterval: r.skippedByInterval ?? false,
+            pickedVideoId: r.pickedVideoId ?? null,
+            pickedTitle: r.pickedTitle ?? null,
+            message: r.message ?? null,
+          })),
+        },
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`lastRunResult 기록 실패: ${msg}`);
+  }
+
+  return aggregate;
 }
 
 // ─── Cloud Functions ────────────────────────────────────────────
 
 /**
- * 매시간 정각에 실행 — config.scheduleHourKst와 현재 KST 시각이 일치할 때만 큐레이션.
- * 어드민에서 시각 바꿔도 함수 재배포 불필요.
+ * 매시 정각 — 각 슬롯의 lastFetchedAt + intervalHours 검사 후 도래한 슬롯만 큐레이션.
+ * intervalHours는 어드민 페이지(/platform/home-content videos 탭)에서 설정.
  */
 export const curateHotVideos = onSchedule(
   {
@@ -709,22 +785,14 @@ export const curateHotVideos = onSchedule(
       logger.error('YOUTUBE_API_KEY secret 미설정 — 큐레이션 중단');
       return;
     }
-
-    const { config } = await loadCurationConfig();
-    const nowHour = currentKstHour();
-    if (nowHour !== config.scheduleHourKst) {
-      logger.info(
-        `스케줄 시각 아님 — 현재 KST ${nowHour}시, 설정 ${config.scheduleHourKst}시 (건너뜀)`,
-      );
-      return;
-    }
     await runCuration(apiKey);
   },
 );
 
 /**
  * 수동 트리거 (관리자용, secret query param 인증).
- * 어드민 UI는 triggerYoutubeCurationNow Callable 사용 권장.
+ * - ?key=SECRET&slot=1   → slot 1만 force 실행
+ * - ?key=SECRET          → 전체 슬롯 force 실행
  */
 export const triggerCurateHotVideos = onRequest(
   {
@@ -744,8 +812,13 @@ export const triggerCurateHotVideos = onRequest(
       res.status(500).json({ ok: false, error: 'YOUTUBE_API_KEY missing' });
       return;
     }
+    const slotParam = req.query.slot;
+    let slotsToRun: SlotIndex[] | undefined;
+    if (typeof slotParam === 'string' && /^[123]$/.test(slotParam)) {
+      slotsToRun = [parseInt(slotParam, 10) as SlotIndex];
+    }
     try {
-      const result = await runCuration(apiKey, { force: true });
+      const result = await runCuration(apiKey, { force: true, slotsToRun });
       res.json({ ok: true, result });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -18,6 +18,15 @@ import {
 import { db } from '@/lib/firebase';
 import { stripUndefined } from '@/lib/firestoreUtil';
 
+export interface YoutubeCurationLastRunSlotEntry {
+  slot: 1 | 2 | 3;
+  upserted: number;
+  skippedByInterval?: boolean;
+  pickedVideoId?: string | null;
+  pickedTitle?: string | null;
+  message?: string | null;
+}
+
 export interface YoutubeCurationLastRunResult {
   upserted: number;
   expiredDeleted: number;
@@ -29,7 +38,10 @@ export interface YoutubeCurationLastRunResult {
     shortsExcluded?: number;
     keywordExcluded?: number;
     maxResultsCut?: number;
+    duplicateExcluded?: number;
   };
+  /** Slot 모델(2026-05-26+) — 슬롯별 결과 요약. */
+  slots?: YoutubeCurationLastRunSlotEntry[];
   message?: string;
 }
 
@@ -38,36 +50,45 @@ export interface YoutubeCurationConfig {
   includeKeywords: string[];
   /** 제목·설명에 하나라도 포함되면 제외. */
   excludeKeywords: string[];
-  /** 홈 노출 최대 갯수 (5~50). */
-  maxResults: number;
-  /** 매일 실행 시각 (KST 0~23). */
-  scheduleHourKst: number;
   /** 쇼츠(60초 이하 또는 #shorts/#쇼츠 태그) 제외 여부. */
   excludeShorts: boolean;
   /** 영상 최소 길이 (초). 쇼츠 외에도 강제 가능. */
   minDurationSec: number;
   /** 영상 최대 나이 (일). 너무 옛날 영상 제외. */
   maxAgeDays: number;
-  /**
-   * 큐레이션 실행 주기 (일). 1=매일, 2=이틀마다, 7=주1회.
-   * scheduleHourKst와 함께 작동 — 지정 시각에 도달했더라도
-   * 마지막 실행으로부터 이 일수가 지나지 않았으면 건너뜀.
-   */
-  refreshIntervalDays: number;
-  /**
-   * true: 새 큐레이션 실행 시 기존 auto doc 모두 삭제 후 새 목록만 노출.
-   * false: autoVideoMaxAgeDays 기반 점진적 만료.
-   */
-  expirePreviousOnRefresh: boolean;
-  /**
-   * auto doc이 N일 이상 지나면 자동 삭제 (expirePreviousOnRefresh=false일 때만).
-   */
-  autoVideoMaxAgeDays?: number;
+  /** 슬롯 1(홈 큰 카드) 새 영상 fetch 주기 (시간). 1~720. */
+  slot1IntervalHours: number;
+  /** 슬롯 2(홈 작은 카드 좌) 새 영상 fetch 주기 (시간). 1~720. */
+  slot2IntervalHours: number;
+  /** 슬롯 3(홈 작은 카드 우) 새 영상 fetch 주기 (시간). 1~720. */
+  slot3IntervalHours: number;
   /** 마지막 실행 시각. */
   lastRunAt?: Timestamp;
   /** 마지막 실행 결과. */
   lastRunResult?: YoutubeCurationLastRunResult;
+  /** 각 슬롯의 마지막 fetch 시각. cron이 갱신. */
+  slot1LastFetchedAt?: Timestamp;
+  slot2LastFetchedAt?: Timestamp;
+  slot3LastFetchedAt?: Timestamp;
+  /** 각 슬롯의 마지막 picked 영상 (어드민 미리보기용). */
+  slot1LastPickedVideoId?: string;
+  slot2LastPickedVideoId?: string;
+  slot3LastPickedVideoId?: string;
+  slot1LastPickedTitle?: string;
+  slot2LastPickedTitle?: string;
+  slot3LastPickedTitle?: string;
   updatedAt?: Timestamp;
+  // ─── Legacy (보존, 미사용) ─────────────────────────────────
+  /** @deprecated Slot 모델로 대체. UI에서 숨김. */
+  maxResults?: number;
+  /** @deprecated Slot 모델로 대체. UI에서 숨김. */
+  scheduleHourKst?: number;
+  /** @deprecated Slot 모델로 대체. UI에서 숨김. */
+  refreshIntervalDays?: number;
+  /** @deprecated Slot 모델로 대체. UI에서 숨김. */
+  expirePreviousOnRefresh?: boolean;
+  /** @deprecated Slot 모델로 대체. UI에서 숨김. */
+  autoVideoMaxAgeDays?: number;
 }
 
 export const DEFAULT_CURATION_CONFIG: YoutubeCurationConfig = {
@@ -83,14 +104,12 @@ export const DEFAULT_CURATION_CONFIG: YoutubeCurationConfig = {
     '베가스', '라스베가스', '마카오',
   ],
   excludeKeywords: [],
-  maxResults: 20,
-  scheduleHourKst: 4,
   excludeShorts: true,
   minDurationSec: 61,
   maxAgeDays: 90,
-  refreshIntervalDays: 1,
-  expirePreviousOnRefresh: true,
-  autoVideoMaxAgeDays: 7,
+  slot1IntervalHours: 6,
+  slot2IntervalHours: 12,
+  slot3IntervalHours: 24,
 };
 
 const DOC_PATH = ['platformConfig', 'youtubeCuration'] as const;

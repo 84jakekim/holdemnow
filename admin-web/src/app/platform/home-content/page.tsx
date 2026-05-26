@@ -444,25 +444,32 @@ function fmtViewCount(n?: number): string {
 }
 
 /* ═══════════════════════════════════════════════════════════════
- * 인기 유튜브 영상 — 자동 큐레이션 설정 카드 (인라인)
+ * 인기 유튜브 영상 — 자동 큐레이션 설정 카드 (Slot 모델, 2026-05-26)
  *
- * platformConfig/youtubeCuration doc을 실시간 구독·저장.
- * Cloud Function curateHotVideos가 scheduleHourKst 시각에 이 설정을 읽고
- * includeKeywords·excludeKeywords·maxResults 등을 적용해 큐레이션 수행.
- * 고급 설정(refreshInterval, autoVideoMaxAgeDays 등)은 /platform/videos 페이지.
+ * 변경: 기존 "하루 N개 + 실행시각" → 슬롯 1/2/3 각각 fetch 주기(시간) 설정.
+ * 사용자 홈은 큰 카드(슬롯1) + 작은 카드 2개(슬롯2, 3) 항상 다른 영상.
+ * Cloud Function은 매시간 cron — 각 슬롯의 lastFetchedAt + intervalHours 도달 시만 실행.
  * ═══════════════════════════════════════════════════════════════ */
+
+const SLOT_LABEL: Record<1 | 2 | 3, string> = {
+  1: '슬롯 1 (홈 큰 카드)',
+  2: '슬롯 2 (홈 작은 카드 좌)',
+  3: '슬롯 3 (홈 작은 카드 우)',
+};
+
 function CurationSettingsCard() {
   const [config, setConfig] = useState<YoutubeCurationConfig | null>(null);
   const [includeText, setIncludeText] = useState<string>('');
   const [excludeText, setExcludeText] = useState<string>('');
-  const [maxResults, setMaxResults] = useState<number>(20);
   const [excludeShorts, setExcludeShorts] = useState<boolean>(true);
-  const [scheduleHourKst, setScheduleHourKst] = useState<number>(4);
+  const [slot1IntervalHours, setSlot1IntervalHours] = useState<number>(6);
+  const [slot2IntervalHours, setSlot2IntervalHours] = useState<number>(12);
+  const [slot3IntervalHours, setSlot3IntervalHours] = useState<number>(24);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState<null | 'all' | 1 | 2 | 3>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -472,9 +479,10 @@ function CurationSettingsCard() {
         if (!loaded) {
           setIncludeText(formatKeywordsText(cfg.includeKeywords));
           setExcludeText(formatKeywordsText(cfg.excludeKeywords));
-          setMaxResults(cfg.maxResults);
           setExcludeShorts(cfg.excludeShorts);
-          setScheduleHourKst(cfg.scheduleHourKst);
+          setSlot1IntervalHours(cfg.slot1IntervalHours);
+          setSlot2IntervalHours(cfg.slot2IntervalHours);
+          setSlot3IntervalHours(cfg.slot3IntervalHours);
           setLoaded(true);
         }
       },
@@ -487,12 +495,15 @@ function CurationSettingsCard() {
     setSaving(true);
     setErr(null);
     try {
+      const clampH = (n: number, fb: number) =>
+        Math.max(1, Math.min(720, Math.floor(n) || fb));
       await saveCurationConfig({
         includeKeywords: parseKeywordsText(includeText),
         excludeKeywords: parseKeywordsText(excludeText),
-        maxResults: Math.max(5, Math.min(50, Math.floor(maxResults) || DEFAULT_CURATION_CONFIG.maxResults)),
         excludeShorts,
-        scheduleHourKst: Math.max(0, Math.min(23, Math.floor(scheduleHourKst))),
+        slot1IntervalHours: clampH(slot1IntervalHours, DEFAULT_CURATION_CONFIG.slot1IntervalHours),
+        slot2IntervalHours: clampH(slot2IntervalHours, DEFAULT_CURATION_CONFIG.slot2IntervalHours),
+        slot3IntervalHours: clampH(slot3IntervalHours, DEFAULT_CURATION_CONFIG.slot3IntervalHours),
       });
       setSavedAt(Date.now());
     } catch (e) {
@@ -507,32 +518,42 @@ function CurationSettingsCard() {
     setIncludeText(formatKeywordsText(DEFAULT_CURATION_CONFIG.includeKeywords));
   };
 
-  const handleRunNow = async () => {
-    if (!window.confirm('지금 즉시 큐레이션을 실행할까요? YouTube Data API 쿼터를 소모합니다.')) return;
-    setRunning(true);
+  const handleRunNow = async (slot?: 1 | 2 | 3) => {
+    const label = slot ? `슬롯 ${slot}` : '전체 슬롯';
+    if (!window.confirm(`${label} 큐레이션을 지금 즉시 실행할까요? YouTube Data API 쿼터를 소모합니다.`)) {
+      return;
+    }
+    setRunning(slot ?? 'all');
     setRunMessage(null);
     setErr(null);
     try {
       const functions = getFunctions(app, 'asia-northeast3');
       const fn = httpsCallable<
-        Record<string, never>,
+        { slot?: 1 | 2 | 3 },
         {
           upserted: number;
           expiredDeleted: number;
           durationMs: number;
-          filtered?: { shortsExcluded?: number; keywordExcluded?: number };
+          slots?: Array<{
+            slot: number;
+            upserted: number;
+            pickedTitle?: string | null;
+            message?: string | null;
+          }>;
         }
       >(functions, 'triggerYoutubeCurationNow');
-      const res = await fn({});
+      const res = await fn(slot ? { slot } : {});
       const d = res.data;
+      const slotSummary = (d.slots ?? [])
+        .map((s) => `슬롯${s.slot}: ${s.upserted > 0 ? `✓ ${s.pickedTitle ?? '갱신'}` : (s.message ?? '갱신 없음')}`)
+        .join(' | ');
       setRunMessage(
-        `완료 — 큐레이션 ${d.upserted}개 / 삭제 ${d.expiredDeleted}개 / ` +
-          `쇼츠 ${d.filtered?.shortsExcluded ?? 0} · 키워드 ${d.filtered?.keywordExcluded ?? 0} 제외`,
+        `완료 — 총 갱신 ${d.upserted}건 / 기존 삭제 ${d.expiredDeleted}건${slotSummary ? ` · ${slotSummary}` : ''}`,
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
-      setRunning(false);
+      setRunning(null);
     }
   };
 
@@ -545,10 +566,11 @@ function CurationSettingsCard() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[18px]">⚙️</span>
-            <h3 className="text-[15px] font-extrabold text-amber-900">자동 큐레이션 설정</h3>
+            <h3 className="text-[15px] font-extrabold text-amber-900">자동 큐레이션 설정 — 슬롯별 갱신 주기</h3>
           </div>
           <p className="text-[11.5px] text-amber-800 mt-1 leading-relaxed">
-            매일 새벽 {config?.scheduleHourKst ?? scheduleHourKst}시 자동 실행 · 포함 키워드 매칭 영상만 추가
+            매시간 cron — 각 슬롯의 lastFetchedAt + intervalHours 도달 시 새 영상으로 교체.
+            홈 화면은 슬롯 1(큰 카드) · 2 · 3(작은 카드 2개)이 항상 서로 다른 영상.
           </p>
         </div>
         {lastRunAt && (
@@ -568,6 +590,120 @@ function CurationSettingsCard() {
       )}
 
       <div className="space-y-3">
+        {/* 슬롯별 갱신 주기 + 미리보기 + 즉시 실행 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {([1, 2, 3] as const).map((slot) => {
+            const intervalH =
+              slot === 1 ? slot1IntervalHours : slot === 2 ? slot2IntervalHours : slot3IntervalHours;
+            const setIntervalH =
+              slot === 1 ? setSlot1IntervalHours : slot === 2 ? setSlot2IntervalHours : setSlot3IntervalHours;
+            const lastFetchedAt =
+              slot === 1
+                ? config?.slot1LastFetchedAt
+                : slot === 2
+                ? config?.slot2LastFetchedAt
+                : config?.slot3LastFetchedAt;
+            const pickedTitle =
+              slot === 1
+                ? config?.slot1LastPickedTitle
+                : slot === 2
+                ? config?.slot2LastPickedTitle
+                : config?.slot3LastPickedTitle;
+            const pickedVideoId =
+              slot === 1
+                ? config?.slot1LastPickedVideoId
+                : slot === 2
+                ? config?.slot2LastPickedVideoId
+                : config?.slot3LastPickedVideoId;
+
+            return (
+              <div
+                key={slot}
+                className="rounded-xl border border-amber-300 bg-white p-3 flex flex-col gap-2"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                      slot === 1 ? 'bg-pink-100 text-pink-700' : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    SLOT {slot}
+                  </span>
+                  <span className="text-[11px] font-bold text-amber-900">{SLOT_LABEL[slot]}</span>
+                </div>
+
+                {/* 미리보기 썸네일 */}
+                {pickedVideoId ? (
+                  <a
+                    href={`https://www.youtube.com/watch?v=${pickedVideoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg overflow-hidden bg-gray-100"
+                    style={{ aspectRatio: '16/9' }}
+                    title={pickedTitle ?? pickedVideoId}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={youtubeThumbnailUrl(pickedVideoId, 'hqdefault')}
+                      alt={pickedTitle ?? ''}
+                      className="w-full h-full object-cover"
+                    />
+                  </a>
+                ) : (
+                  <div
+                    className="rounded-lg bg-gray-100 flex items-center justify-center text-[10px] text-gray-400"
+                    style={{ aspectRatio: '16/9' }}
+                  >
+                    아직 채워지지 않음
+                  </div>
+                )}
+                {pickedTitle && (
+                  <div
+                    className="text-[10.5px] text-gray-700 line-clamp-2 font-bold leading-snug"
+                    title={pickedTitle}
+                  >
+                    {pickedTitle}
+                  </div>
+                )}
+
+                {/* 갱신 주기 */}
+                <div>
+                  <label className="block text-[10.5px] font-bold text-amber-900 mb-1">
+                    🔁 갱신 주기 (시간)
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={720}
+                      value={intervalH}
+                      onChange={(e) => setIntervalH(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-[13px] font-bold bg-white tabular-nums"
+                    />
+                    <span className="text-[11px] font-bold text-amber-700">h</span>
+                  </div>
+                  <div className="text-[10px] text-amber-700 mt-1">
+                    {lastFetchedAt ? (
+                      <>마지막 fetch {fmtRelative(lastFetchedAt)}</>
+                    ) : (
+                      <>아직 한 번도 fetch되지 않음</>
+                    )}
+                  </div>
+                </div>
+
+                {/* 즉시 실행 */}
+                <button
+                  onClick={() => handleRunNow(slot)}
+                  disabled={running !== null || saving}
+                  className="px-3 py-1.5 bg-amber-100 text-amber-900 text-[11.5px] font-extrabold rounded-lg border border-amber-300 hover:bg-amber-200 disabled:opacity-40 transition"
+                >
+                  {running === slot ? '실행 중…' : `⚡ 슬롯 ${slot} 새로고침`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
         {/* 포함 키워드 */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -607,45 +743,17 @@ function CurationSettingsCard() {
           />
         </div>
 
-        {/* 갯수 + 시각 + 쇼츠 제외 */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-[11px] font-bold text-amber-900 mb-1">
-              🎯 노출 영상 갯수 (5~50)
-            </label>
+        {/* 쇼츠 제외 */}
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer w-full px-3 py-2 border border-amber-300 rounded-lg bg-white">
             <input
-              type="number"
-              min={5}
-              max={50}
-              value={maxResults}
-              onChange={(e) => setMaxResults(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-amber-300 rounded-lg text-[13px] font-bold bg-white tabular-nums"
+              type="checkbox"
+              checked={excludeShorts}
+              onChange={(e) => setExcludeShorts(e.target.checked)}
+              className="w-4 h-4 accent-amber-600"
             />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-amber-900 mb-1">
-              ⏰ 실행 시각 (KST 0~23시)
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={23}
-              value={scheduleHourKst}
-              onChange={(e) => setScheduleHourKst(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-amber-300 rounded-lg text-[13px] font-bold bg-white tabular-nums"
-            />
-          </div>
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 cursor-pointer w-full px-3 py-2 border border-amber-300 rounded-lg bg-white">
-              <input
-                type="checkbox"
-                checked={excludeShorts}
-                onChange={(e) => setExcludeShorts(e.target.checked)}
-                className="w-4 h-4 accent-amber-600"
-              />
-              <span className="text-[12px] font-bold text-amber-900">쇼츠 제외</span>
-            </label>
-          </div>
+            <span className="text-[12px] font-bold text-amber-900">쇼츠 제외 (60초 이하 또는 #shorts 태그)</span>
+          </label>
         </div>
 
         {/* 실행 결과 메시지 */}
@@ -655,18 +763,18 @@ function CurationSettingsCard() {
           </div>
         )}
 
-        {/* 액션 — 저장 + 즉시 실행 */}
+        {/* 액션 — 저장 + 전체 즉시 실행 */}
         <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
           {savedAt != null && Date.now() - savedAt < 4000 && (
             <span className="text-[11px] text-emerald-700 font-bold mr-auto">✓ 저장됨</span>
           )}
           <button
-            onClick={handleRunNow}
-            disabled={running || saving}
+            onClick={() => handleRunNow()}
+            disabled={running !== null || saving}
             className="px-4 py-2 bg-amber-100 text-amber-900 text-[12.5px] font-extrabold rounded-lg border border-amber-300 hover:bg-amber-200 disabled:opacity-40 transition"
-            title="저장된 설정으로 지금 즉시 큐레이션 실행"
+            title="저장된 설정으로 전체 슬롯을 즉시 큐레이션"
           >
-            {running ? '실행 중…' : '⚡ 지금 즉시 실행'}
+            {running === 'all' ? '실행 중…' : '⚡ 전체 슬롯 새로고침'}
           </button>
           <button
             onClick={handleSave}
@@ -770,6 +878,19 @@ function VideosTab() {
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">AUTO</span>
                   ) : (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-700">수동</span>
+                  )}
+                  {(v.slot === 1 || v.slot === 2 || v.slot === 3) && (
+                    <span
+                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                        v.slot === 1
+                          ? 'bg-rose-100 text-rose-700'
+                          : v.slot === 2
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-orange-100 text-orange-700'
+                      }`}
+                    >
+                      SLOT {v.slot}
+                    </span>
                   )}
                   <span className="text-sm font-bold text-gray-900 truncate">{v.title}</span>
                 </div>

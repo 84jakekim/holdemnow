@@ -1,7 +1,18 @@
 'use client';
 
+/**
+ * HotVideosCarousel — 인기 유튜브 영상 고정 3 슬롯 그리드 (2026-05-26 carousel 제거)
+ *
+ * 변경 이유:
+ * - 기존: 좌우 스와이프 carousel, 큰 카드/작은 카드가 같은 list에서 처음 N개 — 중복 노출 발생
+ * - 신규: 슬롯 1(큰 카드) / 슬롯 2(작은 카드 좌) / 슬롯 3(작은 카드 우) 항상 서로 다른 영상
+ *
+ * 데이터: subscribeHotVideosBySlot — 자동 큐레이션이 슬롯별로 1개씩 채워준 영상을 반환.
+ * 슬롯이 비어 있으면 (cron 첫 실행 전 또는 후보 부족) 해당 카드는 렌더링 생략.
+ */
+
 import { useEffect, useState } from 'react';
-import { subscribeHotVideos, type HotYoutubeVideo } from '@/lib/homeContent';
+import { subscribeHotVideosBySlot, type HotYoutubeVideo } from '@/lib/homeContent';
 import { youtubeThumbnailUrl } from '@/lib/youtube';
 
 // ─── 채널 아바타 (이니셜 fallback) ───────────────────────────────
@@ -135,7 +146,7 @@ function Thumbnail({ video, large }: { video: HotYoutubeVideo; large: boolean })
   );
 }
 
-// ─── 큰 카드 ─────────────────────────────────────────────────────
+// ─── 큰 카드 (슬롯 1) ──────────────────────────────────────────────
 function BigCard({ video }: { video: HotYoutubeVideo }) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
 
@@ -182,7 +193,7 @@ function BigCard({ video }: { video: HotYoutubeVideo }) {
   );
 }
 
-// ─── 작은 카드 ────────────────────────────────────────────────────
+// ─── 작은 카드 (슬롯 2·3) ──────────────────────────────────────────
 function SmallCard({ video }: { video: HotYoutubeVideo }) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
 
@@ -230,13 +241,15 @@ function SmallCard({ video }: { video: HotYoutubeVideo }) {
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function HotVideosCarousel() {
-  const [videos, setVideos] = useState<HotYoutubeVideo[]>([]);
+  const [slots, setSlots] = useState<
+    [HotYoutubeVideo | null, HotYoutubeVideo | null, HotYoutubeVideo | null]
+  >([null, null, null]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const unsub = subscribeHotVideos(
+    const unsub = subscribeHotVideosBySlot(
       (data) => {
-        setVideos(data);
+        setSlots(data);
         setLoaded(true);
       },
       () => setLoaded(true),
@@ -244,12 +257,10 @@ export default function HotVideosCarousel() {
     return unsub;
   }, []);
 
-  if (!loaded || videos.length === 0) return null;
+  if (!loaded) return null;
+  const [s1, s2, s3] = slots;
+  if (!s1 && !s2 && !s3) return null;
 
-  const hasSmallRow = videos.length >= 2;
-
-  // 좌우 padding(px-4)·세로 padding(py-5)·헤더 톤은 부모 HomeSection이 담당.
-  // 본 컴포넌트는 카드 width와 스크롤만 책임 — 좌측 끝선 일치 보장.
   return (
     <>
       {/* 섹션 헤더 — DS v2.0: section-title(영문 라벨) + h3(한글 제목) 통일 */}
@@ -264,42 +275,18 @@ export default function HotVideosCarousel() {
         </div>
       </div>
 
-      {/* 큰 카드 행 — 한 화면 1개, 좌측 끝선이 부모 px-4와 일치 (calc -32px = 좌우 16px씩) */}
-      <div
-        className="flex overflow-x-auto scrollbar-none gap-3 -mx-4 px-4"
-        style={{ scrollSnapType: 'x mandatory' }}
-        aria-label="큰 영상 카드 가로 스크롤"
-      >
-        {videos.map((v) => (
-          <div
-            key={`big-${v.videoId}`}
-            className="flex-shrink-0"
-            style={{ scrollSnapAlign: 'start', width: 'calc(100vw - 32px)' }}
-          >
-            <BigCard video={v} />
-          </div>
-        ))}
-      </div>
+      {/* 슬롯 1 — 큰 카드 (스와이프 없음, 고정 위치) */}
+      {s1 && (
+        <div>
+          <BigCard video={s1} />
+        </div>
+      )}
 
-      {/* 작은 카드 행 — 한 화면 2개 (영상 2개 이상일 때만) */}
-      {hasSmallRow && (
-        <div
-          className="mt-3 flex overflow-x-auto scrollbar-none gap-3 -mx-4 px-4"
-          style={{ scrollSnapType: 'x mandatory' }}
-          aria-label="작은 영상 카드 가로 스크롤"
-        >
-          {videos.map((v) => (
-            <div
-              key={`small-${v.videoId}`}
-              className="flex-shrink-0"
-              style={{
-                scrollSnapAlign: 'start',
-                width: 'calc((100vw - 32px - 12px) / 2)',
-              }}
-            >
-              <SmallCard video={v} />
-            </div>
-          ))}
+      {/* 슬롯 2·3 — 작은 카드 grid 2열 (스와이프 없음) */}
+      {(s2 || s3) && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {s2 ? <SmallCard video={s2} /> : <div />}
+          {s3 ? <SmallCard video={s3} /> : <div />}
         </div>
       )}
     </>
