@@ -263,15 +263,10 @@ export default function HotVideosCarousel() {
 
   return (
     <>
-      {/* 섹션 헤더 — DS v2.0: section-title(영문 라벨) + h3(한글 제목) 통일 */}
-      <div className="mb-3">
-        <div className="section-title" style={{ marginBottom: 4 }}>HOT VIDEOS</div>
-        <div className="h3" style={{ color: 'var(--text-1)' }}>
-          홀덤 관련{' '}
-          <span style={{ color: 'var(--brand)' }}>인기 영상</span>
-        </div>
-        <div className="text-[12px] mt-1" style={{ color: 'var(--text-3)' }}>
-          홀덤 필수 시청 콘텐츠
+      {/* 섹션 헤더 — 핸드오프 톤 (단일 라인, 부제 제거 2026-05-27) */}
+      <div className="mb-3 flex items-center justify-between">
+        <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.015em', color: 'var(--text-1)' }}>
+          ▶️ 인기 유튜브
         </div>
       </div>
 

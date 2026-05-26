@@ -24,14 +24,10 @@ export default function HotYoutubersScroll() {
   // 가로 스크롤은 음수 마진으로 padding을 뚫고 viewport 끝까지 스크롤 가능.
   return (
     <>
-      {/* 섹션 헤더 — DS v2.0: section-title + h3 통일 */}
+      {/* 섹션 헤더 — 핸드오프 톤 (단일 라인, 부제 제거 2026-05-27) */}
       <div className="mb-3">
-        <div className="section-title" style={{ marginBottom: 4 }}>CREATORS</div>
-        <div className="h3" style={{ color: 'var(--text-1)' }}>
-          인기 유튜버
-        </div>
-        <div className="text-[12px] mt-1" style={{ color: 'var(--text-3)' }}>
-          홀덤 크리에이터 채널 구독하기
+        <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.015em', color: 'var(--text-1)' }}>
+          🎙️ 인기 유튜버
         </div>
       </div>
 

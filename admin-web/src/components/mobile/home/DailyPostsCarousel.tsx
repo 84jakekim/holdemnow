@@ -338,18 +338,18 @@ export default function DailyPostsCarousel() {
         </div>
       )}
 
-      {/* 섹션 헤더 — TOSS 톤 */}
-      <div className="px-4 mb-2.5 flex items-baseline justify-between">
-        <h2 className="text-[16px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
-          오늘의 매장 소식
-        </h2>
+      {/* 섹션 헤더 — 핸드오프 톤 (2026-05-27) */}
+      <div className="px-4 mb-2.5 flex items-center justify-between">
+        <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.015em', color: 'var(--text-1)' }}>
+          💬 오늘의 매장 소식
+        </div>
         {total > 0 && (
           <Link
             href="/m/posts"
-            className="text-[12px] font-semibold transition active:opacity-60"
-            style={{ color: 'var(--text-3)' }}
+            className="transition active:opacity-60"
+            style={{ fontSize: 12, fontWeight: 800, color: 'var(--brand)' }}
           >
-            전체보기 →
+            전체 →
           </Link>
         )}
       </div>
