@@ -458,6 +458,16 @@ function formatDistance(meters: number | null): string {
   return `${Math.round(km)}km`;
 }
 
+/**
+ * SlimPostCard — 홈 상단 띠 카드 (핸드오프 v3.1: 채팅 말풍선 톤).
+ *
+ * 디자인 결정 (2026-05-26, PM 단독):
+ *  - 채팅방(/m/posts) 톤과 통일. 핸드오프 screens-user.jsx 시그니처 적용.
+ *  - 구조: [28px 아바타] · [헤드라인 1줄 + 매장명·거리·시간 1줄] (좌측 아래 꼬리)
+ *  - radius 14/14/14/4 → 카톡 말풍선 꼬리 (홈 띠에도 동일 패턴 적용).
+ *  - 좌측 accent bar 4px 폐기 — 아바타와 말풍선이 색상 시그널 역할.
+ *  - .pr-chat-tape 토큰 사용 (globals.css v3.1).
+ */
 function SlimPostCard({
   post,
   distanceMeters,
@@ -480,54 +490,39 @@ function SlimPostCard({
   }, [post.headline, post.body]);
 
   const distanceLabel = formatDistance(distanceMeters);
-  const topEmoji = emojis[0] ?? '';
+  const avatarEmoji = emojis[0] || '🃏';
 
   return (
     <Link
       href={`/m/store/${post.storeId}`}
-      className="block w-full rounded-xl transition active:opacity-80 overflow-hidden tap"
+      className="pr-chat-tape tap"
       style={{
         height: `${height}px`,
         background: style.surface,
-        border: `1px solid ${style.border}`,
-        boxShadow: `0 2px 8px -6px ${style.accent}`,
-        display: 'flex',
-        alignItems: 'stretch',
+        borderColor: style.border,
+        textDecoration: 'none',
       }}
       aria-label={`${post.storeName ?? '매장'} 소식 보기`}
     >
-      {/* 좌측 accent bar */}
+      {/* 좌측 mini 아바타 (28px, 매장 컬러) */}
       <div
+        className="pr-chat-tape-avatar"
+        style={{ background: style.surface, borderColor: style.border, color: style.textPrimary }}
         aria-hidden
-        style={{
-          width: '4px',
-          background: style.accent,
-          flexShrink: 0,
-        }}
-      />
-      {/* 우측 본문 */}
-      <div className="flex-1 min-w-0 px-3 py-2 flex flex-col justify-center gap-1">
-        {/* 1줄: 이모지 + 헤드라인 */}
-        <div className="flex items-center gap-1.5 min-w-0">
-          {topEmoji && (
-            <span
-              aria-hidden
-              className="flex-shrink-0"
-              style={{ fontSize: '14px', lineHeight: 1 }}
-            >
-              {topEmoji}
-            </span>
-          )}
-          <div
-            className="text-[14px] font-extrabold leading-[1.25] truncate flex-1"
-            style={{ color: style.textPrimary }}
-          >
-            {oneLiner || '오늘의 매장 소식'}
-          </div>
-        </div>
-        {/* 2줄: 매장명 · 거리 · 시간 */}
+      >
+        {avatarEmoji}
+      </div>
+
+      {/* 본문 (헤드라인 1줄 + 메타 1줄) */}
+      <div className="pr-chat-tape-body">
         <div
-          className="flex items-center gap-1 text-[11px] font-semibold min-w-0"
+          className="pr-chat-tape-headline"
+          style={{ color: style.textPrimary }}
+        >
+          {oneLiner || '오늘의 매장 소식'}
+        </div>
+        <div
+          className="pr-chat-tape-meta"
           style={{ color: style.textSecondary }}
         >
           <span className="truncate" style={{ maxWidth: '50%' }}>
@@ -558,17 +553,20 @@ function SlimPostCard({
 // ─────────────────────────────────────────────────────────────
 
 function PinnedStripe({ item }: { item: PinnedPost }) {
+  // 핸드오프 v3.1 — 본사 pinned 띠도 채팅 말풍선 꼬리 톤 적용 (14/14/14/4)
   const inner = (
     <div
-      className="flex items-center gap-2 px-3 py-2 rounded-xl"
+      className="flex items-center gap-2 px-3 py-2"
       style={{
-        background: 'linear-gradient(135deg, rgba(255,31,143,0.08) 0%, rgba(255,31,143,0.04) 100%)',
-        border: '1px solid rgba(255,31,143,0.20)',
+        background: 'linear-gradient(135deg, rgba(255,31,143,0.10) 0%, rgba(255,31,143,0.02) 100%)',
+        border: '1px solid rgba(255,31,143,0.22)',
+        borderRadius: '14px 14px 14px 4px',
+        boxShadow: '0 2px 8px -6px rgba(255,31,143,0.30)',
       }}
     >
       <span
         className="text-[10px] font-extrabold px-1.5 py-0.5 rounded"
-        style={{ background: '#FF1F8F', color: '#fff' }}
+        style={{ background: '#FF1F8F', color: '#fff', letterSpacing: '0.04em' }}
       >
         공지
       </span>
