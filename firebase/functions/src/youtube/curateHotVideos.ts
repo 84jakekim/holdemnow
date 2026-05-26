@@ -403,6 +403,27 @@ async function runSlotCuration(
 
   const cutoffMs = Date.now() - cfg.maxAgeDays * 86_400_000;
 
+  // 1.5) force(수동 새로고침) 모드 — 현재 슬롯에 들어있는 영상 ID를 exclude에 추가
+  //      "새로고침"이라는 사용자 의도 = 다른 영상 보여줘. 같은 top이면 의미 없음.
+  //      (cron 자동 실행은 그대로 — 같은 top이면 유지)
+  if (opts.force) {
+    try {
+      const currentSlotSnap = await firestore
+        .collection('hotYoutubeVideos')
+        .where('slot', '==', slot)
+        .get();
+      for (const d of currentSlotSnap.docs) {
+        const data = d.data() as { manualLocked?: boolean; videoId?: string };
+        if (data.manualLocked === true) continue; // 수동 잠긴 건 보호
+        const vid = data.videoId ?? d.id;
+        if (vid) excludeVideoIds.add(vid);
+      }
+      logger.info(`[curate slot${slot}] force=true — 기존 슬롯 영상 ${currentSlotSnap.size}건 exclude 추가`);
+    } catch (e) {
+      logger.warn(`[curate slot${slot}] force exclude 수집 실패: ${(e as Error).message}`);
+    }
+  }
+
   // 2. 활성 채널 channelId 수집
   const youtubersSnap = await firestore
     .collection('hotYoutubers')
