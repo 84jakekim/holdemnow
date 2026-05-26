@@ -41,24 +41,10 @@ export default function RecentCheckInsStrip() {
 
   const list = useMemo(() => items.slice(0, MAX_ITEMS), [items]);
 
-  // 데이터 0건이면 섹션 자체를 렌더하지 않는다 (홈 노이즈 최소화).
-  if (!loaded) {
-    return (
-      <section aria-label="지금 다녀온 사람들" className="px-4 py-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-extrabold leading-tight" style={{ color: 'var(--text-1)' }}>
-            지금 다녀온 사람들
-          </h2>
-        </div>
-        <div className="flex gap-2 overflow-hidden">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="skel rounded-2xl" style={{ width: 160, height: 84, flexShrink: 0 }} />
-          ))}
-        </div>
-      </section>
-    );
-  }
-  if (list.length === 0) return null;
+  // 로딩 중에도 섹션 자체를 렌더하지 않는다.
+  // 헤더 텍스트가 0건 확정 전에 잠깐 깜빡이는 문제 차단 (2026-05-27 사용자 보고).
+  // 데이터가 확인된 뒤에만 헤더 + 카드 동시 등장 — 약간의 layout shift는 노이즈보다 덜 거슬림.
+  if (!loaded || list.length === 0) return null;
 
   return (
     <section aria-label="지금 다녀온 사람들" className="px-4 py-5">
