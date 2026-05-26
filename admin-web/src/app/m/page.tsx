@@ -16,9 +16,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
+import { hasSeenOnboarding } from '@/lib/onboarding';
 import { coordToRegionLabel } from '@/lib/kakao';
 import HomeAdsCarousel from '@/components/mobile/home/HomeAdsCarousel';
 import HotVideosCarousel from '@/components/mobile/home/HotVideosCarousel';
@@ -55,9 +57,17 @@ function HomeSection({
 }
 
 export default function MobileHome() {
+  const router = useRouter();
   const authState = useAuth();
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
+
+  // 첫 진입 사용자 — /intro 슬라이드 가이드로 redirect (한 번 보면 안 보임)
+  useEffect(() => {
+    if (!hasSeenOnboarding()) {
+      router.replace('/intro');
+    }
+  }, [router]);
 
   // 4섹션 콘텐츠 0건 여부 — 모든 사용자에게 적용
   //  - platform_admin: 본사 어드민 이동 안내 카드
