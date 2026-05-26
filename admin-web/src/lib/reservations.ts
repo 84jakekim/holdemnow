@@ -25,6 +25,8 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  getDocs,
+  limit as fsLimit,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { stripUndefined } from './firestoreUtil';
@@ -67,6 +69,26 @@ export const MAX_PARTICIPATING_GAME_LEN = 200;
 export const MIN_PARTY_SIZE = 1;
 export const MAX_PARTY_SIZE = 20;
 
+/**
+ * 활성 예약으로 간주되는 상태 — 1인 1매장 1예약 정책의 차단 조건.
+ * pending(매장 응답 대기) / confirmed(매장 확정 + 미방문) 두 상태.
+ */
+export const ACTIVE_RESERVATION_STATUSES: ReservationStatus[] = ['pending', 'confirmed'];
+
+/**
+ * 입장시간 + 이 시간만큼 지나면 자동으로 "지난 예약"으로 간주 (클라 필터 + cron).
+ * 사용자가 매장 도착 늦을 수 있어 grace 2시간 보장.
+ */
+export const RESERVATION_AUTO_COMPLETE_GRACE_MS = 2 * 60 * 60 * 1000;
+
+/** 활성 예약 여부 — 시간 경과(reservedFor + grace)분은 제외. */
+export function isReservationActive(r: Reservation): boolean {
+  if (!ACTIVE_RESERVATION_STATUSES.includes(r.status)) return false;
+  const reservedMs = r.reservedFor?.toMillis?.() ?? 0;
+  if (!reservedMs) return true; // 시각 누락 시 안전하게 active로 간주
+  return reservedMs + RESERVATION_AUTO_COMPLETE_GRACE_MS > Date.now();
+}
+
 // ─────────────────────────────────────────────────────────────
 // helpers
 // ─────────────────────────────────────────────────────────────
@@ -108,7 +130,48 @@ function toReservation(
 // ─────────────────────────────────────────────────────────────
 
 /**
+ * 1인 1매장 1예약 정책 위반 시 throw되는 에러.
+ * UI에서 e.activeStoreName으로 안내 메시지 구성 가능.
+ */
+export class ActiveReservationConflictError extends Error {
+  constructor(public readonly activeStoreName: string) {
+    super(
+      activeStoreName
+        ? `이미 [${activeStoreName}]에 예약 중입니다. 기존 예약을 취소 후 다시 시도하세요.`
+        : '이미 다른 매장에 예약 중입니다. 기존 예약을 취소 후 다시 시도하세요.',
+    );
+    this.name = 'ActiveReservationConflictError';
+  }
+}
+
+/**
+ * 본인 활성 예약 1건 조회 — 1인 1매장 1예약 정책 검증용.
+ * 시간 경과(reservedFor + grace)분은 active에서 제외.
+ * 반환 null이면 신규 예약 가능.
+ */
+export async function findActiveReservation(uid: string): Promise<Reservation | null> {
+  if (!uid) return null;
+  const q = query(
+    collectionGroup(db, 'reservations'),
+    where('authorUid', '==', uid),
+    where('status', 'in', ACTIVE_RESERVATION_STATUSES),
+    fsLimit(20),
+  );
+  const snap = await getDocs(q);
+  for (const d of snap.docs) {
+    const storeIdFromPath = d.ref.parent.parent?.id ?? '';
+    const r = toReservation(d.id, d.data() as Record<string, unknown>, storeIdFromPath);
+    if (isReservationActive(r)) return r;
+  }
+  return null;
+}
+
+/**
  * 예약 생성 — status='pending'으로 시작. returns reservationId.
+ *
+ * 가드 (PM 결정 2026-05-27):
+ *  - 1인 1매장 1예약: 본인 활성 예약(pending/confirmed + reservedFor+grace 이내) 있으면 차단.
+ *    같은 매장 활성 예약이 있어도 차단 (사용자가 시간만 바꾸고 싶으면 기존 예약 취소 먼저).
  */
 export async function createReservation(input: {
   storeId: string;
@@ -124,6 +187,13 @@ export async function createReservation(input: {
 }): Promise<string> {
   if (!input.storeId) throw new Error('storeId가 필요합니다.');
   if (!input.authorUid) throw new Error('로그인이 필요합니다.');
+
+  // 1인 1매장 1예약 정책 — 본인 활성 예약 검증.
+  // collectionGroup query에 본인 read rules가 허용되므로 클라에서 사전 검증 가능.
+  const existing = await findActiveReservation(input.authorUid);
+  if (existing) {
+    throw new ActiveReservationConflictError(existing.storeName || '다른 매장');
+  }
 
   const partySize = Math.round(input.partySize);
   if (!Number.isInteger(partySize) || partySize < MIN_PARTY_SIZE || partySize > MAX_PARTY_SIZE) {
@@ -220,6 +290,50 @@ export async function respondToReservation(
   };
 
   await updateDoc(doc(reservationsCol(storeId), reservationId), stripUndefined(patch));
+}
+
+/**
+ * 체크인 자동 완료 — 본인이 같은 매장에 체크인하면 활성 예약 1건을 completed로 전환.
+ * PM 결정 2026-05-27: 같은 매장 + 활성 상태(pending/confirmed)일 때만 트리거.
+ * 다른 매장 체크인은 활성 예약 건드리지 않음 (정책 위반).
+ *
+ * 호출 위치: CheckInSheet.handleSubmit 성공 후 best-effort 호출 (실패 silent).
+ * 호출 실패해도 cron(autoCompleteReservations)이 입장시간+2h에 정리.
+ */
+export async function completeReservationByCheckIn(
+  uid: string,
+  storeId: string,
+): Promise<{ completed: number }> {
+  if (!uid || !storeId) return { completed: 0 };
+  const q = query(
+    collectionGroup(db, 'reservations'),
+    where('authorUid', '==', uid),
+    where('storeId', '==', storeId),
+    where('status', 'in', ACTIVE_RESERVATION_STATUSES),
+    fsLimit(10),
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return { completed: 0 };
+  let completed = 0;
+  for (const d of snap.docs) {
+    try {
+      await updateDoc(
+        d.ref,
+        stripUndefined({
+          status: 'completed' as ReservationStatus,
+          completedAt: serverTimestamp(),
+          completionReason: 'check_in',
+          updatedAt: serverTimestamp(),
+        }),
+      );
+      completed += 1;
+    } catch {
+      // 매장 owner update 권한이 없는 케이스도 있을 수 있음 — silent.
+      // rules: 본인은 status='cancelled'만 허용이라 update 차단될 수 있다.
+      // 그 경우 cron(autoCompleteReservations)이 입장시간+2h에 정리하므로 OK.
+    }
+  }
+  return { completed };
 }
 
 /**

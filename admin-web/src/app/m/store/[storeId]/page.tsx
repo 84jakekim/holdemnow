@@ -37,6 +37,7 @@ import ReportReviewSheet from '@/components/mobile/ReportReviewSheet';
 import ReservationSheet from '@/components/mobile/ReservationSheet';
 import CheckInSheet from '@/components/mobile/CheckInSheet';
 import { hasRecentCheckIn } from '@/lib/checkIns';
+import { findActiveReservation, type Reservation } from '@/lib/reservations';
 import { recordRecentVisit } from '@/lib/recentVisits';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -83,6 +84,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [reservationOpen, setReservationOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkedInRecently, setCheckedInRecently] = useState(false);
+  const [activeReservation, setActiveReservation] = useState<Reservation | null>(null);
 
   useEffect(() => {
     const unsub = subscribeStoreTournaments(storeId, setTournaments, () => {});
@@ -115,6 +117,20 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       .catch(() => { /* 조회 실패 시 false 유지 */ });
     return () => { cancelled = true; };
   }, [authState, storeId, checkInOpen]);
+
+  // 1인 1매장 1예약 정책 — 본인 활성 예약 1건 조회 (예약하기 버튼 안내).
+  // reservationOpen/checkInOpen 변경 시 재조회 (예약 신청·체크인 후 갱신).
+  useEffect(() => {
+    if (authState.status !== 'authenticated') {
+      setActiveReservation(null);
+      return;
+    }
+    let cancelled = false;
+    findActiveReservation(authState.user.uid)
+      .then((r) => { if (!cancelled) setActiveReservation(r); })
+      .catch(() => { /* 조회 실패 시 null 유지 */ });
+    return () => { cancelled = true; };
+  }, [authState, reservationOpen, checkInOpen]);
 
   // 최근 방문 기록 — 매장 데이터가 로드된 후 1회 기록
   useEffect(() => {
@@ -512,25 +528,60 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
       <div className="px-5 py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
         {/* 메인 CTA — 예약하기 (좌) + 길찾기 (우) */}
         <div className="grid grid-cols-2 gap-2 mb-3">
-          {/* 예약하기 */}
-          <button
-            onClick={() => {
-              if (!currentUid) {
-                signInWithPopup(auth, new GoogleAuthProvider()).catch(() => {});
-                return;
-              }
-              setReservationOpen(true);
-            }}
-            className="h-[52px] flex items-center justify-center gap-2 rounded-2xl font-bold text-[15px] transition active:scale-[0.98] text-white"
-            style={{
-              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BB5 100%)',
-              boxShadow: '0 4px 14px rgba(255,31,143,0.30)',
-            }}
-            aria-label={currentUid ? `${store.name} 예약하기` : '로그인하고 예약하기'}
-          >
-            <span aria-hidden="true" style={{ fontSize: 17 }}>📅</span>
-            {currentUid ? '예약하기' : '로그인 후 예약'}
-          </button>
+          {/* 예약하기 — 1인 1매장 1예약 정책 반영 */}
+          {(() => {
+            const hasOtherStoreActive = activeReservation != null && activeReservation.storeId !== storeId;
+            const hasSameStoreActive = activeReservation != null && activeReservation.storeId === storeId;
+            const disabled = currentUid != null && hasOtherStoreActive;
+            const label = !currentUid
+              ? '로그인 후 예약'
+              : hasOtherStoreActive
+                ? '다른 매장 예약 중'
+                : hasSameStoreActive
+                  ? '예약 진행 중'
+                  : '예약하기';
+            return (
+              <button
+                onClick={() => {
+                  if (!currentUid) {
+                    signInWithPopup(auth, new GoogleAuthProvider()).catch(() => {});
+                    return;
+                  }
+                  if (hasOtherStoreActive) {
+                    setToast(
+                      `[${activeReservation?.storeName || '다른 매장'}]에 예약 중입니다. 내 예약에서 취소 후 다시 시도하세요.`,
+                    );
+                    return;
+                  }
+                  if (hasSameStoreActive) {
+                    router.push('/m/reservations');
+                    return;
+                  }
+                  setReservationOpen(true);
+                }}
+                disabled={disabled}
+                className="h-[52px] flex items-center justify-center gap-2 rounded-2xl font-bold text-[15px] transition active:scale-[0.98] text-white disabled:opacity-60"
+                style={
+                  disabled
+                    ? { background: 'var(--text-3)' }
+                    : {
+                        background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BB5 100%)',
+                        boxShadow: '0 4px 14px rgba(255,31,143,0.30)',
+                      }
+                }
+                aria-label={
+                  hasOtherStoreActive
+                    ? `${activeReservation?.storeName ?? '다른 매장'} 예약 중 — 신규 예약 불가`
+                    : currentUid
+                      ? `${store.name} 예약하기`
+                      : '로그인하고 예약하기'
+                }
+              >
+                <span aria-hidden="true" style={{ fontSize: 17 }}>📅</span>
+                {label}
+              </button>
+            );
+          })()}
           {/* 길찾기 */}
           <button
             onClick={() => { bumpStoreMetric(storeId, 'directionsClicks'); openDirections(store.name, store.address); }}

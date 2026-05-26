@@ -17,6 +17,7 @@ import { useAuth, useStoreDoc } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import {
   cancelReservation,
+  isReservationActive,
   reservationStatusLabel,
   subscribeUserReservations,
   type Reservation,
@@ -28,7 +29,8 @@ import InlineStoreMap from '@/components/mobile/reservations/InlineStoreMap';
 
 type Tab = 'upcoming' | 'past';
 
-const UPCOMING_STATUSES: ReservationStatus[] = ['pending', 'confirmed'];
+// 활성 분류는 isReservationActive(r) 헬퍼로 일원화 — status + 시간 경과(grace 2h) 동시 검증.
+// 시간 경과한 pending/confirmed는 자동으로 "지난 예약"으로 분류 (cron 도래 전 클라 안전망).
 
 export default function ReservationsPage() {
   const authState = useAuth();
@@ -55,7 +57,9 @@ export default function ReservationsPage() {
     const u: Reservation[] = [];
     const p: Reservation[] = [];
     for (const r of items) {
-      if (UPCOMING_STATUSES.includes(r.status)) u.push(r);
+      // 1) status 활성(pending/confirmed) + 2) reservedFor + 2h 이내 = 예정
+      // 시간 경과한 pending/confirmed는 cron 도래 전이라도 클라에서 "지난"으로 분류.
+      if (isReservationActive(r)) u.push(r);
       else p.push(r);
     }
     u.sort((a, b) => (a.reservedFor?.toMillis?.() ?? 0) - (b.reservedFor?.toMillis?.() ?? 0));

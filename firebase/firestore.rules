@@ -157,6 +157,13 @@ service cloud.firestore {
               resource.data.status == 'pending'
               || resource.data.reservedFor.toMillis() - request.time.toMillis() >= 60 * 60 * 1000
             ))
+          // 예약자 본인: 체크인으로 인한 자동 완료 (PM 2026-05-27).
+          // status='completed' + completionReason='check_in'으로만 전환 허용 — 임의 'completed' 전환 차단.
+          // pending/confirmed 상태에서만 가능 (이미 완료/취소된 건 재변경 금지).
+          || (resource.data.authorUid == request.auth.uid
+            && request.resource.data.status == 'completed'
+            && request.resource.data.get('completionReason', '') == 'check_in'
+            && (resource.data.status == 'pending' || resource.data.status == 'confirmed'))
           // 매장 owner/member: 운영 상태·readByStore·confirmedAt 갱신 가능 (시간 제약 없음)
           || isStoreOwner(storeId)
           || isStoreMember(storeId)

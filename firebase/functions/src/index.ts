@@ -47,6 +47,8 @@ export { notifyStoreOnReservation } from './notifications/notifyStoreOnReservati
 export { notifyUserOnReservationConfirmed } from './notifications/notifyUserOnReservationConfirmed';
 // 예약 방문 10분 전 사용자에게 리마인더 FCM 푸시 (1분 cron).
 export { notifyReservationReminder } from './notifications/notifyReservationReminder';
+// 입장시간+2h 지난 pending/confirmed 예약 자동 completed (30분 cron) — 2026-05-27
+export { autoCompleteReservations } from './notifications/autoCompleteReservations';
 // 새 리뷰 작성 시 매장 owner에게 FCM 푸시.
 export { notifyStoreOnReview } from './notifications/notifyStoreOnReview';
 // 종료된 관심 토너 자동 삭제 — 매시간, 시작 시각+6h 지난 doc 정리

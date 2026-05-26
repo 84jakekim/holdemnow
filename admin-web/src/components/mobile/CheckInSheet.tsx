@@ -6,6 +6,7 @@ import {
   CheckInGuardError,
   CHECKIN_COMMENT_MAX,
 } from '@/lib/checkIns';
+import { completeReservationByCheckIn } from '@/lib/reservations';
 
 /**
  * 매장 체크인 바텀시트 — 소셜 v0.1
@@ -70,6 +71,10 @@ export default function CheckInSheet({
         storeName,
         comment: comment.trim() || undefined,
       });
+      // 예약 ↔ 체크인 통합 (PM 2026-05-27):
+      // 같은 매장 활성 예약(pending/confirmed)을 자동 completed로 전환 → 1매장 잠금 해제.
+      // 실패해도 cron(autoCompleteReservations)이 입장시간+2h에 백업 정리.
+      completeReservationByCheckIn(authorUid, storeId).catch(() => { /* silent */ });
       onSuccess?.();
       onClose();
     } catch (err) {

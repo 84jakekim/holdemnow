@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ActiveReservationConflictError,
   createReservation,
+  findActiveReservation,
   MAX_PARTICIPATING_GAME_LEN,
   MAX_PARTY_SIZE,
   MAX_RESERVATION_NOTE_LEN,
   MIN_PARTY_SIZE,
+  type Reservation,
 } from '@/lib/reservations';
 import { checkWriteRateLimit, moderateText } from '@/lib/moderation';
 
@@ -65,6 +68,8 @@ export default function ReservationSheet({
   const [note, setNote] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeReservation, setActiveReservation] = useState<Reservation | null>(null);
+  const [activeLoaded, setActiveLoaded] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -79,6 +84,27 @@ export default function ReservationSheet({
     setReservedFor(toLocalInputValue(def));
     setMinDateTime(toLocalInputValue(min));
   }, []);
+
+  // 1인 1매장 1예약 정책 — 시트 오픈 시 본인 활성 예약 사전 검증.
+  // 있으면 화면 상단 안내 + 예약 신청 버튼 비활성.
+  useEffect(() => {
+    if (!authorUid) {
+      setActiveLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    findActiveReservation(authorUid)
+      .then((r) => {
+        if (cancelled) return;
+        setActiveReservation(r);
+        setActiveLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActiveLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, [authorUid]);
 
   // ESC로 닫기
   useEffect(() => {
@@ -102,6 +128,14 @@ export default function ReservationSheet({
     setError(null);
     if (!authorUid) {
       setError('로그인이 필요합니다.');
+      return;
+    }
+    // 1인 1매장 1예약 정책 — submit 시점에 한번 더 검증 (사전 검증 후 다른 탭에서 만들었을 수 있음).
+    if (activeReservation) {
+      setError(
+        `이미 [${activeReservation.storeName || '다른 매장'}]에 예약 중입니다.\n` +
+        '내 예약 페이지에서 기존 예약을 취소한 뒤 다시 시도해주세요.',
+      );
       return;
     }
     const trimmedName = displayName.trim();
@@ -185,7 +219,17 @@ export default function ReservationSheet({
       // 예약 신청 후 홈으로 자동 이동 — 홈 상단 노란 banner에서 진행 상태 확인 가능.
       router.push('/m');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof ActiveReservationConflictError) {
+        setError(e.message);
+        // race condition으로 사전 검증 통과했지만 createReservation에서 차단된 케이스 —
+        // 활성 예약 상태를 재조회해서 버튼 비활성화.
+        try {
+          const r = await findActiveReservation(authorUid);
+          setActiveReservation(r);
+        } catch { /* silent */ }
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setBusy(false);
     }
@@ -221,6 +265,34 @@ export default function ReservationSheet({
           📅 예약 신청
         </div>
         <div className="text-[12px] mb-5" style={{ color: 'var(--text-3)' }}>{storeName}</div>
+
+        {/* 활성 예약 안내 — 1인 1매장 1예약 정책 위반 시 안내 */}
+        {activeLoaded && activeReservation && (
+          <div
+            role="alert"
+            className="mb-5 px-3 py-3 rounded-xl text-[12px] font-bold leading-relaxed"
+            style={{
+              background: 'rgba(245,158,11,0.10)',
+              border: '1px solid rgba(245,158,11,0.30)',
+              color: '#92400E',
+            }}
+          >
+            <div className="text-[13px] font-extrabold mb-1">⚠️ 이미 예약 진행 중</div>
+            <div>
+              [{activeReservation.storeName || '다른 매장'}]에 예약이 있어 신규 예약이 불가합니다.
+              <br />
+              <span className="font-bold">내 예약</span> 페이지에서 기존 예약을 취소한 뒤 다시 시도해주세요.
+            </div>
+            <button
+              type="button"
+              onClick={() => { onClose(); router.push('/m/reservations'); }}
+              className="mt-2 w-full py-2 rounded-lg text-[12px] font-extrabold text-white"
+              style={{ background: '#F59E0B' }}
+            >
+              내 예약으로 이동
+            </button>
+          </div>
+        )}
 
         {/* 1. 참가 닉네임 */}
         <div className="mb-5">
@@ -430,11 +502,15 @@ export default function ReservationSheet({
           <button
             type="button"
             onClick={submit}
-            disabled={busy}
+            disabled={busy || (activeLoaded && activeReservation != null)}
             className="flex-1 py-3 rounded-xl text-[14px] font-extrabold text-white disabled:opacity-50 transition active:scale-[0.98]"
             style={{ background: '#FF1F8F', boxShadow: '0 4px 12px rgba(255,31,143,0.30)' }}
           >
-            {busy ? '신청 중…' : '예약 신청'}
+            {busy
+              ? '신청 중…'
+              : activeReservation
+                ? '기존 예약 취소 필요'
+                : '예약 신청'}
           </button>
         </div>
 
