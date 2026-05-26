@@ -55,6 +55,10 @@ export { notifyUserOnCancelRequestDeclined } from './notifications/notifyUserOnC
 export { notifyReservationReminder } from './notifications/notifyReservationReminder';
 // 입장시간+2h 지난 pending/confirmed 예약 자동 completed (30분 cron) — 2026-05-27
 export { autoCompleteReservations } from './notifications/autoCompleteReservations';
+// 90일 이상 지난 종료 예약 자동 삭제 (매일 03:00 KST) — 2026-05-27
+// 대상: cancelled/rejected/completed/no_show + reservedFor < now-90d.
+// 활성(pending/confirmed) 및 cancelRequested=true 는 이중 가드로 절대 삭제 X.
+export { cleanupOldReservations } from './notifications/cleanupOldReservations';
 // 새 리뷰 작성 시 매장 owner에게 FCM 푸시.
 export { notifyStoreOnReview } from './notifications/notifyStoreOnReview';
 // 종료된 관심 토너 자동 삭제 — 매시간, 시작 시각+6h 지난 doc 정리
