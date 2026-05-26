@@ -462,6 +462,7 @@ function CurationSettingsCard() {
   const [includeText, setIncludeText] = useState<string>('');
   const [excludeText, setExcludeText] = useState<string>('');
   const [excludeShorts, setExcludeShorts] = useState<boolean>(true);
+  const [minDurationSec, setMinDurationSec] = useState<number>(61);
   const [slot1IntervalHours, setSlot1IntervalHours] = useState<number>(6);
   const [slot2IntervalHours, setSlot2IntervalHours] = useState<number>(12);
   const [slot3IntervalHours, setSlot3IntervalHours] = useState<number>(24);
@@ -480,6 +481,7 @@ function CurationSettingsCard() {
           setIncludeText(formatKeywordsText(cfg.includeKeywords));
           setExcludeText(formatKeywordsText(cfg.excludeKeywords));
           setExcludeShorts(cfg.excludeShorts);
+          setMinDurationSec(cfg.minDurationSec ?? 61);
           setSlot1IntervalHours(cfg.slot1IntervalHours);
           setSlot2IntervalHours(cfg.slot2IntervalHours);
           setSlot3IntervalHours(cfg.slot3IntervalHours);
@@ -501,6 +503,7 @@ function CurationSettingsCard() {
         includeKeywords: parseKeywordsText(includeText),
         excludeKeywords: parseKeywordsText(excludeText),
         excludeShorts,
+        minDurationSec: Math.max(0, Math.min(7200, Math.floor(minDurationSec) || 0)),
         slot1IntervalHours: clampH(slot1IntervalHours, DEFAULT_CURATION_CONFIG.slot1IntervalHours),
         slot2IntervalHours: clampH(slot2IntervalHours, DEFAULT_CURATION_CONFIG.slot2IntervalHours),
         slot3IntervalHours: clampH(slot3IntervalHours, DEFAULT_CURATION_CONFIG.slot3IntervalHours),
@@ -754,6 +757,34 @@ function CurationSettingsCard() {
             />
             <span className="text-[12px] font-bold text-amber-900">쇼츠 제외 (60초 이하 또는 #shorts 태그)</span>
           </label>
+        </div>
+
+        {/* 최소 영상 길이 */}
+        <div>
+          <label className="text-[11px] font-bold text-amber-900 mb-1.5 block">
+            최소 영상 길이 (이하 제외)
+          </label>
+          <div className="flex items-center gap-2">
+            <select
+              value={minDurationSec}
+              onChange={(e) => setMinDurationSec(Number(e.target.value))}
+              className="flex-1 px-3 py-2 border border-amber-300 rounded-lg text-[12.5px] font-bold bg-white text-amber-900"
+            >
+              <option value={0}>제한 없음 (모든 길이 허용)</option>
+              <option value={61}>60초 초과 (쇼츠만 제외)</option>
+              <option value={180}>3분 초과</option>
+              <option value={300}>5분 초과 (권장)</option>
+              <option value={600}>10분 초과</option>
+              <option value={900}>15분 초과</option>
+              <option value={1200}>20분 초과</option>
+            </select>
+            <span className="text-[10px] text-amber-700 font-bold whitespace-nowrap">
+              현재: {minDurationSec === 0 ? '없음' : `${Math.floor(minDurationSec / 60)}분 ${minDurationSec % 60}초+`}
+            </span>
+          </div>
+          <div className="text-[10.5px] text-amber-700 mt-1 leading-relaxed">
+            선택한 길이 이하 영상은 큐레이션에서 제외됩니다. 쇼츠 외에 짧은 클립도 거를 때 사용.
+          </div>
         </div>
 
         {/* 실행 결과 메시지 */}
