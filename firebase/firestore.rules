@@ -148,11 +148,12 @@ service cloud.firestore {
           && request.resource.data.partySize <= 20
           && request.resource.data.status == 'pending';
         allow update: if isSignedIn() && (
-          // 예약자 본인: status='cancelled' 로만 취소 가능.
+          // 예약자 본인: status='cancelled' 로만 취소 가능 + cancelledBy='user' 강제.
           // pending(매장 확인 전)은 즉시 취소 OK.
           // confirmed/그 외 상태에서는 reservedFor 1시간 전까지만 취소 가능.
           (resource.data.authorUid == request.auth.uid
             && request.resource.data.status == 'cancelled'
+            && request.resource.data.get('cancelledBy', 'user') == 'user'
             && (
               resource.data.status == 'pending'
               || resource.data.reservedFor.toMillis() - request.time.toMillis() >= 60 * 60 * 1000
@@ -164,9 +165,14 @@ service cloud.firestore {
             && request.resource.data.status == 'completed'
             && request.resource.data.get('completionReason', '') == 'check_in'
             && (resource.data.status == 'pending' || resource.data.status == 'confirmed'))
-          // 매장 owner/member: 운영 상태·readByStore·confirmedAt 갱신 가능 (시간 제약 없음)
-          || isStoreOwner(storeId)
-          || isStoreMember(storeId)
+          // 매장 owner/member: 운영 상태 갱신 가능 (시간 제약 없음).
+          // 매장이 cancelled로 전환할 때는 cancelledBy='store' 강제 — 본인 우회 방지.
+          // 그 외 상태 전환(pending→confirmed/rejected/no_show/completed)은 자유.
+          || ((isStoreOwner(storeId) || isStoreMember(storeId))
+            && (
+              request.resource.data.status != 'cancelled'
+              || request.resource.data.get('cancelledBy', '') == 'store'
+            ))
           || isPlatformAdmin()
         );
         allow delete: if isPlatformAdmin();

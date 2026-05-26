@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   subscribeStoreReservations,
   respondToReservation,
+  cancelReservationByStore,
   markReservationRead,
   reservationStatusLabel,
+  reservationCancelLabel,
   type Reservation,
   type ReservationStatus,
 } from '@/lib/reservations';
@@ -39,6 +41,7 @@ export default function ReservationsPanel({ storeId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [rejectTarget, setRejectTarget] = useState<Reservation | null>(null);
+  const [storeCancelTarget, setStoreCancelTarget] = useState<Reservation | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,6 +98,20 @@ export default function ReservationsPanel({ storeId }: Props) {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       alert(`거부 실패: ${msg}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleStoreCancel(r: Reservation, reason: string, memo: string) {
+    if (busyId) return;
+    setBusyId(r.id);
+    try {
+      await cancelReservationByStore(storeId, r.id, { reason, memo });
+      setStoreCancelTarget(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`취소 실패: ${msg}`);
     } finally {
       setBusyId(null);
     }
@@ -185,6 +202,7 @@ export default function ReservationsPanel({ storeId }: Props) {
               busy={busyId === r.id}
               onApprove={() => handleApprove(r)}
               onRejectOpen={() => setRejectTarget(r)}
+              onStoreCancelOpen={() => setStoreCancelTarget(r)}
             />
           ))}
         </div>
@@ -197,6 +215,16 @@ export default function ReservationsPanel({ storeId }: Props) {
           busy={busyId === rejectTarget.id}
           onClose={() => setRejectTarget(null)}
           onConfirm={(note) => handleReject(rejectTarget, note)}
+        />
+      )}
+
+      {/* 매장 취소 모달 (확정된 예약을 매장이 취소) */}
+      {storeCancelTarget && (
+        <StoreCancelModal
+          reservation={storeCancelTarget}
+          busy={busyId === storeCancelTarget.id}
+          onClose={() => setStoreCancelTarget(null)}
+          onConfirm={(reason, memo) => handleStoreCancel(storeCancelTarget, reason, memo)}
         />
       )}
     </div>
@@ -241,9 +269,17 @@ interface CardProps {
   busy: boolean;
   onApprove: () => void;
   onRejectOpen: () => void;
+  onStoreCancelOpen: () => void;
 }
 
-function ReservationCard({ reservation: r, storeId, busy, onApprove, onRejectOpen }: CardProps) {
+function ReservationCard({
+  reservation: r,
+  storeId,
+  busy,
+  onApprove,
+  onRejectOpen,
+  onStoreCancelOpen,
+}: CardProps) {
   const [noteOpen, setNoteOpen] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tone = statusTone(r.status);
@@ -297,7 +333,9 @@ function ReservationCard({ reservation: r, storeId, busy, onApprove, onRejectOpe
           className="text-[10px] font-extrabold tracking-wider px-2 py-0.5 rounded-full"
           style={{ background: tone.chipBg, color: tone.chipFg }}
         >
-          {reservationStatusLabel(r.status)}
+          {r.status === 'cancelled'
+            ? reservationCancelLabel(r.cancelledBy)
+            : reservationStatusLabel(r.status)}
         </span>
         {isUnread && (
           <span
@@ -383,7 +421,33 @@ function ReservationCard({ reservation: r, storeId, busy, onApprove, onRejectOpe
         </div>
       )}
 
-      {/* 액션 — pending만 */}
+      {/* 매장 취소 사유·메모 (cancelled + cancelledBy='store') */}
+      {r.status === 'cancelled' && r.cancelledBy === 'store' && (r.cancelReason || r.cancelMemo) && (
+        <div
+          className="px-2.5 py-1.5 text-[12px] mb-2 space-y-1"
+          style={{
+            background: 'rgba(107,114,128,0.06)',
+            border: '1px solid rgba(107,114,128,0.20)',
+            borderRadius: '8px',
+            color: 'var(--text-2)',
+          }}
+        >
+          {r.cancelReason && (
+            <div>
+              <span className="font-bold mr-1" style={{ color: '#6b7280' }}>취소 사유:</span>
+              {r.cancelReason}
+            </div>
+          )}
+          {r.cancelMemo && (
+            <div>
+              <span className="font-bold mr-1" style={{ color: '#6b7280' }}>메모:</span>
+              {r.cancelMemo}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 액션 — pending: 승인/거부 */}
       {r.status === 'pending' && (
         <div className="flex gap-2 mt-2">
           <button
@@ -405,6 +469,25 @@ function ReservationCard({ reservation: r, storeId, busy, onApprove, onRejectOpe
             }}
           >
             ❌ 거부
+          </button>
+        </div>
+      )}
+
+      {/* 액션 — confirmed: 매장 취소 (사용자 변심 전화 대응) */}
+      {r.status === 'confirmed' && (
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={onStoreCancelOpen}
+            disabled={busy}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px] transition disabled:opacity-50"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1px solid rgba(229,62,62,0.40)',
+              color: '#dc2626',
+            }}
+            title="사용자 변심 / 매장 사정 등으로 확정된 예약을 취소합니다"
+          >
+            🚫 매장 취소
           </button>
         </div>
       )}
@@ -491,6 +574,137 @@ function RejectModal({
             style={{ background: '#dc2626' }}
           >
             {busy ? '처리 중…' : '거부'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 매장 취소 사유 모달 (confirmed → cancelled)
+// ─────────────────────────────────────────────────────────────
+
+const CANCEL_REASON_PRESETS = [
+  '사용자 변심 (전화 통보)',
+  '매장 사정 (영업 변경·휴무)',
+  '시간 조정 요청',
+  '기타',
+];
+
+function StoreCancelModal({
+  reservation: r,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  reservation: Reservation;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string, memo: string) => void;
+}) {
+  const [reason, setReason] = useState<string>(CANCEL_REASON_PRESETS[0]);
+  const [memo, setMemo] = useState('');
+  const reservedMs = r.reservedFor?.toMillis?.() ?? 0;
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm p-5 shadow-xl"
+        style={{
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-lg)',
+        }}
+      >
+        <div className="font-extrabold text-[15px] mb-1" style={{ color: 'var(--text-1)' }}>
+          🚫 확정 예약을 취소할까요?
+        </div>
+        <div className="text-[12px] mb-3" style={{ color: 'var(--text-2)' }}>
+          {r.authorName || '익명'} · {formatWhen(reservedMs)} · {r.partySize}명
+        </div>
+
+        <label className="text-[12px] font-bold block mb-1" style={{ color: 'var(--text-1)' }}>
+          취소 사유 (선택)
+        </label>
+        <div className="space-y-1.5 mb-3">
+          {CANCEL_REASON_PRESETS.map((p) => {
+            const active = reason === p;
+            return (
+              <button
+                key={p}
+                onClick={() => setReason(p)}
+                className="w-full text-left px-2.5 py-1.5 text-[12px] transition"
+                style={{
+                  background: active ? 'rgba(229,62,62,0.08)' : 'var(--surface-1)',
+                  border: `1px solid ${active ? 'rgba(229,62,62,0.40)' : 'var(--border)'}`,
+                  borderRadius: '8px',
+                  color: active ? '#dc2626' : 'var(--text-1)',
+                  fontWeight: active ? 700 : 500,
+                }}
+              >
+                {active ? '● ' : '○ '}
+                {p}
+              </button>
+            );
+          })}
+        </div>
+
+        <label className="text-[12px] font-bold block mb-1" style={{ color: 'var(--text-1)' }}>
+          매장 메모 (선택)
+        </label>
+        <textarea
+          value={memo}
+          onChange={(e) => setMemo(e.target.value.slice(0, 200))}
+          placeholder="예) 사용자가 전화로 일정 변경 요청. 다음 주말 재예약 안내."
+          rows={3}
+          className="w-full text-[13px] p-2.5 resize-none"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            color: 'var(--text-1)',
+            outline: 'none',
+          }}
+        />
+        <div className="text-[10px] text-right mt-0.5" style={{ color: 'var(--text-3)' }}>
+          {memo.length}/200
+        </div>
+
+        <div
+          className="mt-3 p-2 rounded text-[11px] leading-relaxed"
+          style={{
+            background: 'rgba(245,158,11,0.08)',
+            border: '1px solid rgba(245,158,11,0.25)',
+            color: '#b45309',
+          }}
+        >
+          ⚠️ 취소 시 사용자에게 푸시 알림이 자동 발송되며, 해당 사용자의 다른 매장 예약 잠금이 해제됩니다.
+        </div>
+
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px]"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+          >
+            닫기
+          </button>
+          <button
+            onClick={() => onConfirm(reason.trim(), memo.trim())}
+            disabled={busy}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px] text-white disabled:opacity-50"
+            style={{ background: '#dc2626' }}
+          >
+            {busy ? '처리 중…' : '🚫 매장 취소'}
           </button>
         </div>
       </div>

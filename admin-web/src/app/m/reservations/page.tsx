@@ -19,6 +19,7 @@ import {
   cancelReservation,
   isReservationActive,
   reservationStatusLabel,
+  reservationCancelLabel,
   subscribeUserReservations,
   type Reservation,
   type ReservationStatus,
@@ -353,7 +354,11 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
       <div className="p-4">
         {/* 1행: 상태칩 + 매장명 + D-day */}
         <div className="flex items-center gap-2 mb-2">
-          <StatusChip status={reservation.status} tone={tone} />
+          <StatusChip
+            status={reservation.status}
+            tone={tone}
+            cancelledBy={reservation.cancelledBy}
+          />
           <span className="text-[15px] font-extrabold truncate flex-1 min-w-0" style={{ color: 'var(--text-1)' }}>
             {reservation.storeName || '매장'}
           </span>
@@ -417,6 +422,36 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
           >
             <span className="font-extrabold mr-1" style={{ color: 'var(--brand)' }}>매장 안내:</span>
             {reservation.responseNote}
+          </div>
+        )}
+
+        {/* 매장 취소 사유·메모 (cancelledBy='store') */}
+        {reservation.status === 'cancelled' &&
+          reservation.cancelledBy === 'store' &&
+          (reservation.cancelReason || reservation.cancelMemo) && (
+          <div
+            className="text-[12px] leading-relaxed px-3 py-2 rounded-lg mb-3 space-y-1"
+            style={{
+              background: 'rgba(229,62,62,0.06)',
+              color: 'var(--text-2)',
+              border: '1px solid rgba(229,62,62,0.20)',
+            }}
+          >
+            <div className="font-extrabold" style={{ color: '#B91C1C' }}>
+              🚫 매장에서 취소된 예약입니다
+            </div>
+            {reservation.cancelReason && (
+              <div>
+                <span className="font-bold mr-1">사유:</span>
+                {reservation.cancelReason}
+              </div>
+            )}
+            {reservation.cancelMemo && (
+              <div>
+                <span className="font-bold mr-1">매장 메모:</span>
+                {reservation.cancelMemo}
+              </div>
+            )}
           </div>
         )}
 
@@ -510,8 +545,18 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
  * 공통 UI
  * ─────────────────────────────────────────────────────────────*/
 
-function StatusChip({ status, tone }: { status: ReservationStatus; tone: CardTone }) {
+function StatusChip({
+  status,
+  tone,
+  cancelledBy,
+}: {
+  status: ReservationStatus;
+  tone: CardTone;
+  cancelledBy?: 'user' | 'store' | 'platform' | null;
+}) {
   const dot = status === 'confirmed' ? '✓' : status === 'pending' ? '⌛' : status === 'rejected' ? '✕' : '·';
+  const label =
+    status === 'cancelled' ? reservationCancelLabel(cancelledBy) : reservationStatusLabel(status);
   return (
     <span
       className="inline-flex items-center gap-1 text-[10.5px] font-extrabold px-2 py-0.5 rounded-full flex-shrink-0"
@@ -522,7 +567,7 @@ function StatusChip({ status, tone }: { status: ReservationStatus; tone: CardTon
       }}
     >
       <span aria-hidden>{dot}</span>
-      {reservationStatusLabel(status)}
+      {label}
     </span>
   );
 }

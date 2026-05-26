@@ -62,6 +62,14 @@ export interface Reservation {
   durationMinutes?: number;
   /** 확정 처리 시각 */
   confirmedAt?: Timestamp | null;
+  /** 취소 시각 (사용자 본인 또는 매장 owner) */
+  cancelledAt?: Timestamp | null;
+  /** 취소 주체 — 'user'(본인), 'store'(매장 owner), 'platform'(본사) */
+  cancelledBy?: 'user' | 'store' | 'platform' | null;
+  /** 매장 측 취소 사유 (자유 입력 또는 프리셋) */
+  cancelReason?: string | null;
+  /** 매장 측 자유 메모 */
+  cancelMemo?: string | null;
 }
 
 export const MAX_RESERVATION_NOTE_LEN = 200;
@@ -122,6 +130,10 @@ function toReservation(
     readByStore: (data.readByStore as boolean | undefined) ?? false,
     durationMinutes: (data.durationMinutes as number | undefined) ?? undefined,
     confirmedAt: (data.confirmedAt as Timestamp | null | undefined) ?? null,
+    cancelledAt: (data.cancelledAt as Timestamp | null | undefined) ?? null,
+    cancelledBy: (data.cancelledBy as 'user' | 'store' | 'platform' | null | undefined) ?? null,
+    cancelReason: (data.cancelReason as string | null | undefined) ?? null,
+    cancelMemo: (data.cancelMemo as string | null | undefined) ?? null,
   };
 }
 
@@ -246,7 +258,7 @@ export async function createReservation(input: {
 
 /**
  * 예약 취소 — 본인만 가능 (rules에서 강제).
- * status='cancelled' + updatedAt.
+ * status='cancelled' + cancelledBy='user' + cancelledAt + updatedAt.
  */
 export async function cancelReservation(
   storeId: string,
@@ -255,10 +267,56 @@ export async function cancelReservation(
   if (!storeId || !reservationId) {
     throw new Error('storeId·reservationId는 필수입니다.');
   }
-  await updateDoc(doc(reservationsCol(storeId), reservationId), {
-    status: 'cancelled',
-    updatedAt: serverTimestamp(),
-  });
+  await updateDoc(
+    doc(reservationsCol(storeId), reservationId),
+    stripUndefined({
+      status: 'cancelled',
+      cancelledBy: 'user',
+      cancelledAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+}
+
+/**
+ * 매장 측 예약 취소 — owner/member만 가능 (rules에서 강제).
+ * 사용자가 전화 등으로 변심을 알린 경우 매장이 직접 cancelled 처리.
+ * cancelReason/cancelMemo는 자유 입력 (선택).
+ * PM 결정 2026-05-27.
+ */
+export async function cancelReservationByStore(
+  storeId: string,
+  reservationId: string,
+  input?: { reason?: string; memo?: string },
+): Promise<void> {
+  if (!storeId || !reservationId) {
+    throw new Error('storeId·reservationId는 필수입니다.');
+  }
+  const uid = auth.currentUser?.uid ?? null;
+  const reason = (input?.reason ?? '').trim();
+  const memo = (input?.memo ?? '').trim();
+
+  if (reason.length > 100) {
+    throw new Error('취소 사유는 100자 이내로 작성해주세요.');
+  }
+  if (memo.length > 200) {
+    throw new Error('취소 메모는 200자 이내로 작성해주세요.');
+  }
+
+  await updateDoc(
+    doc(reservationsCol(storeId), reservationId),
+    stripUndefined({
+      status: 'cancelled' as ReservationStatus,
+      cancelledBy: 'store',
+      cancelledAt: serverTimestamp(),
+      cancelReason: reason || null,
+      cancelMemo: memo || null,
+      respondedAt: serverTimestamp(),
+      respondedBy: uid,
+      readByStore: true,
+      updatedAt: serverTimestamp(),
+    }),
+  );
 }
 
 /**
@@ -418,12 +476,28 @@ export function reservationStatusLabel(s: ReservationStatus): string {
     case 'rejected':
       return '매장 거부';
     case 'cancelled':
-      return '사용자 취소';
+      return '예약 취소';
     case 'no_show':
       return '노쇼';
     case 'completed':
       return '방문 완료';
     default:
       return s;
+  }
+}
+
+/** 취소 주체별 라벨 — cancelled 상태 카드에 표시 */
+export function reservationCancelLabel(
+  cancelledBy?: 'user' | 'store' | 'platform' | null,
+): string {
+  switch (cancelledBy) {
+    case 'store':
+      return '매장 취소';
+    case 'platform':
+      return '본사 취소';
+    case 'user':
+      return '사용자 취소';
+    default:
+      return '예약 취소';
   }
 }
