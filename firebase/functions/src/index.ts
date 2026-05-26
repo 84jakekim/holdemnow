@@ -30,6 +30,8 @@ export { getYoutubeChannelMeta } from './youtube/getYoutubeChannelMeta';
 export { curateHotVideos, triggerCurateHotVideos } from './youtube/curateHotVideos';
 // 본사 어드민 즉시 실행 Callable (platform_admin only, /platform/videos 페이지 "지금 실행" 버튼)
 export { triggerYoutubeCurationNow } from './youtube/triggerYoutubeCurationNow';
+// 인기 유튜버 자동 일괄 등록 (platform_admin only) — 키워드 search + channels.list로 메타·아바타 한 번에 fetch
+export { autoImportYoutubers } from './youtube/autoImportYoutubers';
 
 // ===== Notifications (FCM) =====
 export { notifyFavoriteOnLive } from './notifications/notifyFavoriteOnLive';
