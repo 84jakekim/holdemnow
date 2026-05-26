@@ -30,6 +30,7 @@ import {
 import { callPhone, openDirections } from '@/lib/actions';
 import { ensureStoreCoords } from '@/lib/storeGeocode';
 import InlineStoreMap from '@/components/mobile/reservations/InlineStoreMap';
+import NotificationBellButton from '@/components/mobile/NotificationBellButton';
 
 type Tab = 'upcoming' | 'past';
 
@@ -99,11 +100,14 @@ export default function ReservationsPage() {
               매장 방문 예약과 상태를 한눈에
             </p>
           </div>
-          <div
-            className="hero-pink-action px-3 py-1.5 rounded-full text-[11px] font-extrabold mono"
-            style={{ color: '#fff' }}
-          >
-            예정 {upcoming.length} · 지난 {past.length}
+          <div className="flex items-center gap-2">
+            <div
+              className="hero-pink-action px-3 py-1.5 rounded-full text-[11px] font-extrabold mono"
+              style={{ color: '#fff' }}
+            >
+              예정 {upcoming.length} · 지난 {past.length}
+            </div>
+            <NotificationBellButton variant="hero" ariaLabel="알림" />
           </div>
         </div>
       </header>

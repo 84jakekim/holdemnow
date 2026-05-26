@@ -11,6 +11,7 @@ import { posterStyleFor } from '@/lib/templates';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
 import { bumpStoreMetric } from '@/lib/analytics';
 import { haversineMeters, type LatLng } from '@/lib/geo';
+import NotificationBellButton from '@/components/mobile/NotificationBellButton';
 
 /** 캘린더 "내 주변" 반경 (m). 위치 거부/미동의 시 전국 폴백. */
 const NEARBY_RADIUS_M = 20_000;
@@ -130,15 +131,18 @@ export default function CalendarPage() {
           <span className="text-[19px] font-black tracking-tight" style={{ color: '#FFFFFF', textShadow: '0 1px 4px rgba(0,0,0,0.18)' }}>
             📅 토너 캘린더
           </span>
-          <Link
-            href="/m/search"
-            aria-label="검색"
-            className="hero-pink-action w-9 h-9 flex items-center justify-center rounded-full"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-            </svg>
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/m/search"
+              aria-label="검색"
+              className="hero-pink-action w-9 h-9 flex items-center justify-center rounded-full"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+            </Link>
+            <NotificationBellButton variant="hero" ariaLabel="알림" />
+          </div>
         </div>
       </header>
 

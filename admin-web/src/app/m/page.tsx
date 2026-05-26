@@ -25,6 +25,7 @@ import HotVideosCarousel from '@/components/mobile/home/HotVideosCarousel';
 import HotYoutubersScroll from '@/components/mobile/home/HotYoutubersScroll';
 import DailyPostsCarousel from '@/components/mobile/home/DailyPostsCarousel';
 import RecentCheckInsStrip from '@/components/mobile/home/RecentCheckInsStrip';
+import NotificationBellButton from '@/components/mobile/NotificationBellButton';
 
 /** 활성 콘텐츠 존재 여부를 1회 fetch로 확인 */
 async function hasActiveContent(col: string): Promise<boolean> {
@@ -222,16 +223,7 @@ export default function MobileHome() {
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
             </Link>
-            <button
-              aria-label="알림"
-              className="hero-pink-action w-10 h-10 flex items-center justify-center rounded-full relative"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 01-3.46 0"/>
-              </svg>
-              <span style={{ position:'absolute', top:8, right:9, width:6, height:6, borderRadius:99, background:'#FFFFFF' }} />
-            </button>
+            <NotificationBellButton variant="hero" ariaLabel="알림" />
           </div>
         </div>
       </header>

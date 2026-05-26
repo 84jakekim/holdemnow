@@ -23,6 +23,7 @@ import {
 } from '@/lib/posts';
 import { resolveCardVisual } from '@/lib/postCardStyle';
 import { formatRelativeKo } from '@/lib/relativeTime';
+import NotificationBellButton from '@/components/mobile/NotificationBellButton';
 import { RatingChip } from '@/components/mobile/RatingChip';
 import StoreFindModeToggle from '@/components/mobile/find/StoreFindModeToggle';
 import PrimaryLiveCard from '@/components/mobile/live/PrimaryLiveCard';
@@ -168,6 +169,7 @@ function FindHeader() {
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
           </Link>
+          <NotificationBellButton variant="hero" ariaLabel="알림" />
         </div>
       </div>
     </header>

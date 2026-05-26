@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import LogoutConfirmSheet from '@/components/mobile/LogoutConfirmSheet';
 import RecentVisitsSection from '@/components/mobile/my/RecentVisitsSection';
+import NotificationBellButton from '@/components/mobile/NotificationBellButton';
 import { doc, setDoc, onSnapshot, serverTimestamp, collection, collectionGroup, query, where } from 'firebase/firestore';
 import { enableNotifications, getNotificationPermission, isMessagingSupported } from '@/lib/messaging';
 import { moderateText, checkWriteRateLimit } from '@/lib/moderation';
@@ -162,15 +163,7 @@ export default function MyPage() {
         <span className="text-xl font-extrabold tracking-tight font-serif" style={{ color: 'var(--text-1)' }}>
           내정보
         </span>
-        <button
-          aria-label="알림 설정"
-          className="w-9 h-9 flex items-center justify-center rounded-xl"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/>
-          </svg>
-        </button>
+        <NotificationBellButton variant="light" ariaLabel="알림" />
       </header>
 
       {/* ── 프로필 카드 — 핑크 hero 그라데이션 (handoff ScreenMy 패턴) ── */}
