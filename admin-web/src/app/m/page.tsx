@@ -24,6 +24,7 @@ import HomeAdsCarousel from '@/components/mobile/home/HomeAdsCarousel';
 import HotVideosCarousel from '@/components/mobile/home/HotVideosCarousel';
 import HotYoutubersScroll from '@/components/mobile/home/HotYoutubersScroll';
 import DailyPostsCarousel from '@/components/mobile/home/DailyPostsCarousel';
+import RecentCheckInsStrip from '@/components/mobile/home/RecentCheckInsStrip';
 
 /** 활성 콘텐츠 존재 여부를 1회 fetch로 확인 */
 async function hasActiveContent(col: string): Promise<boolean> {
@@ -253,7 +254,11 @@ export default function MobileHome() {
         <HomeAdsCarousel position="top" />
       </HomeSection>
 
-      {/* 3. 인기 유튜브 영상 — 가로 카드 슬라이드 */}
+      {/* 3. 지금 다녀온 사람들 — 소셜 v0.1 (memory: project_social_feature_plan)
+            별도 탭 신설 X. 홈 한 섹션으로만 노출 — 매장 체크인 24h 피드. */}
+      <RecentCheckInsStrip />
+
+      {/* 4. 인기 유튜브 영상 — 가로 카드 슬라이드 */}
       <HomeSection ariaLabel="인기 유튜브 영상">
         <HotVideosCarousel />
       </HomeSection>
