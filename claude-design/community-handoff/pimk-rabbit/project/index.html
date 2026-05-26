@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pink Rabbit — Design System & Prototype</title>
+
+  <!-- Pretendard (한국어 본문) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <!-- Noto Sans KR (대체 옵션) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&family=Spoqa+Han+Sans+Neo:wght@400;500;700&family=Gowun+Dodum&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    /* ── Pink Rabbit 디자인 토큰 (light) ───────────────── */
+    :root{
+      --brand:#FF1F8F;
+      --brand-dim:#E01077;
+      --brand-pale:#FFF0F7;
+      --brand-soft:#FF6BAA;
+      --live:#E53E3E;
+      --gold:#F59E0B;
+      --success:#10B981;
+
+      --bg:#FFFFFF;
+      --bg-sub:#EEF0F4;
+      --surface-1:#FFFFFF;
+      --surface-2:#F3F4F6;
+      --surface-3:#E5E7EB;
+      --border:#E5E7EB;
+      --border-strong:#D1D5DB;
+
+      --text-1:#111827;
+      --text-2:#6B7280;
+      --text-3:#9CA3AF;
+
+      --shadow-card: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-float: 0 4px 16px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.06);
+      --shadow-brand: 0 4px 18px rgba(255,31,143,.22);
+      --shadow-hero: 0 10px 40px rgba(17,24,39,.18), 0 4px 12px rgba(17,24,39,.08);
+
+      --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:18px; --r-xl:22px; --r-2xl:28px;
+
+      --font-body:'Pretendard','Noto Sans KR',sans-serif;
+      --font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;
+    }
+
+    /* dark mode (본사 어드민/TV 톤) */
+    [data-theme="dark"]{
+      --bg:#0F1419;
+      --bg-sub:#0A0D12;
+      --surface-1:#161B25;
+      --surface-2:#1A1F2A;
+      --surface-3:#222836;
+      --border:#2D3548;
+      --border-strong:#3A4258;
+      --text-1:#F3F4F6;
+      --text-2:#9CA3AF;
+      --text-3:#6B7280;
+      --shadow-card: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.3);
+      --shadow-float: 0 4px 16px rgba(0,0,0,.5);
+      --shadow-hero: 0 10px 40px rgba(0,0,0,.6);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; }
+    body{
+      font-family:var(--font-body);
+      letter-spacing:-.01em;
+      background:var(--bg-sub);
+      color:var(--text-1);
+      -webkit-font-smoothing:antialiased;
+      transition: background .25s ease, color .25s ease;
+      min-height:100vh;
+    }
+    .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+    /* ── Common building blocks ─────────────────────────── */
+    .phone{
+      width:392px;
+      background:var(--bg);
+      border-radius:36px;
+      overflow:hidden;
+      box-shadow:var(--shadow-hero);
+      border:1px solid rgba(0,0,0,.08);
+      position:relative;
+    }
+    [data-theme="dark"] .phone{ border-color:rgba(255,255,255,.06); }
+
+    .phone-label{
+      display:block; text-align:center;
+      font-size:11px; font-weight:700; color:var(--text-2);
+      margin-bottom:10px; font-family:var(--font-mono);
+      letter-spacing:.03em;
+    }
+
+    .badge-live{
+      display:inline-flex; align-items:center; gap:5px;
+      padding:3px 9px; border-radius:999px;
+      font-size:10px; font-weight:800; color:#fff;
+      background:var(--live); letter-spacing:.06em;
+    }
+    .badge-live .dot{
+      width:5px; height:5px; border-radius:999px; background:#fff;
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    .pill{
+      display:inline-flex; align-items:center; gap:4px;
+      padding:4px 10px; border-radius:999px;
+      font-size:11px; font-weight:700;
+      background:var(--surface-2); color:var(--text-1);
+      border:1px solid var(--border);
+    }
+
+    .swatch{
+      width:48px; height:48px; border-radius:14px;
+      box-shadow:var(--shadow-card);
+    }
+
+    .ds-card{
+      background:var(--surface-1);
+      border:1px solid var(--border);
+      border-radius:var(--r-xl);
+      box-shadow:var(--shadow-card);
+    }
+
+    /* hover micro-interactions */
+    .tap{ cursor:pointer; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
+    .tap:active{ transform: scale(.97); }
+    .lift{ transition: transform .2s ease, box-shadow .2s ease; }
+    .lift:hover{ transform: translateY(-2px); box-shadow:var(--shadow-float); }
+
+    /* skeleton shimmer for loading */
+    @keyframes shimmer{
+      0%{ background-position: -200% 0; }
+      100%{ background-position: 200% 0; }
+    }
+    .skel{
+      background: linear-gradient(90deg, rgba(0,0,0,.04) 0%, rgba(0,0,0,.10) 50%, rgba(0,0,0,.04) 100%);
+      background-size:200% 100%;
+      animation: shimmer 1.6s infinite;
+      border-radius:6px;
+    }
+    [data-theme="dark"] .skel{
+      background: linear-gradient(90deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.04) 100%);
+    }
+
+    /* hide scrollbar in phone scroll regions */
+    .no-scrollbar::-webkit-scrollbar{ display:none; }
+    .no-scrollbar{ scrollbar-width:none; }
+
+    /* focus ring */
+    button, a{ font-family:inherit; }
+    button:focus-visible, a:focus-visible{ outline:2px solid var(--brand); outline-offset:2px; border-radius:6px; }
+
+    /* page chrome */
+    .page-wrap{ max-width:1280px; margin:0 auto; padding:48px 24px 96px; }
+
+    .section-title{
+      font-size:11px; font-weight:800;
+      letter-spacing:.12em; text-transform:uppercase;
+      color:var(--text-2);
+      margin-bottom:12px;
+    }
+
+    .h1{ font-weight:900; font-size:40px; letter-spacing:-.025em; line-height:1.1; }
+    .h2{ font-weight:900; font-size:28px; letter-spacing:-.02em; line-height:1.15; }
+    .h3{ font-weight:800; font-size:18px; letter-spacing:-.015em; }
+
+    /* phone screen swap transition */
+    .screen-fade-enter{ opacity:0; transform: translateY(6px); }
+    .screen-fade-active{ opacity:1; transform: translateY(0); transition: opacity .22s ease, transform .22s ease; }
+
+    /* Tab bar press feedback */
+    .tabbar-item{ transition: transform .12s ease; }
+    .tabbar-item:active{ transform: scale(.92); }
+  </style>
+</head>
+<body>
+
+  <div id="root">
+    <!-- Loading splash while React boots -->
+    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center;">
+      <div style="text-align:center;">
+        <div style="width:60px; height:60px; border-radius:18px; background:linear-gradient(135deg,#FF1F8F,#FF6BAA); margin:0 auto; box-shadow:0 8px 24px rgba(255,31,143,.32);"></div>
+        <div style="font-size:13px; font-weight:800; margin-top:14px; letter-spacing:-.01em;">Pink Rabbit</div>
+        <div style="font-size:11px; color:#9CA3AF; margin-top:4px;">Loading prototype...</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="screens-user.jsx"></script>
+  <script type="text/babel" src="screens-others.jsx"></script>
+  <script type="text/babel" src="screens-onboarding.jsx"></script>
+  <script type="text/babel" src="screens-community.jsx"></script>
+  <script type="text/babel" src="design-system.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
