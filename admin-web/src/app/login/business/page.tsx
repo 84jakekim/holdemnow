@@ -3,14 +3,22 @@
 /**
  * /login/business — 매장 사장·대회사 관계자 전용 로그인 페이지
  *
- * /login 메인은 일반 사용자(플레이어) 위주.
- * 사장님·대회사 관계자는 우측 상단 진입점을 통해 이곳으로 분기.
+ * 2026-05-26 Pink Rabbit handoff (pimk-rabbit/screens-others.jsx StoreAuth 793~972)
+ *  · 골드/앰버 hero (linear-gradient 135deg #92400E → #F59E0B)
+ *  · 🏪 백드롭 emoji + frosted 흰 배지 + OWNER 우상단 배지
+ *  · "매장 사장님 환영합니다" + 보조 카피
+ *  · 골드 솔리드 CTA + 💡 앰버 안내 박스
  *
  * 분기:
  *  - 비밀번호 찾기:   /login/recover
  *  - 매장 가입신청:   /signup/store
  *  - 대회사 가입신청: /signup/organizer
  *  - 일반 로그인 회귀: /login
+ *
+ * E2E 보존 (account-separation-and-tv-landscape.spec.ts B):
+ *  · placeholder="가입 시 등록한 이메일" 유지
+ *  · placeholder="비밀번호" (.first()) 유지
+ *  · 버튼 텍스트 /매장.*대회사 로그인/ 매칭 유지
  */
 
 import { useEffect, useState } from 'react';
@@ -20,7 +28,6 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { loginWithEmailExpecting, WrongRoleError } from '@/lib/emailAuth';
-import { RabbitLogo } from '@/components/ui';
 
 export default function BusinessLoginPage() {
   const router = useRouter();
@@ -117,7 +124,8 @@ export default function BusinessLoginPage() {
           <div className="flex flex-col gap-2">
             <Link
               href="/signup/store"
-              className="block w-full px-4 py-2.5 rounded-xl bg-[#FF1F8F] text-white text-sm font-extrabold"
+              className="block w-full px-4 py-2.5 rounded-xl text-white text-sm font-extrabold"
+              style={{ background: '#F59E0B' }}
             >
               매장 가입 신청
             </Link>
@@ -147,82 +155,107 @@ export default function BusinessLoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col bg-white relative">
-      {/* 좌측 상단 — 일반 로그인으로 회귀 */}
-      <Link
-        href="/login"
-        className="absolute top-3 left-3 text-[11px] font-medium text-gray-500 hover:text-gray-900 px-3 py-1.5 rounded-full hover:bg-gray-100 transition"
+    <main
+      className="min-h-screen flex flex-col relative"
+      style={{ background: 'var(--bg)' }}
+    >
+      {/* 헤더 — RabbitLogo + 매장 로그인 + OWNER 배지 */}
+      <header
+        style={{
+          height: 52,
+          padding: '0 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--bg)',
+        }}
       >
-        ← 일반 로그인으로
-      </Link>
-
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-10">
-        {/* Hero 스플래시 — Pink Rabbit handoff: 핑크 hero 카드 (Business) */}
-        <div
-          className="relative overflow-hidden w-full max-w-sm mb-8 mt-2"
+        <Link
+          href="/login"
+          aria-label="일반 로그인으로 돌아가기"
           style={{
-            borderRadius: 28,
-            padding: '30px 24px 26px',
-            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 50%, #FFB3D4 100%)',
-            color: '#ffffff',
-            boxShadow: '0 18px 48px rgba(255,31,143,0.30), 0 4px 14px rgba(0,0,0,0.10)',
+            width: 36,
+            height: 36,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-1)',
+            textDecoration: 'none',
           }}
         >
-          <div
-            aria-hidden
-            style={{ position: 'absolute', top: -34, right: -40, opacity: 0.18, pointerEvents: 'none' }}
-          >
-            <RabbitLogo size={200} variant="mark" />
-          </div>
-          <div
-            aria-hidden
-            style={{
-              position: 'absolute', top: -18, right: -18, width: 90, height: 90,
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)',
-              pointerEvents: 'none',
-            }}
-          />
-          <div className="relative flex flex-col items-center" style={{ zIndex: 1 }}>
-            <RabbitLogo size={80} variant="badge" glow aria-label="Pink Rabbit Business" />
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5" />
+            <path d="M12 19l-7-7 7-7" />
+          </svg>
+        </Link>
+        <div
+          style={{
+            flex: 1,
+            fontSize: 15,
+            fontWeight: 800,
+            letterSpacing: '-0.015em',
+            color: 'var(--text-1)',
+          }}
+        >
+          매장 로그인
+        </div>
+        <span className="pr-owner-badge">OWNER</span>
+      </header>
+
+      <div className="flex-1 flex flex-col">
+        {/* 골드/앰버 hero */}
+        <div
+          className="pr-hero-gold"
+          style={{ borderRadius: 0, padding: '28px 20px 24px' }}
+        >
+          <div className="pr-hero-gold-emoji" aria-hidden>🏪</div>
+          <div style={{ position: 'relative' }}>
+            <div className="pr-hero-gold-badge" aria-hidden>🏪</div>
             <div
-              className="mt-3 font-black"
               style={{
-                fontSize: 22,
-                letterSpacing: '-0.03em',
-                color: '#ffffff',
-                textShadow: '0 2px 10px rgba(0,0,0,0.18)',
+                fontSize: 19,
+                fontWeight: 900,
+                marginTop: 12,
+                letterSpacing: '-0.02em',
+                color: '#fff',
               }}
             >
-              Pink Rabbit
+              매장 사장님 환영합니다
             </div>
-            <span
-              className="mt-2 text-[10px] font-extrabold px-2.5 py-1 rounded-full"
+            <div
               style={{
-                background: 'rgba(255,255,255,0.22)',
-                border: '1px solid rgba(255,255,255,0.32)',
-                color: '#ffffff',
-                letterSpacing: '0.10em',
-                backdropFilter: 'blur(4px)',
-                WebkitBackdropFilter: 'blur(4px)',
+                fontSize: 11,
+                opacity: 0.92,
+                marginTop: 4,
+                lineHeight: 1.5,
+                color: '#fff',
               }}
             >
-              매장·대회사 전용
-            </span>
-            <p className="text-[12px] mt-2 font-semibold" style={{ color: 'rgba(255,255,255,0.94)' }}>
-              홀덤펍 사장님 · 대회사 관계자 로그인
-            </p>
+              토너 운영 · TV 디스플레이 · 광고 관리를 한 곳에서
+            </div>
           </div>
         </div>
 
-        <div className="w-full max-w-sm">
-          {/* ── 이메일/비밀번호 로그인 ── */}
-          <form onSubmit={handleEmailLogin} className="space-y-3">
+        <div className="flex-1 px-5 pt-5 pb-8 max-w-md w-full mx-auto">
+          {/* 로그인 폼 */}
+          <form onSubmit={handleEmailLogin}>
             <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1.5">이메일</label>
+              <label
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: 'var(--text-2)',
+                  letterSpacing: '0.04em',
+                  marginBottom: 6,
+                  display: 'block',
+                }}
+              >
+                이메일
+              </label>
               <input
                 type="email"
-                className="form-input"
+                className="pr-gold-input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="가입 시 등록한 이메일"
@@ -230,12 +263,25 @@ export default function BusinessLoginPage() {
                 required
               />
             </div>
-            <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1.5">비밀번호</label>
-              <div className="relative">
+
+            <div style={{ marginTop: 12 }}>
+              <label
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: 'var(--text-2)',
+                  letterSpacing: '0.04em',
+                  marginBottom: 6,
+                  display: 'block',
+                }}
+              >
+                비밀번호
+              </label>
+              <div style={{ position: 'relative' }}>
                 <input
                   type={showPw ? 'text' : 'password'}
-                  className="form-input pr-14"
+                  className="pr-gold-input"
+                  style={{ paddingRight: 64 }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호"
@@ -245,7 +291,19 @@ export default function BusinessLoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPw((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-medium"
+                  className="absolute"
+                  style={{
+                    right: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-3)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: 4,
+                  }}
                   tabIndex={-1}
                 >
                   {showPw ? '숨기기' : '보기'}
@@ -254,17 +312,34 @@ export default function BusinessLoginPage() {
             </div>
 
             {loginError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 leading-relaxed">
+              <div
+                role="alert"
+                style={{
+                  marginTop: 12,
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 12,
+                  color: '#B91C1C',
+                  lineHeight: 1.5,
+                }}
+              >
                 {loginError}
               </div>
             )}
 
-            {/* 비번 찾기 — 폼 안 우측 정렬, 핑크 강조로 분실 사용자가 즉시 발견 */}
-            <div className="flex justify-end -mt-1">
+            {/* 비밀번호 찾기 */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
               <Link
                 href="/login/recover"
-                className="text-xs font-bold underline underline-offset-2"
-                style={{ color: 'var(--brand, #FF1F8F)' }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#B45309',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 2,
+                }}
               >
                 비밀번호를 잊으셨나요?
               </Link>
@@ -273,65 +348,137 @@ export default function BusinessLoginPage() {
             <button
               type="submit"
               disabled={loggingIn || !email.trim() || !password}
-              className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition disabled:opacity-40 mt-1"
-              style={{ background: '#FF1F8F' }}
+              className="pr-cta-gold"
+              style={{ marginTop: 14 }}
             >
               {loggingIn ? '로그인 중…' : '매장 / 대회사 로그인'}
             </button>
           </form>
 
+          {/* 💡 안내 박스 */}
+          <div className="pr-gold-hint">
+            <span style={{ fontSize: 16, lineHeight: 1 }} aria-hidden>💡</span>
+            <div>
+              <b>처음이신가요?</b> 사업자등록증을 미리 준비하시면 입점 신청이 빠릅니다.
+              본사 검토 후 1–2일 내 승인됩니다.
+            </div>
+          </div>
+
           {/* 가입신청 카드 */}
-          <div className="mt-6 bg-gray-50 rounded-xl p-4 space-y-2">
-            <div className="text-[10px] font-bold text-gray-500 tracking-widest mb-1">아직 가입하지 않으셨나요?</div>
+          <div
+            style={{
+              marginTop: 20,
+              background: 'var(--surface-2)',
+              borderRadius: 14,
+              padding: 14,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                color: 'var(--text-2)',
+                letterSpacing: '0.10em',
+                marginBottom: 8,
+              }}
+            >
+              아직 가입하지 않으셨나요?
+            </div>
             <Link
               href="/signup/store"
-              className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#FF1F8F] transition"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 12,
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                textDecoration: 'none',
+                color: 'var(--text-1)',
+                marginBottom: 8,
+                transition: 'border-color .15s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#F59E0B')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
             >
               <div>
-                <div className="text-sm font-bold text-gray-900">매장 가입 신청</div>
-                <div className="text-[11px] text-gray-500 mt-0.5">홀덤펍 사장님·매니저 전용</div>
+                <div style={{ fontSize: 13, fontWeight: 800 }}>매장 가입 신청</div>
+                <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
+                  홀덤펍 사장님·매니저 전용
+                </div>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden className="text-gray-400">
-                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden style={{ color: 'var(--text-3)' }}>
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </Link>
             <Link
               href="/signup/organizer"
-              className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#FF1F8F] transition"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 12,
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                textDecoration: 'none',
+                color: 'var(--text-1)',
+                transition: 'border-color .15s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#F59E0B')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
             >
               <div>
-                <div className="text-sm font-bold text-gray-900">대회사 가입 신청</div>
-                <div className="text-[11px] text-gray-500 mt-0.5">홀덤 대회 운영 법인·단체</div>
+                <div style={{ fontSize: 13, fontWeight: 800 }}>대회사 가입 신청</div>
+                <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
+                  홀덤 대회 운영 법인·단체
+                </div>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden className="text-gray-400">
-                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden style={{ color: 'var(--text-3)' }}>
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
+            </Link>
+          </div>
+
+          {/* 본사 로그인 보조 링크 */}
+          <div
+            style={{
+              marginTop: 18,
+              textAlign: 'center',
+              fontSize: 10,
+              color: 'var(--text-3)',
+            }}
+          >
+            본사 관리자이신가요?{' '}
+            <Link
+              href="/platform-login"
+              style={{
+                color: 'var(--text-2)',
+                textDecoration: 'underline',
+                fontWeight: 700,
+              }}
+            >
+              본사 로그인 →
             </Link>
           </div>
         </div>
       </div>
 
-      <p className="text-[10px] text-gray-400 text-center pb-6 leading-relaxed">
+      <p
+        style={{
+          fontSize: 10,
+          color: 'var(--text-3)',
+          textAlign: 'center',
+          paddingBottom: 24,
+          lineHeight: 1.6,
+        }}
+      >
         로그인 시 이용약관 및 개인정보 처리방침에 동의합니다.
         <br />
         정보 제공 플랫폼 (사행성 매개 X)
       </p>
 
-      <style jsx global>{`
-        .form-input {
-          background: #fff;
-          border: 1.5px solid #e5e7eb;
-          border-radius: 10px;
-          padding: 11px 14px;
-          font-size: 14px;
-          color: #111;
-          width: 100%;
-          box-sizing: border-box;
-          outline: none;
-          transition: border-color 0.15s;
-        }
-        .form-input:focus { border-color: #FF1F8F; }
-      `}</style>
     </main>
   );
 }

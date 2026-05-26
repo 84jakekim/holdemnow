@@ -1,13 +1,23 @@
 'use client';
 
 /**
- * /platform/login — 본사(platform_admin) 관리자 전용 로그인 페이지
+ * /platform-login — 본사(platform_admin) 관리자 전용 로그인 페이지
+ *
+ * 2026-05-26 Pink Rabbit handoff (pimk-rabbit/screens-others.jsx PlatformLoginScreen 977~1132)
+ *  · 다크 #0A0D12 보안 톤
+ *  · 헤더: RabbitLogo mark + PLATFORM CONTROL mono + SECURE 빨강 배지
+ *  · 🔒 64px 그라데이션 hero + radial 핑크/블루 글로우
+ *  · "본사 관제센터 진입" + IP 화이트리스트 안내
+ *  · ADMIN EMAIL / PASSWORD (소문자 라벨 + 다크 입력)
+ *  · CTA: 핑크 그라데이션 "Sign in to Control Center"
+ *  · 하단 보안 정책 3건 + audit URL
+ *  · OTP는 시스템 미보유 — 핸드오프 6자리 OTP 입력 필드 생략 (메모리 기록)
+ *  · Google 로그인 보존 (다크 톤 화이트 버튼)
  *
  * - 매장/대회사용 /login/business 와 별도. 본사 운영자만 사용.
- * - 가입 카드 없음 (본사 계정은 가입 폼 없음 — 본사 내부 운영용 사전 발급)
- * - OAuth 진입 없음 — Email/Password 만
- * - 로그인 성공 후 platform_admin role 보유 검증 → /platform.
- *   role 없으면 안내 + 로그아웃 옵션 (잘못된 계정으로 진입한 매장 사장 등).
+ * - 가입 카드 없음 — 본사 계정은 사전 발급
+ * - 로그인 성공 후 platform_admin role 보유 검증 → /platform
+ * - role 없으면 안내 + 로그아웃 옵션
  */
 
 import { Suspense, useEffect, useState } from 'react';
@@ -24,7 +34,10 @@ export default function PlatformLoginPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+        <main
+          className="min-h-screen flex items-center justify-center text-sm"
+          style={{ background: '#0A0D12', color: 'rgba(255,255,255,0.5)' }}
+        >
           로딩 중…
         </main>
       }
@@ -141,66 +154,151 @@ function PlatformLoginInner() {
 
   if (authState.status === 'loading' || (authState.status === 'authenticated' && userDoc === undefined)) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+      <main
+        className="min-h-screen flex items-center justify-center text-sm"
+        style={{ background: '#0A0D12', color: 'rgba(255,255,255,0.5)' }}
+      >
         로딩 중…
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen flex flex-col bg-gray-900 relative">
-      {/* 우측 상단 — 잘못 들어왔을 때 매장/대회사 로그인 페이지로 안내 */}
-      <Link
-        href="/login/business"
-        className="absolute top-3 right-3 text-[11px] font-medium text-gray-300 hover:text-white px-3 py-1.5 rounded-full hover:bg-gray-800 transition"
-      >
-        매장·대회사 로그인 →
-      </Link>
+    <main className="pr-platform-shell">
+      {/* 헤더 — RabbitLogo + PLATFORM CONTROL + SECURE */}
+      <header className="pr-platform-header">
+        <div className="pr-platform-logo-frame">
+          <RabbitLogo size={20} variant="mark" />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div className="pr-platform-control-label">PLATFORM CONTROL</div>
+        </div>
+        <span className="pr-secure-badge">SECURE</span>
+        <Link
+          href="/login/business"
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: 'rgba(255,255,255,0.5)',
+            textDecoration: 'none',
+            padding: '4px 8px',
+            marginLeft: 6,
+            borderRadius: 6,
+            border: '1px solid rgba(255,255,255,0.10)',
+            transition: 'color 0.15s, border-color 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#fff';
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.30)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)';
+          }}
+        >
+          매장·대회사 →
+        </Link>
+      </header>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
-        {/* 로고 — Pink Rabbit handoff: badge variant + glow (다크 톤) */}
-        <div className="flex flex-col items-center mb-8 mt-6">
-          <RabbitLogo size={88} variant="badge" glow aria-label="Pink Rabbit Platform" />
-          <div
-            className="mt-3 font-black"
-            style={{
-              fontSize: 20,
-              letterSpacing: '-0.03em',
-              background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              color: 'transparent',
-            }}
-          >
-            Pink Rabbit
+      <div className="flex-1 flex flex-col items-center" style={{ width: '100%' }}>
+        {/* 🔒 보안 hero */}
+        <div className="pr-platform-hero" style={{ width: '100%', maxWidth: 440 }}>
+          <div className="pr-platform-hero-glow" aria-hidden />
+          <div style={{ position: 'relative' }}>
+            <div className="pr-platform-lock" aria-hidden>🔒</div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 900,
+                marginTop: 14,
+                letterSpacing: '-0.02em',
+                color: '#fff',
+              }}
+            >
+              본사 관제센터 진입
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: 'rgba(255,255,255,0.55)',
+                marginTop: 6,
+                lineHeight: 1.55,
+                maxWidth: 320,
+                marginLeft: 'auto',
+                marginRight: 'auto',
+              }}
+            >
+              관리자 전용 페이지입니다.{' '}
+              <span style={{ color: '#FCA5A5' }}>IP 화이트리스트</span>가 적용되며 모든 접근은 감사 로그가 남습니다.
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 mt-2">
-            <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full tracking-widest border border-amber-400/30">
-              🏢 본사 관리자 전용
-            </span>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">
-            본사 운영자만 사용 가능합니다.
-          </p>
         </div>
 
-        <div className="w-full max-w-sm">
+        <section
+          style={{
+            padding: '8px 20px 24px',
+            width: '100%',
+            maxWidth: 420,
+            boxSizing: 'border-box',
+          }}
+        >
           {wrongAccountInfo ? (
-            <div className="bg-amber-900/30 border border-amber-700/50 rounded-2xl p-5 mb-4">
-              <div className="text-amber-300 font-bold text-sm mb-2">⚠️ 본사 관리자 계정이 아닙니다</div>
-              <div className="text-[12px] text-amber-200 leading-relaxed mb-4">{wrongAccountInfo}</div>
-              <div className="flex flex-col gap-2">
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.10)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: 14,
+                padding: 18,
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  color: '#FCD34D',
+                  fontWeight: 800,
+                  fontSize: 13,
+                  marginBottom: 8,
+                }}
+              >
+                ⚠️ 본사 관리자 계정이 아닙니다
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'rgba(252, 211, 77, 0.85)',
+                  lineHeight: 1.55,
+                  marginBottom: 14,
+                }}
+              >
+                {wrongAccountInfo}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <Link
                   href="/login/business"
-                  className="block w-full text-center py-3 rounded-xl font-bold text-sm text-white"
-                  style={{ background: '#FF1F8F' }}
+                  className="pr-cta-pink"
+                  style={{
+                    display: 'block',
+                    textAlign: 'center',
+                    textDecoration: 'none',
+                    textTransform: 'none',
+                    letterSpacing: '-0.01em',
+                  }}
                 >
                   매장·대회사 로그인으로 이동
                 </Link>
                 <button
+                  type="button"
                   onClick={handleSignoutWrongAccount}
-                  className="block w-full text-center py-2 text-xs text-amber-300 hover:text-white underline underline-offset-2"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: 11,
+                    color: 'rgba(252, 211, 77, 0.85)',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 2,
+                    cursor: 'pointer',
+                    padding: 6,
+                  }}
                 >
                   다른 본사 계정으로 다시 로그인
                 </button>
@@ -208,13 +306,28 @@ function PlatformLoginInner() {
             </div>
           ) : (
             <>
-              {/* Google 로그인 — Google OAuth로 가입한 본사 관리자용 */}
+              {/* Google 로그인 (보존) */}
               <button
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={loggingIn}
-                className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
-                style={{ background: '#FFFFFF', color: '#1F2937', border: '1px solid #E5E7EB' }}
+                style={{
+                  width: '100%',
+                  padding: '12px 0',
+                  borderRadius: 10,
+                  background: '#FFFFFF',
+                  color: '#1F2937',
+                  border: '1px solid rgba(255,255,255,0.20)',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  cursor: loggingIn ? 'not-allowed' : 'pointer',
+                  opacity: loggingIn ? 0.4 : 1,
+                  transition: 'opacity 0.15s',
+                }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -224,100 +337,158 @@ function PlatformLoginInner() {
                 </svg>
                 {loggingIn ? '로그인 중…' : 'Google로 본사 로그인'}
               </button>
-              <p className="text-[10px] text-gray-500 text-center my-3">
-                Google 계정은 platform_admin role이 부여된 사용자만 진입 가능
-              </p>
-              <div className="flex items-center gap-3 my-3">
-                <div className="flex-1 h-px bg-gray-700" />
-                <span className="text-[10px] text-gray-500 font-bold">또는</span>
-                <div className="flex-1 h-px bg-gray-700" />
+
+              <div className="pr-platform-divider">
+                <div className="pr-platform-divider-line" />
+                <span className="pr-platform-divider-text">OR</span>
+                <div className="pr-platform-divider-line" />
               </div>
-              <form onSubmit={handleEmailLogin} className="space-y-3">
+
+              <form onSubmit={handleEmailLogin}>
+                {/* ADMIN EMAIL */}
                 <div>
-                  <label className="text-xs font-bold text-gray-300 block mb-1.5">본사 관리자 아이디 (또는 이메일)</label>
-                <input
-                  type="text"
-                  className="platform-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin01 또는 admin@example.com"
-                  autoComplete="username"
-                  required
-                />
-                <div className="text-[10.5px] text-gray-500 mt-1">
-                  아이디만 입력하면 자동으로 본사 어드민 계정을 인식합니다.
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-300 block mb-1.5">비밀번호</label>
-                <div className="relative">
+                  <label className="pr-input-dark-label">ADMIN EMAIL</label>
                   <input
-                    type={showPw ? 'text' : 'password'}
-                    className="platform-input pr-14"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="비밀번호"
-                    autoComplete="current-password"
+                    type="text"
+                    className="pr-input-dark"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin01 또는 admin@holdemnow.com"
+                    autoComplete="username"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPw((p) => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-500 font-medium hover:text-gray-300"
-                    tabIndex={-1}
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: 'rgba(255,255,255,0.35)',
+                      marginTop: 6,
+                      lineHeight: 1.5,
+                    }}
                   >
-                    {showPw ? '숨기기' : '보기'}
-                  </button>
+                    아이디만 입력하면 자동으로 본사 어드민 계정을 인식합니다.
+                  </div>
                 </div>
-              </div>
 
-              {loginError && (
-                <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-3 text-xs text-red-300 leading-relaxed">
-                  {loginError}
+                {/* PASSWORD */}
+                <div style={{ marginTop: 12 }}>
+                  <label className="pr-input-dark-label">PASSWORD</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPw ? 'text' : 'password'}
+                      className="pr-input-dark"
+                      style={{ paddingRight: 64 }}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw((p) => !p)}
+                      style={{
+                        position: 'absolute',
+                        right: 12,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: 4,
+                      }}
+                      tabIndex={-1}
+                    >
+                      {showPw ? '숨기기' : '보기'}
+                    </button>
+                  </div>
                 </div>
-              )}
 
+                {loginError && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginTop: 12,
+                      background: 'rgba(229, 62, 62, 0.12)',
+                      border: '1px solid rgba(229, 62, 62, 0.35)',
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 12,
+                      color: '#FCA5A5',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {loginError}
+                  </div>
+                )}
+
+                {/* CTA — 핑크 그라데이션 */}
                 <button
                   type="submit"
                   disabled={loggingIn || !email.trim() || !password}
-                  className="w-full py-3.5 rounded-xl font-bold text-sm text-gray-900 transition disabled:opacity-40 mt-1"
-                  style={{ background: '#FBBF24' }}
+                  className="pr-cta-pink"
+                  style={{ marginTop: 18 }}
                 >
-                  {loggingIn ? '로그인 중…' : '본사 관리자 로그인'}
+                  {loggingIn ? 'Signing in…' : 'Sign in to Control Center'}
                 </button>
               </form>
+
+              {/* 보안 정책 */}
+              <div className="pr-platform-policy">
+                <div className="pr-platform-policy-row">
+                  <span>•</span>
+                  <span>회사 VPN 또는 등록된 IP에서만 접근 가능</span>
+                </div>
+                <div className="pr-platform-policy-row">
+                  <span>•</span>
+                  <span>5회 실패 시 계정 잠금 · 슈퍼관리자 승인 필요</span>
+                </div>
+                <div className="pr-platform-policy-row">
+                  <span>•</span>
+                  <span>
+                    접근 기록:{' '}
+                    <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                      audit.holdemnow.com
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {/* URL 표시 */}
+              <div className="pr-platform-url">platform.holdemnow.com / signin</div>
+
+              {/* 신규 가입 없음 안내 */}
+              <p
+                style={{
+                  fontSize: 10.5,
+                  color: 'rgba(255,255,255,0.30)',
+                  textAlign: 'center',
+                  marginTop: 18,
+                  lineHeight: 1.6,
+                }}
+              >
+                본사 계정 신규 발급은 시스템 운영자에게 문의하세요.
+                <br />
+                이 페이지는 본사 관계자 외에 사용하지 않습니다.
+              </p>
             </>
           )}
-
-          {/* 가입 카드 없음 — 본사 계정은 별도 발급 (이 페이지에 안내만) */}
-          <p className="text-[11px] text-gray-500 text-center mt-6 leading-relaxed">
-            본사 계정 신규 발급은 시스템 운영자에게 문의하세요.
-            <br />
-            (이 페이지는 본사 관계자 외에 사용하지 않습니다.)
-          </p>
-        </div>
+        </section>
       </div>
 
-      <p className="text-[10px] text-gray-500 text-center pb-6 leading-relaxed">
+      <p
+        style={{
+          fontSize: 10,
+          color: 'rgba(255,255,255,0.30)',
+          textAlign: 'center',
+          paddingBottom: 24,
+          lineHeight: 1.6,
+        }}
+      >
         본사 운영 대시보드 · Pink Rabbit Internal
       </p>
-
-      <style jsx global>{`
-        .platform-input {
-          background: #111827;
-          border: 1.5px solid #374151;
-          border-radius: 10px;
-          padding: 11px 14px;
-          font-size: 14px;
-          color: #f3f4f6;
-          width: 100%;
-          box-sizing: border-box;
-          outline: none;
-          transition: border-color 0.15s;
-        }
-        .platform-input:focus { border-color: #FBBF24; }
-        .platform-input::placeholder { color: #6b7280; }
-      `}</style>
     </main>
   );
 }
