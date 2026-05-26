@@ -23,6 +23,7 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  setDoc,
   Timestamp,
   getCountFromServer,
 } from 'firebase/firestore';
@@ -135,6 +136,17 @@ export interface DealerProfile extends CommunityItem {
   residence?: string;
   /** 개인정보 수집·이용 동의 여부 */
   privacyConsent?: boolean;
+  /**
+   * 공개 토글 (2026-05-26 절충안).
+   * - true: 일반 사용자(/m/community/dealers)에게도 노출. 본인이 명시적으로 켰을 때만.
+   * - false 또는 undefined: 매장 owner 전용 (기존 v0.3 정책 유지) — 어드민 딜러 풀에서만 노출.
+   *
+   * 정책 (memory: project_dealer_profile_v03 절충안):
+   *   본인이 토글을 켜야만 사용자 열람 허용. 매장 owner 수익 모델은 publicProfile=false
+   *   상태에서도 어드민에서 전체 접근 가능하므로 보호됨. 딜러 본인이 적극 노출을 원할 때만 v1.0
+   *   유료 매칭 시장에 영향 없이 사용자 접점 확장.
+   */
+  publicProfile?: boolean;
   // contact는 CommunityItem 공통 필드 재사용
 }
 
@@ -521,6 +533,48 @@ export function subscribeActiveDealerProfiles(
   }
 }
 
+/**
+ * 공개 딜러 프로필만 — 일반 사용자 /m/community/dealers 리스트용 (2026-05-26 절충).
+ * publicProfile=true 토글한 딜러만 노출. 매장 owner는 subscribeAllDealerProfiles로 전체 조회.
+ *
+ * 클라이언트 사이드 필터로 처리 (publicProfile 인덱스 별도 신설 미필요 — 전체 active 100건 한도).
+ */
+export function subscribePublicDealerProfiles(
+  filter: { region?: string; availableShift?: AvailableShift },
+  onChange: (items: DealerProfile[]) => void,
+  onError: (e: Error) => void,
+): () => void {
+  try {
+    const q = query(
+      collection(db, COMMUNITY),
+      where('type', '==', 'dealerProfile'),
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc'),
+      limit(100),
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        let items = snap.docs
+          .map((d) => fromDoc(d.id, d.data()) as DealerProfile)
+          .filter((p) => p.publicProfile === true);
+        if (filter.region) {
+          const kw = filter.region.trim().toLowerCase();
+          items = items.filter((p) => p.region?.toLowerCase().includes(kw));
+        }
+        if (filter.availableShift) {
+          items = items.filter((p) => p.availableShifts?.includes(filter.availableShift!));
+        }
+        onChange(items);
+      },
+      (e) => onError(e as Error),
+    );
+  } catch {
+    onChange([]);
+    return () => {};
+  }
+}
+
 /** 단일 딜러 프로필 실시간 구독 */
 export function subscribeDealerProfile(
   itemId: string,
@@ -569,6 +623,8 @@ export interface CreateDealerProfileInput {
   gender?: DealerGender;
   residence?: string;
   privacyConsent?: boolean;
+  /** 일반 사용자 공개 여부 (디폴트 false — 매장 owner 전용) */
+  publicProfile?: boolean;
 }
 
 export async function createDealerProfile(input: CreateDealerProfileInput): Promise<string> {
@@ -589,6 +645,7 @@ export async function createDealerProfile(input: CreateDealerProfileInput): Prom
     ...(input.gender ? { gender: input.gender } : {}),
     ...(input.residence ? { residence: input.residence } : {}),
     privacyConsent: input.privacyConsent ?? false,
+    publicProfile: input.publicProfile ?? false,
     status: 'active' as CommunityItemStatus,
     flagCount: 0,
     authorType: 'user',
@@ -819,6 +876,118 @@ export async function createUsedListing(input: CreateUsedListingInput): Promise<
     expiresAt: Timestamp.fromDate(expiresAt),
   }));
   return ref.id;
+}
+
+/**
+ * 사용자(authorType='user') 중고 등록 — 매장 owner가 아닌 일반 사용자도 등록 가능 (2026-05-26 정책 완화).
+ * 정책 (memory: project_holdemnow_community v0.2):
+ *   - 1일 등록 한도 3건 (countUserUsedListingsToday로 클라 차단 + writeRateLimits 보강)
+ *   - 신고 누적 3건 시 autoHideOnReports Cloud Function이 자동 status='hidden' 처리
+ *   - 이미지 1~4장 필수, 만료 30일은 매장과 동일
+ *   - storeId/storeName 없음 (authorType='user' 식별)
+ */
+export interface CreateUserUsedListingInput {
+  authorUid: string;
+  authorDisplayName: string;
+  title: string;
+  body: string;
+  category: UsedCategory;
+  price: number;
+  priceNegotiable: boolean;
+  condition: UsedCondition;
+  region?: string;
+  contact: { phone?: string; kakaoOpenChat?: string };
+  images: string[];   // 1~4장 필수
+}
+
+export const USER_USED_DAILY_LIMIT = 3;
+
+/** 사용자 본인의 오늘(24h 안) 등록 건수 — 등록 한도 검증용 */
+export async function countUserUsedListingsToday(uid: string): Promise<number> {
+  try {
+    const since = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+    const q = query(
+      collection(db, COMMUNITY),
+      where('type', '==', 'usedListing'),
+      where('authorUid', '==', uid),
+      where('createdAt', '>=', since),
+    );
+    const snap = await getCountFromServer(q);
+    return snap.data().count;
+  } catch {
+    return 0;
+  }
+}
+
+export async function createUserUsedListing(input: CreateUserUsedListingInput): Promise<string> {
+  // 1일 한도 검증
+  const todayCount = await countUserUsedListingsToday(input.authorUid);
+  if (todayCount >= USER_USED_DAILY_LIMIT) {
+    throw new Error(`하루 ${USER_USED_DAILY_LIMIT}건까지만 등록할 수 있습니다`);
+  }
+
+  const expiresAt = new Date(Date.now() + USED_TTL_MS);
+  const ref = await addDoc(collection(db, COMMUNITY), stripUndefined({
+    type: 'usedListing',
+    title: input.title,
+    body: input.body,
+    category: input.category,
+    price: input.price,
+    priceNegotiable: input.priceNegotiable,
+    condition: input.condition,
+    dealStatus: 'selling' as DealStatus,
+    images: input.images,
+    region: input.region ?? '',
+    contact: { phone: input.contact.phone ?? '', kakaoOpenChat: input.contact.kakaoOpenChat ?? '' },
+    status: 'active' as CommunityItemStatus,
+    flagCount: 0,
+    authorType: 'user',
+    authorUid: input.authorUid,
+    authorDisplayName: input.authorDisplayName,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    expiresAt: Timestamp.fromDate(expiresAt),
+  }));
+  return ref.id;
+}
+
+/**
+ * 커뮤니티 아이템 신고 — reports/{itemId_reporterUid} 멱등.
+ * Cloud Function autoHideOnReports가 동일 targetId 신고 3건 누적 시 자동 status='hidden'.
+ */
+export async function reportCommunityItem(
+  itemId: string,
+  reporterUid: string,
+  reason: 'spam' | 'offensive' | 'misinformation' | 'advertising' | 'other',
+  detail?: string,
+): Promise<void> {
+  if (!itemId || !reporterUid) throw new Error('itemId·reporterUid는 필수입니다');
+  const reportId = `${itemId}_${reporterUid}`;
+  const ref = doc(db, 'reports', reportId);
+  const existing = await getDoc(ref);
+  if (existing.exists()) return;
+  const payload: Record<string, unknown> = {
+    targetType: 'community',
+    targetId: itemId,
+    targetParentPath: `community/${itemId}`,
+    reporterUid,
+    reason,
+    resolved: false,
+    createdAt: serverTimestamp(),
+  };
+  if (detail && detail.trim()) payload.detail = detail.trim().slice(0, 500);
+  await setDoc(ref, stripUndefined(payload), { merge: false });
+}
+
+/** 이미 신고했는가 검사 — 신고 버튼 비활성화용 */
+export async function hasReportedCommunityItem(itemId: string, uid: string): Promise<boolean> {
+  if (!itemId || !uid) return false;
+  try {
+    const snap = await getDoc(doc(db, 'reports', `${itemId}_${uid}`));
+    return snap.exists();
+  } catch {
+    return false;
+  }
 }
 
 export type UpdateUsedListingInput = Partial<{

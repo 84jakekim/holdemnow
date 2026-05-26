@@ -158,7 +158,7 @@ export default function UsedListPage() {
         style={{ background: 'rgba(245,158,11,0.08)', color: 'var(--text-2)', border: '1px solid rgba(245,158,11,0.18)' }}
         role="note"
       >
-        💡 매장 비품 직거래 공간입니다. 등록은 매장 어드민에서 가능합니다.
+        💡 매장·일반 사용자 모두 등록 가능. 직거래는 본인 책임이며 신고 누적 3건 시 자동 숨김.
       </div>
 
       {/* ── 2열 그리드 ── */}
@@ -183,6 +183,19 @@ export default function UsedListPage() {
           </div>
         )}
       </div>
+
+      {/* ── 글쓰기 FAB ── */}
+      <button
+        onClick={() => router.push('/m/community/used/new')}
+        className="fixed bottom-20 right-5 w-14 h-14 rounded-full text-white text-2xl font-extrabold flex items-center justify-center tap z-30"
+        style={{
+          background: 'linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%)',
+          boxShadow: '0 6px 20px rgba(245,158,11,0.45)',
+        }}
+        aria-label="중고 등록"
+      >
+        +
+      </button>
     </div>
   );
 }

@@ -11,7 +11,10 @@ import {
   formatUsedPrice,
   formatRelativeTime,
   subscribeUsedListing,
+  reportCommunityItem,
+  hasReportedCommunityItem,
 } from '@/lib/community';
+import { useAuth } from '@/lib/hooks';
 import BlockedContentNotice from '@/components/mobile/BlockedContentNotice';
 
 /* ============================================================
@@ -28,8 +31,11 @@ function daysLeft(expiresAt?: string | Date): number {
 export default function UsedDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const authState = useAuth();
   const [item, setItem] = useState<UsedListing | null | undefined>(undefined);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [reported, setReported] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeUsedListing(
@@ -39,6 +45,38 @@ export default function UsedDetailPage({ params }: { params: Promise<{ id: strin
     );
     return unsub;
   }, [id]);
+
+  useEffect(() => {
+    if (authState.status !== 'authenticated') { setReported(false); return; }
+    hasReportedCommunityItem(id, authState.user.uid).then(setReported).catch(() => {});
+  }, [id, authState]);
+
+  async function handleReport() {
+    if (authState.status !== 'authenticated') {
+      alert('로그인이 필요합니다');
+      return;
+    }
+    if (reported) return;
+    const reason = window.prompt(
+      '신고 사유를 선택하세요:\n1=스팸\n2=불쾌한 내용\n3=허위정보\n4=광고\n5=기타',
+      '1',
+    );
+    if (!reason) return;
+    const map: Record<string, 'spam' | 'offensive' | 'misinformation' | 'advertising' | 'other'> = {
+      '1': 'spam', '2': 'offensive', '3': 'misinformation', '4': 'advertising', '5': 'other',
+    };
+    const reasonKey = map[reason.trim()] ?? 'other';
+    setReporting(true);
+    try {
+      await reportCommunityItem(id, authState.user.uid, reasonKey);
+      setReported(true);
+      alert('신고 접수되었습니다. 누적 3건 시 자동 숨김됩니다.');
+    } catch (e) {
+      alert(`신고 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setReporting(false);
+    }
+  }
 
   if (item === undefined) {
     return (
@@ -198,6 +236,27 @@ export default function UsedDetailPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
 
+        {/* ── 사용자 작성자 헤더 (authorType='user') ── */}
+        {!item.storeId && (
+          <div
+            className="flex items-center gap-3 px-4 py-3"
+            style={{ borderBottom: '1px solid var(--border)' }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+              style={{ background: 'var(--surface-2)' }}
+            >
+              <span aria-hidden="true">👤</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-bold truncate" style={{ color: 'var(--text-1)' }}>
+                {(item as { authorDisplayName?: string }).authorDisplayName ?? '익명'}
+              </div>
+              <div className="text-[11px]" style={{ color: 'var(--text-3)' }}>개인 판매자</div>
+            </div>
+          </div>
+        )}
+
         {/* ── 매장 헤더 ── */}
         {item.storeId && (
           <Link
@@ -316,6 +375,24 @@ export default function UsedDetailPage({ params }: { params: Promise<{ id: strin
         >
           Pink Rabbit는 판매자와 구매자의 만남을 주선합니다. 실제 거래 및 배송 책임은 거래 당사자에게 있습니다.
         </div>
+
+        {/* ── 신고 버튼 ── */}
+        {authState.status === 'authenticated' && item.authorUid !== authState.user.uid && (
+          <div className="px-4 pt-3">
+            <button
+              onClick={handleReport}
+              disabled={reported || reporting}
+              className="w-full py-2.5 rounded-md text-[12px] font-bold tap disabled:opacity-50"
+              style={{
+                background: reported ? 'var(--surface-2)' : 'transparent',
+                color: reported ? 'var(--text-3)' : '#B91C1C',
+                border: '1px solid ' + (reported ? 'var(--border)' : 'rgba(185,28,28,0.30)'),
+              }}
+            >
+              {reported ? '✓ 신고 접수됨' : reporting ? '신고 중…' : '🚨 신고하기'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── 하단 고정 CTA ── */}

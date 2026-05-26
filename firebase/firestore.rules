@@ -410,8 +410,15 @@ service cloud.firestore {
           (request.resource.data.type == 'jobOffer'
             && isStoreOwner(request.resource.data.storeId))
           || (request.resource.data.type == 'dealerProfile')
+          // usedListing: 매장 owner(authorType='store') 또는 일반 사용자(authorType='user').
+          // 사용자 등록은 1일 3건 제한(클라 + writeRateLimits namespace='community')
+          // + 신고 누적 3건 시 autoHideOnReports가 자동 hidden 처리.
           || (request.resource.data.type == 'usedListing'
-            && isStoreOwner(request.resource.data.storeId))
+            && (
+              (request.resource.data.get('authorType', '') == 'store'
+                && isStoreOwner(request.resource.data.get('storeId', '')))
+              || request.resource.data.get('authorType', '') == 'user'
+            ))
         );
       // update — 작성자 본인만 본문 변경 가능. authorUid·type 변경 차단으로
       // 권한 escalation 방어(다른 사람 uid로 바꿔치기 금지). platform_admin은
