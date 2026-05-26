@@ -1112,12 +1112,44 @@ function VideoModal({ video, saving, onSave, onClose }: {
 // TAB 3: 인기 유튜버 채널
 // ═══════════════════════════════════════════════════════════════
 
+// ─── 자동 가져오기 callable 타입 ────────────────────────────────
+interface AutoImportInsertedChannel {
+  channelId: string;
+  channelName: string;
+  channelUrl: string;
+  avatarUrl: string;
+  description: string;
+  subscriberCount: number;
+  videoCount: number;
+}
+interface AutoImportSkippedReason {
+  channelId: string;
+  reason: 'already_registered' | 'meta_fetch_failed' | 'invalid_channel_id';
+  channelName?: string;
+}
+interface AutoImportResult {
+  inserted: AutoImportInsertedChannel[];
+  skipped: AutoImportSkippedReason[];
+  total: number;
+  requested: number;
+  keywords: string[];
+}
+
 function YoutubersTab() {
   const [youtubers, setYoutubers] = useState<HotYoutuber[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<HotYoutuber | 'new' | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ─── 자동 가져오기 상태 ──────────────────────────────────────
+  const [importCount, setImportCount] = useState<number>(5);
+  const [importKeywords, setImportKeywords] = useState<string>('홀덤, 포커');
+  const [importing, setImporting] = useState<boolean>(false);
+  const [importResult, setImportResult] = useState<AutoImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  // 마지막 호출 시각 — spam 방지 cooldown (10초)
+  const lastImportAtRef = useRef<number>(0);
 
   useEffect(() => {
     const q = query(collection(db, 'hotYoutubers'), orderBy('order'));
@@ -1138,6 +1170,43 @@ function YoutubersTab() {
     syncHomeContentCounts();
   };
 
+  const handleAutoImport = async () => {
+    // cooldown 10초
+    const now = Date.now();
+    if (now - lastImportAtRef.current < 10_000) {
+      setImportError('연속 호출 방지 — 10초 후 다시 시도해 주세요.');
+      return;
+    }
+    lastImportAtRef.current = now;
+
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const fns = getFunctions(app, 'asia-northeast3');
+      const callable = httpsCallable<
+        { count: number; keywords: string[] },
+        AutoImportResult
+      >(fns, 'autoImportYoutubers');
+      const keywords = importKeywords
+        .split(/[,\n]/)
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0);
+      const res = await callable({
+        count: Math.max(1, Math.min(20, Math.floor(importCount))),
+        keywords: keywords.length > 0 ? keywords : ['홀덤', '포커'],
+      });
+      setImportResult(res.data);
+      // 활성 카운트 동기화
+      if (res.data.inserted.length > 0) syncHomeContentCounts();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setImportError(msg);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   interface YoutuberFormData {
     channelId: string;
     channelName: string;
@@ -1150,9 +1219,101 @@ function YoutubersTab() {
 
   return (
     <div>
+      {/* ─── 자동 가져오기 섹션 (PM 2026-05-26 추가) ─── */}
+      <div className="mb-5 rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 to-amber-50 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-base">🎯</span>
+          <h3 className="text-sm font-extrabold text-gray-900">자동 가져오기</h3>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">NEW</span>
+        </div>
+        <p className="text-xs text-gray-600 mb-3">
+          YouTube에서 한국 홀덤·포커 채널을 검색해 메타·아바타·구독자수를 한 번에 자동 등록합니다.
+          이미 등록된 채널은 자동 제외됩니다.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-shrink-0">
+            <label className="block text-[11px] font-bold text-gray-700 mb-1">수량</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={importCount}
+              onChange={(e) => setImportCount(Number(e.target.value) || 1)}
+              className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              disabled={importing}
+            />
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-[11px] font-bold text-gray-700 mb-1">검색 키워드 (쉼표 구분, 최대 5개)</label>
+            <input
+              type="text"
+              value={importKeywords}
+              onChange={(e) => setImportKeywords(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              placeholder="홀덤, 포커"
+              disabled={importing}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleAutoImport}
+            disabled={importing}
+            className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          >
+            {importing ? '가져오는 중…' : '가져오기'}
+          </button>
+        </div>
+
+        {/* 결과 / 에러 */}
+        {importError && (
+          <div className="mt-3 text-xs text-red-700 bg-red-100 border border-red-200 rounded-lg px-3 py-2">
+            ⚠ {importError}
+          </div>
+        )}
+        {importResult && (
+          <div className="mt-3 space-y-2">
+            <div className="text-xs font-bold text-gray-700">
+              결과: 신규 등록 {importResult.inserted.length}개 · 건너뜀 {importResult.skipped.length}개
+              {' · '}요청 {importResult.requested}개 · 키워드 [{importResult.keywords.join(', ')}]
+            </div>
+            {importResult.inserted.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {importResult.inserted.map((ch) => (
+                  <div key={ch.channelId} className="flex items-center gap-2 bg-white rounded-lg border border-green-200 p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={ch.avatarUrl} alt={ch.channelName} className="w-9 h-9 rounded-full object-cover bg-gray-100 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-gray-900 truncate">{ch.channelName}</div>
+                      <div className="text-[10px] text-gray-500 truncate">
+                        {ch.subscriberCount.toLocaleString()}명 · {ch.videoCount}개 영상
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {importResult.skipped.length > 0 && (
+              <details className="text-[11px] text-gray-500">
+                <summary className="cursor-pointer">건너뛴 채널 {importResult.skipped.length}개 보기</summary>
+                <ul className="mt-1 pl-4 space-y-0.5">
+                  {importResult.skipped.slice(0, 30).map((s, i) => (
+                    <li key={`${s.channelId}-${i}`}>
+                      <span className="font-mono">{s.channelId.slice(0, 14)}…</span>
+                      {' — '}
+                      {s.reason === 'already_registered' ? '이미 등록됨' :
+                        s.reason === 'meta_fetch_failed' ? '메타 조회 실패' : '잘못된 채널 ID'}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-end mb-4">
         <button onClick={() => setEditing('new')} className="px-4 py-2 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition">
-          + 채널 추가
+          + 채널 추가 (수동)
         </button>
       </div>
 
