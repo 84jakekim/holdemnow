@@ -20,17 +20,10 @@ runConfig:
 
 env:
   # App Hosting 백엔드 분할 (2026-05-26)
-  # ⚠ 핫픽스 2026-05-26: biz/admin 신규 백엔드의 첫 rollout이 콘솔에서 아직 완료되지 않았는데
-  # variant=app으로 가드를 활성화해 /login/business·/platform-login 등이 placeholder 백엔드로
-  # 잘못 redirect되는 문제. biz/admin 백엔드 GitHub 연결+첫 rollout 완료 후 value를 "app"으로 복귀.
-  - variable: NEXT_PUBLIC_APP_VARIANT
-    value: ""
-    availability:
-      - BUILD
-      - RUNTIME
+  # NEXT_PUBLIC_APP_VARIANT는 proxy.ts가 request host로 자동 판별하므로 yaml에 명시하지 않음.
+  # 명시 override가 필요할 때만 추가 (테스트/디버그). 빈 값("")은 yaml 스키마 위반.
 
-  # 다른 백엔드 URL — BACKEND_SETUP.md 참고하여 백엔드 생성 후 채워 넣을 것.
-  # 빈 값일 때는 middleware가 /_blocked 안내 페이지로 rewrite (정보 누설 방지).
+  # 다른 백엔드 URL — host base에서 자동 도출되므로 사실상 fallback용.
   - variable: NEXT_PUBLIC_BACKEND_APP_URL
     value: "https://holdemnow--holdemnow-prod.us-east4.hosted.app"
     availability:
