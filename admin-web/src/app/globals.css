@@ -1755,7 +1755,12 @@ textarea:not(.no-pr-focus):focus {
 
 /* ─── 다크모드 — Tailwind 하드코딩 색상 일괄 override (2026-05-27)
  * 매장 어드민·본사 어드민·기타 페이지의 text-gray-*/bg-white 등이
- * 다크모드에서 검정 폰트로 보이지 않는 문제 차단. */
+ * 다크모드에서 검정 폰트로 보이지 않는 문제 차단.
+ *
+ * ⚠ 2026-05-27 4차: Tailwind v4가 user CSS의 :is/[data-theme] selector를
+ * 빌드 시 tree-shake로 제거하던 문제 발견 → @layer utilities 안에 박아 cascade
+ * 우선순위 보장 + lightningcss optimizer 통과. */
+@layer utilities {
 html[data-theme="dark"] .bg-white            { background-color: var(--bg) !important; }
 html[data-theme="dark"] .bg-gray-50          { background-color: var(--bg-sub) !important; }
 html[data-theme="dark"] .bg-gray-100         { background-color: var(--surface-1) !important; }
@@ -1881,3 +1886,4 @@ html[data-theme="dark"] .border-pink-100,
 html[data-theme="dark"] .border-pink-200    { border-color: rgba(255,31,143,0.30) !important; }
 html[data-theme="dark"] .border-purple-100,
 html[data-theme="dark"] .border-purple-200  { border-color: rgba(168,85,247,0.30) !important; }
+} /* end @layer utilities — 다크모드 override */
