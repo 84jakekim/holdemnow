@@ -45,6 +45,7 @@ interface DealerForm {
   gender: DealerGender | '';
   residence: string;
   privacyConsent: boolean;
+  publicProfile: boolean;
 }
 
 function defaultForm(displayName = ''): DealerForm {
@@ -63,6 +64,7 @@ function defaultForm(displayName = ''): DealerForm {
     gender: '',
     residence: '',
     privacyConsent: false,
+    publicProfile: false,
   };
 }
 
@@ -130,6 +132,7 @@ export default function MyDealerProfilePage() {
           gender: profile.gender ?? '',
           residence: profile.residence ?? '',
           privacyConsent: profile.privacyConsent ?? false,
+          publicProfile: profile.publicProfile ?? false,
         });
       } else {
         setExisting(null);
@@ -210,6 +213,7 @@ export default function MyDealerProfilePage() {
         ...(form.gender ? { gender: form.gender as DealerGender } : {}),
         ...(form.residence ? { residence: form.residence } : {}),
         privacyConsent: form.privacyConsent,
+        publicProfile: form.publicProfile,
       };
       if (existing?.id) {
         await updateDealerProfile(existing.id, input);
@@ -267,7 +271,7 @@ export default function MyDealerProfilePage() {
             </div>
             <h1 className="h2 font-serif mt-1.5">🃏 {isEdit ? '프로필 수정' : '프로필 등록'}</h1>
             <p className="text-[13px] font-semibold opacity-90 mt-1.5">
-              매장 대표 전용 공개 · 일반 노출 X
+              매장 대표 전용 (디폴트) · 공개 토글 시 사용자 노출
             </p>
           </div>
           <div className="w-9 h-9 flex-shrink-0" aria-hidden="true" />
@@ -276,15 +280,36 @@ export default function MyDealerProfilePage() {
 
       <div style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 110px)' }}>
 
-        {/* ── 매장 owner 공개 안내 박스 ── */}
-        <div className="mx-4 mt-5 px-4 py-3.5 rounded-2xl flex items-start gap-3"
+        {/* ── 공개 범위 안내 + 토글 (2026-05-26 절충) ── */}
+        <div className="mx-4 mt-5 px-4 py-3.5 rounded-2xl"
           style={{ background: 'rgba(255,31,143,0.07)', border: '1px solid rgba(255,31,143,0.20)' }}
         >
-          <svg className="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF1F8F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <p className="text-[12px] leading-relaxed font-medium" style={{ color: '#FF1F8F' }}>
-            이 프로필은 <strong>매장 대표(승인된 매장 사장)에게만 공개</strong>됩니다. 일반 사용자에게는 노출되지 않습니다.
+          <div className="flex items-start gap-3">
+            <svg className="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF1F8F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p className="text-[12px] leading-relaxed font-medium" style={{ color: '#FF1F8F' }}>
+              기본은 <strong>매장 대표 전용 비공개</strong>입니다. 아래 토글을 켜면 일반 사용자에게도 노출됩니다.
+            </p>
+          </div>
+          <label className="mt-3 flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl cursor-pointer bg-white" style={{ border: '1px solid rgba(255,31,143,0.25)' }}>
+            <span className="flex items-center gap-2">
+              <span className="text-base" aria-hidden="true">{form.publicProfile ? '🌐' : '🔒'}</span>
+              <span className="text-[13px] font-bold" style={{ color: 'var(--text-1)' }}>
+                일반 사용자에게 공개
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={form.publicProfile}
+              onChange={(e) => setForm((f) => ({ ...f, publicProfile: e.target.checked }))}
+              className="w-5 h-5 accent-[#FF1F8F]"
+            />
+          </label>
+          <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
+            {form.publicProfile
+              ? '✓ 일반 사용자 /m/community/dealers 리스트에 노출됩니다. 매장 owner는 항상 전체 접근 가능.'
+              : '🔒 매장 owner 어드민에서만 열람 가능. 사용자 리스트 노출 X.'}
           </p>
         </div>
 
