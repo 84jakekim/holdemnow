@@ -64,12 +64,26 @@ export interface Reservation {
   confirmedAt?: Timestamp | null;
   /** 취소 시각 (사용자 본인 또는 매장 owner) */
   cancelledAt?: Timestamp | null;
-  /** 취소 주체 — 'user'(본인), 'store'(매장 owner), 'platform'(본사) */
-  cancelledBy?: 'user' | 'store' | 'platform' | null;
-  /** 매장 측 취소 사유 (자유 입력 또는 프리셋) */
+  /** 취소 주체 — 'user'(본인), 'store'(매장 직접 취소), 'store_approved'(사용자 신청 → 매장 승인), 'platform'(본사) */
+  cancelledBy?: 'user' | 'store' | 'store_approved' | 'platform' | null;
+  /** 매장 측 취소 사유 (자유 입력 또는 프리셋) — store/store_approved 케이스에서 사용 */
   cancelReason?: string | null;
-  /** 매장 측 자유 메모 */
+  /** 매장 측 자유 메모 — store/store_approved 케이스에서 사용 */
   cancelMemo?: string | null;
+
+  // ─────────── 사용자 발의 → 매장 승인 흐름 (PM 2026-05-27) ───────────
+  /** 사용자가 취소 신청을 했는지 여부 (status='confirmed' 상태에서만 유효) */
+  cancelRequested?: boolean;
+  /** 취소 신청 시각 */
+  cancelRequestedAt?: Timestamp | null;
+  /** 취소 신청 사유 (필수, 100자) */
+  cancelRequestReason?: string | null;
+  /** 취소 신청 자유 메모 (선택, 200자) */
+  cancelRequestNote?: string | null;
+  /** 매장이 취소 신청을 거절한 시각 */
+  cancelRequestDeclinedAt?: Timestamp | null;
+  /** 매장이 거절한 사유 (자유 입력) */
+  cancelRequestDeclineReason?: string | null;
 }
 
 export const MAX_RESERVATION_NOTE_LEN = 200;
@@ -131,9 +145,27 @@ function toReservation(
     durationMinutes: (data.durationMinutes as number | undefined) ?? undefined,
     confirmedAt: (data.confirmedAt as Timestamp | null | undefined) ?? null,
     cancelledAt: (data.cancelledAt as Timestamp | null | undefined) ?? null,
-    cancelledBy: (data.cancelledBy as 'user' | 'store' | 'platform' | null | undefined) ?? null,
+    cancelledBy:
+      (data.cancelledBy as
+        | 'user'
+        | 'store'
+        | 'store_approved'
+        | 'platform'
+        | null
+        | undefined) ?? null,
     cancelReason: (data.cancelReason as string | null | undefined) ?? null,
     cancelMemo: (data.cancelMemo as string | null | undefined) ?? null,
+    cancelRequested: (data.cancelRequested as boolean | undefined) ?? false,
+    cancelRequestedAt:
+      (data.cancelRequestedAt as Timestamp | null | undefined) ?? null,
+    cancelRequestReason:
+      (data.cancelRequestReason as string | null | undefined) ?? null,
+    cancelRequestNote:
+      (data.cancelRequestNote as string | null | undefined) ?? null,
+    cancelRequestDeclinedAt:
+      (data.cancelRequestDeclinedAt as Timestamp | null | undefined) ?? null,
+    cancelRequestDeclineReason:
+      (data.cancelRequestDeclineReason as string | null | undefined) ?? null,
   };
 }
 
@@ -259,6 +291,10 @@ export async function createReservation(input: {
 /**
  * 예약 취소 — 본인만 가능 (rules에서 강제).
  * status='cancelled' + cancelledBy='user' + cancelledAt + updatedAt.
+ *
+ * PM 2026-05-27 정책 변경: confirmed 예약은 더 이상 단독 취소 불가.
+ * confirmed의 경우 requestCancellation()으로 매장 승인 게이트를 거쳐야 함.
+ * 이 함수는 pending에만 호출되어야 한다 (UI/rules 양쪽 보장).
  */
 export async function cancelReservation(
   storeId: string,
@@ -307,10 +343,141 @@ export async function cancelReservationByStore(
     doc(reservationsCol(storeId), reservationId),
     stripUndefined({
       status: 'cancelled' as ReservationStatus,
-      cancelledBy: 'store',
+      cancelledBy: 'store' as const,
       cancelledAt: serverTimestamp(),
       cancelReason: reason || null,
       cancelMemo: memo || null,
+      respondedAt: serverTimestamp(),
+      respondedBy: uid,
+      readByStore: true,
+      updatedAt: serverTimestamp(),
+    }),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 사용자 발의 → 매장 승인 취소 흐름 (PM 2026-05-27)
+// confirmed 예약은 사용자가 단독 취소 불가. 매장 승인 게이트.
+// ─────────────────────────────────────────────────────────────
+
+export const MAX_CANCEL_REQUEST_REASON_LEN = 100;
+export const MAX_CANCEL_REQUEST_NOTE_LEN = 200;
+export const MAX_CANCEL_REQUEST_DECLINE_REASON_LEN = 200;
+
+/**
+ * 사용자 — confirmed 예약에 취소 신청.
+ * status는 그대로 'confirmed' 유지, cancelRequested=true 마킹만.
+ * 매장 어드민에 NEW 배지로 노출 + FCM 푸시 발송 (Cloud Function).
+ *
+ * 가드:
+ * - 본인만 호출 (rules 강제)
+ * - resource.status === 'confirmed' (rules 강제)
+ * - cancelRequested false → true (rules에서 중복 신청 차단 가능)
+ */
+export async function requestCancellation(
+  storeId: string,
+  reservationId: string,
+  input: { reason: string; note?: string },
+): Promise<void> {
+  if (!storeId || !reservationId) {
+    throw new Error('storeId·reservationId는 필수입니다.');
+  }
+  const reason = (input.reason ?? '').trim();
+  const note = (input.note ?? '').trim();
+
+  if (!reason) {
+    throw new Error('취소 신청 사유는 필수입니다.');
+  }
+  if (reason.length > MAX_CANCEL_REQUEST_REASON_LEN) {
+    throw new Error(
+      `취소 사유는 ${MAX_CANCEL_REQUEST_REASON_LEN}자 이내로 작성해주세요.`,
+    );
+  }
+  if (note.length > MAX_CANCEL_REQUEST_NOTE_LEN) {
+    throw new Error(
+      `취소 메모는 ${MAX_CANCEL_REQUEST_NOTE_LEN}자 이내로 작성해주세요.`,
+    );
+  }
+
+  await updateDoc(
+    doc(reservationsCol(storeId), reservationId),
+    stripUndefined({
+      cancelRequested: true,
+      cancelRequestedAt: serverTimestamp(),
+      cancelRequestReason: reason,
+      cancelRequestNote: note || null,
+      // 재신청 케이스 — 이전 거절 흔적 지움
+      cancelRequestDeclinedAt: null,
+      cancelRequestDeclineReason: null,
+      // 매장 어드민의 "읽음" 다시 unread로 — pending과 동일 UX
+      readByStore: false,
+      updatedAt: serverTimestamp(),
+    }),
+  );
+}
+
+/**
+ * 매장 owner — 사용자 취소 신청을 승인.
+ * status='cancelled' + cancelledBy='store_approved' 전환.
+ * cancelReason은 사용자가 신청한 reason 그대로 보존 (cancelRequestReason 복제).
+ * 1매장 락 해제 (status가 active를 벗어나므로).
+ */
+export async function approveStoreCancellation(
+  storeId: string,
+  reservationId: string,
+): Promise<void> {
+  if (!storeId || !reservationId) {
+    throw new Error('storeId·reservationId는 필수입니다.');
+  }
+  const uid = auth.currentUser?.uid ?? null;
+
+  await updateDoc(
+    doc(reservationsCol(storeId), reservationId),
+    stripUndefined({
+      status: 'cancelled' as ReservationStatus,
+      cancelledBy: 'store_approved' as const,
+      cancelledAt: serverTimestamp(),
+      // 사용자가 신청한 사유를 cancelReason으로 옮김 (cancelRequestReason은 그대로 둠 — 이력 보존)
+      // 클라에서 별도 read 없이 한 번에 update — 단, cancelReason 값은 후속 단계에서 cancelRequestReason 복제용으로
+      // 매장 어드민 UI에서 직접 전달받지 않고, 여기서는 cancelRequested=false 토글 + cancelReason 누락 시
+      // rules에서 따로 검증하지 않음 (display 측에서 cancelRequestReason를 보여줌).
+      cancelRequested: false,
+      respondedAt: serverTimestamp(),
+      respondedBy: uid,
+      readByStore: true,
+      updatedAt: serverTimestamp(),
+    }),
+  );
+}
+
+/**
+ * 매장 owner — 사용자 취소 신청을 거절.
+ * status='confirmed' 그대로 유지. cancelRequested=false, declinedAt/declineReason 기록.
+ * 사용자는 거절 사유 보고 재신청 가능.
+ */
+export async function declineCancellation(
+  storeId: string,
+  reservationId: string,
+  declineReason: string,
+): Promise<void> {
+  if (!storeId || !reservationId) {
+    throw new Error('storeId·reservationId는 필수입니다.');
+  }
+  const reason = (declineReason ?? '').trim();
+  if (reason.length > MAX_CANCEL_REQUEST_DECLINE_REASON_LEN) {
+    throw new Error(
+      `거절 사유는 ${MAX_CANCEL_REQUEST_DECLINE_REASON_LEN}자 이내로 작성해주세요.`,
+    );
+  }
+  const uid = auth.currentUser?.uid ?? null;
+
+  await updateDoc(
+    doc(reservationsCol(storeId), reservationId),
+    stripUndefined({
+      cancelRequested: false,
+      cancelRequestDeclinedAt: serverTimestamp(),
+      cancelRequestDeclineReason: reason || null,
+      // status='confirmed' 유지 (변경 X)
       respondedAt: serverTimestamp(),
       respondedBy: uid,
       readByStore: true,
@@ -488,11 +655,13 @@ export function reservationStatusLabel(s: ReservationStatus): string {
 
 /** 취소 주체별 라벨 — cancelled 상태 카드에 표시 */
 export function reservationCancelLabel(
-  cancelledBy?: 'user' | 'store' | 'platform' | null,
+  cancelledBy?: 'user' | 'store' | 'store_approved' | 'platform' | null,
 ): string {
   switch (cancelledBy) {
     case 'store':
       return '매장 취소';
+    case 'store_approved':
+      return '매장 승인 취소';
     case 'platform':
       return '본사 취소';
     case 'user':

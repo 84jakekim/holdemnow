@@ -20,7 +20,10 @@ import {
   isReservationActive,
   reservationStatusLabel,
   reservationCancelLabel,
+  requestCancellation,
   subscribeUserReservations,
+  MAX_CANCEL_REQUEST_REASON_LEN,
+  MAX_CANCEL_REQUEST_NOTE_LEN,
   type Reservation,
   type ReservationStatus,
 } from '@/lib/reservations';
@@ -290,6 +293,7 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
 
   // 매장 좌표 보정 (lat/lng 누락 시 geocode)
   useEffect(() => {
@@ -312,11 +316,19 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
   const isImminent = reservation.status === 'confirmed' && reservedMs - now > 0 && reservedMs - now <= 2 * 60 * 60 * 1000;
   const tone = toneFor(reservation.status);
 
-  // PM 결정: 본인 취소 가능 시간 룰 (rules와 일치)
-  // pending: 항상 / confirmed: reservedFor - 1h > now
-  const canCancel =
-    reservation.status === 'pending' ||
-    (reservation.status === 'confirmed' && reservedMs - now > 60 * 60 * 1000);
+  // PM 2026-05-27: pending은 본인 즉시 취소. confirmed는 매장 승인 게이트.
+  const canCancelDirect = reservation.status === 'pending';
+  const canRequestCancellation =
+    reservation.status === 'confirmed' &&
+    !reservation.cancelRequested &&
+    reservedMs - now > 0; // 이미 지난 예약은 신청 불가
+
+  const isPendingApproval =
+    reservation.status === 'confirmed' && reservation.cancelRequested === true;
+  const wasDeclined =
+    reservation.status === 'confirmed' &&
+    !reservation.cancelRequested &&
+    !!reservation.cancelRequestDeclinedAt;
 
   const isPastOrEnded = reservation.status === 'cancelled' || reservation.status === 'rejected' ||
     reservation.status === 'no_show' || reservation.status === 'completed';
@@ -327,6 +339,19 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
     setError(null);
     try {
       await cancelReservation(reservation.storeId, reservation.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRequestSubmit = async (reason: string, note: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await requestCancellation(reservation.storeId, reservation.id, { reason, note });
+      setRequestModalOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -425,25 +450,41 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
           </div>
         )}
 
-        {/* 매장 취소 사유·메모 (cancelledBy='store') */}
+        {/* 매장 취소 사유·메모 (cancelledBy='store' 직접 / 'store_approved' 승인) */}
         {reservation.status === 'cancelled' &&
-          reservation.cancelledBy === 'store' &&
-          (reservation.cancelReason || reservation.cancelMemo) && (
+          (reservation.cancelledBy === 'store' || reservation.cancelledBy === 'store_approved') && (
           <div
             className="text-[12px] leading-relaxed px-3 py-2 rounded-lg mb-3 space-y-1"
             style={{
-              background: 'rgba(229,62,62,0.06)',
+              background:
+                reservation.cancelledBy === 'store_approved'
+                  ? 'rgba(16,185,129,0.06)'
+                  : 'rgba(229,62,62,0.06)',
               color: 'var(--text-2)',
-              border: '1px solid rgba(229,62,62,0.20)',
+              border:
+                reservation.cancelledBy === 'store_approved'
+                  ? '1px solid rgba(16,185,129,0.20)'
+                  : '1px solid rgba(229,62,62,0.20)',
             }}
           >
-            <div className="font-extrabold" style={{ color: '#B91C1C' }}>
-              🚫 매장에서 취소된 예약입니다
+            <div
+              className="font-extrabold"
+              style={{ color: reservation.cancelledBy === 'store_approved' ? '#047857' : '#B91C1C' }}
+            >
+              {reservation.cancelledBy === 'store_approved'
+                ? '✅ 매장이 취소 신청을 승인했습니다'
+                : '🚫 매장에서 취소된 예약입니다'}
             </div>
-            {reservation.cancelReason && (
+            {(reservation.cancelRequestReason || reservation.cancelReason) && (
               <div>
                 <span className="font-bold mr-1">사유:</span>
-                {reservation.cancelReason}
+                {reservation.cancelRequestReason || reservation.cancelReason}
+              </div>
+            )}
+            {reservation.cancelRequestNote && (
+              <div>
+                <span className="font-bold mr-1">메모:</span>
+                {reservation.cancelRequestNote}
               </div>
             )}
             {reservation.cancelMemo && (
@@ -452,6 +493,63 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
                 {reservation.cancelMemo}
               </div>
             )}
+          </div>
+        )}
+
+        {/* 매장 승인 대기 중 배지 (confirmed + cancelRequested=true) */}
+        {isPendingApproval && (
+          <div
+            className="text-[12px] leading-relaxed px-3 py-2 rounded-lg mb-3 space-y-1"
+            style={{
+              background: 'rgba(245,158,11,0.10)',
+              color: '#92400E',
+              border: '1px solid rgba(245,158,11,0.35)',
+            }}
+          >
+            <div className="font-extrabold flex items-center gap-1">
+              <span aria-hidden>⏳</span>
+              매장 승인 대기 중
+            </div>
+            {reservation.cancelRequestReason && (
+              <div>
+                <span className="font-bold mr-1">신청 사유:</span>
+                {reservation.cancelRequestReason}
+              </div>
+            )}
+            {reservation.cancelRequestNote && (
+              <div>
+                <span className="font-bold mr-1">메모:</span>
+                {reservation.cancelRequestNote}
+              </div>
+            )}
+            <div className="text-[11px] mt-1 opacity-80">
+              매장이 승인하면 자동으로 취소 완료됩니다. 거절 시 알림을 받으세요.
+            </div>
+          </div>
+        )}
+
+        {/* 거절 안내 (confirmed + cancelRequested=false + 거절 이력 있음) */}
+        {wasDeclined && (
+          <div
+            className="text-[12px] leading-relaxed px-3 py-2 rounded-lg mb-3 space-y-1"
+            style={{
+              background: 'rgba(229,62,62,0.06)',
+              color: 'var(--text-2)',
+              border: '1px solid rgba(229,62,62,0.25)',
+            }}
+          >
+            <div className="font-extrabold" style={{ color: '#B91C1C' }}>
+              ❌ 매장이 취소 신청을 거절했습니다
+            </div>
+            {reservation.cancelRequestDeclineReason && (
+              <div>
+                <span className="font-bold mr-1">거절 사유:</span>
+                {reservation.cancelRequestDeclineReason}
+              </div>
+            )}
+            <div className="text-[11px] mt-1 opacity-80">
+              필요시 다시 취소 신청하거나 매장에 전화로 문의하세요.
+            </div>
           </div>
         )}
 
@@ -508,19 +606,24 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
           >
             📋 매장 상세
           </ActionButton>
-          {canCancel && (
+          {canCancelDirect && (
             <ActionButton onClick={handleCancel} disabled={busy} variant="danger">
               {busy ? '취소 중…' : '❌ 예약 취소'}
             </ActionButton>
           )}
-          {/* 취소 불가(confirmed 임박) — 사용자가 '취소 버튼 왜 없지' 혼란 방지로
-           * disabled 안내 버튼을 노출 + 사유 표시. 방문 1시간 전 부터는 매장 문의 필요. */}
-          {!canCancel && !isPastOrEnded && (
+          {canRequestCancellation && (
             <ActionButton
-              onClick={() => alert('방문 1시간 전부터는 직접 취소할 수 없어요.\n매장에 전화로 변경을 요청해 주세요.')}
-              variant="disabled"
+              onClick={() => setRequestModalOpen(true)}
+              disabled={busy}
+              variant="subtle"
             >
-              ⏰ 취소 불가 · 매장 문의
+              📝 취소 신청
+            </ActionButton>
+          )}
+          {/* confirmed + 대기 중 → 버튼 없음 (배지로 안내만) */}
+          {isPendingApproval && (
+            <ActionButton variant="disabled" disabled>
+              ⏳ 매장 승인 대기 중
             </ActionButton>
           )}
           {isPastOrEnded && (
@@ -530,12 +633,161 @@ function ReservationCard({ reservation }: { reservation: Reservation }) {
           )}
         </div>
 
-        {/* 취소 불가 안내 문구 — 액션 행 아래 작은 도움말 */}
-        {!canCancel && !isPastOrEnded && (
+        {/* confirmed의 안내 문구 */}
+        {reservation.status === 'confirmed' && !isPendingApproval && !wasDeclined && reservedMs - now > 0 && (
           <div className="mt-2 text-[11px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            방문 1시간 전부터는 직접 취소가 불가해요. 변경이 필요하면 위 <b>📞 전화</b> 버튼으로 매장에 알려주세요.
+            매장이 확정한 예약입니다. 변경이 필요하면 <b>취소 신청</b>을 보내주세요 — 매장 승인 후 취소됩니다.
           </div>
         )}
+      </div>
+
+      {requestModalOpen && (
+        <CancelRequestModal
+          reservation={reservation}
+          busy={busy}
+          onClose={() => setRequestModalOpen(false)}
+          onSubmit={handleRequestSubmit}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * 취소 신청 모달 — confirmed 예약 발의
+ * ─────────────────────────────────────────────────────────────*/
+
+const CANCEL_REASON_PRESETS = [
+  '일정 변경 (방문 어려움)',
+  '인원 조정 필요',
+  '시간 변경 요청',
+  '기타',
+];
+
+function CancelRequestModal({
+  reservation,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  reservation: Reservation;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string, note: string) => void;
+}) {
+  const [reason, setReason] = useState<string>(CANCEL_REASON_PRESETS[0]);
+  const [note, setNote] = useState('');
+  const reservedMs = reservation.reservedFor?.toMillis?.() ?? 0;
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm p-5 shadow-xl"
+        style={{
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-lg)',
+        }}
+      >
+        <div className="font-extrabold text-[15px] mb-1" style={{ color: 'var(--text-1)' }}>
+          📝 예약 취소를 신청할까요?
+        </div>
+        <div className="text-[12px] mb-3" style={{ color: 'var(--text-2)' }}>
+          {reservation.storeName || '매장'} · {fmtDateTime(reservedMs)} · {reservation.partySize}명
+        </div>
+
+        <div
+          className="mb-3 p-2 rounded text-[11px] leading-relaxed"
+          style={{
+            background: 'rgba(245,158,11,0.08)',
+            border: '1px solid rgba(245,158,11,0.25)',
+            color: '#b45309',
+          }}
+        >
+          ⚠️ 매장 승인 후 취소가 완료됩니다. 거절될 경우 알림을 받으세요.
+        </div>
+
+        <label className="text-[12px] font-bold block mb-1" style={{ color: 'var(--text-1)' }}>
+          취소 사유 <span style={{ color: 'var(--brand)' }}>*</span>
+        </label>
+        <div className="space-y-1.5 mb-3">
+          {CANCEL_REASON_PRESETS.map((p) => {
+            const active = reason === p;
+            return (
+              <button
+                key={p}
+                onClick={() => setReason(p)}
+                className="w-full text-left px-2.5 py-1.5 text-[12px] transition"
+                style={{
+                  background: active ? 'rgba(255,31,143,0.06)' : 'var(--surface-1)',
+                  border: `1px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
+                  borderRadius: '8px',
+                  color: active ? 'var(--brand)' : 'var(--text-1)',
+                  fontWeight: active ? 700 : 500,
+                }}
+              >
+                {active ? '● ' : '○ '}
+                {p}
+              </button>
+            );
+          })}
+        </div>
+
+        <label className="text-[12px] font-bold block mb-1" style={{ color: 'var(--text-1)' }}>
+          자유 메모 (선택)
+        </label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value.slice(0, MAX_CANCEL_REQUEST_NOTE_LEN))}
+          placeholder="예) 회사 일정 변경으로 방문이 어려워졌습니다."
+          rows={3}
+          className="w-full text-[13px] p-2.5 resize-none"
+          style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            color: 'var(--text-1)',
+            outline: 'none',
+          }}
+        />
+        <div className="text-[10px] text-right mt-0.5" style={{ color: 'var(--text-3)' }}>
+          {note.length}/{MAX_CANCEL_REQUEST_NOTE_LEN}
+        </div>
+
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px]"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+          >
+            닫기
+          </button>
+          <button
+            onClick={() => {
+              const r = (reason || '').trim().slice(0, MAX_CANCEL_REQUEST_REASON_LEN);
+              if (!r) {
+                alert('취소 사유를 선택해주세요.');
+                return;
+              }
+              onSubmit(r, note.trim());
+            }}
+            disabled={busy}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px] text-white disabled:opacity-50"
+            style={{
+              background: 'linear-gradient(135deg, #FF1F8F 0%, #B91072 100%)',
+            }}
+          >
+            {busy ? '처리 중…' : '취소 신청'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -552,7 +804,7 @@ function StatusChip({
 }: {
   status: ReservationStatus;
   tone: CardTone;
-  cancelledBy?: 'user' | 'store' | 'platform' | null;
+  cancelledBy?: 'user' | 'store' | 'store_approved' | 'platform' | null;
 }) {
   const dot = status === 'confirmed' ? '✓' : status === 'pending' ? '⌛' : status === 'rejected' ? '✕' : '·';
   const label =

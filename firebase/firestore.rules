@@ -148,16 +148,22 @@ service cloud.firestore {
           && request.resource.data.partySize <= 20
           && request.resource.data.status == 'pending';
         allow update: if isSignedIn() && (
-          // 예약자 본인: status='cancelled' 로만 취소 가능 + cancelledBy='user' 강제.
-          // pending(매장 확인 전)은 즉시 취소 OK.
-          // confirmed/그 외 상태에서는 reservedFor 1시간 전까지만 취소 가능.
+          // 예약자 본인 — pending(매장 확인 전)은 즉시 취소 가능.
+          // confirmed는 단독 취소 차단 — 아래의 "취소 신청"으로만 가능 (PM 2026-05-27).
           (resource.data.authorUid == request.auth.uid
             && request.resource.data.status == 'cancelled'
             && request.resource.data.get('cancelledBy', 'user') == 'user'
-            && (
-              resource.data.status == 'pending'
-              || resource.data.reservedFor.toMillis() - request.time.toMillis() >= 60 * 60 * 1000
-            ))
+            && resource.data.status == 'pending')
+          // 예약자 본인 — confirmed 예약에 "취소 신청" 마킹 (status는 그대로).
+          // cancelRequested false → true 전환만 허용. status='confirmed' 보존 + 사유 100자 이내.
+          || (resource.data.authorUid == request.auth.uid
+            && resource.data.status == 'confirmed'
+            && request.resource.data.status == 'confirmed'
+            && request.resource.data.get('cancelRequested', false) == true
+            && request.resource.data.get('cancelRequestReason', '') is string
+            && request.resource.data.get('cancelRequestReason', '').size() > 0
+            && request.resource.data.get('cancelRequestReason', '').size() <= 100
+            && request.resource.data.get('cancelRequestNote', '').size() <= 200)
           // 예약자 본인: 체크인으로 인한 자동 완료 (PM 2026-05-27).
           // status='completed' + completionReason='check_in'으로만 전환 허용 — 임의 'completed' 전환 차단.
           // pending/confirmed 상태에서만 가능 (이미 완료/취소된 건 재변경 금지).
@@ -165,8 +171,22 @@ service cloud.firestore {
             && request.resource.data.status == 'completed'
             && request.resource.data.get('completionReason', '') == 'check_in'
             && (resource.data.status == 'pending' || resource.data.status == 'confirmed'))
-          // 매장 owner/member: 운영 상태 갱신 가능 (시간 제약 없음).
-          // 매장이 cancelled로 전환할 때는 cancelledBy='store' 강제 — 본인 우회 방지.
+          // 매장 owner/member — 사용자 취소 신청 승인.
+          // cancelRequested=true → status='cancelled' + cancelledBy='store_approved' 전환만 허용.
+          || ((isStoreOwner(storeId) || isStoreMember(storeId))
+            && resource.data.get('cancelRequested', false) == true
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.get('cancelledBy', '') == 'store_approved'
+            && request.resource.data.get('cancelRequested', false) == false)
+          // 매장 owner/member — 사용자 취소 신청 거절.
+          // cancelRequested=true → false 전환 + status='confirmed' 보존.
+          || ((isStoreOwner(storeId) || isStoreMember(storeId))
+            && resource.data.get('cancelRequested', false) == true
+            && request.resource.data.status == 'confirmed'
+            && request.resource.data.get('cancelRequested', false) == false
+            && request.resource.data.get('cancelRequestDeclineReason', '').size() <= 200)
+          // 매장 owner/member: 운영 상태 갱신 (시간 제약 없음).
+          // 매장 직접 취소 시 cancelledBy='store' 강제 — 본인 우회 방지.
           // 그 외 상태 전환(pending→confirmed/rejected/no_show/completed)은 자유.
           || ((isStoreOwner(storeId) || isStoreMember(storeId))
             && (
