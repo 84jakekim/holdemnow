@@ -3,6 +3,9 @@ import { JetBrains_Mono, Fraunces } from 'next/font/google';
 import Script from 'next/script';
 import PWAUpdateManager from '@/components/PWAUpdateManager';
 import './globals.css';
+// 다크모드 Tailwind override — Tailwind v4가 globals.css 안의 utility override를
+// tree-shake로 제거하는 문제 차단. 별도 raw CSS 파일로 분리해 빌드 파이프라인 우회.
+import '@/styles/dark-overrides.css';
 
 const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY ?? '';
 const APP_VARIANT = (process.env.NEXT_PUBLIC_APP_VARIANT ?? 'app').trim().toLowerCase();

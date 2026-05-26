@@ -1,0 +1,135 @@
+/* 다크모드 Tailwind 하드코딩 색상 일괄 override (2026-05-27)
+   매장 어드민, 본사 어드민, 기타 페이지의 .text-gray-*, .bg-white 등이
+   다크모드에서 검정 폰트로 보이지 않는 문제 차단.
+
+   2026-05-27 5차: Tailwind v4가 globals.css 안에 박은 user CSS의
+   .bg-white / .text-gray-900 같은 utility override를 빌드 시 제거하던
+   문제 발견 → 별도 raw CSS 파일로 분리해 빌드 파이프라인 우회.
+ * 우선순위 보장 + lightningcss optimizer 통과. */
+
+html[data-theme="dark"] .bg-white            { background-color: var(--bg) !important; }
+html[data-theme="dark"] .bg-gray-50          { background-color: var(--bg-sub) !important; }
+html[data-theme="dark"] .bg-gray-100         { background-color: var(--surface-1) !important; }
+html[data-theme="dark"] .bg-gray-200         { background-color: var(--surface-2) !important; }
+
+html[data-theme="dark"] .text-black          { color: var(--text-1) !important; }
+html[data-theme="dark"] .text-gray-900       { color: var(--text-1) !important; }
+html[data-theme="dark"] .text-gray-800       { color: var(--text-1) !important; }
+html[data-theme="dark"] .text-gray-700       { color: var(--text-2) !important; }
+html[data-theme="dark"] .text-gray-600       { color: var(--text-2) !important; }
+html[data-theme="dark"] .text-gray-500       { color: var(--text-3) !important; }
+html[data-theme="dark"] .text-gray-400       { color: var(--text-3) !important; }
+
+html[data-theme="dark"] .border-gray-100     { border-color: var(--border) !important; }
+html[data-theme="dark"] .border-gray-200     { border-color: var(--border) !important; }
+html[data-theme="dark"] .border-gray-300     { border-color: var(--border-strong) !important; }
+
+/* divide-* (Tailwind 자식 분리선) — admin 테이블/리스트에서 자주 사용 */
+html[data-theme="dark"] .divide-gray-100 > * + * { border-color: var(--border) !important; }
+html[data-theme="dark"] .divide-gray-200 > * + * { border-color: var(--border) !important; }
+
+/* 다크모드 — hover/추가 회색·placeholder 보강 (2026-05-27 2차) */
+html[data-theme="dark"] .bg-gray-300         { background-color: var(--surface-3) !important; }
+html[data-theme="dark"] .hover\:bg-gray-50:hover  { background-color: var(--bg-sub) !important; }
+html[data-theme="dark"] .hover\:bg-gray-100:hover { background-color: var(--surface-1) !important; }
+html[data-theme="dark"] .hover\:bg-gray-200:hover { background-color: var(--surface-2) !important; }
+html[data-theme="dark"] .hover\:text-gray-700:hover { color: var(--text-2) !important; }
+html[data-theme="dark"] .hover\:text-gray-900:hover { color: var(--text-1) !important; }
+
+/* placeholder — admin input들이 텍스트 가시성 부족 */
+html[data-theme="dark"] .placeholder\:text-gray-400::placeholder,
+html[data-theme="dark"] .placeholder\:text-gray-500::placeholder {
+  color: var(--text-3) !important;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--text-3) !important;
+}
+
+/* divide-x/divide-y 자식 분리선 보강 */
+html[data-theme="dark"] .divide-gray-100 > * + *,
+html[data-theme="dark"] .divide-gray-200 > * + *,
+html[data-theme="dark"] .divide-gray-300 > * + * { border-color: var(--border) !important; }
+
+/* ─── 다크모드 — 옅은 색 배경 카드 대응 (2026-05-27 3차)
+ * admin 페이지에서 bg-amber-50 / bg-blue-50 / bg-red-50 등
+ * 옅은 색 배경 카드가 다크모드에 그대로 노출 → 안 보임. */
+
+/* 옅은 50 배경 → 같은 색 12% 투명도 (어두운 톤 위에 살짝 보임) */
+html[data-theme="dark"] .bg-amber-50   { background-color: rgba(245,158,11,0.12) !important; }
+html[data-theme="dark"] .bg-blue-50    { background-color: rgba(59,130,246,0.12) !important; }
+html[data-theme="dark"] .bg-green-50   { background-color: rgba(34,197,94,0.12) !important; }
+html[data-theme="dark"] .bg-emerald-50 { background-color: rgba(16,185,129,0.12) !important; }
+html[data-theme="dark"] .bg-red-50     { background-color: rgba(239,68,68,0.12) !important; }
+html[data-theme="dark"] .bg-yellow-50  { background-color: rgba(234,179,8,0.12) !important; }
+html[data-theme="dark"] .bg-pink-50    { background-color: rgba(255,31,143,0.12) !important; }
+html[data-theme="dark"] .bg-orange-50  { background-color: rgba(249,115,22,0.12) !important; }
+html[data-theme="dark"] .bg-purple-50  { background-color: rgba(168,85,247,0.12) !important; }
+html[data-theme="dark"] .bg-indigo-50  { background-color: rgba(99,102,241,0.12) !important; }
+html[data-theme="dark"] .bg-teal-50    { background-color: rgba(20,184,166,0.12) !important; }
+html[data-theme="dark"] .bg-cyan-50    { background-color: rgba(6,182,212,0.12) !important; }
+
+/* 100 배경 → 18% (살짝 더 진함) */
+html[data-theme="dark"] .bg-amber-100   { background-color: rgba(245,158,11,0.18) !important; }
+html[data-theme="dark"] .bg-blue-100    { background-color: rgba(59,130,246,0.18) !important; }
+html[data-theme="dark"] .bg-green-100   { background-color: rgba(34,197,94,0.18) !important; }
+html[data-theme="dark"] .bg-emerald-100 { background-color: rgba(16,185,129,0.18) !important; }
+html[data-theme="dark"] .bg-red-100     { background-color: rgba(239,68,68,0.18) !important; }
+html[data-theme="dark"] .bg-yellow-100  { background-color: rgba(234,179,8,0.18) !important; }
+html[data-theme="dark"] .bg-pink-100    { background-color: rgba(255,31,143,0.18) !important; }
+html[data-theme="dark"] .bg-orange-100  { background-color: rgba(249,115,22,0.18) !important; }
+html[data-theme="dark"] .bg-purple-100  { background-color: rgba(168,85,247,0.18) !important; }
+html[data-theme="dark"] .bg-indigo-100  { background-color: rgba(99,102,241,0.18) !important; }
+
+/* 200 배경 → 24% */
+html[data-theme="dark"] .bg-amber-200   { background-color: rgba(245,158,11,0.24) !important; }
+html[data-theme="dark"] .bg-blue-200    { background-color: rgba(59,130,246,0.24) !important; }
+html[data-theme="dark"] .bg-red-200     { background-color: rgba(239,68,68,0.24) !important; }
+html[data-theme="dark"] .bg-pink-200    { background-color: rgba(255,31,143,0.24) !important; }
+html[data-theme="dark"] .bg-purple-200  { background-color: rgba(168,85,247,0.24) !important; }
+
+/* text-700/800 (옅은 배경 위 어두운 텍스트) → 다크 모드용 밝은 톤 */
+html[data-theme="dark"] .text-amber-700,
+html[data-theme="dark"] .text-amber-800   { color: #FCD34D !important; }
+html[data-theme="dark"] .text-amber-600   { color: #FBBF24 !important; }
+html[data-theme="dark"] .text-blue-700,
+html[data-theme="dark"] .text-blue-800    { color: #93C5FD !important; }
+html[data-theme="dark"] .text-blue-600    { color: #60A5FA !important; }
+html[data-theme="dark"] .text-emerald-700,
+html[data-theme="dark"] .text-emerald-800,
+html[data-theme="dark"] .text-green-700,
+html[data-theme="dark"] .text-green-800   { color: #6EE7B7 !important; }
+html[data-theme="dark"] .text-green-600   { color: #4ADE80 !important; }
+html[data-theme="dark"] .text-red-700,
+html[data-theme="dark"] .text-red-800     { color: #FCA5A5 !important; }
+html[data-theme="dark"] .text-red-600     { color: #F87171 !important; }
+html[data-theme="dark"] .text-red-500     { color: #EF4444 !important; }
+html[data-theme="dark"] .text-pink-700,
+html[data-theme="dark"] .text-pink-800    { color: #F9A8D4 !important; }
+html[data-theme="dark"] .text-purple-700,
+html[data-theme="dark"] .text-purple-800  { color: #C4B5FD !important; }
+html[data-theme="dark"] .text-orange-700,
+html[data-theme="dark"] .text-orange-800  { color: #FDBA74 !important; }
+html[data-theme="dark"] .text-yellow-700,
+html[data-theme="dark"] .text-yellow-800  { color: #FDE047 !important; }
+
+/* border-color: 옅은 보더 → 같은 색 30% 투명 */
+html[data-theme="dark"] .border-amber-100,
+html[data-theme="dark"] .border-amber-200,
+html[data-theme="dark"] .border-amber-300   { border-color: rgba(245,158,11,0.30) !important; }
+html[data-theme="dark"] .border-blue-100,
+html[data-theme="dark"] .border-blue-200    { border-color: rgba(59,130,246,0.30) !important; }
+html[data-theme="dark"] .border-green-100,
+html[data-theme="dark"] .border-green-200,
+html[data-theme="dark"] .border-emerald-100,
+html[data-theme="dark"] .border-emerald-200 { border-color: rgba(16,185,129,0.30) !important; }
+html[data-theme="dark"] .border-red-100,
+html[data-theme="dark"] .border-red-200     { border-color: rgba(239,68,68,0.30) !important; }
+html[data-theme="dark"] .border-yellow-100,
+html[data-theme="dark"] .border-yellow-200,
+html[data-theme="dark"] .border-yellow-300  { border-color: rgba(234,179,8,0.30) !important; }
+html[data-theme="dark"] .border-pink-100,
+html[data-theme="dark"] .border-pink-200    { border-color: rgba(255,31,143,0.30) !important; }
+html[data-theme="dark"] .border-purple-100,
+html[data-theme="dark"] .border-purple-200  { border-color: rgba(168,85,247,0.30) !important; }
+
