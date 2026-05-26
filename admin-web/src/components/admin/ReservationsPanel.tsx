@@ -19,6 +19,13 @@ import {
  * ReservationsPanel — 매장 어드민 예약 관리 패널
  * /admin/[storeId] 의 activeMenu === 'reservations' 일 때 렌더
  * 데이터: stores/{storeId}/reservations (실시간 구독)
+ *
+ * 2026-05-27 일자별 그룹 + 통계 카드 + sticky 날짜 헤더 + 검색.
+ *  - 상단: 통계 4카드 (오늘/이번주/이번달/처리 대기)
+ *  - 처리 대기 섹션 (취소 신청 + pending) — 일자 무관 최상단
+ *  - 일자별 sticky 헤더 + 카드 stack (그룹 내 시간순)
+ *  - 날짜 칩 네비게이션 (오늘/내일/이번주/지난)
+ *  - 검색: 이름/전화번호
  * ========================================================== */
 
 interface Props {
@@ -26,6 +33,7 @@ interface Props {
 }
 
 type FilterKey = 'all' | 'pending' | 'confirmed' | 'rejected_cancelled' | 'completed';
+type DateRangeKey = 'all' | 'today' | 'tomorrow' | 'this_week' | 'past';
 
 const FILTERS: { id: FilterKey; label: string }[] = [
   { id: 'all', label: '전체' },
@@ -35,14 +43,75 @@ const FILTERS: { id: FilterKey; label: string }[] = [
   { id: 'completed', label: '완료' },
 ];
 
+const DATE_RANGES: { id: DateRangeKey; label: string }[] = [
+  { id: 'all', label: '전체' },
+  { id: 'today', label: '오늘' },
+  { id: 'tomorrow', label: '내일' },
+  { id: 'this_week', label: '이번 주' },
+  { id: 'past', label: '지난' },
+];
+
 // 24시간 임박 기준
 const SOON_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// 일자별 그룹 key: YYYY-MM-DD (로컬 시간 기준)
+function dayKey(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// 자정 ms (오늘 0시)
+function startOfToday(): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+// 이번 주의 시작(월요일 0시) ms
+function startOfThisWeek(): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0=일,1=월,...
+  const diff = day === 0 ? -6 : 1 - day; // 월요일까지
+  d.setDate(d.getDate() + diff);
+  return d.getTime();
+}
+
+function isInDateRange(reservedMs: number, range: DateRangeKey): boolean {
+  if (range === 'all') return true;
+  const t0 = startOfToday();
+  if (range === 'today') return reservedMs >= t0 && reservedMs < t0 + DAY_MS;
+  if (range === 'tomorrow') return reservedMs >= t0 + DAY_MS && reservedMs < t0 + 2 * DAY_MS;
+  if (range === 'this_week') {
+    const w0 = startOfThisWeek();
+    return reservedMs >= w0 && reservedMs < w0 + 7 * DAY_MS;
+  }
+  if (range === 'past') return reservedMs < t0;
+  return true;
+}
+
+// 일자 헤더 라벨 (예: "5/27 화 · 오늘", "5/28 수 · 내일", "6/1 일")
+const DOW_KR = ['일', '월', '화', '수', '목', '금', '토'];
+function formatDayHeader(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const t0 = startOfToday();
+  const ms = date.getTime();
+  const base = `${m}/${d} ${DOW_KR[date.getDay()]}`;
+  if (ms === t0) return `${base} · 오늘`;
+  if (ms === t0 + DAY_MS) return `${base} · 내일`;
+  if (ms === t0 - DAY_MS) return `${base} · 어제`;
+  return base;
+}
 
 export default function ReservationsPanel({ storeId }: Props) {
   const [items, setItems] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [rejectTarget, setRejectTarget] = useState<Reservation | null>(null);
   const [storeCancelTarget, setStoreCancelTarget] = useState<Reservation | null>(null);
   const [declineTarget, setDeclineTarget] = useState<Reservation | null>(null);
@@ -70,27 +139,124 @@ export default function ReservationsPanel({ storeId }: Props) {
     [items],
   );
 
-  const filtered = useMemo(() => {
-    if (filter === 'all') return items;
-    if (filter === 'rejected_cancelled') {
-      return items.filter((r) => r.status === 'rejected' || r.status === 'cancelled');
+  // ─── 통계 (오늘/이번주/이번달/확정/처리 대기) ────────────────────
+  const stats = useMemo(() => {
+    const t0 = startOfToday();
+    const w0 = startOfThisWeek();
+    const m0 = (() => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(1);
+      return d.getTime();
+    })();
+    let today = 0, week = 0, month = 0, confirmed = 0;
+    for (const r of items) {
+      const ms = r.reservedFor?.toMillis?.() ?? 0;
+      if (!ms) continue;
+      // 활성 상태(pending/confirmed)만 카운트 — 취소/거부/완료 제외
+      if (r.status !== 'pending' && r.status !== 'confirmed') continue;
+      if (ms >= t0 && ms < t0 + DAY_MS) today += 1;
+      if (ms >= w0 && ms < w0 + 7 * DAY_MS) week += 1;
+      if (ms >= m0) month += 1;
+      if (r.status === 'confirmed') confirmed += 1;
     }
-    return items.filter((r) => r.status === filter);
-  }, [items, filter]);
+    return { today, week, month, confirmed };
+  }, [items]);
 
-  // 전체 보기일 때 — 우선순위: ①cancel 신청(confirmed+cancelRequested) ②pending ③나머지
-  const sorted = useMemo(() => {
-    if (filter !== 'all') return filtered;
-    const cancelReq = filtered.filter(
-      (r) => r.status === 'confirmed' && r.cancelRequested === true,
-    );
-    const pending = filtered.filter((r) => r.status === 'pending');
-    const rest = filtered.filter(
+  // ─── 필터 적용 (status + dateRange + search) ────────────────────
+  const filtered = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return items.filter((r) => {
+      // status filter
+      if (filter !== 'all') {
+        if (filter === 'rejected_cancelled') {
+          if (r.status !== 'rejected' && r.status !== 'cancelled') return false;
+        } else if (r.status !== filter) {
+          return false;
+        }
+      }
+      // date range filter
+      const ms = r.reservedFor?.toMillis?.() ?? 0;
+      if (!isInDateRange(ms, dateRange)) return false;
+      // search filter
+      if (term) {
+        const name = (r.authorName || '').toLowerCase();
+        const phone = (r.authorPhone || '').replace(/[^0-9]/g, '');
+        const termDigits = term.replace(/[^0-9]/g, '');
+        const nameHit = name.includes(term);
+        const phoneHit = termDigits.length > 0 && phone.includes(termDigits);
+        if (!nameHit && !phoneHit) return false;
+      }
+      return true;
+    });
+  }, [items, filter, dateRange, searchTerm]);
+
+  // ─── "처리 대기" 우선 섹션 + 일자별 그룹 ─────────────────────────
+  // 처리 대기 = pending + cancelRequested(confirmed+cancelRequested=true)
+  // — 일자 무관. 매장 사장의 즉시 액션 영역.
+  const urgentItems = useMemo(() => {
+    return filtered.filter(
       (r) =>
-        !(r.status === 'confirmed' && r.cancelRequested === true) && r.status !== 'pending',
+        r.status === 'pending' ||
+        (r.status === 'confirmed' && r.cancelRequested === true),
     );
-    return [...cancelReq, ...pending, ...rest];
-  }, [filtered, filter]);
+  }, [filtered]);
+
+  const restItems = useMemo(() => {
+    return filtered.filter(
+      (r) =>
+        !(
+          r.status === 'pending' ||
+          (r.status === 'confirmed' && r.cancelRequested === true)
+        ),
+    );
+  }, [filtered]);
+
+  // 일자별 그룹화. 오늘·미래는 ASC(가까운 일자 먼저), 과거는 DESC(최근 먼저).
+  const dayGroups = useMemo(() => {
+    const t0 = startOfToday();
+    const map = new Map<string, Reservation[]>();
+    for (const r of restItems) {
+      const ms = r.reservedFor?.toMillis?.() ?? 0;
+      const k = ms ? dayKey(ms) : 'unknown';
+      const arr = map.get(k) ?? [];
+      arr.push(r);
+      map.set(k, arr);
+    }
+    // 그룹 내 시간순 ASC
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const aa = a.reservedFor?.toMillis?.() ?? 0;
+        const bb = b.reservedFor?.toMillis?.() ?? 0;
+        return aa - bb;
+      });
+    }
+    // 그룹 키 정렬: 오늘·미래 ASC → 과거 DESC
+    const keys = Array.from(map.keys()).filter((k) => k !== 'unknown');
+    const future = keys
+      .filter((k) => {
+        const [y, m, d] = k.split('-').map(Number);
+        return new Date(y, m - 1, d).getTime() >= t0;
+      })
+      .sort();
+    const past = keys
+      .filter((k) => {
+        const [y, m, d] = k.split('-').map(Number);
+        return new Date(y, m - 1, d).getTime() < t0;
+      })
+      .sort()
+      .reverse();
+    const ordered: { key: string; items: Reservation[] }[] = [];
+    for (const k of [...future, ...past]) {
+      ordered.push({ key: k, items: map.get(k)! });
+    }
+    if (map.has('unknown')) {
+      ordered.push({ key: 'unknown', items: map.get('unknown')! });
+    }
+    return ordered;
+  }, [restItems]);
+
+  const totalVisible = urgentItems.length + restItems.length;
 
   async function handleApprove(r: Reservation) {
     if (busyId) return;
@@ -162,6 +328,8 @@ export default function ReservationsPanel({ storeId }: Props) {
     }
   }
 
+  const urgentCount = urgentItems.length;
+
   return (
     <div>
       {/* 헤더 */}
@@ -171,14 +339,27 @@ export default function ReservationsPanel({ storeId }: Props) {
           📅 예약 관리
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>
-          사용자가 보낸 방문 예약을 실시간으로 확인하고 승인·거부하세요.
+          일자별로 정리된 예약을 확인하고 승인·거부하세요. 90일 이상 지난 종료 예약은 자동 삭제됩니다.
         </p>
+      </div>
+
+      {/* 통계 카드 4종 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-5">
+        <StatCard label="오늘 예약" value={stats.today} accent="#FF1F8F" />
+        <StatCard label="이번 주" value={stats.week} accent="#16a34a" />
+        <StatCard label="이번 달" value={stats.month} accent="#3b82f6" />
+        <StatCard
+          label="처리 대기"
+          value={pendingCount + cancelRequestCount}
+          accent="#F59E0B"
+          emphasize={pendingCount + cancelRequestCount > 0}
+        />
       </div>
 
       {/* 사용자 취소 신청 알림 띠 */}
       {cancelRequestCount > 0 && (
         <div
-          className="mb-4 px-3 py-2.5 flex items-center gap-2 text-[13px] font-bold"
+          className="mb-3 px-3 py-2.5 flex items-center gap-2 text-[13px] font-bold"
           style={{
             background: 'rgba(245,158,11,0.10)',
             border: '1px solid rgba(245,158,11,0.35)',
@@ -187,11 +368,74 @@ export default function ReservationsPanel({ storeId }: Props) {
           }}
         >
           <span aria-hidden>🔔</span>
-          사용자 취소 신청 {cancelRequestCount}건 대기 중 — 카드에서 승인/거절을 선택하세요.
+          사용자 취소 신청 {cancelRequestCount}건 대기 중 — 아래 처리 대기 섹션에서 승인/거절을 선택하세요.
         </div>
       )}
 
-      {/* 필터 칩 */}
+      {/* 검색 + 날짜 범위 칩 */}
+      <div className="flex flex-col md:flex-row gap-2.5 mb-3">
+        <div className="relative flex-1 min-w-0">
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="이름 또는 전화번호로 검색…"
+            className="w-full pl-9 pr-3 py-2 text-[13px]"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-lg)',
+              color: 'var(--text-1)',
+              outline: 'none',
+            }}
+          />
+          <span
+            aria-hidden
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px]"
+            style={{ color: 'var(--text-3)' }}
+          >
+            🔍
+          </span>
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] px-1.5 py-0.5"
+              style={{ color: 'var(--text-3)' }}
+              aria-label="검색어 지우기"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {DATE_RANGES.map((d) => {
+            const isActive = dateRange === d.id;
+            return (
+              <button
+                key={d.id}
+                onClick={() => setDateRange(d.id)}
+                className="px-3 py-1.5 rounded-full text-[11.5px] font-bold transition"
+                style={
+                  isActive
+                    ? {
+                        background: 'var(--brand)',
+                        color: '#fff',
+                        border: '1px solid var(--brand)',
+                      }
+                    : {
+                        background: 'var(--surface-1)',
+                        color: 'var(--text-1)',
+                        border: '1px solid var(--border)',
+                      }
+                }
+              >
+                {d.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 상태 필터 칩 */}
       <div className="flex flex-wrap gap-2 mb-5">
         {FILTERS.map((f) => {
           const isActive = filter === f.id;
@@ -248,25 +492,94 @@ export default function ReservationsPanel({ storeId }: Props) {
         </div>
       )}
 
-      {/* 본문 */}
+      {/* 본문 — 일자별 그룹 */}
       {loading ? (
         <div className="text-sm" style={{ color: 'var(--text-2)' }}>로딩 중…</div>
-      ) : sorted.length === 0 ? (
+      ) : totalVisible === 0 ? (
         <EmptyState filter={filter} />
       ) : (
-        <div className="space-y-3">
-          {sorted.map((r) => (
-            <ReservationCard
-              key={r.id}
-              reservation={r}
-              storeId={storeId}
-              busy={busyId === r.id}
-              onApprove={() => handleApprove(r)}
-              onRejectOpen={() => setRejectTarget(r)}
-              onStoreCancelOpen={() => setStoreCancelTarget(r)}
-              onApproveCancellation={() => handleApproveCancellation(r)}
-              onDeclineCancellationOpen={() => setDeclineTarget(r)}
-            />
+        <div className="space-y-5">
+          {/* 처리 대기 섹션 (일자 무관 최상단) */}
+          {urgentCount > 0 && (
+            <section>
+              <div
+                className="sticky top-0 z-10 -mx-1 px-1 py-2 mb-2 flex items-center gap-2"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, var(--bg, #fafafa) 75%, rgba(250,250,250,0))',
+                }}
+              >
+                <span
+                  className="text-[10.5px] font-extrabold tracking-wider px-2 py-0.5 rounded-full"
+                  style={{ background: '#F59E0B', color: '#fff' }}
+                >
+                  🔔 처리 대기 {urgentCount}
+                </span>
+                <span className="text-[11px]" style={{ color: 'var(--text-3)' }}>
+                  취소 신청 + 새 예약 — 즉시 응답하세요
+                </span>
+              </div>
+              <div className="space-y-3">
+                {urgentItems.map((r) => (
+                  <ReservationCard
+                    key={r.id}
+                    reservation={r}
+                    storeId={storeId}
+                    busy={busyId === r.id}
+                    onApprove={() => handleApprove(r)}
+                    onRejectOpen={() => setRejectTarget(r)}
+                    onStoreCancelOpen={() => setStoreCancelTarget(r)}
+                    onApproveCancellation={() => handleApproveCancellation(r)}
+                    onDeclineCancellationOpen={() => setDeclineTarget(r)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 일자별 그룹 */}
+          {dayGroups.map((g) => (
+            <section key={g.key}>
+              <div
+                className="sticky top-0 z-10 -mx-1 px-1 py-2 mb-2 flex items-center gap-2"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, var(--bg, #fafafa) 75%, rgba(250,250,250,0))',
+                }}
+              >
+                <span
+                  className="text-[12.5px] font-extrabold"
+                  style={{ color: 'var(--text-1)' }}
+                >
+                  {g.key === 'unknown' ? '날짜 미정' : formatDayHeader(g.key)}
+                </span>
+                <span
+                  className="text-[10.5px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: 'var(--surface-1)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-2)',
+                  }}
+                >
+                  {g.items.length}건
+                </span>
+              </div>
+              <div className="space-y-3">
+                {g.items.map((r) => (
+                  <ReservationCard
+                    key={r.id}
+                    reservation={r}
+                    storeId={storeId}
+                    busy={busyId === r.id}
+                    onApprove={() => handleApprove(r)}
+                    onRejectOpen={() => setRejectTarget(r)}
+                    onStoreCancelOpen={() => setStoreCancelTarget(r)}
+                    onApproveCancellation={() => handleApproveCancellation(r)}
+                    onDeclineCancellationOpen={() => setDeclineTarget(r)}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -300,6 +613,50 @@ export default function ReservationsPanel({ storeId }: Props) {
           onConfirm={(reason) => handleDeclineCancellation(declineTarget, reason)}
         />
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 통계 카드
+// ─────────────────────────────────────────────────────────────
+
+function StatCard({
+  label,
+  value,
+  accent,
+  emphasize = false,
+}: {
+  label: string;
+  value: number;
+  accent: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div
+      className="px-3 py-2.5 lift"
+      style={{
+        background: emphasize
+          ? `linear-gradient(135deg, ${accent}14, var(--surface-1))`
+          : 'var(--surface-1)',
+        border: `1px solid ${emphasize ? `${accent}55` : 'var(--border)'}`,
+        borderLeft: `4px solid ${accent}`,
+        borderRadius: 'var(--r-lg)',
+        boxShadow: 'var(--shadow-card)',
+      }}
+    >
+      <div
+        className="text-[10.5px] font-bold tracking-wider mb-0.5"
+        style={{ color: 'var(--text-3)' }}
+      >
+        {label}
+      </div>
+      <div
+        className="text-[22px] font-extrabold leading-none"
+        style={{ color: emphasize ? accent : 'var(--text-1)' }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
