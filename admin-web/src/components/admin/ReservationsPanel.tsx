@@ -5,9 +5,12 @@ import {
   subscribeStoreReservations,
   respondToReservation,
   cancelReservationByStore,
+  approveStoreCancellation,
+  declineCancellation,
   markReservationRead,
   reservationStatusLabel,
   reservationCancelLabel,
+  MAX_CANCEL_REQUEST_DECLINE_REASON_LEN,
   type Reservation,
   type ReservationStatus,
 } from '@/lib/reservations';
@@ -42,6 +45,7 @@ export default function ReservationsPanel({ storeId }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [rejectTarget, setRejectTarget] = useState<Reservation | null>(null);
   const [storeCancelTarget, setStoreCancelTarget] = useState<Reservation | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<Reservation | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,6 +63,13 @@ export default function ReservationsPanel({ storeId }: Props) {
     [items],
   );
 
+  // 사용자 취소 신청 카운트 (confirmed + cancelRequested=true)
+  const cancelRequestCount = useMemo(
+    () =>
+      items.filter((r) => r.status === 'confirmed' && r.cancelRequested === true).length,
+    [items],
+  );
+
   const filtered = useMemo(() => {
     if (filter === 'all') return items;
     if (filter === 'rejected_cancelled') {
@@ -67,12 +78,18 @@ export default function ReservationsPanel({ storeId }: Props) {
     return items.filter((r) => r.status === filter);
   }, [items, filter]);
 
-  // 전체 보기일 때 — pending 먼저, 그다음 나머지
+  // 전체 보기일 때 — 우선순위: ①cancel 신청(confirmed+cancelRequested) ②pending ③나머지
   const sorted = useMemo(() => {
     if (filter !== 'all') return filtered;
+    const cancelReq = filtered.filter(
+      (r) => r.status === 'confirmed' && r.cancelRequested === true,
+    );
     const pending = filtered.filter((r) => r.status === 'pending');
-    const rest = filtered.filter((r) => r.status !== 'pending');
-    return [...pending, ...rest];
+    const rest = filtered.filter(
+      (r) =>
+        !(r.status === 'confirmed' && r.cancelRequested === true) && r.status !== 'pending',
+    );
+    return [...cancelReq, ...pending, ...rest];
   }, [filtered, filter]);
 
   async function handleApprove(r: Reservation) {
@@ -117,6 +134,34 @@ export default function ReservationsPanel({ storeId }: Props) {
     }
   }
 
+  async function handleApproveCancellation(r: Reservation) {
+    if (busyId) return;
+    if (!confirm('사용자의 취소 신청을 승인할까요?\n예약이 취소되고 사용자에게 알림이 발송됩니다.')) return;
+    setBusyId(r.id);
+    try {
+      await approveStoreCancellation(storeId, r.id);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`승인 실패: ${msg}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDeclineCancellation(r: Reservation, declineReason: string) {
+    if (busyId) return;
+    setBusyId(r.id);
+    try {
+      await declineCancellation(storeId, r.id, declineReason);
+      setDeclineTarget(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`거절 실패: ${msg}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div>
       {/* 헤더 */}
@@ -129,6 +174,22 @@ export default function ReservationsPanel({ storeId }: Props) {
           사용자가 보낸 방문 예약을 실시간으로 확인하고 승인·거부하세요.
         </p>
       </div>
+
+      {/* 사용자 취소 신청 알림 띠 */}
+      {cancelRequestCount > 0 && (
+        <div
+          className="mb-4 px-3 py-2.5 flex items-center gap-2 text-[13px] font-bold"
+          style={{
+            background: 'rgba(245,158,11,0.10)',
+            border: '1px solid rgba(245,158,11,0.35)',
+            color: '#b45309',
+            borderRadius: 'var(--r-lg)',
+          }}
+        >
+          <span aria-hidden>🔔</span>
+          사용자 취소 신청 {cancelRequestCount}건 대기 중 — 카드에서 승인/거절을 선택하세요.
+        </div>
+      )}
 
       {/* 필터 칩 */}
       <div className="flex flex-wrap gap-2 mb-5">
@@ -203,6 +264,8 @@ export default function ReservationsPanel({ storeId }: Props) {
               onApprove={() => handleApprove(r)}
               onRejectOpen={() => setRejectTarget(r)}
               onStoreCancelOpen={() => setStoreCancelTarget(r)}
+              onApproveCancellation={() => handleApproveCancellation(r)}
+              onDeclineCancellationOpen={() => setDeclineTarget(r)}
             />
           ))}
         </div>
@@ -225,6 +288,16 @@ export default function ReservationsPanel({ storeId }: Props) {
           busy={busyId === storeCancelTarget.id}
           onClose={() => setStoreCancelTarget(null)}
           onConfirm={(reason, memo) => handleStoreCancel(storeCancelTarget, reason, memo)}
+        />
+      )}
+
+      {/* 사용자 취소 신청 거절 모달 */}
+      {declineTarget && (
+        <DeclineCancellationModal
+          reservation={declineTarget}
+          busy={busyId === declineTarget.id}
+          onClose={() => setDeclineTarget(null)}
+          onConfirm={(reason) => handleDeclineCancellation(declineTarget, reason)}
         />
       )}
     </div>
@@ -270,6 +343,8 @@ interface CardProps {
   onApprove: () => void;
   onRejectOpen: () => void;
   onStoreCancelOpen: () => void;
+  onApproveCancellation: () => void;
+  onDeclineCancellationOpen: () => void;
 }
 
 function ReservationCard({
@@ -279,6 +354,8 @@ function ReservationCard({
   onApprove,
   onRejectOpen,
   onStoreCancelOpen,
+  onApproveCancellation,
+  onDeclineCancellationOpen,
 }: CardProps) {
   const [noteOpen, setNoteOpen] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -290,7 +367,9 @@ function ReservationCard({
   const phone = r.authorPhone?.trim();
   const note = r.note?.trim();
   const responseNote = r.responseNote?.trim();
-  const isUnread = !r.readByStore && r.status === 'pending';
+  const hasCancelRequest = r.status === 'confirmed' && r.cancelRequested === true;
+  // unread: 신규 pending OR 신규 cancel 신청
+  const isUnread = !r.readByStore && (r.status === 'pending' || hasCancelRequest);
 
   function handleMouseEnter() {
     if (!isUnread) return;
@@ -319,9 +398,15 @@ function ReservationCard({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       style={{
-        background: tone.bg,
-        border: `1px solid ${tone.border}`,
-        borderLeft: isUnread ? '4px solid #F59E0B' : `4px solid ${tone.leftBar}`,
+        background: hasCancelRequest ? 'rgba(245,158,11,0.05)' : tone.bg,
+        border: hasCancelRequest
+          ? '1px solid rgba(245,158,11,0.40)'
+          : `1px solid ${tone.border}`,
+        borderLeft: hasCancelRequest
+          ? '4px solid #F59E0B'
+          : isUnread
+            ? '4px solid #F59E0B'
+            : `4px solid ${tone.leftBar}`,
         borderRadius: 'var(--r-lg)',
         cursor: 'default',
         boxShadow: 'var(--shadow-card)',
@@ -337,7 +422,15 @@ function ReservationCard({
             ? reservationCancelLabel(r.cancelledBy)
             : reservationStatusLabel(r.status)}
         </span>
-        {isUnread && (
+        {hasCancelRequest && (
+          <span
+            className="text-[10px] font-extrabold tracking-wider px-2 py-0.5 rounded-full"
+            style={{ background: '#F59E0B', color: '#fff' }}
+          >
+            🔔 사용자 취소 신청
+          </span>
+        )}
+        {isUnread && !hasCancelRequest && (
           <span
             className="text-[10px] font-extrabold tracking-wider px-2 py-0.5 rounded-full"
             style={{ background: '#F59E0B', color: '#fff' }}
@@ -405,6 +498,37 @@ function ReservationCard({
         </button>
       )}
 
+      {/* 사용자 취소 신청 사유/메모 — confirmed + cancelRequested=true */}
+      {hasCancelRequest && (
+        <div
+          className="px-2.5 py-2 text-[12px] mb-2 space-y-1"
+          style={{
+            background: 'rgba(245,158,11,0.10)',
+            border: '1px solid rgba(245,158,11,0.30)',
+            borderRadius: '8px',
+            color: '#92400E',
+          }}
+        >
+          {r.cancelRequestReason && (
+            <div>
+              <span className="font-bold mr-1">신청 사유:</span>
+              {r.cancelRequestReason}
+            </div>
+          )}
+          {r.cancelRequestNote && (
+            <div>
+              <span className="font-bold mr-1">메모:</span>
+              {r.cancelRequestNote}
+            </div>
+          )}
+          {r.cancelRequestedAt && (
+            <div className="text-[10.5px] opacity-75">
+              신청 {formatRelative(r.cancelRequestedAt.toMillis?.() ?? 0)}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 매장 응답 메모 (있을 때) */}
       {responseNote && (
         <div
@@ -421,26 +545,55 @@ function ReservationCard({
         </div>
       )}
 
-      {/* 매장 취소 사유·메모 (cancelled + cancelledBy='store') */}
-      {r.status === 'cancelled' && r.cancelledBy === 'store' && (r.cancelReason || r.cancelMemo) && (
+      {/* 매장 취소 사유·메모 (cancelled + cancelledBy='store' 또는 'store_approved') */}
+      {r.status === 'cancelled' && (r.cancelledBy === 'store' || r.cancelledBy === 'store_approved') && (
         <div
           className="px-2.5 py-1.5 text-[12px] mb-2 space-y-1"
           style={{
-            background: 'rgba(107,114,128,0.06)',
-            border: '1px solid rgba(107,114,128,0.20)',
+            background:
+              r.cancelledBy === 'store_approved'
+                ? 'rgba(16,185,129,0.06)'
+                : 'rgba(107,114,128,0.06)',
+            border:
+              r.cancelledBy === 'store_approved'
+                ? '1px solid rgba(16,185,129,0.20)'
+                : '1px solid rgba(107,114,128,0.20)',
             borderRadius: '8px',
             color: 'var(--text-2)',
           }}
         >
-          {r.cancelReason && (
+          {r.cancelledBy === 'store_approved' && (
+            <div className="font-bold" style={{ color: '#047857' }}>
+              ✅ 사용자 신청을 매장이 승인
+            </div>
+          )}
+          {(r.cancelRequestReason || r.cancelReason) && (
             <div>
-              <span className="font-bold mr-1" style={{ color: '#6b7280' }}>취소 사유:</span>
-              {r.cancelReason}
+              <span
+                className="font-bold mr-1"
+                style={{ color: r.cancelledBy === 'store_approved' ? '#047857' : '#6b7280' }}
+              >
+                사유:
+              </span>
+              {r.cancelRequestReason || r.cancelReason}
+            </div>
+          )}
+          {r.cancelRequestNote && (
+            <div>
+              <span
+                className="font-bold mr-1"
+                style={{ color: r.cancelledBy === 'store_approved' ? '#047857' : '#6b7280' }}
+              >
+                사용자 메모:
+              </span>
+              {r.cancelRequestNote}
             </div>
           )}
           {r.cancelMemo && (
             <div>
-              <span className="font-bold mr-1" style={{ color: '#6b7280' }}>메모:</span>
+              <span className="font-bold mr-1" style={{ color: '#6b7280' }}>
+                매장 메모:
+              </span>
               {r.cancelMemo}
             </div>
           )}
@@ -473,8 +626,36 @@ function ReservationCard({
         </div>
       )}
 
-      {/* 액션 — confirmed: 매장 취소 (사용자 변심 전화 대응) */}
-      {r.status === 'confirmed' && (
+      {/* 액션 — confirmed + cancelRequested=true: 승인 / 거절 */}
+      {r.status === 'confirmed' && hasCancelRequest && (
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={onApproveCancellation}
+            disabled={busy}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px] text-white transition disabled:opacity-50"
+            style={{ background: '#dc2626' }}
+            title="사용자 취소 신청을 승인합니다 (예약 취소 완료)"
+          >
+            ✅ 승인 (취소 완료)
+          </button>
+          <button
+            onClick={onDeclineCancellationOpen}
+            disabled={busy}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px] transition disabled:opacity-50"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+            title="사용자 취소 신청을 거절합니다 (예약 유지)"
+          >
+            ❌ 거절
+          </button>
+        </div>
+      )}
+
+      {/* 액션 — confirmed + cancelRequested=false: 매장 직접 취소 (전화 케이스) */}
+      {r.status === 'confirmed' && !hasCancelRequest && (
         <div className="flex gap-2 mt-2">
           <button
             onClick={onStoreCancelOpen}
@@ -485,7 +666,7 @@ function ReservationCard({
               border: '1px solid rgba(229,62,62,0.40)',
               color: '#dc2626',
             }}
-            title="사용자 변심 / 매장 사정 등으로 확정된 예약을 취소합니다"
+            title="사용자 변심 / 매장 사정 등으로 확정된 예약을 취소합니다 (전화 통보 대응)"
           >
             🚫 매장 취소
           </button>
@@ -705,6 +886,145 @@ function StoreCancelModal({
             style={{ background: '#dc2626' }}
           >
             {busy ? '처리 중…' : '🚫 매장 취소'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 사용자 취소 신청 거절 모달
+// ─────────────────────────────────────────────────────────────
+
+const DECLINE_REASON_PRESETS = [
+  '예약 시간이 임박해 취소 어려움',
+  '대기 인원이 있어 유지 필요',
+  '매장 사정상 취소 어려움',
+  '기타 (직접 입력)',
+];
+
+function DeclineCancellationModal({
+  reservation: r,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  reservation: Reservation;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (declineReason: string) => void;
+}) {
+  const [presetIdx, setPresetIdx] = useState(0);
+  const [custom, setCustom] = useState('');
+  const reservedMs = r.reservedFor?.toMillis?.() ?? 0;
+  const isCustom = presetIdx === DECLINE_REASON_PRESETS.length - 1;
+  const effectiveReason = isCustom ? custom.trim() : DECLINE_REASON_PRESETS[presetIdx];
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm p-5 shadow-xl"
+        style={{
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-lg)',
+        }}
+      >
+        <div className="font-extrabold text-[15px] mb-1" style={{ color: 'var(--text-1)' }}>
+          ❌ 취소 신청을 거절할까요?
+        </div>
+        <div className="text-[12px] mb-3" style={{ color: 'var(--text-2)' }}>
+          {r.authorName || '익명'} · {formatWhen(reservedMs)} · {r.partySize}명
+        </div>
+
+        <div
+          className="mb-3 p-2 rounded text-[11px] leading-relaxed"
+          style={{
+            background: 'rgba(245,158,11,0.08)',
+            border: '1px solid rgba(245,158,11,0.25)',
+            color: '#b45309',
+          }}
+        >
+          ⚠️ 거절하면 예약은 그대로 유지되고, 사용자에게 거절 사유가 푸시로 발송됩니다.
+        </div>
+
+        <label className="text-[12px] font-bold block mb-1" style={{ color: 'var(--text-1)' }}>
+          거절 사유 (선택)
+        </label>
+        <div className="space-y-1.5 mb-2">
+          {DECLINE_REASON_PRESETS.map((p, i) => {
+            const active = presetIdx === i;
+            return (
+              <button
+                key={p}
+                onClick={() => setPresetIdx(i)}
+                className="w-full text-left px-2.5 py-1.5 text-[12px] transition"
+                style={{
+                  background: active ? 'rgba(229,62,62,0.06)' : 'var(--surface-1)',
+                  border: `1px solid ${active ? 'rgba(229,62,62,0.40)' : 'var(--border)'}`,
+                  borderRadius: '8px',
+                  color: active ? '#dc2626' : 'var(--text-1)',
+                  fontWeight: active ? 700 : 500,
+                }}
+              >
+                {active ? '● ' : '○ '}
+                {p}
+              </button>
+            );
+          })}
+        </div>
+        {isCustom && (
+          <>
+            <textarea
+              value={custom}
+              onChange={(e) => setCustom(e.target.value.slice(0, MAX_CANCEL_REQUEST_DECLINE_REASON_LEN))}
+              placeholder="거절 사유를 입력하세요"
+              rows={3}
+              className="w-full text-[13px] p-2.5 resize-none mt-2"
+              style={{
+                background: 'var(--surface-1)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                color: 'var(--text-1)',
+                outline: 'none',
+              }}
+            />
+            <div className="text-[10px] text-right mt-0.5" style={{ color: 'var(--text-3)' }}>
+              {custom.length}/{MAX_CANCEL_REQUEST_DECLINE_REASON_LEN}
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px]"
+            style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-1)',
+            }}
+          >
+            닫기
+          </button>
+          <button
+            onClick={() => {
+              if (isCustom && !custom.trim()) {
+                alert('거절 사유를 입력해주세요.');
+                return;
+              }
+              onConfirm(effectiveReason);
+            }}
+            disabled={busy}
+            className="flex-1 py-2 rounded-lg font-bold text-[13px] text-white disabled:opacity-50"
+            style={{ background: '#dc2626' }}
+          >
+            {busy ? '처리 중…' : '❌ 거절'}
           </button>
         </div>
       </div>
