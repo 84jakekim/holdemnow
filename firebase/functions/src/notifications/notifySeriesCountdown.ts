@@ -14,7 +14,13 @@
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
-import { gatherFcmTokens, sendAndCleanup, filterByPrefs, uidFromPath } from './_shared';
+import {
+  gatherFcmTokens,
+  sendAndCleanup,
+  filterByPrefs,
+  uidFromPath,
+  writeInAppNotificationBulk,
+} from './_shared';
 
 const TARGET_DAYS = [7, 3, 1] as const;
 
@@ -88,12 +94,14 @@ export const notifySeriesCountdown = onSchedule(
         // tournamentStart pref 재사용 (default ON) — 별도 토글 신설 시 prefs key 추가
         const allowedUids = await filterByPrefs(candidateUids, 'tournamentStart', true);
         const tokens = await gatherFcmTokens(allowedUids);
+        const emoji = dDays === 1 ? '🚨' : dDays === 3 ? '⚡' : '📅';
+        const venue = series.finalVenue ? ` · ${series.finalVenue}` : '';
+        const title = `${series.name ?? '시리즈'} 본선 D-${dDays}`;
+        const body = `${series.season ?? ''}${venue} 본선까지 ${dDays}일 남았습니다`;
         if (tokens.length > 0) {
-          const emoji = dDays === 1 ? '🚨' : dDays === 3 ? '⚡' : '📅';
-          const venue = series.finalVenue ? ` · ${series.finalVenue}` : '';
           const res = await sendAndCleanup(tokens, {
-            title: `${emoji} ${series.name ?? '시리즈'} 본선 D-${dDays}`,
-            body: `${series.season ?? ''}${venue} 본선까지 ${dDays}일 남았습니다`,
+            title: `${emoji} ${title}`,
+            body,
             data: {
               type: 'series-countdown',
               seriesId: seriesDoc.id,
@@ -104,6 +112,15 @@ export const notifySeriesCountdown = onSchedule(
             tag: `series-countdown-${seriesDoc.id}-${dDays}`,
           });
           sentCount = res.successCount;
+        }
+        if (allowedUids.length > 0) {
+          await writeInAppNotificationBulk(allowedUids, {
+            type: 'series_countdown',
+            title,
+            body,
+            linkPath: `/m/series/${seriesDoc.id}`,
+            payload: { seriesId: seriesDoc.id, dDay: dDays },
+          });
         }
       }
 

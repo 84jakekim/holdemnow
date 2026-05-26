@@ -13,6 +13,7 @@
 
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { writeInAppNotification } from './_shared';
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -99,6 +100,15 @@ export const notifyUserOnReservationConfirmed = onDocumentUpdated(
     console.log(
       `[notifyUserOnReservationConfirmed] uid=${authorUid} store=${storeId} rid=${rid} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
+
+    // 인앱 알림 doc 작성 (FCM 결과와 독립)
+    await writeInAppNotification(authorUid, {
+      type: 'reservation_confirmed',
+      title: '예약 확정',
+      body: `${storeName} ${timeStr} ${partySize}명 예약이 확정되었습니다`,
+      linkPath: '/m/reservations',
+      payload: { storeId, reservationId: rid },
+    });
 
     // Invalid/만료 토큰 자동 정리 — 동일 디바이스가 다른 사용자에게도 잔존하던 토큰을 끊는다.
     // Firebase 표준 에러 코드: messaging/registration-token-not-registered, messaging/invalid-registration-token

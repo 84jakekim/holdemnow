@@ -352,6 +352,14 @@
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "word", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "read", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

@@ -17,6 +17,7 @@
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
+import { writeInAppNotification } from './_shared';
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -140,6 +141,15 @@ export const notifyReservationReminder = onSchedule(
           `[notifyReservationReminder] uid=${authorUid} store=${storeId} rid=${rid} ` +
             `sent=${resp.successCount} failed=${resp.failureCount}`,
         );
+
+        // 인앱 알림 doc 작성
+        await writeInAppNotification(authorUid, {
+          type: 'reservation_reminder',
+          title: '곧 방문 시간',
+          body: `${storeName} ${timeStr} ${partySize}명 — 10분 후 입장하세요`,
+          linkPath: `/m/store/${storeId}`,
+          payload: { storeId, reservationId: rid },
+        });
 
         // reminderSentAt 박아 다음 cron에서 중복 발송 차단
         await doc.ref.update({

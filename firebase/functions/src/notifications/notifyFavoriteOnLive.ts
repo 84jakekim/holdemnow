@@ -14,6 +14,7 @@
 
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { writeInAppNotificationBulk } from './_shared';
 
 interface LiveSessionDoc {
   storeId?: string;
@@ -135,6 +136,15 @@ export const notifyFavoriteOnLive = onDocumentCreated(
     console.log(
       `Sent to ${tokenDocs.length} devices for store ${storeId}: ${resp.successCount} OK, ${resp.failureCount} failed`,
     );
+
+    // 인앱 알림 doc 작성 — favLive=true 사용자 전원에게
+    await writeInAppNotificationBulk(uids, {
+      type: 'favorite_live',
+      title: `${storeName} LIVE 시작`,
+      body: `${tournamentName} · 지금 진행 중`,
+      linkPath: `/m/live/${sessionId}`,
+      payload: { storeId, sessionId },
+    });
 
     // 5. 만료/무효 토큰 정리
     const cleanups: Promise<unknown>[] = [];

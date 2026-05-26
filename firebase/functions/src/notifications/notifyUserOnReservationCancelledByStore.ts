@@ -22,6 +22,7 @@
 
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { writeInAppNotification } from './_shared';
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -136,6 +137,15 @@ export const notifyUserOnReservationCancelledByStore = onDocumentUpdated(
     console.log(
       `[notifyUserOnReservationCancelledByStore] uid=${authorUid} store=${storeId} rid=${rid} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
+
+    // 인앱 알림 doc 작성 (FCM 결과와 독립)
+    await writeInAppNotification(authorUid, {
+      type: 'reservation_cancelled_by_store',
+      title: titleText,
+      body: bodyText,
+      linkPath: '/m/reservations',
+      payload: { storeId, reservationId: rid, cancelledBy: after.cancelledBy ?? 'store' },
+    });
 
     // Invalid/만료 토큰 자동 정리
     const invalidTokens: string[] = [];

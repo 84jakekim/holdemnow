@@ -325,6 +325,29 @@ service cloud.firestore {
       }
     }
 
+    // ===== 인앱 알림 (notifications) — 2026-05-27 =====
+    // 사용자별 인앱 알림 보관함. FCM OS 푸시와 별개의 in-app 알림 doc.
+    // 컬렉션: notifications/{uid}/items/{notifId}
+    //
+    // 정책:
+    //   - read: 본인만
+    //   - create: 클라이언트 금지. Cloud Functions(admin SDK)만 작성.
+    //     (admin SDK는 rules를 우회하므로 여기서는 'false'로 클라이언트만 차단.)
+    //   - update: 본인만, 그리고 'read'/'readAt' 두 필드 외 다른 필드 변경 금지.
+    //     "모두 읽음 처리" / 클릭 시 자동 read=true 전환.
+    //   - delete: 본인만 (수동 삭제) 또는 Cloud Function cron(admin SDK).
+    match /notifications/{userId} {
+      match /items/{notifId} {
+        allow read: if uid() == userId;
+        allow create: if false;  // Cloud Functions(admin SDK)만
+        // 본인이 read/readAt 필드만 변경하는 update만 허용
+        allow update: if uid() == userId
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['read', 'readAt']);
+        allow delete: if uid() == userId;
+      }
+    }
+
     // ===== 전화번호 중복 방지 인덱스 (phoneIndex) =====
     // doc id = 정규화된 한국 핸드폰 번호 (예: "01012345678").
     // 1인 1계정 정책: 어떤 가입 방식이든 사용자가 직접 입력한 전화번호로 unique 보장.

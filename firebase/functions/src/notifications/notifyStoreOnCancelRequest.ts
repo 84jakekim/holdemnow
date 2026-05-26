@@ -18,6 +18,7 @@
 
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { writeInAppNotification } from './_shared';
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -120,6 +121,15 @@ export const notifyStoreOnCancelRequest = onDocumentUpdated(
     console.log(
       `[notifyStoreOnCancelRequest] owner=${ownerUid} store=${storeId} rid=${rid} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
+
+    // 매장 owner에게 인앱 알림 doc 작성
+    await writeInAppNotification(ownerUid, {
+      type: 'cancel_request_received',
+      title: '취소 신청 수신',
+      body,
+      linkPath: `/admin/${storeId}#reservations`,
+      payload: { storeId, reservationId: rid },
+    });
 
     // Invalid/만료 토큰 자동 정리
     const invalidTokens: string[] = [];

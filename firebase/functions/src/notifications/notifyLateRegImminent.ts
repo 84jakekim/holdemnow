@@ -11,7 +11,13 @@
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
-import { gatherFcmTokens, sendAndCleanup, filterByPrefs, uidFromPath } from './_shared';
+import {
+  gatherFcmTokens,
+  sendAndCleanup,
+  filterByPrefs,
+  uidFromPath,
+  writeInAppNotificationBulk,
+} from './_shared';
 
 interface BlindLevel {
   level: number;
@@ -81,10 +87,12 @@ export const notifyLateRegImminent = onSchedule(
         // lateRegImminent는 default OFF (opt-in) — 사용자가 명시적으로 켠 경우만 발송
         const allowedUids = await filterByPrefs(candidateUids, 'lateRegImminent', false);
         const tokens = await gatherFcmTokens(allowedUids);
+        const title = `${live.storeName ?? '매장'} 등록 마감 30분 전`;
+        const body = `${live.tournamentName ?? 'LIVE 토너'} · 지금 바로 가세요`;
         if (tokens.length > 0) {
           const res = await sendAndCleanup(tokens, {
-            title: `⏰ ${live.storeName ?? '매장'} 등록 마감 30분 전`,
-            body: `${live.tournamentName ?? 'LIVE 토너'} · 지금 바로 가세요`,
+            title: `⏰ ${title}`,
+            body,
             data: {
               type: 'late-reg-imminent',
               sessionId: liveDoc.id,
@@ -95,6 +103,15 @@ export const notifyLateRegImminent = onSchedule(
             tag: `late-reg-${liveDoc.id}`,
           });
           sentCount = res.successCount;
+        }
+        if (allowedUids.length > 0) {
+          await writeInAppNotificationBulk(allowedUids, {
+            type: 'late_reg_imminent',
+            title,
+            body,
+            linkPath: `/m/live/${liveDoc.id}`,
+            payload: { sessionId: liveDoc.id, storeId: live.storeId ?? null },
+          });
         }
       }
 

@@ -11,7 +11,13 @@
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
-import { gatherFcmTokens, sendAndCleanup, filterByPrefs, uidFromPath } from './_shared';
+import {
+  gatherFcmTokens,
+  sendAndCleanup,
+  filterByPrefs,
+  uidFromPath,
+  writeInAppNotificationBulk,
+} from './_shared';
 
 export const notifyTournamentStart = onSchedule(
   {
@@ -60,10 +66,12 @@ export const notifyTournamentStart = onSchedule(
       if (candidateUids.length > 0) {
         const allowedUids = await filterByPrefs(candidateUids, 'tournamentStart', true);
         const tokens = await gatherFcmTokens(allowedUids);
+        const title = `${tourn.name ?? '관심 토너'} 1시간 전`;
+        const body = `${tourn.storeName ?? ''} · 바이인 ${(tourn.buyIn ?? 0).toLocaleString()}원`;
         if (tokens.length > 0) {
           const res = await sendAndCleanup(tokens, {
-            title: `⏰ ${tourn.name ?? '관심 토너'} 1시간 전`,
-            body: `${tourn.storeName ?? ''} · 바이인 ₩${(tourn.buyIn ?? 0).toLocaleString()}`,
+            title: `⏰ ${title}`,
+            body,
             data: {
               type: 'tournament-start',
               tournamentId: tournDoc.id,
@@ -74,6 +82,16 @@ export const notifyTournamentStart = onSchedule(
             tag: `tournament-start-${tournDoc.id}`,
           });
           sentCount = res.successCount;
+        }
+        // 인앱 알림은 prefs 통과한 uid 전원에게 (FCM 토큰 유무와 독립)
+        if (allowedUids.length > 0) {
+          await writeInAppNotificationBulk(allowedUids, {
+            type: 'tournament_start',
+            title,
+            body,
+            linkPath: `/m/store/${tourn.storeId ?? ''}`,
+            payload: { tournamentId: tournDoc.id, storeId: tourn.storeId ?? null },
+          });
         }
       }
 

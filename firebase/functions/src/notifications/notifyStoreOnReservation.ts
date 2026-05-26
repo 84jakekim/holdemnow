@@ -14,6 +14,7 @@
 
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { writeInAppNotification } from './_shared';
 
 export const notifyStoreOnReservation = onDocumentCreated(
   {
@@ -81,5 +82,14 @@ export const notifyStoreOnReservation = onDocumentCreated(
     console.log(
       `[notifyStoreOnReservation] store=${data.storeId} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
+
+    // 매장 owner에게 인앱 알림 doc 작성
+    await writeInAppNotification(ownerUid, {
+      type: 'new_reservation',
+      title: '새 예약',
+      body: `${data.authorName ?? '익명'} · ${timeStr} ${data.partySize ?? 1}명`,
+      linkPath: `/admin/${data.storeId}#reservations`,
+      payload: { storeId: data.storeId, reservationId: event.params.reservationId },
+    });
   },
 );

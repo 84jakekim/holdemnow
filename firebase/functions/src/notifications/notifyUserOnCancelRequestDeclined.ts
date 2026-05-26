@@ -21,6 +21,7 @@
 
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { writeInAppNotification } from './_shared';
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -128,6 +129,15 @@ export const notifyUserOnCancelRequestDeclined = onDocumentUpdated(
     console.log(
       `[notifyUserOnCancelRequestDeclined] uid=${authorUid} store=${storeId} rid=${rid} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
+
+    // 인앱 알림 doc 작성
+    await writeInAppNotification(authorUid, {
+      type: 'cancel_request_declined',
+      title: '취소 신청 거절',
+      body: bodyText,
+      linkPath: '/m/reservations',
+      payload: { storeId, reservationId: rid },
+    });
 
     // 토큰 정리
     const invalidTokens: string[] = [];

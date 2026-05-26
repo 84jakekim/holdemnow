@@ -217,6 +217,20 @@ export async function broadcastMarketing(input: {
   }
   await Promise.allSettled(cleanups);
 
+  // 6. 인앱 알림 doc 작성 — recipient uid 전원 (FCM 토큰 유무와 독립). 60일 TTL.
+  // 마케팅 알림은 사용자가 토글 ON한 사용자만 대상이므로 정보통신망법 준수.
+  await writeInAppNotificationBulk(targetUids, {
+    type: 'marketing',
+    title: input.title,
+    body: finalBody,
+    linkPath: input.linkUrl ?? '/m',
+    payload: {
+      campaignId: input.campaignId ?? null,
+      isAd: input.isAdvertisement ? 1 : 0,
+    },
+    ttlDays: 60,
+  });
+
   return {
     recipientCount: targetUids.length,
     deliveredCount: totalSuccess,
@@ -229,4 +243,108 @@ export function uidFromPath(refPath: string): string | null {
   const parts = refPath.split('/');
   const idx = parts.indexOf('users') + 1;
   return idx > 0 && parts[idx] ? parts[idx] : null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 인앱 알림(notifications/{uid}/items) — 2026-05-27
+// ─────────────────────────────────────────────────────────────
+
+export type InAppNotificationType =
+  | 'reservation_confirmed'
+  | 'reservation_cancelled_by_store'
+  | 'cancel_request_received'
+  | 'cancel_request_declined'
+  | 'reservation_reminder'
+  | 'new_reservation'
+  | 'tournament_start'
+  | 'late_reg_imminent'
+  | 'series_countdown'
+  | 'favorite_live'
+  | 'new_review'
+  | 'marketing';
+
+export interface InAppNotificationInput {
+  type: InAppNotificationType;
+  title: string;
+  body: string;
+  linkPath?: string | null;
+  payload?: Record<string, string | number | boolean | null> | null;
+  /** TTL 일수 (기본 30일). 마케팅은 60일 권장. */
+  ttlDays?: number;
+}
+
+/**
+ * 단일 사용자에게 인앱 알림 doc 작성.
+ *
+ * FCM 푸시와 별개. FCM 실패해도 in-app은 작성, in-app 실패해도 FCM은 send.
+ * 호출부에서 await로 catch만 하면 됨 — throw하지 않음(silent fail 회피).
+ *
+ * 경로: notifications/{uid}/items/{auto-id}
+ */
+export async function writeInAppNotification(
+  uid: string,
+  input: InAppNotificationInput,
+): Promise<string | null> {
+  if (!uid) return null;
+  const db = admin.firestore();
+  const ttlDays = input.ttlDays ?? 30;
+  const now = admin.firestore.Timestamp.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(
+    now.toMillis() + ttlDays * 24 * 3600 * 1000,
+  );
+
+  // undefined 필드를 객체에서 제거 (Firestore는 undefined 거부)
+  const raw: Record<string, unknown> = {
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    read: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt,
+  };
+  if (input.linkPath) raw.linkPath = input.linkPath;
+  if (input.payload && Object.keys(input.payload).length > 0) {
+    const sanitized: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input.payload)) {
+      if (v !== undefined && v !== null) sanitized[k] = v;
+    }
+    if (Object.keys(sanitized).length > 0) raw.payload = sanitized;
+  }
+
+  try {
+    const ref = await db
+      .collection('notifications')
+      .doc(uid)
+      .collection('items')
+      .add(raw);
+    return ref.id;
+  } catch (err) {
+    console.error(`[writeInAppNotification] uid=${uid} type=${input.type} failed`, err);
+    return null;
+  }
+}
+
+/**
+ * 다중 사용자에게 일괄 인앱 알림 작성 (마케팅/시리즈 카운트다운 등).
+ * 청크 단위로 Promise.allSettled.
+ */
+export async function writeInAppNotificationBulk(
+  uids: string[],
+  input: InAppNotificationInput,
+): Promise<{ writtenCount: number; failedCount: number }> {
+  if (uids.length === 0) return { writtenCount: 0, failedCount: 0 };
+  let written = 0;
+  let failed = 0;
+  // 청크 500개씩
+  for (let i = 0; i < uids.length; i += 500) {
+    const chunk = uids.slice(i, i + 500);
+    const results = await Promise.allSettled(
+      chunk.map((uid) => writeInAppNotification(uid, input)),
+    );
+    results.forEach((r) => {
+      if (r.status === 'fulfilled' && r.value) written++;
+      else failed++;
+    });
+  }
+  return { writtenCount: written, failedCount: failed };
 }

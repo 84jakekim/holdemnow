@@ -13,6 +13,7 @@
 
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { writeInAppNotification } from './_shared';
 
 export const notifyStoreOnReview = onDocumentCreated(
   {
@@ -84,6 +85,15 @@ export const notifyStoreOnReview = onDocumentCreated(
       `[notifyStoreOnReview] store=${storeId} (${storeName}) rid=${reviewId} ` +
         `rating=${rating} sent=${resp.successCount} failed=${resp.failureCount}`,
     );
+
+    // 매장 owner에게 인앱 알림 doc 작성
+    await writeInAppNotification(ownerUid, {
+      type: 'new_review',
+      title: `새 리뷰 (${stars})`,
+      body: `${author}: ${bodyPreview}`,
+      linkPath: `/admin/${storeId}`,
+      payload: { storeId, reviewId, rating },
+    });
 
     // 무효 토큰 정리
     const invalidTokens: string[] = [];
