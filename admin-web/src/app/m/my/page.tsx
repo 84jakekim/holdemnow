@@ -289,7 +289,7 @@ export default function MyPage() {
             { label: '내 예약', go: '/m/reservations', emoji: '📅' },
             { label: '시리즈 구독', go: '/m/subscriptions', emoji: '📊' },
             { label: '내가 쓴 리뷰', go: '/m/my/reviews', emoji: '✍️' },
-            { label: '도움말·문의', go: null, emoji: '💬' },
+            { label: '도움말·문의', go: '/m/help', emoji: '💬' },
           ] as { label: string; go: string | null; emoji: string }[]).map((m, i, arr) => (
             <button
               key={m.label}

@@ -348,6 +348,24 @@ service cloud.firestore {
     //   - update: 본인만, 그리고 'read'/'readAt' 두 필드 외 다른 필드 변경 금지.
     //     "모두 읽음 처리" / 클릭 시 자동 read=true 전환.
     //   - delete: 본인만 (수동 삭제) 또는 Cloud Function cron(admin SDK).
+    // ─── 사용자 ↔ 본사 1:1 문의 (2026-05-27 신설) ───
+    // - create: 본인만 (uid == authorUid)
+    // - read: 본인 + platform_admin
+    // - update: platform_admin (답변 등록·상태 변경)
+    // - delete: platform_admin
+    match /inquiries/{inquiryId} {
+      allow read: if isSignedIn()
+        && (resource.data.uid == uid() || isPlatformAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.uid == uid()
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0;
+      allow update: if isPlatformAdmin();
+      allow delete: if isPlatformAdmin();
+    }
+
     match /notifications/{userId} {
       match /items/{notifId} {
         allow read: if uid() == userId;

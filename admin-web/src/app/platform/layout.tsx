@@ -67,6 +67,7 @@ const MENU_GROUPS: MenuGroup[] = [
       { id: 'moderation', icon: '🛡️', label: '모더레이션', href: '/platform/moderation' },
       { id: 'audit-log', icon: '📋', label: '감사 로그', href: '/platform/audit-log' },
       { id: 'reviews', icon: '⭐', label: '리뷰 관리', href: '/platform/reviews' },
+      { id: 'inquiries', icon: '📩', label: '사용자 문의', href: '/platform/inquiries' },
       { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
       { id: 'pinned', icon: '📌', label: '홈 고정 공지', href: '/platform/pinned' },
       { id: 'feed-config', icon: '📍', label: '반경 설정', href: '/platform/feed-config' },
