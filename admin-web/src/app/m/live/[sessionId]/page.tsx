@@ -19,6 +19,7 @@ import {
   fmtTime,
   computeLateRegMinutes,
   useLiveCountdown,
+  useLiveTimelineTick,
   advanceLevelIfDue,
   isLiveOnBreak,
   resolveNextPlayLevel,
@@ -115,8 +116,9 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     bumpStoreMetric(session.storeId, 'liveOpens');
   }, [session?.id, session?.storeId]);
 
-  // 절대 시각(levelEndsAt) 기반 카운트다운 — 폰 재접속해도 정확
-  const sec = useLiveCountdown(session ?? null);
+  // 절대 시각 기반 카운트다운 + wrap 처리 (사용자 폰 스피커 사운드 책임)
+  const tick = useLiveTimelineTick(session ?? null, { handleWrap: true });
+  const sec = tick?.secondsLeft ?? 0;
 
   // ─── 사운드 (카운트다운 비프 · 블라인드업 알림) ───────────────────
   // 풀스크린 LIVE 페이지에서만 활성 — 사용자가 화면 켜놓고 보는 페이지.

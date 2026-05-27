@@ -301,6 +301,7 @@ export function useLiveCountdown(session: LiveSession | null | undefined): numbe
  *  매초 computeTimelinePosition을 호출해 level/sec/sb/bb/ante/isFinishing을 모두 반환. */
 export function useLiveTimelineTick(
   session: LiveSession | null | undefined,
+  opts?: { handleWrap?: boolean },
 ): { level: number; secondsLeft: number; isFinishing: boolean; sb: number; bb: number; ante: number } | null {
   const [pos, setPos] = useState(() => (session ? computeTimelinePosition(session) : null));
   // 2026-05-28 정정 #10 (MMA 차용 + React Web 적합화):
@@ -339,26 +340,36 @@ export function useLiveTimelineTick(
     // 콜백에서 sessionRef.current로 최신 session 참조하므로 dep 불필요.
   ]);
 
-  // 사운드(블라인드업) + advance 트랜잭션 — useEffect + ref dedup (안티패턴 회피)
-  const prevPosRef = useRef<{ level: number; secondsLeft: number } | null>(null);
-  const advanceFiredKeyRef = useRef<string>('');
+  // 2026-05-28 #11: opts.handleWrap=true 인 호출처에서만 wrap 처리.
+  //   m/store(player 권한)에서 호출 시 handleWrap 미지정 → advance/사운드 호출 X →
+  //   트랜잭션 race + 권한 실패 시 cron 1분 대기로 인한 40초 정체 차단.
+  //
+  //   handleWrap=true 호출처 정책:
+  //   - TV display (매장 권한 + TV 스피커): advance + 사운드
+  //   - TournamentControlCenter (사장 권한 + 사장 폰): advance + 사운드
+  //   - m/live 풀스크린 (player 권한 + 사용자 폰): 사운드만 (advance도 시도 — idempotent)
+  //
+  //   같은 cycle 1회만 트리거 (cycleKey ref dedup).
+  //   같은 기기 multiple page는 sounds.ts cooldown(5s) + localStorage cross-tab dedup.
+  const prevLevelRef = useRef<number | null>(null);
+  const wrapFiredKeyRef = useRef<string>('');
   useEffect(() => {
-    if (!pos) { prevPosRef.current = null; return; }
-    if (!session || session.status !== 'running') {
-      prevPosRef.current = { level: pos.level, secondsLeft: pos.secondsLeft };
+    if (!opts?.handleWrap) return;
+    if (!pos || !session || session.status !== 'running') {
+      prevLevelRef.current = pos?.level ?? null;
       return;
     }
-    const prev = prevPosRef.current;
-    if (prev && prev.level < pos.level) {
-      const key = `lv${prev.level}-${session.id}`;
-      if (advanceFiredKeyRef.current !== key) {
-        advanceFiredKeyRef.current = key;
+    const prevLv = prevLevelRef.current;
+    if (prevLv !== null && prevLv < pos.level) {
+      const key = `lv${prevLv}-${session.id}`;
+      if (wrapFiredKeyRef.current !== key) {
+        wrapFiredKeyRef.current = key;
         import('./sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
-        void advanceLevelIfDue(session.id, prev.level).catch(() => {});
+        void advanceLevelIfDue(session.id, prevLv).catch(() => {});
       }
     }
-    prevPosRef.current = { level: pos.level, secondsLeft: pos.secondsLeft };
-  }, [pos?.level, pos?.secondsLeft, session?.id, session?.status]);
+    prevLevelRef.current = pos.level;
+  }, [pos?.level, session?.id, session?.status, opts?.handleWrap]);
 
   return pos;
 }

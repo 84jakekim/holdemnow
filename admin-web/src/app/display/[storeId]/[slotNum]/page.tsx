@@ -87,8 +87,9 @@ export default function DisplayPage({
     return unsub;
   }, [slot?.sessionId]);
 
-  // 절대 시각(levelEndsAt) 기반 카운트다운
-  const sec = useLiveCountdown(session ?? null);
+  // 절대 시각(levelEndsAt) 기반 카운트다운 + wrap 처리 (TV가 매장 권한 + TV 스피커 책임)
+  const tick = useLiveTimelineTick(session ?? null, { handleWrap: true });
+  const sec = tick?.secondsLeft ?? 0;
 
   // ─── 사운드 활성화 + Wake Lock (모바일 최적화 재설계 — 2026-05-22 PM 단독) ───
   // 정정 사양 (사용자 외출 모드 긴급 보고):

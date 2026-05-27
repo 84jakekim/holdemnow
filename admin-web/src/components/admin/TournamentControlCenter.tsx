@@ -34,6 +34,7 @@ import {
   computeLateRegMinutes,
   fmtTime,
   useLiveCountdown,
+  useLiveTimelineTick,
   FINISHING_GRACE_SEC,
   computeFinishingGraceSec,
   computeReadyExpirySec,
@@ -499,7 +500,9 @@ function SessionControlPanel({
   storeId: string;
   display: TimerDisplaySettings;
 }) {
-  const seconds = useLiveCountdown(session);
+  // 사장 컨트롤 = wrap 처리 책임 (advance + 사운드 호출). 사장 권한이라 트랜잭션 권한 보장.
+  const tick = useLiveTimelineTick(session, { handleWrap: true });
+  const seconds = tick?.secondsLeft ?? 0;
   const [showJump, setShowJump] = useState(false);
   const isReady = session.status === 'ready';
   const isPaused = session.status === 'paused';
@@ -553,29 +556,12 @@ function SessionControlPanel({
     };
   }, []);
 
-  const advanceFiredCycleRef = useRef<string>('');
+  // 2026-05-28 #11: sec=0 트리거 폐기 (lib hook이 wrap 즉시 다음 레벨로 가서 sec=0 못 봄).
+  // wrap 처리는 useLiveTimelineTick({ handleWrap: true })가 담당.
   const prevSecRef = useRef<number | null>(null);
   useEffect(() => {
-    const prev = prevSecRef.current;
-    // running 상태에서 prev > 0 → 현재 0으로 떨어진 순간만 발사
-    if (
-      session.status === 'running' &&
-      prev !== null &&
-      prev > 0 &&
-      seconds === 0 &&
-      session.id
-    ) {
-      const lv = session.currentLevel ?? -1;
-      const cycleKey = `lv${lv}-${session.id}`;
-      if (advanceFiredCycleRef.current !== cycleKey) {
-        advanceFiredCycleRef.current = cycleKey;
-        // 2026-05-28 #8: playBlindUp / advanceLevelIfDue 호출 제거.
-        // 사운드 + advance는 useLiveTimelineTick(lib) 단일 경로에서 처리.
-        // cycleKey 마킹만 유지.
-      }
-    }
     prevSecRef.current = seconds;
-  }, [seconds, session.status, session.id, session.currentLevel]);
+  }, [seconds]);
 
   // 마지막 레벨 자동 정리 (sanity guard 포함 — LivePanel과 동일 로직)
   const finishingMs = session.finishingAt?.toMillis?.();
