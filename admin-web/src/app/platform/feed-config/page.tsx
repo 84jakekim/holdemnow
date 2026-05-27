@@ -60,6 +60,9 @@ export default function FeedConfigPage() {
   const [nearbyOptions, setNearbyOptions] = useState<number[]>(FEED_CONFIG_DEFAULT.nearbyRadiusOptionsKm);
   const [nearbyAuto, setNearbyAuto] = useState<boolean>(FEED_CONFIG_DEFAULT.nearbyAutoExpand);
   const [nearbyAutoMax, setNearbyAutoMax] = useState<number>(FEED_CONFIG_DEFAULT.nearbyAutoExpandMaxKm);
+  // 4) 지금 LIVE 전체보기 (2026-05-27 신설)
+  const [liveListDefault, setLiveListDefault] = useState<number>(FEED_CONFIG_DEFAULT.liveListRadiusKm);
+  const [liveListOptions, setLiveListOptions] = useState<number[]>(FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm);
 
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -85,6 +88,8 @@ export default function FeedConfigPage() {
           setNearbyOptions(next.nearbyRadiusOptionsKm);
           setNearbyAuto(next.nearbyAutoExpand);
           setNearbyAutoMax(next.nearbyAutoExpandMaxKm);
+          setLiveListDefault(next.liveListRadiusKm ?? FEED_CONFIG_DEFAULT.liveListRadiusKm);
+          setLiveListOptions(next.liveListRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm);
           setLoaded(true);
         }
       },
@@ -156,13 +161,16 @@ export default function FeedConfigPage() {
       nearbyDefault !== cfg.nearbyRadiusDefaultKm ||
       !eqArr(nearbyOptions, cfg.nearbyRadiusOptionsKm) ||
       nearbyAuto !== cfg.nearbyAutoExpand ||
-      nearbyAutoMax !== cfg.nearbyAutoExpandMaxKm
+      nearbyAutoMax !== cfg.nearbyAutoExpandMaxKm ||
+      liveListDefault !== (cfg.liveListRadiusKm ?? FEED_CONFIG_DEFAULT.liveListRadiusKm) ||
+      !eqArr(liveListOptions, cfg.liveListRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm)
     );
   }, [
     loaded, cfg,
     chatDefault, chatOptions,
     popularDefault, popularOptions, popularAuto, popularAutoMax,
     nearbyDefault, nearbyOptions, nearbyAuto, nearbyAutoMax,
+    liveListDefault, liveListOptions,
   ]);
 
   const onSave = async () => {
@@ -183,6 +191,8 @@ export default function FeedConfigPage() {
           nearbyRadiusOptionsKm: nearbyOptions,
           nearbyAutoExpand: nearbyAuto,
           nearbyAutoExpandMaxKm: nearbyAutoMax,
+          liveListRadiusKm: liveListDefault,
+          liveListRadiusOptionsKm: liveListOptions,
         },
         { actorUid, actorEmail },
       );
@@ -304,6 +314,20 @@ export default function FeedConfigPage() {
         />
       </RadiusSectionCard>
 
+      {/* 4) 지금 LIVE 전체보기 (2026-05-27 사용자 요청) */}
+      <RadiusSectionCard
+        icon="🎬"
+        title="지금 LIVE 전체보기"
+        subtitle="/m/live 페이지의 카드 노출 반경"
+        defaultKm={liveListDefault}
+        onDefault={setLiveListDefault}
+        options={liveListOptions}
+        onOptions={setLiveListOptions}
+        sliderMax={200}
+        showSlider
+      />
+
+
       {/* 액션 */}
       <section className="flex items-center gap-3 sticky bottom-4 z-10">
         <button
@@ -329,6 +353,7 @@ export default function FeedConfigPage() {
           <div>💬 채팅방: <b>{formatRadiusKm(cfg.defaultRadiusKm)}</b> · {cfg.radiusOptions.map(formatRadiusKm).join(' · ')}</div>
           <div>⭐ 인기 매장: <b>{formatRadiusKm(cfg.popularRadiusDefaultKm)}</b> · {cfg.popularRadiusOptionsKm.map(formatRadiusKm).join(' · ')} · 자동확장 {cfg.popularAutoExpand ? `ON(최대 ${formatRadiusKm(cfg.popularAutoExpandMaxKm)})` : 'OFF'}</div>
           <div>📍 주변 매장: <b>{formatRadiusKm(cfg.nearbyRadiusDefaultKm)}</b> · {cfg.nearbyRadiusOptionsKm.map(formatRadiusKm).join(' · ')} · 자동확장 {cfg.nearbyAutoExpand ? `ON(최대 ${formatRadiusKm(cfg.nearbyAutoExpandMaxKm)})` : 'OFF'}</div>
+          <div>🎬 지금 LIVE 전체보기: <b>{formatRadiusKm(cfg.liveListRadiusKm ?? FEED_CONFIG_DEFAULT.liveListRadiusKm)}</b> · {(cfg.liveListRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm).map(formatRadiusKm).join(' · ')}</div>
         </div>
         {cfg.updatedAt && (
           <div className="mt-2" style={{ color: 'var(--text-3)' }}>

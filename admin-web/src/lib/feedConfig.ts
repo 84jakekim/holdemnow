@@ -59,6 +59,12 @@ export interface FeedConfig {
   nearbyAutoExpand: boolean;
   nearbyAutoExpandMaxKm: number;
 
+  // ===== 지금 LIVE 전체보기 (/m/live) 섹션 (2026-05-27 신설) =====
+  /** 지금 LIVE 전체보기 페이지의 카드 노출 반경 (km). */
+  liveListRadiusKm: number;
+  /** 추후 사용자 토글용 옵션 (현재는 본사 디폴트만 적용). */
+  liveListRadiusOptionsKm: number[];
+
   updatedAt?: Timestamp;
   updatedBy?: string;
 }
@@ -77,6 +83,9 @@ export const FEED_CONFIG_DEFAULT: FeedConfig = {
   nearbyRadiusOptionsKm: [5, 10, 20, 50, 100],
   nearbyAutoExpand: true,
   nearbyAutoExpandMaxKm: 100,
+
+  liveListRadiusKm: 30,
+  liveListRadiusOptionsKm: [10, 20, 30, 50, 100],
 };
 
 const FEED_CONFIG_REF = doc(db, 'meta', 'feedConfig');
@@ -298,6 +307,16 @@ function normalizeConfig(raw: Partial<FeedConfig>): FeedConfig {
         ? raw.nearbyAutoExpand
         : FEED_CONFIG_DEFAULT.nearbyAutoExpand,
     nearbyAutoExpandMaxKm: Math.max(nearbyMax, nearbyDef),
+
+    liveListRadiusKm: clampRadius(
+      raw.liveListRadiusKm,
+      FEED_CONFIG_DEFAULT.liveListRadiusKm,
+      500,
+    ),
+    liveListRadiusOptionsKm: sanitizeOptions(
+      raw.liveListRadiusOptionsKm,
+      FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm,
+    ),
 
     updatedAt: raw.updatedAt,
     updatedBy: raw.updatedBy,

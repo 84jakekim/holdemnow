@@ -17,13 +17,14 @@ import {
 import { posterStyleFor, fmtBuyInTicketsMobile } from '@/lib/templates';
 import { bumpStoreMetric } from '@/lib/analytics';
 import { haversineMeters, formatDistance, type LatLng } from '@/lib/geo';
+import { subscribeFeedConfig, FEED_CONFIG_DEFAULT, type FeedConfig } from '@/lib/feedConfig';
 
 /**
  * 지금 LIVE — 사용자 위치 30km 반경 내 LIVE 매장 카드 리스트.
  * 정렬: 거리 가까운 순. 위치 거부 시 모든 LIVE 표시 (거리 정보 없음).
  */
 
-const NEARBY_RADIUS_M = 30_000;
+/** 본사 feedConfig.liveListRadiusKm(km) → m. 미설정 시 30km fallback. 2026-05-27 동적 제어. */
 
 interface StoreMeta {
   lat?: number;
@@ -53,6 +54,10 @@ export default function LiveFeedListPage() {
   // 필터/정렬 (2026-05-27 사용자 요청)
   const [sortKey, setSortKey] = useState<'distance' | 'startsAt'>('distance');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'break'>('all');
+  // 본사 feedConfig 구독 — liveListRadiusKm 동적 적용
+  const [feedConfig, setFeedConfig] = useState<FeedConfig>(FEED_CONFIG_DEFAULT);
+  useEffect(() => subscribeFeedConfig(setFeedConfig), []);
+  const radiusM = (feedConfig.liveListRadiusKm ?? 30) * 1000;
   // 1초 tick — finishingAt 그레이스 만료를 매초 재평가하기 위함
   const [, setNowTick] = useState(0);
   useEffect(() => {
@@ -119,7 +124,7 @@ export default function LiveFeedListPage() {
 
     // 1) 30km 반경 필터 (위치 없으면 skip)
     const inRadius = userLocation
-      ? enriched.filter(({ distance }) => distance == null || distance <= NEARBY_RADIUS_M)
+      ? enriched.filter(({ distance }) => distance == null || distance <= radiusM)
       : enriched;
 
     // 2) 상태 필터 (참가가능 / 참가마감 / 휴식)
@@ -152,7 +157,7 @@ export default function LiveFeedListPage() {
       if (b.distance != null) return 1;
       return 0;
     });
-  }, [sessions, storesById, userLocation, sortKey, statusFilter]);
+  }, [sessions, storesById, userLocation, sortKey, statusFilter, radiusM]);
 
   return (
     <div className="pb-24">
@@ -183,7 +188,7 @@ export default function LiveFeedListPage() {
             <h1 className="h2 font-serif mt-1.5">🎬 지금 LIVE</h1>
             <p className="text-[13px] font-semibold opacity-90 mt-1.5">
               {userLocation
-                ? `내 주변 ${NEARBY_RADIUS_M / 1000}km · 거리순`
+                ? `내 주변 ${radiusM / 1000}km · 거리순`
                 : locationDenied
                   ? '전체 LIVE 매장'
                   : '위치 확인 중…'}
@@ -280,7 +285,7 @@ export default function LiveFeedListPage() {
                 {statusFilter !== 'all'
                   ? '필터를 "전체"로 바꾸면 더 많은 LIVE를 볼 수 있어요.'
                   : userLocation
-                    ? `반경 ${NEARBY_RADIUS_M / 1000}km 안에 LIVE 토너가 없습니다.`
+                    ? `반경 ${radiusM / 1000}km 안에 LIVE 토너가 없습니다.`
                     : '어드민에서 LIVE 시작 시 즉시 표시됩니다.'}
               </div>
             </div>
