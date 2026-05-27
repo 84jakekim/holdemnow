@@ -358,60 +358,27 @@ export function useLiveTimelineTick(
     });
   }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
 
-  // 2026-05-28 정정 #6 (1~2레벨 2중 발화 + 4~5레벨 40초 정체):
-  //   기존 ref 기반 비교가 setTimeout 없이는 re-render 트리거 X →
-  //   사용자 보고 40초 정체. useState + setTimeout으로 명시적 재렌더 보장.
+  // 2026-05-28 정정 #7 (사용자 명령):
+  //   "0초에 자연스럽게 다음 레벨로 전환 + 카운트다운 즉시 시작 + 사운드는 그 순간 1회"
   //
-  // 흐름: wrap 첫 진입 → showZero=true (sec=0 + 트리거 발화)
-  //        → setTimeout(1100ms) → showZero=false → pos 그대로 (다음 레벨 카운트다운)
-  const [showZeroOnWrap, setShowZeroOnWrap] = useState(false);
-  const wrapKeyRef = useRef<string>('');
-  const wrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  // 흐름: wrap 감지 즉시 pos 그대로 반환 (다음 레벨 시간) → 화면 정지 X
+  //        wrap 감지 useEffect가 사운드 트리거 + advance 트랜잭션 동시 호출
+  //   → 호출처의 sec===0 트리거는 발화 안 함 (sec=0이 화면에 안 보이므로) → 자동 dedup
+  const wrapTriggerKeyRef = useRef<string>('');
   useEffect(() => {
     const wrapped = !!(pos && session && session.status === 'running' && pos.level > session.currentLevel);
     if (wrapped && session) {
       const key = `lv${session.currentLevel}-${session.id}`;
-      if (wrapKeyRef.current !== key) {
-        wrapKeyRef.current = key;
-        setShowZeroOnWrap(true);
-        if (wrapTimerRef.current) clearTimeout(wrapTimerRef.current);
-        wrapTimerRef.current = setTimeout(() => setShowZeroOnWrap(false), 1100);
+      if (wrapTriggerKeyRef.current !== key) {
+        wrapTriggerKeyRef.current = key;
+        // 사운드 1회 발화 (cooldown + cross-tab dedup은 sounds.ts 내부 처리)
+        import('./sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
       }
-    } else if (!wrapped && wrapKeyRef.current) {
-      // 서버가 currentLevel 갱신 → wrap 상태 해제
-      wrapKeyRef.current = '';
-      setShowZeroOnWrap(false);
-      if (wrapTimerRef.current) {
-        clearTimeout(wrapTimerRef.current);
-        wrapTimerRef.current = null;
-      }
+    } else if (!wrapped && wrapTriggerKeyRef.current) {
+      // 서버 currentLevel 갱신 — key 해제
+      wrapTriggerKeyRef.current = '';
     }
   }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
-
-  useEffect(() => {
-    return () => {
-      if (wrapTimerRef.current) clearTimeout(wrapTimerRef.current);
-    };
-  }, []);
-
-  if (pos && session && session.status === 'running' && pos.level > session.currentLevel) {
-    if (showZeroOnWrap) {
-      // 첫 1.1s만 sec=0 (트리거 발화 보장)
-      const cur = (session.blindStructureLocked && session.blindStructureLocked.length > 0
-        ? session.blindStructureLocked
-        : session.blindStructure)?.find((l) => l.level === session.currentLevel);
-      return {
-        level: session.currentLevel,
-        secondsLeft: 0,
-        isFinishing: false,
-        sb: cur?.sb ?? session.smallBlind ?? 0,
-        bb: cur?.bb ?? session.bigBlind ?? 0,
-        ante: cur?.ante ?? session.ante ?? 0,
-      };
-    }
-    // 1.1s 후엔 pos 그대로 = 다음 레벨 카운트다운 (서버 응답 대기 X)
-  }
 
   return pos;
 }
