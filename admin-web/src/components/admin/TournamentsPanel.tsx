@@ -24,6 +24,7 @@ import {
   subscribeTemplates,
   posterStyleFor,
 } from '@/lib/templates';
+import TournamentGuide from './TournamentGuide';
 
 interface Props {
   storeId: string;
@@ -149,6 +150,10 @@ export default function TournamentsPanel({ storeId, storeName }: Props) {
           💡 먼저 좌측 <b>🎲 토너 템플릿</b>에서 토너를 등록해야 합니다.
         </div>
       )}
+
+      {/* ── 활용 가이드 (2026-05-27 사용자 요청) ── */}
+      <TournamentGuide />
+
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded p-3 text-xs text-red-700">
