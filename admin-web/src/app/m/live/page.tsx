@@ -50,6 +50,9 @@ export default function LiveFeedListPage() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [loading, setLoading] = useState(true);
+  // 필터/정렬 (2026-05-27 사용자 요청)
+  const [sortKey, setSortKey] = useState<'distance' | 'startsAt'>('distance');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'break'>('all');
   // 1초 tick — finishingAt 그레이스 만료를 매초 재평가하기 위함
   const [, setNowTick] = useState(0);
   useEffect(() => {
@@ -102,7 +105,7 @@ export default function LiveFeedListPage() {
     })();
   }, []);
 
-  // 30km 필터 + 거리 정렬 (그레이스 만료 세션은 subscribeAllLiveSessions에서 이미 제외됨)
+  // 30km 필터 + 상태/정렬 필터 (사용자 토글)
   const filteredSessions = useMemo(() => {
     const enriched = sessions.map((s) => {
       const meta = storesById[s.storeId];
@@ -113,16 +116,43 @@ export default function LiveFeedListPage() {
       const locality = localityFromAddress(meta?.address);
       return { session: s, distance, locality };
     });
-    if (!userLocation) return enriched; // 위치 없으면 전부 표시
-    return enriched
-      .filter(({ distance }) => distance == null || distance <= NEARBY_RADIUS_M)
-      .sort((a, b) => {
-        if (a.distance != null && b.distance != null) return a.distance - b.distance;
-        if (a.distance != null) return -1;
-        if (b.distance != null) return 1;
-        return 0;
-      });
-  }, [sessions, storesById, userLocation]);
+
+    // 1) 30km 반경 필터 (위치 없으면 skip)
+    const inRadius = userLocation
+      ? enriched.filter(({ distance }) => distance == null || distance <= NEARBY_RADIUS_M)
+      : enriched;
+
+    // 2) 상태 필터 (참가가능 / 참가마감 / 휴식)
+    const byStatus = inRadius.filter(({ session: s }) => {
+      const isOpen = !s.lateRegClosed && s.currentLevel <= s.lateRegEndLevel;
+      const isBreak = s.status === 'break' || s.status === 'paused';
+      switch (statusFilter) {
+        case 'open':   return isOpen && !isBreak;
+        case 'closed': return !isOpen;
+        case 'break':  return isBreak;
+        default:       return true;
+      }
+    });
+
+    // 3) 정렬 (거리순 또는 시작순)
+    return [...byStatus].sort((a, b) => {
+      if (sortKey === 'startsAt') {
+        // startedAt이 Timestamp이면 toMillis()로 정렬 (any 우회 — 타입 좁힘)
+        const toMs = (v: unknown): number => {
+          if (v && typeof (v as { toMillis?: () => number }).toMillis === 'function') {
+            return (v as { toMillis: () => number }).toMillis();
+          }
+          return 0;
+        };
+        return toMs(b.session.startedAt) - toMs(a.session.startedAt); // 최근 시작순
+      }
+      // 거리순 (기본)
+      if (a.distance != null && b.distance != null) return a.distance - b.distance;
+      if (a.distance != null) return -1;
+      if (b.distance != null) return 1;
+      return 0;
+    });
+  }, [sessions, storesById, userLocation, sortKey, statusFilter]);
 
   return (
     <div className="pb-24">
@@ -165,9 +195,74 @@ export default function LiveFeedListPage() {
         </div>
       </header>
 
+      {/* 필터/정렬 칩 (2026-05-27 사용자 요청) */}
+      <div
+        className="px-5 pt-4 pb-2 flex flex-wrap items-center gap-1.5"
+        style={{ background: 'var(--bg)' }}
+      >
+        {/* 정렬 */}
+        {([
+          { key: 'distance' as const, label: '📍 거리순' },
+          { key: 'startsAt' as const, label: '🕐 시작순' },
+        ]).map((opt) => {
+          const active = sortKey === opt.key;
+          return (
+            <button
+              key={opt.key}
+              onClick={() => setSortKey(opt.key)}
+              className="tap"
+              style={{
+                padding: '5px 11px',
+                borderRadius: 99,
+                fontSize: 11,
+                fontWeight: 800,
+                border: active ? 'none' : '1px solid var(--border)',
+                background: active ? 'var(--brand)' : 'var(--bg)',
+                color: active ? '#fff' : 'var(--text-1)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+        {/* 구분선 */}
+        <span aria-hidden style={{ width: 1, height: 14, background: 'var(--border-strong)', margin: '0 4px' }} />
+        {/* 상태 */}
+        {([
+          { key: 'all' as const, label: '전체' },
+          { key: 'open' as const, label: '✅ 참가가능' },
+          { key: 'closed' as const, label: '🔒 참가마감' },
+          { key: 'break' as const, label: '☕ 휴식' },
+        ]).map((opt) => {
+          const active = statusFilter === opt.key;
+          return (
+            <button
+              key={opt.key}
+              onClick={() => setStatusFilter(opt.key)}
+              className="tap"
+              style={{
+                padding: '5px 11px',
+                borderRadius: 99,
+                fontSize: 11,
+                fontWeight: 700,
+                border: active ? 'none' : '1px solid var(--border)',
+                background: active ? 'var(--text-1)' : 'var(--bg)',
+                color: active ? 'var(--bg)' : 'var(--text-2)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* 결과 */}
       {loading ? (
-        <div className="px-5 pt-4 space-y-3">
+        <div className="px-5 pt-3 space-y-3">
           <div className="skel h-40 rounded-r-xl" />
           <div className="skel h-40 rounded-r-xl" />
         </div>
@@ -177,18 +272,22 @@ export default function LiveFeedListPage() {
             <div className="empty-state-icon" aria-hidden>🎬</div>
             <div>
               <div className="empty-state-title">
-                {userLocation ? '내 주변에 LIVE가 없어요' : '진행 중인 LIVE가 없어요'}
+                {statusFilter !== 'all'
+                  ? '해당 조건의 LIVE가 없어요'
+                  : userLocation ? '내 주변에 LIVE가 없어요' : '진행 중인 LIVE가 없어요'}
               </div>
               <div className="empty-state-desc" style={{ marginTop: 6 }}>
-                {userLocation
-                  ? `반경 ${NEARBY_RADIUS_M / 1000}km 안에 LIVE 토너가 없습니다.`
-                  : '어드민에서 LIVE 시작 시 즉시 표시됩니다.'}
+                {statusFilter !== 'all'
+                  ? '필터를 "전체"로 바꾸면 더 많은 LIVE를 볼 수 있어요.'
+                  : userLocation
+                    ? `반경 ${NEARBY_RADIUS_M / 1000}km 안에 LIVE 토너가 없습니다.`
+                    : '어드민에서 LIVE 시작 시 즉시 표시됩니다.'}
               </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="px-5 space-y-3">
+        <div className="px-5 pt-2 space-y-3">
           {filteredSessions.map(({ session, distance, locality }) => (
             <LiveCard key={session.id} session={session} distance={distance} locality={locality} />
           ))}
