@@ -79,6 +79,7 @@ const MENU_GROUPS: MenuGroup[] = [
     title: '광고',
     items: [
       { id: 'ads', icon: '💰', label: '광고 슬롯 관리', href: '/platform/ads' },
+      { id: 'splash-ads', icon: '📺', label: '스플래시 광고', href: '/platform/splash-ads' },
     ],
   },
   {

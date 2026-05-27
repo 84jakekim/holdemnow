@@ -624,6 +624,26 @@ service cloud.firestore {
       allow create, update, delete: if isPlatformAdmin();
     }
 
+    // ===== 스플래시 광고 (splashAds) — 본사 등록 풀스크린 광고 =====
+    // - read: 누구나 (사용자 앱 cold start 노출).
+    // - create/delete: platform_admin만.
+    // - update: platform_admin은 모든 필드. 일반 사용자는 impressions/clicks/updatedAt만 increment 허용 (CTR 측정).
+    match /splashAds/{adId} {
+      allow read: if true;
+      allow create, delete: if isPlatformAdmin();
+      allow update: if isPlatformAdmin()
+        || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['impressions', 'clicks', 'updatedAt'])
+        )
+        || (
+          // 비로그인(Anonymous 포함하지 않는 cold start 직전) 카운터는 거부 — 인증 후에만.
+          // 현 정책: 카운터는 인증 사용자만 (anonymous 포함). 모든 모바일 진입은 익명 자동 로그인 통과 가정.
+          false
+        );
+    }
+
     // ===== 광고 슬롯 (adSlots) — Sprint 3 Phase C =====
     // 매장 광고 노출권. v0.1은 본사 수동 부여만(클라 결제 없음).
     // - read: 누구나 (모바일 홈/매장찾기 슬롯 분배에 사용).

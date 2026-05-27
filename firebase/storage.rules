@@ -78,6 +78,13 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(5);
     }
 
+    // 스플래시 광고 풀스크린 이미지 (mobile 9:16 권장, 최대 5MB)
+    // 페이지 자체가 platform_admin gating — v0.1 인증 사용자 write 허용.
+    match /splashAds/{adId}/{file=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && maxSize(5);
+    }
+
     // 인기 유튜버 아바타 (최대 2MB)
     match /hotYoutubers/{cid}/{file=**} {
       allow read: if true;

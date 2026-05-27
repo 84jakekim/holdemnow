@@ -6,6 +6,7 @@ import NoticePopup from '@/components/mobile/NoticePopup';
 import InAppToast from '@/components/mobile/InAppToast';
 import ConfirmedReservationBanner from '@/components/mobile/ConfirmedReservationBanner';
 import AuthGate from '@/components/AuthGate';
+import SponsoredSplash from '@/components/SponsoredSplash';
 import { useAuth } from '@/lib/hooks';
 import { useHeartbeat } from '@/lib/heartbeat';
 
@@ -111,6 +112,8 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     <AuthGate>
       <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
         <div className="max-w-md mx-auto min-h-screen relative" style={{ background: 'var(--bg)' }}>
+          {/* 본사 등록 스플래시 광고 — 세션당 1회 cold start 노출, 광고 0건이면 비표시 */}
+          <SponsoredSplash />
           {/* 인앱 FCM 토스트 (전역) — 다른 type 푸시용으로 마운트 유지 */}
           <InAppToast />
           {/* 예약 상태 마퀴 띠 — 페이지 무관 항상 표시.
