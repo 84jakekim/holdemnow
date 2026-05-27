@@ -194,6 +194,10 @@ export async function saveFeedConfig(
       nearbyAutoExpand: normalized.nearbyAutoExpand,
       nearbyAutoExpandMaxKm: normalized.nearbyAutoExpandMaxKm,
 
+      // 지금 LIVE 전체보기 (2026-05-27 HOTFIX — 저장 누락 버그 fix)
+      liveListRadiusKm: normalized.liveListRadiusKm,
+      liveListRadiusOptionsKm: normalized.liveListRadiusOptionsKm,
+
       updatedAt: serverTimestamp(),
       updatedBy: meta.actorUid,
     }),
