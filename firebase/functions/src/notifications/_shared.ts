@@ -261,7 +261,9 @@ export type InAppNotificationType =
   | 'series_countdown'
   | 'favorite_live'
   | 'new_review'
-  | 'marketing';
+  | 'marketing'
+  | 'new_inquiry'
+  | 'inquiry_replied';
 
 export interface InAppNotificationInput {
   type: InAppNotificationType;

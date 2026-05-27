@@ -53,6 +53,8 @@ export { notifyStoreOnCancelRequest } from './notifications/notifyStoreOnCancelR
 export { notifyUserOnCancelRequestDeclined } from './notifications/notifyUserOnCancelRequestDeclined';
 // 예약 방문 10분 전 사용자에게 리마인더 FCM 푸시 (1분 cron).
 export { notifyReservationReminder } from './notifications/notifyReservationReminder';
+// 사용자 ↔ 본사 1:1 문의 알림 (2026-05-27): 새 문의 → 본사, 답변 → 사용자.
+export { notifyAdminOnNewInquiry, notifyUserOnInquiryReplied } from './notifications/notifyOnInquiry';
 // 입장시간+2h 지난 pending/confirmed 예약 자동 completed (30분 cron) — 2026-05-27
 export { autoCompleteReservations } from './notifications/autoCompleteReservations';
 // 90일 이상 지난 종료 예약 자동 삭제 (매일 03:00 KST) — 2026-05-27
