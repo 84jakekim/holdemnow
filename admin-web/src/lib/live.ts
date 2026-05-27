@@ -365,7 +365,18 @@ export function useLiveTimelineTick(
       if (wrapFiredKeyRef.current !== key) {
         wrapFiredKeyRef.current = key;
         import('./sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
-        void advanceLevelIfDue(session.id, prevLv).catch(() => {});
+        // 2026-05-28 #13 (B): advance 실패 시 다음 tick에서 자동 재시도 보장.
+        //   첫 호출이 race/clock skew로 false 받으면 1초 후 setInterval tick에서
+        //   pos 변경 없어도 prev/pos.level은 그대로지만 ref 리셋 후 wrap 조건 재만족 X.
+        //   대신 다음 tick에서 직접 retry — 별도 setTimeout 체인.
+        //   server side 처리 후엔 prev.level === pos.level가 되어 자동 조건 false → 무한 retry X.
+        const attempt = async (tryCount: number) => {
+          const ok = await advanceLevelIfDue(session.id, prevLv).catch(() => false);
+          if (!ok && tryCount < 5) {
+            setTimeout(() => { void attempt(tryCount + 1); }, 1000);
+          }
+        };
+        void attempt(0);
       }
     }
     prevLevelRef.current = pos.level;
@@ -885,9 +896,12 @@ export async function advanceLevelIfDue(
       if (data.finishingAt) return false;
 
       // 조건 4: nextLevelAt이 도래해야 함 (없으면 timeline 기반 fallback)
+      // 2026-05-28 #13 (A): client clock이 server보다 미세 빠를 때 advance가 1~2초 일찍
+      //   호출되어 nextMs > now로 false 반환되는 race 차단. 3초 grace 허용.
+      //   client wrap 감지 시점이 server time보다 빠를 수 있음 → grace로 흡수.
       const now = Date.now();
       const nextMs = data.nextLevelAt?.toMillis?.();
-      if (typeof nextMs === 'number' && nextMs > now) return false;
+      if (typeof nextMs === 'number' && nextMs > now + 3000) return false;
 
       // structure에서 expectedLevel과 다음 레벨 찾기
       const structure = (data.blindStructureLocked && data.blindStructureLocked.length > 0)
