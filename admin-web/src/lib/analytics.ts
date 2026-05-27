@@ -37,6 +37,18 @@ function metricsRef(storeId: string) {
   return doc(db, 'stores', storeId, 'metrics', 'global');
 }
 
+/** YYYY-MM-DD (브라우저 로컬 = KST 가정) */
+function todayKey(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function dailyMetricsRef(storeId: string, dateKey: string) {
+  return doc(db, 'stores', storeId, 'dailyMetrics', dateKey);
+}
+
 /**
  * 카운터 +1. sessionStorage 기반 클라이언트 dedup — 같은 (storeId, field) 조합은
  * 브라우저 세션 내 1회만 카운트(베타 어뷰징 1차 방어). 새 탭/리로드 시 리셋.
@@ -60,12 +72,22 @@ export function bumpStoreMetric(storeId: string, field: StoreMetricField) {
   if (!storeId) return;
   // 같은 세션 중복 카운트 방지 (favoriteAdds/directionsClicks 등). impressions는 trackImpressionOnce가 별도 처리.
   if (field !== 'impressions' && alreadyBumped(storeId, field)) return;
+  // 1) 누적 카운터 (기존)
   setDoc(
     metricsRef(storeId),
     { [field]: increment(1), updatedAt: serverTimestamp() },
     { merge: true },
   ).catch(() => {
-    // 익명 사용자, 네트워크 오류 등 — silent fail
+    /* 익명 사용자/네트워크 오류 — silent */
+  });
+  // 2) 일별 카운터 (2026-05-27 추가) — 대시보드 일/주/월 분석 + 추이 그래프용
+  const dk = todayKey();
+  setDoc(
+    dailyMetricsRef(storeId, dk),
+    { [field]: increment(1), date: dk, updatedAt: serverTimestamp() },
+    { merge: true },
+  ).catch(() => {
+    /* silent */
   });
 }
 

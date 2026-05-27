@@ -26,6 +26,7 @@ import { useReservationSoundAlert } from '@/hooks/useReservationSoundAlert';
 import ThemeToggle from '@/components/admin/ThemeToggle';
 import { useTheme } from '@/lib/theme';
 import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
+import { loadLastNDays, periodTotals, type DailyMetricsDoc, type MetricField } from '@/lib/dailyMetrics';
 import { subscribeStoreReservations } from '@/lib/reservations';
 import { changePassword, syncPasswordRecovery, validatePassword } from '@/lib/emailAuth';
 import { RabbitLogo } from '@/components/ui';
@@ -558,7 +559,8 @@ function DashboardContent({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      {/* 누적 KPI 4종 (전체 기간) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
         {kpis.map((k) => (
           <div key={k.label} className="p-4 lift" style={cardStyle}>
             <div className="text-[10px] font-extrabold tracking-wider mb-1.5" style={{ color: 'var(--text-2)' }}>{k.label}</div>
@@ -580,6 +582,9 @@ function DashboardContent({
         ))}
       </div>
 
+      {/* 일/주/월 + 14일 추이 그래프 (2026-05-27) */}
+      <DailyMetricsBlock storeId={storeId} cardStyle={cardStyle} />
+
       <div className="p-5" style={cardStyle}>
         <div className="text-sm font-bold mb-3" style={{ color: 'var(--text-1)' }}>🎯 시작 가이드</div>
         <ol className="text-xs space-y-2 list-decimal list-inside leading-relaxed" style={{ color: 'var(--text-2)' }}>
@@ -591,6 +596,174 @@ function DashboardContent({
         </ol>
       </div>
     </>
+  );
+}
+
+// =====================================================================
+// 일/주/월 + 14일 추이 그래프 (2026-05-27)
+// =====================================================================
+
+const METRIC_OPTIONS: { field: MetricField; label: string; color: string }[] = [
+  { field: 'impressions', label: '노출', color: '#FF1F8F' },
+  { field: 'cardClicks', label: '카드 클릭', color: '#F59E0B' },
+  { field: 'directionsClicks', label: '길찾기', color: '#10B981' },
+  { field: 'phoneClicks', label: '전화', color: '#3B82F6' },
+];
+
+function DailyMetricsBlock({
+  storeId,
+  cardStyle,
+}: {
+  storeId: string;
+  cardStyle: React.CSSProperties;
+}) {
+  const [docs, setDocs] = useState<DailyMetricsDoc[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [activeField, setActiveField] = useState<MetricField>('impressions');
+
+  useEffect(() => {
+    let cancelled = false;
+    loadLastNDays(storeId, 30)
+      .then((d) => { if (!cancelled) { setDocs(d); setLoaded(true); } })
+      .catch(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, [storeId]);
+
+  const activeOpt = METRIC_OPTIONS.find((o) => o.field === activeField)!;
+  const totals = periodTotals(docs, activeField);
+  const last14 = docs.slice(-14);
+  const max = Math.max(1, ...last14.map((d) => d[activeField] ?? 0));
+
+  return (
+    <div className="p-5 mb-6 lift" style={cardStyle}>
+      {/* 헤더 + 지표 선택 */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>
+            📈 일·주·월 분석
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+            지표를 선택해서 기간별 합계와 14일 추이를 확인하세요
+          </div>
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {METRIC_OPTIONS.map((o) => {
+            const active = activeField === o.field;
+            return (
+              <button
+                key={o.field}
+                onClick={() => setActiveField(o.field)}
+                className="tap"
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 99,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: active ? 'none' : '1px solid var(--border)',
+                  background: active ? o.color : 'var(--surface-1)',
+                  color: active ? '#fff' : 'var(--text-2)',
+                  cursor: 'pointer',
+                }}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3-tab KPI (오늘 / 이번주 / 이번달) */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {(
+          [
+            { key: 'today', label: '오늘', value: totals.today, sub: '24시간 누적' },
+            { key: 'week', label: '이번 주', value: totals.week, sub: '최근 7일' },
+            { key: 'month', label: '이번 달', value: totals.month, sub: '최근 30일' },
+          ] as const
+        ).map((p) => (
+          <div
+            key={p.key}
+            className="p-3"
+            style={{
+              borderRadius: 'var(--r-lg)',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div className="text-[10px] font-extrabold tracking-wider" style={{ color: 'var(--text-3)' }}>
+              {p.label}
+            </div>
+            <div className="mono text-xl font-extrabold mt-1" style={{ color: activeOpt.color }}>
+              {p.value.toLocaleString()}
+            </div>
+            <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+              {p.sub}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 14일 추이 바 차트 (CSS-only SVG) */}
+      <div>
+        <div className="text-[11px] font-bold mb-2" style={{ color: 'var(--text-2)' }}>
+          최근 14일 추이 — {activeOpt.label}
+        </div>
+        {!loaded ? (
+          <div className="text-[11px] py-8 text-center" style={{ color: 'var(--text-3)' }}>
+            불러오는 중…
+          </div>
+        ) : last14.every((d) => (d[activeField] ?? 0) === 0) ? (
+          <div
+            className="text-[11px] py-8 text-center rounded-lg"
+            style={{ color: 'var(--text-3)', background: 'var(--surface-2)' }}
+          >
+            아직 수집된 데이터가 없어요 — 매장이 사용자 앱에서 노출/클릭되기 시작하면 즉시 표시됩니다
+          </div>
+        ) : (
+          <div
+            className="flex items-end gap-1"
+            style={{
+              height: 120,
+              padding: '8px 4px 0',
+              borderTop: '1px solid var(--border)',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            {last14.map((d, i) => {
+              const v = d[activeField] ?? 0;
+              const heightPct = (v / max) * 100;
+              const dateLabel = d.date.slice(5).replace('-', '/');
+              return (
+                <div
+                  key={d.date}
+                  className="flex-1 flex flex-col items-center justify-end h-full"
+                  title={`${d.date}: ${v.toLocaleString()}`}
+                >
+                  <div
+                    style={{
+                      width: '70%',
+                      height: `${Math.max(2, heightPct)}%`,
+                      background: v === 0 ? 'var(--surface-3)' : activeOpt.color,
+                      borderRadius: '4px 4px 0 0',
+                      opacity: v === 0 ? 0.3 : 0.9,
+                      transition: 'height 0.3s ease',
+                    }}
+                  />
+                  {(i === 0 || i === 7 || i === 13) && (
+                    <div
+                      className="mono text-[9px] mt-1"
+                      style={{ color: 'var(--text-3)' }}
+                    >
+                      {dateLabel}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

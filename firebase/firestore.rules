@@ -114,6 +114,14 @@ service cloud.firestore {
         allow write: if true;
       }
 
+      // 일별 카운터 (2026-05-27) — 대시보드 일/주/월 분석 + 추이 그래프용
+      // analytics.bumpStoreMetric이 매번 daily doc도 increment.
+      // 보안 모델은 /metrics와 동일 (v0.1 demo, 누구나 write).
+      match /dailyMetrics/{dateKey} {
+        allow read: if true;
+        allow write: if true;
+      }
+
       // 매장 데일리 홍보 "오늘의 소식" — 매장 owner/member/platform_admin만 write, 누구나 read.
       // pending 매장이어도 owner는 미리 글 작성 가능 — 매장이 사용자에게 노출 안 되는 동안
       // 글도 마찬가지로 노출되지 않으며, status=active로 전환되는 순간 함께 노출됨.
