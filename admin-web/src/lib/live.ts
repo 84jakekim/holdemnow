@@ -303,77 +303,62 @@ export function useLiveTimelineTick(
   session: LiveSession | null | undefined,
 ): { level: number; secondsLeft: number; isFinishing: boolean; sb: number; bb: number; ante: number } | null {
   const [pos, setPos] = useState(() => (session ? computeTimelinePosition(session) : null));
-  // 2026-05-28 정정 #9 (MMA 패턴 적용):
-  //   사용자 명령: "MMA의 라운드 종료 시 부저 + 즉시 다음 라운드 + 정지 0ms" 작동 방식만 차용.
+  // 2026-05-28 정정 #10 (MMA 차용 + React Web 적합화):
+  //   #9 실패 — setState 콜백 안 부수효과(사운드) 호출은 React 안티패턴.
+  //   React가 콜백 여러 번 실행 → 3~4중 발화. 그리고 currentLevel dep로 setInterval 재시작 race → 카운트다운 1초 누락.
   //
-  // MMA core (timer/index.tsx line 478~514):
-  //   setInterval(() => setSecLeft((s) => {
-  //     if (s === 11) playSound('tenSec');        ← 10초 도달 즉시 사운드
-  //     else if (s >= 5 && s <= 10) playSound('countdownTick');
-  //     if (s > 1) return s - 1;
-  //     playSound('roundEnd');                    ← 1초에서 즉시 점프 + 사운드
-  //     return settings.roundSec;                 ← 다음 라운드 초로 즉시 (sec=0 노출 X)
-  //   }), 1000);
+  // MMA에서 차용한 본질:
+  //   ① 단일 setInterval 한 곳에서 timeline 진행
+  //   ② sec=0 노출 X (다음 레벨 즉시 점프)
+  //   ③ wrap 시 즉시 사운드 (서버 응답 대기 X)
   //
-  // 적용:
-  //   setInterval 콜백 안에서 setPos 함수형 업데이트 → prev/new 동기 비교 →
-  //   카운트다운 비프 + wrap 사운드 + advance 호출을 단일 콜백 안에서.
-  //   setState 콜백은 atomic 동기 실행 → useEffect dep race 완전 차단.
-  //
-  //   wrap = prev.level < new.level. 새 pos = 이미 다음 레벨 시간 → return new (정지 0ms).
-  //   사운드는 dynamic import (비동기지만 cooldown 5s + localStorage가 다중 호출 차단).
-  //   advance는 트랜잭션 idempotent → race 안전.
+  // React Web 적합화:
+  //   - setInterval 콜백 = pure (setPos만). setState 콜백 안 사운드 호출 X.
+  //   - 사운드 + advance = 별도 useEffect + prevPosRef dedup.
+  //   - setInterval dep에서 currentLevel 제거 — wrap 후 재시작 race 차단.
+  //   - 카운트다운 비프는 lib에서 호출 X — 호출처가 자기 soundWarn30Effective 설정 따라 호출.
+  //     (lib에서 호출하면 OFF한 사장도 듣게 되어 정책 위반)
   const sessionRef = useRef(session);
   sessionRef.current = session;
   useEffect(() => {
-    if (!session) {
-      setPos(null);
-      return;
-    }
+    if (!session) { setPos(null); return; }
     setPos(computeTimelinePosition(session));
     if (session.status === 'completed') return;
-    if (session.status !== 'running') {
-      // paused/break/ready 매초 재계산 (변동 없거나 미세 변동)
-      const t = setInterval(() => setPos(computeTimelinePosition(sessionRef.current!)), 1000);
-      return () => clearInterval(t);
-    }
-    // running: MMA 패턴 — setInterval 콜백 안에서 setState callback으로 sound 동기 호출
     const t = setInterval(() => {
       const sess = sessionRef.current;
-      if (!sess) return;
-      const newPos = computeTimelinePosition(sess);
-      setPos((prev) => {
-        if (!newPos) return prev;
-        if (!prev) return newPos;
-
-        // (1) 카운트다운 비프 — 같은 레벨 안에서 10~1초 도달
-        if (prev.level === newPos.level &&
-            newPos.secondsLeft >= 1 && newPos.secondsLeft <= 10 &&
-            newPos.secondsLeft !== prev.secondsLeft) {
-          import('./sounds').then(({ playCountdownBeep, playFinalBeep }) => {
-            if (newPos.secondsLeft <= 3) playFinalBeep();
-            else playCountdownBeep();
-          }).catch(() => {});
-        }
-
-        // (2) 레벨 wrap — prev.level < new.level (또는 secondsLeft가 prev에서 갑자기 큰 값으로 점프)
-        if (prev.level < newPos.level) {
-          import('./sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
-          void advanceLevelIfDue(sess.id, prev.level).catch(() => {});
-        }
-
-        return newPos;
-      });
+      if (sess) setPos(computeTimelinePosition(sess));
     }, 1000);
     return () => clearInterval(t);
   }, [
     session?.id,
     session?.status,
-    session?.currentLevel,
     session?.totalStartedAt?.toMillis(),
     session?.totalPausedMs,
     session?.pausedAt?.toMillis(),
+    // currentLevel dep 제거 — wrap 후 setInterval 재시작 race로 비프 1초 누락 차단.
+    // 콜백에서 sessionRef.current로 최신 session 참조하므로 dep 불필요.
   ]);
+
+  // 사운드(블라인드업) + advance 트랜잭션 — useEffect + ref dedup (안티패턴 회피)
+  const prevPosRef = useRef<{ level: number; secondsLeft: number } | null>(null);
+  const advanceFiredKeyRef = useRef<string>('');
+  useEffect(() => {
+    if (!pos) { prevPosRef.current = null; return; }
+    if (!session || session.status !== 'running') {
+      prevPosRef.current = { level: pos.level, secondsLeft: pos.secondsLeft };
+      return;
+    }
+    const prev = prevPosRef.current;
+    if (prev && prev.level < pos.level) {
+      const key = `lv${prev.level}-${session.id}`;
+      if (advanceFiredKeyRef.current !== key) {
+        advanceFiredKeyRef.current = key;
+        import('./sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
+        void advanceLevelIfDue(session.id, prev.level).catch(() => {});
+      }
+    }
+    prevPosRef.current = { level: pos.level, secondsLeft: pos.secondsLeft };
+  }, [pos?.level, pos?.secondsLeft, session?.id, session?.status]);
 
   return pos;
 }
