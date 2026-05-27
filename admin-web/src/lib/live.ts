@@ -353,26 +353,46 @@ export function useLiveTimelineTick(
     if (advanceFiredKeyRef.current === key) return;
     advanceFiredKeyRef.current = key;
     void advanceLevelIfDue(session.id, session.currentLevel).catch(() => {
-      // 실패 시 다음 tick에서 재시도 가능하도록 key 해제 (서버가 아직 옛 레벨이면 동일 key 재사용 OK)
+      // 실패 시 다음 tick에서 재시도 가능하도록 key 해제
       advanceFiredKeyRef.current = '';
     });
   }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
 
-  // 2026-05-27 정정 #4 핵심: 다음 레벨 wrap 상태에서는 sec=0을 표면화.
-  //   서버가 아직 currentLevel을 안 올린 상태(advance 트랜잭션 진행 중 또는 직전)에서
-  //   호출처가 sec=0을 한 tick이라도 볼 수 있게 만들어 TTS/playBlindUp 트리거를 정상화.
+  // 2026-05-28 정정 #5 (사용자 보고: 레벨업 시 5~10초 멈춤):
+  //   직전 fix(wrap 시 sec=0 강제 반환)가 서버 currentLevel advance까지
+  //   화면을 sec=0에 고정 → Firestore 트랜잭션 지연 시 5~10초 정체.
+  //
+  // Fix: wrap 첫 1초만 sec=0 (트리거 발화 보장), 그 다음부터는 pos 그대로
+  //   다음 레벨 시간 표시 (낙관적 업데이트, 서버 응답 대기 X). 트랜잭션 결과 도착하면
+  //   자연 동기화. cron 백업이 있어 inconsistency 위험 없음.
+  const wrapStartedAtRef = useRef<number | null>(null);
+  const wrapKeyRef = useRef<string>('');
   if (pos && session && session.status === 'running' && pos.level > session.currentLevel) {
-    const cur = (session.blindStructureLocked && session.blindStructureLocked.length > 0
-      ? session.blindStructureLocked
-      : session.blindStructure)?.find((l) => l.level === session.currentLevel);
-    return {
-      level: session.currentLevel,
-      secondsLeft: 0,
-      isFinishing: false,
-      sb: cur?.sb ?? session.smallBlind ?? 0,
-      bb: cur?.bb ?? session.bigBlind ?? 0,
-      ante: cur?.ante ?? session.ante ?? 0,
-    };
+    const key = `lv${session.currentLevel}-${session.id}`;
+    if (wrapKeyRef.current !== key) {
+      wrapKeyRef.current = key;
+      wrapStartedAtRef.current = Date.now();
+    }
+    const sinceWrap = wrapStartedAtRef.current ? Date.now() - wrapStartedAtRef.current : 0;
+    // wrap 진입 후 첫 1100ms만 sec=0 (트리거 발화) → 그 다음부터 다음 레벨 시간 자체 카운트다운
+    if (sinceWrap < 1100) {
+      const cur = (session.blindStructureLocked && session.blindStructureLocked.length > 0
+        ? session.blindStructureLocked
+        : session.blindStructure)?.find((l) => l.level === session.currentLevel);
+      return {
+        level: session.currentLevel,
+        secondsLeft: 0,
+        isFinishing: false,
+        sb: cur?.sb ?? session.smallBlind ?? 0,
+        bb: cur?.bb ?? session.bigBlind ?? 0,
+        ante: cur?.ante ?? session.ante ?? 0,
+      };
+    }
+    // 1.1초 후엔 pos 그대로 = 다음 레벨 시간 표시 (서버 응답 안 와도 화면 즉시 진행)
+  } else if (wrapKeyRef.current !== '' && pos && session && pos.level <= session.currentLevel) {
+    // 서버가 currentLevel 갱신 — wrap 상태 해제
+    wrapKeyRef.current = '';
+    wrapStartedAtRef.current = null;
   }
 
   return pos;
