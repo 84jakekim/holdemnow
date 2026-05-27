@@ -303,20 +303,70 @@ export function useLiveTimelineTick(
   session: LiveSession | null | undefined,
 ): { level: number; secondsLeft: number; isFinishing: boolean; sb: number; bb: number; ante: number } | null {
   const [pos, setPos] = useState(() => (session ? computeTimelinePosition(session) : null));
+  // 2026-05-28 정정 #9 (MMA 패턴 적용):
+  //   사용자 명령: "MMA의 라운드 종료 시 부저 + 즉시 다음 라운드 + 정지 0ms" 작동 방식만 차용.
+  //
+  // MMA core (timer/index.tsx line 478~514):
+  //   setInterval(() => setSecLeft((s) => {
+  //     if (s === 11) playSound('tenSec');        ← 10초 도달 즉시 사운드
+  //     else if (s >= 5 && s <= 10) playSound('countdownTick');
+  //     if (s > 1) return s - 1;
+  //     playSound('roundEnd');                    ← 1초에서 즉시 점프 + 사운드
+  //     return settings.roundSec;                 ← 다음 라운드 초로 즉시 (sec=0 노출 X)
+  //   }), 1000);
+  //
+  // 적용:
+  //   setInterval 콜백 안에서 setPos 함수형 업데이트 → prev/new 동기 비교 →
+  //   카운트다운 비프 + wrap 사운드 + advance 호출을 단일 콜백 안에서.
+  //   setState 콜백은 atomic 동기 실행 → useEffect dep race 완전 차단.
+  //
+  //   wrap = prev.level < new.level. 새 pos = 이미 다음 레벨 시간 → return new (정지 0ms).
+  //   사운드는 dynamic import (비동기지만 cooldown 5s + localStorage가 다중 호출 차단).
+  //   advance는 트랜잭션 idempotent → race 안전.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   useEffect(() => {
     if (!session) {
       setPos(null);
       return;
     }
     setPos(computeTimelinePosition(session));
-    // ready/running/paused/break 모두 매초 재계산 (paused는 pausedAt 고정이라 변동 없음 → 무해)
     if (session.status === 'completed') return;
-    const t = setInterval(() => setPos(computeTimelinePosition(session)), 1000);
+    if (session.status !== 'running') {
+      // paused/break/ready 매초 재계산 (변동 없거나 미세 변동)
+      const t = setInterval(() => setPos(computeTimelinePosition(sessionRef.current!)), 1000);
+      return () => clearInterval(t);
+    }
+    // running: MMA 패턴 — setInterval 콜백 안에서 setState callback으로 sound 동기 호출
+    const t = setInterval(() => {
+      const sess = sessionRef.current;
+      if (!sess) return;
+      const newPos = computeTimelinePosition(sess);
+      setPos((prev) => {
+        if (!newPos) return prev;
+        if (!prev) return newPos;
+
+        // (1) 카운트다운 비프 — 같은 레벨 안에서 10~1초 도달
+        if (prev.level === newPos.level &&
+            newPos.secondsLeft >= 1 && newPos.secondsLeft <= 10 &&
+            newPos.secondsLeft !== prev.secondsLeft) {
+          import('./sounds').then(({ playCountdownBeep, playFinalBeep }) => {
+            if (newPos.secondsLeft <= 3) playFinalBeep();
+            else playCountdownBeep();
+          }).catch(() => {});
+        }
+
+        // (2) 레벨 wrap — prev.level < new.level (또는 secondsLeft가 prev에서 갑자기 큰 값으로 점프)
+        if (prev.level < newPos.level) {
+          import('./sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
+          void advanceLevelIfDue(sess.id, prev.level).catch(() => {});
+        }
+
+        return newPos;
+      });
+    }, 1000);
     return () => clearInterval(t);
   }, [
-    // timeline 기반이라 levelEndsAt/levelSecondsLeft는 useEffect dep에서 제외 —
-    // cron이 매분 갱신하던 그 필드들이 dep에 있으면 setInterval 재시작 race로
-    // 타이머가 점프하는 현상이 발생함 (사용자 보고: 18:50→20:00 reset).
     session?.id,
     session?.status,
     session?.currentLevel,
@@ -324,61 +374,6 @@ export function useLiveTimelineTick(
     session?.totalPausedMs,
     session?.pausedAt?.toMillis(),
   ]);
-
-  // 2026-05-24 사용자 정정 #3 + 2026-05-27 사용자 정정 #4 (PM 단독):
-  //   "0초 도달 즉시 블라인드업 TTS + 레벨 변경이 동시에 나와야 하는데
-  //    현재는 10초 카운트다운만 정상, 레벨 변경+사운드는 몇 분 후 늦게 나옴."
-  //
-  // 결정적 원인 (2단 버그):
-  //   ① computeTimelinePosition은 elapsed >= cumulative 도달 즉시 다음 레벨로 wrap →
-  //      secondsLeft가 0이 아니라 다음 레벨 전체 시간으로 점프.
-  //      따라서 호출처(display/m/live/TournamentControlCenter)의
-  //      `prev > 0 && sec === 0` useEffect가 한 tick도 sec=0 상태를 못 보고 통과 →
-  //      ❌ TTS/playBlindUp 영영 트리거 X
-  //      ❌ advanceLevelIfDue 영영 트리거 X (advanceFiredKeyRef 가드는 sec=0과 별도 효과)
-  //   ② cron(1분 주기)이 결국 catch-up — 사용자에게는 "몇 분 후 쌩뚱맞게" 발화로 체감.
-  //
-  // Fix (2-pronged):
-  //   (A) pos가 다음 레벨로 wrap한 상태(pos.level > session.currentLevel)에서는
-  //       반환 시 secondsLeft를 0으로 강제. level은 서버 currentLevel을 유지 (호출처 동기화).
-  //       → 호출처의 `prev > 0 && sec === 0` 트리거가 자연 동작 → 즉시 TTS + advanceLevelIfDue 호출.
-  //   (B) 백업으로 여기서도 advanceLevelIfDue 직접 호출 (cron 대기 X).
-  //   결과: 0초 도달 → 화면 sec=0 한 tick 노출 → TTS+톤+advance 동시 발사 → 다음 tick에서 새 레벨.
-  const advanceFiredKeyRef = useRef<string>('');
-  useEffect(() => {
-    if (!session || !pos) return;
-    if (session.status !== 'running') return;
-    if (pos.level <= session.currentLevel) return;
-    const key = `lv${session.currentLevel}-${session.id}`;
-    if (advanceFiredKeyRef.current === key) return;
-    advanceFiredKeyRef.current = key;
-    void advanceLevelIfDue(session.id, session.currentLevel).catch(() => {
-      // 실패 시 다음 tick에서 재시도 가능하도록 key 해제
-      advanceFiredKeyRef.current = '';
-    });
-  }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
-
-  // 2026-05-28 정정 #7 (사용자 명령):
-  //   "0초에 자연스럽게 다음 레벨로 전환 + 카운트다운 즉시 시작 + 사운드는 그 순간 1회"
-  //
-  // 흐름: wrap 감지 즉시 pos 그대로 반환 (다음 레벨 시간) → 화면 정지 X
-  //        wrap 감지 useEffect가 사운드 트리거 + advance 트랜잭션 동시 호출
-  //   → 호출처의 sec===0 트리거는 발화 안 함 (sec=0이 화면에 안 보이므로) → 자동 dedup
-  const wrapTriggerKeyRef = useRef<string>('');
-  useEffect(() => {
-    const wrapped = !!(pos && session && session.status === 'running' && pos.level > session.currentLevel);
-    if (wrapped && session) {
-      const key = `lv${session.currentLevel}-${session.id}`;
-      if (wrapTriggerKeyRef.current !== key) {
-        wrapTriggerKeyRef.current = key;
-        // 사운드 1회 발화 (cooldown + cross-tab dedup은 sounds.ts 내부 처리)
-        import('./sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
-      }
-    } else if (!wrapped && wrapTriggerKeyRef.current) {
-      // 서버 currentLevel 갱신 — key 해제
-      wrapTriggerKeyRef.current = '';
-    }
-  }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
 
   return pos;
 }
