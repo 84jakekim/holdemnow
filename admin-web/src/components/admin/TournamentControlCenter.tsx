@@ -569,13 +569,9 @@ function SessionControlPanel({
       const cycleKey = `lv${lv}-${session.id}`;
       if (advanceFiredCycleRef.current !== cycleKey) {
         advanceFiredCycleRef.current = cycleKey;
-        // 2026-05-27 정정#4 (PM 단독): 컨트롤 페이지에서도 0초 도달 즉시 차임+TTS.
-        //   사장이 컨트롤 페이지만 켜놓고 LIVE 운영 중인 경우(TV 미연결) TTS가 안 들리던 누락 케이스.
-        import('@/lib/sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
-        // 동적 import로 advanceLevelIfDue 호출 (TournamentControlCenter는 import 이미 가능)
-        import('@/lib/live').then(({ advanceLevelIfDue }) => {
-          void advanceLevelIfDue(session.id, lv).catch(() => {});
-        }).catch(() => {});
+        // 2026-05-28 #8: playBlindUp / advanceLevelIfDue 호출 제거.
+        // 사운드 + advance는 useLiveTimelineTick(lib) 단일 경로에서 처리.
+        // cycleKey 마킹만 유지.
       }
     }
     prevSecRef.current = seconds;

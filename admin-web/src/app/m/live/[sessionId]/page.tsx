@@ -167,14 +167,13 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
       }
       // sec=0 도달 즉시 blindUp (서버 cron 대기 X).
       // 마지막 레벨/break 같은 경우 graceSec != null이라 currentLevel가 안 변경됨 → skip.
+      // 2026-05-28 #8: playBlindUp/advance 호출 제거 — lib 단일 경로.
       if (prevSec > 0 && sec === 0) {
         const lv = session.currentLevel;
         const cycleKey = `lv${lv}-${session.id}`;
         if (blindUpFiredCycleRef.current !== cycleKey) {
           blindUpFiredCycleRef.current = cycleKey;
-          playBlindUp();
-          // 클라 transaction으로 서버 currentLevel 즉시 advance — cron 대기 제거.
-          void advanceLevelIfDue(session.id, lv).catch(() => {});
+          // playBlindUp/advance 호출 X
         }
       }
     }

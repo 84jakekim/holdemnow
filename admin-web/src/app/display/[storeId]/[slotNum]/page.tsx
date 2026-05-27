@@ -309,17 +309,16 @@ export default function DisplayPage({
       if (soundWarn30Effective && prev !== null && prev !== sec && sec >= 1 && sec <= 10) {
         playCountdownBeep();
       }
-      // sec=0 도달 즉시 blindUp (cron 대기 X). prev가 1 이상에서 0으로 떨어진 순간.
-      // 첫 mount 시 prev=null이면 skip — 백업 effect(레벨 변경)가 처리.
+      // 2026-05-28 #8: sec=0 트리거에서 playBlindUp/advance 호출 제거.
+      // 모든 사운드 + advance는 useLiveTimelineTick(lib) 단일 경로에서 처리.
+      // 호출처 다중 트리거로 인한 2중/3중 발화 차단.
+      // cycleKey 마킹만 유지 (이후 카운트다운 비프 dedup용).
       if (soundBlindUpEffective && prev !== null && prev > 0 && sec === 0 && session?.id) {
         const lv = session.currentLevel ?? -1;
         const cycleKey = `lv${lv}-${session.id}`;
         if (blindUpFiredCycleRef.current !== cycleKey) {
           blindUpFiredCycleRef.current = cycleKey;
-          playBlindUp();
-          // 서버 currentLevel을 클라 transaction으로 즉시 +1 — autoAdvanceLevel cron
-          // (1분 주기) 의존 제거. 권한·동시성 충돌 시 false 반환, cron이 fallback 처리.
-          void advanceLevelIfDue(session.id, lv).catch(() => {});
+          // playBlindUp/advance 호출 X — lib에서만
         }
       }
     }
