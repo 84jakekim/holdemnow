@@ -189,10 +189,12 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     const prevLevel = prevLevelRef.current;
     const currLevel = session.currentLevel;
     if (prevLevel != null && currLevel > prevLevel) {
+      // 2026-05-28: 백업 트리거에서 playBlindUp 호출 제거 — 메인 트리거(sec===0)와
+      // 중복 발화 차단. cycleKey 마킹만 유지.
       const cycleKey = `lv${currLevel}-${session.id}`;
       if (blindUpFiredCycleRef.current !== cycleKey) {
         blindUpFiredCycleRef.current = cycleKey;
-        playBlindUp();
+        // playBlindUp 호출 X
       }
     }
     prevLevelRef.current = currLevel;

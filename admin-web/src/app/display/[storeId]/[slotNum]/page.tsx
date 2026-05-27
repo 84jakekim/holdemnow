@@ -348,10 +348,13 @@ export default function DisplayPage({
       currLv > prevLv &&
       session?.id
     ) {
+      // 2026-05-28: 백업 트리거에서 playBlindUp 호출 제거 — 메인 트리거(sec===0)와
+      // 중복 발화로 "블라인블라인드업!" 2중 음성 발생. 새로고침 직후 sec=0 못 본 경우
+      // 사운드 누락은 허용 (레벨업 표시는 정상). cycleKey만 마킹해 dedup 유지.
       const cycleKey = `lv${currLv}-${session.id}`;
       if (blindUpFiredCycleRef.current !== cycleKey) {
         blindUpFiredCycleRef.current = cycleKey;
-        playBlindUp();
+        // playBlindUp 호출 X — 메인 트리거에서만 발화
       }
     }
     prevLevelRef.current = currLv;
