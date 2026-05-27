@@ -564,7 +564,7 @@ function CurationSettingsCard() {
   const lastUpserted = config?.lastRunResult?.upserted;
 
   return (
-    <div className="mb-5 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5">
+    <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
       <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2">
@@ -1251,7 +1251,7 @@ function YoutubersTab() {
   return (
     <div>
       {/* ─── 자동 가져오기 섹션 (PM 2026-05-26 추가) ─── */}
-      <div className="mb-5 rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 to-amber-50 p-4">
+      <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-base">🎯</span>
           <h3 className="text-sm font-extrabold text-gray-900">자동 가져오기</h3>
