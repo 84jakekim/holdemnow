@@ -136,28 +136,36 @@ let lastBlindUpFiredAt = 0; // module-level (cross-tab과 함께 이중 안전)
 export function playBlindUp(): void {
   if (typeof window === 'undefined') return;
 
-  // Cross-tab + module-level dedup — TTS 2중/N중 발화 방지
+  // Cross-tab + module-level dedup
   const now = Date.now();
-  if (now - lastBlindUpFiredAt < BLIND_UP_COOLDOWN_MS) return;       // 같은 탭
-  if (now - getLastFired() < BLIND_UP_COOLDOWN_MS) return;            // 다른 탭/페이지
+  if (now - lastBlindUpFiredAt < BLIND_UP_COOLDOWN_MS) return;
+  if (now - getLastFired() < BLIND_UP_COOLDOWN_MS) return;
   lastBlindUpFiredAt = now;
   setLastFired(now);
 
-  // 1) 오락기 차임 prefix (C5 → G5 상승 2음, sine + gain 0.6) — TTS와 병렬
+  // 2026-05-28 #12 (사용자 테스트 요청): TTS 제거 → 단순 레벨체인지 비프 1회.
+  //   "TTS 넣고나서 타이머가 이상해진 것 같다" — TTS speechSynthesis가 메인스레드를
+  //   잡아 React render 지연시켜 타이머 정체 유발 가능성. TTS 빠지면 정상화되는지 검증.
   const ctx = getCtx();
-  if (ctx) {
-    tryResume(ctx);
-    try {
-      const t0 = ctx.currentTime;
-      playArcadeNote(ctx, 523, t0, 0.18);          // C5
-      playArcadeNote(ctx, 784, t0 + 0.15, 0.22);   // G5 (길게 강조)
-    } catch {
-      /* ignore */
-    }
+  if (!ctx) return;
+  tryResume(ctx);
+  try {
+    const t0 = ctx.currentTime;
+    // 명확하고 짧은 단음 — 1320Hz(E6) 0.35초 + 약간 강조 (gain 0.8)
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 1320;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(0.8, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.36);
+  } catch {
+    /* ignore */
   }
-
-  // 2) 한국어 TTS — 즉시 발화 (cancel/setTimeout 없음, 차임과 병렬 동시 재생)
-  speakBlindUp();
 }
 
 /**
