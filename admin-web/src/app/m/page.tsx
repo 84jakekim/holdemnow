@@ -175,7 +175,7 @@ export default function MobileHome() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo.png"
+              src="/logo-rabbit.svg"
               alt=""
               width={44}
               height={44}

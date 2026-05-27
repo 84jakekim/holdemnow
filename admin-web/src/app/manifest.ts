@@ -20,28 +20,20 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: 'ko',
     categories: ['entertainment', 'lifestyle', 'social'],
     icons: [
-      // OS 스플래시 — 정사각형 워드마크 SVG (안드로이드 Chrome이 PWA 첫 실행 시
-      // background_color 위에 가장 큰 icon을 정중앙 배치. logo.png는 가로형이라
-      // 늘어져 보였으므로 정사각형 워드마크를 우선 노출).
+      // 신규 토끼 로고 SVG (2026-05-27 핸드오프 적용) — 어느 사이즈에도 선명
       {
-        src: '/splash-icon.svg',
+        src: '/logo-rabbit.svg',
         sizes: 'any',
         type: 'image/svg+xml',
         purpose: 'any',
       },
       {
-        src: '/splash-icon.svg',
+        src: '/logo-rabbit.svg',
         sizes: 'any',
         type: 'image/svg+xml',
         purpose: 'maskable',
       },
-      // 홈 화면 앱 아이콘 — Pink Rabbit 토끼 PNG
-      {
-        src: '/logo.png',
-        sizes: '512x512',
-        type: 'image/png',
-        purpose: 'any',
-      },
+      // PNG fallback (안드로이드 일부 브라우저 호환)
       {
         src: '/icon-192.png',
         sizes: '192x192',

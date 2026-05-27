@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Pink Rabbit">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1F8F"/>
+      <stop offset="100%" stop-color="#FF6BAA"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="20%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="70%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- iOS squircle 배경 (radius = 64 * 0.225 ≈ 14.4) -->
+  <rect width="64" height="64" rx="14.4" ry="14.4" fill="url(#bg)"/>
+  <rect width="64" height="64" rx="14.4" ry="14.4" fill="url(#glow)"/>
+
+  <!-- 왼쪽 귀 -->
+  <ellipse cx="22" cy="20" rx="4.8" ry="11" fill="#ffffff" transform="rotate(-12 22 20)"/>
+  <ellipse cx="22" cy="22" rx="1.9" ry="6.5" fill="#FFB3D4" transform="rotate(-12 22 22)"/>
+  <!-- 오른쪽 귀 -->
+  <ellipse cx="42" cy="20" rx="4.8" ry="11" fill="#ffffff" transform="rotate(12 42 20)"/>
+  <ellipse cx="42" cy="22" rx="1.9" ry="6.5" fill="#FFB3D4" transform="rotate(12 42 22)"/>
+  <!-- 머리 -->
+  <circle cx="32" cy="42" r="14" fill="#ffffff"/>
+  <!-- 볼 블러시 -->
+  <circle cx="23" cy="46" r="2" fill="#FFB3D4" opacity="0.8"/>
+  <circle cx="41" cy="46" r="2" fill="#FFB3D4" opacity="0.8"/>
+  <!-- 눈 -->
+  <ellipse cx="27" cy="40.5" rx="1.8" ry="2.4" fill="#FF1F8F"/>
+  <ellipse cx="37" cy="40.5" rx="1.8" ry="2.4" fill="#FF1F8F"/>
+  <!-- 눈 하이라이트 -->
+  <circle cx="27.5" cy="40" r="0.7" fill="#ffffff"/>
+  <circle cx="37.5" cy="40" r="0.7" fill="#ffffff"/>
+  <!-- 코 -->
+  <ellipse cx="32" cy="45.4" rx="1.4" ry="1" fill="#FF1F8F"/>
+  <!-- 입 -->
+  <path d="M32 46.6 Q32 48.4 30.3 48.6 M32 46.6 Q32 48.4 33.7 48.6" stroke="#FF1F8F" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+</svg>
