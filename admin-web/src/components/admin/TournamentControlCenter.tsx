@@ -1893,7 +1893,7 @@ function SessionTournamentControlBox({
             💰 PRIZE POOL {!showPP && '(TV 노출 OFF)'}
           </div>
           <div className="text-[10px] font-mono flex items-center gap-1" style={{ color: 'var(--text-2)' }}>
-            <span style={{ color: 'var(--text-3)' }}>({entries}+{rebuys}) × {buyInT}T ×</span>
+            <span style={{ color: 'var(--text-3)' }}>({entries}+{rebuys}) × {buyInT}Ticket ×</span>
             <PayoutPercentInline
               value={ps.payoutPercent}
               disabled={busy}
@@ -1907,7 +1907,7 @@ function SessionTournamentControlBox({
             {fmtPrizeDisplay(prizePoolWon, unit) || '—'}
           </div>
           <div className="text-[10px] font-mono" style={{ color: 'var(--text-3)' }}>
-            총 {total}엔트리 · {(buyInWon / TICKET_WON * total).toLocaleString()}T
+            총 {total}엔트리 · {(buyInWon / TICKET_WON * total).toLocaleString()}Ticket
           </div>
         </div>
       </div>
@@ -1996,34 +1996,45 @@ function PrizePoolModeRadio({
     { id: 'distribution', label: '분배표', sub: '1~N등 표시' },
   ];
   return (
-    <div className="grid grid-cols-3 gap-1.5">
-      {options.map((opt) => {
-        const selected = value === opt.id;
-        return (
-          <button
-            key={opt.id}
-            type="button"
-            onClick={() => onChange(opt.id)}
-            className={`text-left rounded-md px-2 py-1.5 border-2 transition-all ${
-              selected ? 'shadow-sm' : 'hover:bg-gray-50'
-            }`}
-            style={{
-              background: selected ? 'rgba(16,185,129,0.10)' : 'var(--surface-2)',
-              borderColor: selected ? 'rgba(16,185,129,0.55)' : 'var(--border)',
-            }}
-          >
-            <div
-              className="text-[11px] font-extrabold"
-              style={{ color: selected ? '#047857' : 'var(--text-1)' }}
+    <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5">
+        {options.map((opt) => {
+          const selected = value === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => onChange(opt.id)}
+              className={`text-left rounded-md px-2 py-1.5 border-2 transition-all ${
+                selected ? 'shadow-sm' : 'hover:bg-gray-50'
+              }`}
+              style={{
+                background: selected ? 'rgba(16,185,129,0.10)' : 'var(--surface-2)',
+                borderColor: selected ? 'rgba(16,185,129,0.55)' : 'var(--border)',
+              }}
             >
-              {selected ? '●' : '○'} {opt.label}
-            </div>
-            <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-              {opt.sub}
-            </div>
-          </button>
-        );
-      })}
+              <div
+                className="text-[11px] font-extrabold"
+                style={{ color: selected ? '#047857' : 'var(--text-1)' }}
+              >
+                {selected ? '●' : '○'} {opt.label}
+              </div>
+              <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+                {opt.sub}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {/* 2026-05-28 개선 #4: 분배표 모드 권장 주석 */}
+      {value === 'distribution' && (
+        <div
+          className="text-[9px] leading-relaxed px-1"
+          style={{ color: 'var(--text-3)' }}
+        >
+          * 분배표 모드는 PC 모드에서만 사용 권장
+        </div>
+      )}
     </div>
   );
 }

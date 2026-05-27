@@ -387,12 +387,13 @@ export function ticketsToWon(tickets: number): number {
   return Math.max(0, Math.floor(tickets || 0)) * TICKET_WON;
 }
 
-/** 표시용 — "3T (3만원)" 같은 라벨 (어드민 템플릿 편집 화면 전용).
- *  Phase 4 (2026-05-21): ₩ 기호 제거 — 사용자 정책 "한화 w 표시는 없애야". */
+/** 표시용 — "3Ticket (3만원)" 같은 라벨 (어드민 템플릿 편집 화면 전용).
+ *  Phase 4 (2026-05-21): ₩ 기호 제거 — 사용자 정책 "한화 w 표시는 없애야".
+ *  2026-05-28 개선 #3: "T" → "Ticket" (단위 명칭 명확화). */
 export function fmtBuyIn(won: number): string {
   const t = wonToTickets(won);
   const man = Math.round((won || 0) / 10000);
-  return `${t}T (${man.toLocaleString()}만원)`;
+  return `${t}Ticket (${man.toLocaleString()}만원)`;
 }
 
 /**

@@ -805,18 +805,10 @@ export default function DisplayPage({
               inline-flex 안에 LEVEL 거대 카드 → 타이머 → 진행바 → 블라인드(중앙) 순. */}
           <div className="inline-flex flex-col items-center">
             {/* 2026-05-24 사용자 정정: LEVEL 폰트 2.5배 + "LEVEL N" 명확 표기 (NOW 배지 폐기).
-                일관된 톤으로 가로 layout과 동일 디자인 — 데스크탑 거대 카드. */}
+                2026-05-28 개선 #2: 카드 배경/보더 제거 — 폰트만 표시 (타이머와 동일 컨셉).
+                mb-3 → mb-1 (타이머와 간격 축소). */}
             <div
-              className="rounded-2xl px-5 py-2 mb-3 border flex items-center justify-center"
-              style={{
-                background: isCurrentBreak
-                  ? 'linear-gradient(135deg, rgba(255,209,102,0.22), rgba(0,0,0,0.55))'
-                  : `linear-gradient(135deg, ${display.accentColor}2E, rgba(0,0,0,0.55))`,
-                borderColor: isCurrentBreak ? '#FFD16699' : `${display.accentColor}80`,
-                boxShadow: isCurrentBreak
-                  ? '0 0 18px rgba(255,209,102,0.18) inset'
-                  : `0 0 18px ${display.accentColor}22 inset`,
-              }}
+              className="flex items-center justify-center mb-1"
               aria-label={`현재 레벨 ${session.currentLevel}`}
             >
               <span
@@ -824,6 +816,7 @@ export default function DisplayPage({
                 style={{
                   color: isCurrentBreak ? '#FFD166' : display.textColor,
                   fontSize: 'clamp(28px, 3.3vw, 40px)',
+                  opacity: 0.85,
                 }}
               >
                 {displayedLevelLabel}
@@ -1353,18 +1346,9 @@ function MobilePortraitLayout({
       {/* 거대 타이머 — 화면 폭의 18~22vw 정도. LEVEL 거대 카드가 타이머 바로 위. */}
       <div className="flex-1 flex flex-col items-center justify-center min-h-0">
         {/* 2026-05-24 사용자 정정: 세로 모드도 동일 디자인 — "LEVEL N" 명확 표기.
-            세로 폭 제약상 가로(40px)보다 작게 — clamp(22px, 4.5vw, 32px) (~1.8배). */}
+            2026-05-28 개선 #2: 카드 배경/보더 제거 — 폰트만 표시. mb-2 → mb-1 (간격 축소). */}
         <div
-          className="rounded-2xl px-4 py-1.5 mb-2 border flex items-center justify-center"
-          style={{
-            background: isCurrentBreak
-              ? 'linear-gradient(135deg, rgba(255,209,102,0.22), rgba(0,0,0,0.55))'
-              : `linear-gradient(135deg, ${display.accentColor}2E, rgba(0,0,0,0.55))`,
-            borderColor: isCurrentBreak ? '#FFD16699' : `${display.accentColor}80`,
-            boxShadow: isCurrentBreak
-              ? '0 0 14px rgba(255,209,102,0.18) inset'
-              : `0 0 14px ${display.accentColor}22 inset`,
-          }}
+          className="flex items-center justify-center mb-1"
           aria-label={`현재 레벨 ${session.currentLevel}`}
         >
           <span
@@ -1372,6 +1356,7 @@ function MobilePortraitLayout({
             style={{
               color: isCurrentBreak ? '#FFD166' : display.textColor,
               fontSize: 'clamp(22px, 4.5vw, 32px)',
+              opacity: 0.85,
             }}
           >
             {displayedLevelLabel}
@@ -2229,20 +2214,10 @@ function MobileLandscapeLayout({
         {/* ─── 중: LEVEL 배지 + 거대 타이머 + 진행바 + 중앙 하단 BLINDS ─── */}
         <div className="flex flex-col items-center justify-center min-w-0">
           {/* 2026-05-24 사용자 정정 (재²): "level 2.5배가 안 됨" — 가로 layout clamp min/max 키움.
-              직전: clamp(28px, 3.3vw, 40px) — 작은 viewport에서 min(28)에 수렴 → 안 커 보임.
-              현재: clamp(48px, 5.2vw, 80px) — 1.7~2배 키움. 실제 시각 2.5배 효과.
-              tracking 0.18em / padding 확장 유지로 dignified. */}
+              2026-05-28 개선 #2: 카드 배경/보더 제거 — 폰트만 표시 (타이머와 동일 컨셉).
+              mb-3 → mb-1 (타이머와 간격 축소). */}
           <div
-            className="rounded-2xl px-5 py-2 mb-3 border flex items-center justify-center"
-            style={{
-              background: isCurrentBreak
-                ? 'linear-gradient(135deg, rgba(255,209,102,0.22), rgba(0,0,0,0.55))'
-                : `linear-gradient(135deg, ${display.accentColor}2E, rgba(0,0,0,0.55))`,
-              borderColor: isCurrentBreak ? '#FFD16699' : `${display.accentColor}80`,
-              boxShadow: isCurrentBreak
-                ? '0 0 18px rgba(255,209,102,0.18) inset'
-                : `0 0 18px ${display.accentColor}22 inset`,
-            }}
+            className="flex items-center justify-center mb-1"
             aria-label={`현재 레벨 ${session.currentLevel}`}
           >
             <span
@@ -2252,6 +2227,7 @@ function MobileLandscapeLayout({
                 // 2026-05-24 사용자 정정 (보고서): "LEVEL 2.5배 안 됨" — clamp min 28→48 / max 40→80
                 // 2026-05-24 PM 핫픽스: compact면 모바일 viewport에 맞춰 min/max 축소.
                 fontSize: fz(48, 5.2, 80, sLevel),
+                opacity: 0.85,
               }}
             >
               {displayedLevelLabel}
@@ -3087,11 +3063,16 @@ function LeftSmartInfoStack({
 }
 
 /**
- * NextLevelCompactCard — 2026-05-28 신설.
+ * NextLevelCompactCard — 2026-05-28 신설 / 개선 #1 (2026-05-28).
  *
  * 모바일 가로(compact=true) 전용. BlindStructurePanel 대신 표시.
- * 작은 화면에서 풀 스트럭쳐는 내용 잘림 → NEXT LEVEL SB/BB/Ante만 컴팩트하게.
- * 현재 레벨 정보(상단) + 다음 레벨(NEXT, 하단) 단일 카드.
+ * 작은 화면에서 풀 스트럭쳐는 내용 잘림 → NEXT LEVEL 번호(큰 라벨) + SB/BB/Ante 구조.
+ *
+ * 개선 #1 요구:
+ *  - 상단에 "NEXT LEVEL {번호}" 큰 라벨 (예: "NEXT LEVEL 5")
+ *  - 그 아래 SB/BB/Ante 금액 표기
+ *  - 내용 잘림 절대 없게 — overflow hidden 회피, 글자 단위 줄바꿈 허용
+ *  - 좌측 상단 좁은 공간이라 폰트/패딩 보수적으로 설정
  */
 function NextLevelCompactCard({
   nextBlind,
@@ -3106,78 +3087,97 @@ function NextLevelCompactCard({
   const fg = display.textColor;
   const blinds = display.blindsColor;
 
+  // 다음 레벨이 없으면 축약 카드
+  if (!nextBlind) {
+    return (
+      <div
+        className="rounded-xl border w-full flex flex-col items-center justify-center py-3 px-2"
+        style={{ background: 'rgba(0,0,0,0.45)', borderColor: 'rgba(255,255,255,0.10)' }}
+      >
+        <div className="font-extrabold tracking-[0.18em] text-center" style={{ color: fg, opacity: 0.4, fontSize: 11 }}>
+          NEXT LEVEL
+        </div>
+        <div className="font-extrabold text-center mt-1" style={{ color: fg, opacity: 0.35, fontSize: 13 }}>
+          마지막 레벨
+        </div>
+      </div>
+    );
+  }
+
+  // BREAK 다음
+  if (nextBlind.isBreak) {
+    return (
+      <div
+        className="rounded-xl border w-full flex flex-col py-2.5 px-2.5 gap-1"
+        style={{ background: 'rgba(0,0,0,0.45)', borderColor: 'rgba(255,209,102,0.35)' }}
+      >
+        <div
+          className="font-extrabold tracking-[0.16em] leading-tight"
+          style={{ color: '#FFD166', fontSize: 11, opacity: 0.85 }}
+        >
+          NEXT
+        </div>
+        <div
+          className="font-extrabold leading-tight"
+          style={{ color: '#FFD166', fontSize: 17, letterSpacing: '-0.01em' }}
+        >
+          ☕ BREAK
+        </div>
+        <div
+          className="font-mono font-bold leading-tight"
+          style={{ color: '#FFD166', opacity: 0.75, fontSize: 13 }}
+        >
+          {Math.round(nextBlind.durationSec / 60)}분
+        </div>
+      </div>
+    );
+  }
+
+  // 일반 다음 레벨 — 개선 #1: "NEXT LEVEL N" 큰 라벨 + SB/BB/Ante
+  const levelNum = nextDisplayedNumber ?? nextBlind.level;
   return (
     <div
-      className="rounded-xl border overflow-hidden flex flex-col w-full"
-      style={{
-        background: 'rgba(0,0,0,0.55)',
-        borderColor: 'rgba(255,255,255,0.12)',
-      }}
+      className="rounded-xl border w-full flex flex-col py-2.5 px-2.5 gap-1.5"
+      style={{ background: 'rgba(0,0,0,0.45)', borderColor: `${accent}35` }}
     >
-      {/* 헤더 */}
+      {/* "NEXT LEVEL N" 큰 라벨 — 잘림 방지: word-break + overflow visible */}
       <div
-        className="font-extrabold tracking-[0.2em] border-b px-3 py-2"
+        className="font-extrabold leading-tight"
         style={{
-          borderColor: 'rgba(255,255,255,0.1)',
-          color: fg,
-          background: 'rgba(0,0,0,0.35)',
-          fontSize: 14,
+          color: accent,
+          fontSize: 13,
+          letterSpacing: '0.06em',
+          // 줄바꿈 허용 — 좁은 공간에서 "NEXT LEVEL\n5" 형태로
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
         }}
       >
         NEXT LEVEL
       </div>
-
-      {/* 콘텐츠 */}
-      <div className="px-3 py-3 flex flex-col gap-2 items-center justify-center flex-1">
-        {!nextBlind ? (
-          <div
-            className="text-center font-extrabold tracking-widest"
-            style={{ color: fg, opacity: 0.45, fontSize: 13 }}
-          >
-            마지막 레벨
-          </div>
-        ) : nextBlind.isBreak ? (
-          <>
-            <div
-              className="font-extrabold tracking-[0.2em]"
-              style={{ color: '#FFD166', fontSize: 12 }}
-            >
-              ☕ BREAK
-            </div>
-            <div
-              className="font-mono font-extrabold"
-              style={{ color: '#FFD166', fontSize: 22, letterSpacing: '-0.02em' }}
-            >
-              {Math.round(nextBlind.durationSec / 60)}분
-            </div>
-          </>
-        ) : (
-          <>
-            <div
-              className="font-extrabold tracking-[0.2em]"
-              style={{ color: accent, opacity: 0.85, fontSize: 11 }}
-            >
-              LV {nextDisplayedNumber ?? nextBlind.level}
-            </div>
-            <div
-              className="font-mono font-extrabold tabular-nums leading-none"
-              style={{ color: blinds, fontSize: 22, letterSpacing: '-0.03em' }}
-            >
-              {nextBlind.sb.toLocaleString()}
-              <span style={{ color: fg, opacity: 0.35 }} className="mx-1">/</span>
-              {nextBlind.bb.toLocaleString()}
-            </div>
-            {nextBlind.ante > 0 && (
-              <div
-                className="font-mono font-bold"
-                style={{ color: fg, opacity: 0.65, fontSize: 11 }}
-              >
-                Ante {nextBlind.ante.toLocaleString()}
-              </div>
-            )}
-          </>
-        )}
+      <div
+        className="font-extrabold leading-none"
+        style={{ color: accent, fontSize: 26, letterSpacing: '-0.02em' }}
+      >
+        {levelNum}
       </div>
+      {/* SB/BB */}
+      <div
+        className="font-mono font-extrabold tabular-nums leading-none"
+        style={{ color: blinds, fontSize: 15, letterSpacing: '-0.02em' }}
+      >
+        {nextBlind.sb.toLocaleString()}
+        <span style={{ color: fg, opacity: 0.35 }} className="mx-0.5">/</span>
+        {nextBlind.bb.toLocaleString()}
+      </div>
+      {/* Ante (있을 때만) */}
+      {nextBlind.ante > 0 && (
+        <div
+          className="font-mono font-bold leading-tight"
+          style={{ color: fg, opacity: 0.6, fontSize: 11 }}
+        >
+          Ante {nextBlind.ante.toLocaleString()}
+        </div>
+      )}
     </div>
   );
 }
