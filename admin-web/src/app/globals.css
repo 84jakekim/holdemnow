@@ -198,6 +198,20 @@ html, body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { scrollbar-width: none; }
 
+/* ── 타이머 10초 카운트다운 긴박감 scale pulse (2026-05-28) ── */
+/* TV display + 사장 컨트롤 + m/live 공통. scale 1.0 ↔ 1.1, 1초 사이클. */
+@keyframes timer-pulse {
+  0%, 100% { transform: scale(1.0); }
+  50%       { transform: scale(1.1); }
+}
+.timer-pulse {
+  animation: timer-pulse 1s ease-in-out infinite;
+  display: inline-block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer-pulse { animation: none; }
+}
+
 /* ── LIVE pulse — 빨강 ripple (강화 v3) ───────────────── */
 @keyframes pulseLive {
   0%   { box-shadow: 0 0 0 0   rgba(229,62,62,0.55); }

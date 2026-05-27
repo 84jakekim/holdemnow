@@ -829,7 +829,7 @@ export default function DisplayPage({
               </span>
             </div>
             <div
-              className={`font-mono font-extrabold leading-none transition-colors text-center ${veryLow ? 'animate-pulse' : ''}`}
+              className={`font-mono font-extrabold leading-none transition-colors text-center ${lowTime ? 'timer-pulse' : ''}`}
               style={{
                 fontSize: `clamp(${150 * (display.timerScale ?? 1)}px, ${18 * (display.timerScale ?? 1)}vw, ${280 * (display.timerScale ?? 1)}px)`,
                 letterSpacing: '-0.05em',
@@ -1143,43 +1143,42 @@ export default function DisplayPage({
         </button>
       )}
 
-      {/* 사운드 활성화 오버레이 — 첫 진입 + unlock 안 된 상태 */}
+      {/* 사운드 활성화 오버레이 — 첫 진입 + unlock 안 된 상태
+          2026-05-28: 더 눈에 띄게 + click 한 번에 확실한 unlock 보장.
+          중복 클릭 핸들러 통합, 테스트 비프 즉시 재생으로 성공 확인. */}
       {!audioReady && (
         <button
           type="button"
           onClick={() => {
             unlockAudio();
             setAudioReady(true);
-            try {
-              localStorage.setItem('holdemnow:tvAudioUnlocked', '1');
-            } catch {}
+            try { localStorage.setItem('holdemnow:tvAudioUnlocked', '1'); } catch {}
+            // 즉시 비프 — unlock 성공 확인 + 카운트다운 비프 미리 테스트
+            setTimeout(() => playCountdownBeep(), 80);
           }}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          aria-label="사운드 활성화"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md"
+          aria-label="사운드 활성화 — 화면을 터치하세요"
         >
-          <div className="text-center text-white p-10 rounded-3xl bg-gray-900/95 border-2 border-amber-400 shadow-2xl max-w-md mx-6"
-            onClick={(e) => {
-              // 오버레이 내부 클릭 시에도 unlock + 테스트 비프 한 번 즉시
-              e.stopPropagation();
-              unlockAudio();
-              setAudioReady(true);
-              try { localStorage.setItem('holdemnow:tvAudioUnlocked', '1'); } catch {}
-              setTimeout(() => playCountdownBeep(), 100);
-            }}
+          <div className="text-center text-white px-8 py-10 rounded-3xl bg-gray-950/98 border-2 border-amber-400 shadow-2xl max-w-sm mx-5"
+            style={{ boxShadow: '0 0 60px rgba(245,158,11,0.30), 0 8px 32px rgba(0,0,0,0.8)' }}
           >
-            <div className="text-7xl mb-5">🔊</div>
-            <div className="text-2xl font-extrabold mb-3">TV 송출 시작</div>
-            <div className="text-sm text-gray-300 mb-5 leading-relaxed">
-              화면을 터치하면 사운드가 활성화됩니다.<br />
-              세로/가로 전환은 우측 상단 <span className="text-amber-300 font-bold">전체화면</span> 버튼으로.
+            {/* 아이콘 — 크게 + pulse */}
+            <div className="text-8xl mb-4 animate-bounce">🔊</div>
+            <div className="text-3xl font-extrabold mb-2 tracking-tight">TV 송출 시작</div>
+            <div className="text-sm text-gray-300 mb-6 leading-relaxed">
+              터치하면 <span className="text-amber-300 font-bold">카운트다운 비프</span>가<br />
+              즉시 활성화됩니다.
             </div>
-            <div className="text-[12px] text-gray-400 mb-6 leading-relaxed">
-              📱 모바일은 기본 세로 레이아웃으로 표시.<br />
-              가로(landscape) 풀스크린은 사용자가 명시적으로 전환합니다.<br />
-              <span className="text-amber-300/70">기본값은 가로 강제 X — race 차단</span>
-            </div>
-            <div className="text-amber-400 text-base font-bold animate-pulse">
-              화면 아무 곳이나 터치
+            {/* CTA 버튼 — 명확한 탭 타겟 */}
+            <div
+              className="w-full rounded-2xl py-4 text-lg font-extrabold tracking-widest animate-pulse"
+              style={{
+                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                color: '#1A0A00',
+                boxShadow: '0 0 24px rgba(245,158,11,0.50)',
+              }}
+            >
+              화면 터치로 시작
             </div>
           </div>
         </button>
@@ -1378,7 +1377,7 @@ function MobilePortraitLayout({
           </span>
         </div>
         <div
-          className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
+          className={`font-mono font-extrabold leading-none transition-colors ${lowTime ? 'timer-pulse' : ''}`}
           style={{
             // 세로 portrait: vw·vh 둘 다 고려. vh 기준으로 화면이 짧아도 타이머가 잘리지 않게.
             // 360px 폭 세로(640~900px 높이): ~22vw≈79px, ~15vh≈96-135px → min(22vw, 15vh) 사용.
@@ -2048,16 +2047,25 @@ function MobileLandscapeLayout({
             정보 중복 zero. 사용자가 토너 운영 페이지 토글로 즉시 전환. */}
         <div className="flex flex-col justify-center gap-3 min-w-0 min-h-0 overflow-hidden">
           {display.showStructure !== false ? (
-            // [ON] 스트럭쳐 패널 — NEXT는 mount하지 않음 (스트럭쳐가 다음 레벨 포함)
-            // 2026-05-24 사용자 정정: structureScale 배율로 폰트/패딩/폭 동적 조절.
-            // 2026-05-24 PM 핫픽스: compact일 때 scale에 0.65 곱해 모바일 가로용 컴팩트 패널.
+            // [ON] 스트럭쳐 패널 — 모바일 가로(compact)일 때는 NEXT LEVEL 컴팩트 카드로 대체.
+            // 작은 화면에서 풀 스트럭쳐는 내용 잘림 문제 → nextBlind SB/BB/Ante만 표시.
+            // PC/태블릿(compact=false)은 기존 풀 스트럭쳐 유지.
+            compact ? (
+              // 모바일 가로 전용 — NEXT LEVEL 단일 컴팩트 카드
+              <NextLevelCompactCard
+                nextBlind={nextBlind}
+                nextDisplayedNumber={nextDisplayedNumber}
+                display={display}
+              />
+            ) : (
             <BlindStructurePanel
               structure={structure}
               currentLevel={session.currentLevel}
               display={display}
               variant="landscape"
-              scale={sStructure * (compact ? 0.65 : 1.0)}
+              scale={sStructure}
             />
+            )
           ) : (
             // [OFF] NEXT 안내 카드만 (스트럭쳐 가려진 상태)
             // 2026-05-24 사용자 정정: nextScale 배율로 폰트·패딩 동적.
@@ -2193,7 +2201,7 @@ function MobileLandscapeLayout({
             </span>
           </div>
           <div
-            className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
+            className={`font-mono font-extrabold leading-none transition-colors ${lowTime ? 'timer-pulse' : ''}`}
             style={{
               // 2026-05-24 사용자 정정 (보고서): 타이머 시인성 강화
               // 2026-05-28 최적화: compact 모바일 가로는 vh 상한도 함께 적용 (짧은 화면 잘림 방지)
@@ -3009,6 +3017,102 @@ function LeftSmartInfoStack({
             '#FFD166',
           )
         : null}
+    </div>
+  );
+}
+
+/**
+ * NextLevelCompactCard — 2026-05-28 신설.
+ *
+ * 모바일 가로(compact=true) 전용. BlindStructurePanel 대신 표시.
+ * 작은 화면에서 풀 스트럭쳐는 내용 잘림 → NEXT LEVEL SB/BB/Ante만 컴팩트하게.
+ * 현재 레벨 정보(상단) + 다음 레벨(NEXT, 하단) 단일 카드.
+ */
+function NextLevelCompactCard({
+  nextBlind,
+  nextDisplayedNumber,
+  display,
+}: {
+  nextBlind: { level: number; sb: number; bb: number; ante: number; durationSec: number; isBreak?: boolean } | undefined;
+  nextDisplayedNumber: number | null;
+  display: TimerDisplaySettings;
+}) {
+  const accent = display.accentColor;
+  const fg = display.textColor;
+  const blinds = display.blindsColor;
+
+  return (
+    <div
+      className="rounded-xl border overflow-hidden flex flex-col w-full"
+      style={{
+        background: 'rgba(0,0,0,0.55)',
+        borderColor: 'rgba(255,255,255,0.12)',
+      }}
+    >
+      {/* 헤더 */}
+      <div
+        className="font-extrabold tracking-[0.2em] border-b px-3 py-2"
+        style={{
+          borderColor: 'rgba(255,255,255,0.1)',
+          color: fg,
+          background: 'rgba(0,0,0,0.35)',
+          fontSize: 14,
+        }}
+      >
+        NEXT LEVEL
+      </div>
+
+      {/* 콘텐츠 */}
+      <div className="px-3 py-3 flex flex-col gap-2 items-center justify-center flex-1">
+        {!nextBlind ? (
+          <div
+            className="text-center font-extrabold tracking-widest"
+            style={{ color: fg, opacity: 0.45, fontSize: 13 }}
+          >
+            마지막 레벨
+          </div>
+        ) : nextBlind.isBreak ? (
+          <>
+            <div
+              className="font-extrabold tracking-[0.2em]"
+              style={{ color: '#FFD166', fontSize: 12 }}
+            >
+              ☕ BREAK
+            </div>
+            <div
+              className="font-mono font-extrabold"
+              style={{ color: '#FFD166', fontSize: 22, letterSpacing: '-0.02em' }}
+            >
+              {Math.round(nextBlind.durationSec / 60)}분
+            </div>
+          </>
+        ) : (
+          <>
+            <div
+              className="font-extrabold tracking-[0.2em]"
+              style={{ color: accent, opacity: 0.85, fontSize: 11 }}
+            >
+              LV {nextDisplayedNumber ?? nextBlind.level}
+            </div>
+            <div
+              className="font-mono font-extrabold tabular-nums leading-none"
+              style={{ color: blinds, fontSize: 22, letterSpacing: '-0.03em' }}
+            >
+              {nextBlind.sb.toLocaleString()}
+              <span style={{ color: fg, opacity: 0.35 }} className="mx-1">/</span>
+              {nextBlind.bb.toLocaleString()}
+            </div>
+            {nextBlind.ante > 0 && (
+              <div
+                className="font-mono font-bold"
+                style={{ color: fg, opacity: 0.65, fontSize: 11 }}
+              >
+                Ante {nextBlind.ante.toLocaleString()}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -668,7 +668,7 @@ function SessionControlPanel({
           })()}
         </div>
         <div
-          className="font-mono font-extrabold leading-none transition-colors"
+          className={`font-mono font-extrabold leading-none transition-colors ${lowTime ? 'timer-pulse' : ''}`}
           style={{
             fontSize: '96px',
             letterSpacing: '-0.04em',
