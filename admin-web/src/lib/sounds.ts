@@ -115,20 +115,33 @@ export function playFinalBeep(): void {
  *  2. 사용 불가 → lang='ko-KR'만 지정 (브라우저 기본)
  *  3. 둘 다 실패 → silent (차임만 발사)
  */
-// Module-level cooldown — 같은 sec=0 cycle 안에서 메인/백업 트리거 race 차단.
-// 2026-05-28 강화: 1500ms → 3000ms. 트리거 다중 경로(sec=0, currentLevel 변경,
-// timeline wrap fallback)에서 일부 경로가 3초 이상 늦게 fire되어도 1회만 발화.
-// 한 레벨은 보통 5분 이상이라 cooldown 영향 없음.
-let lastBlindUpFiredAt = 0;
-const BLIND_UP_COOLDOWN_MS = 3000;
+// Cross-tab + module-level cooldown
+// 2026-05-28 #2 사용자 보고: cooldown 3초 + module dedup도 1→2레벨 2중 발화.
+//   원인 = 같은 기기에서 TV/매장 컨트롤/LIVE 풀스크린 여러 페이지가 동시 열림
+//   → 각 페이지가 별도 JS 컨텍스트라 module-level cooldown 격리.
+// Fix: localStorage 기반 cross-tab dedup 5초.
+const BLIND_UP_COOLDOWN_MS = 5000;
+const LS_KEY = 'pr:blindUp:lastFiredAt';
+
+function getLastFired(): number {
+  if (typeof window === 'undefined') return 0;
+  try { return Number(window.localStorage.getItem(LS_KEY) || 0); } catch { return 0; }
+}
+function setLastFired(t: number) {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(LS_KEY, String(t)); } catch { /* private mode */ }
+}
+let lastBlindUpFiredAt = 0; // module-level (cross-tab과 함께 이중 안전)
 
 export function playBlindUp(): void {
   if (typeof window === 'undefined') return;
 
-  // 1.5초 내 재호출 차단 — TTS 2중 발화 방지
+  // Cross-tab + module-level dedup — TTS 2중/N중 발화 방지
   const now = Date.now();
-  if (now - lastBlindUpFiredAt < BLIND_UP_COOLDOWN_MS) return;
+  if (now - lastBlindUpFiredAt < BLIND_UP_COOLDOWN_MS) return;       // 같은 탭
+  if (now - getLastFired() < BLIND_UP_COOLDOWN_MS) return;            // 다른 탭/페이지
   lastBlindUpFiredAt = now;
+  setLastFired(now);
 
   // 1) 오락기 차임 prefix (C5 → G5 상승 2음, sine + gain 0.6) — TTS와 병렬
   const ctx = getCtx();

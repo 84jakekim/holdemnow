@@ -358,24 +358,46 @@ export function useLiveTimelineTick(
     });
   }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
 
-  // 2026-05-28 정정 #5 (사용자 보고: 레벨업 시 5~10초 멈춤):
-  //   직전 fix(wrap 시 sec=0 강제 반환)가 서버 currentLevel advance까지
-  //   화면을 sec=0에 고정 → Firestore 트랜잭션 지연 시 5~10초 정체.
+  // 2026-05-28 정정 #6 (1~2레벨 2중 발화 + 4~5레벨 40초 정체):
+  //   기존 ref 기반 비교가 setTimeout 없이는 re-render 트리거 X →
+  //   사용자 보고 40초 정체. useState + setTimeout으로 명시적 재렌더 보장.
   //
-  // Fix: wrap 첫 1초만 sec=0 (트리거 발화 보장), 그 다음부터는 pos 그대로
-  //   다음 레벨 시간 표시 (낙관적 업데이트, 서버 응답 대기 X). 트랜잭션 결과 도착하면
-  //   자연 동기화. cron 백업이 있어 inconsistency 위험 없음.
-  const wrapStartedAtRef = useRef<number | null>(null);
+  // 흐름: wrap 첫 진입 → showZero=true (sec=0 + 트리거 발화)
+  //        → setTimeout(1100ms) → showZero=false → pos 그대로 (다음 레벨 카운트다운)
+  const [showZeroOnWrap, setShowZeroOnWrap] = useState(false);
   const wrapKeyRef = useRef<string>('');
-  if (pos && session && session.status === 'running' && pos.level > session.currentLevel) {
-    const key = `lv${session.currentLevel}-${session.id}`;
-    if (wrapKeyRef.current !== key) {
-      wrapKeyRef.current = key;
-      wrapStartedAtRef.current = Date.now();
+  const wrapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const wrapped = !!(pos && session && session.status === 'running' && pos.level > session.currentLevel);
+    if (wrapped && session) {
+      const key = `lv${session.currentLevel}-${session.id}`;
+      if (wrapKeyRef.current !== key) {
+        wrapKeyRef.current = key;
+        setShowZeroOnWrap(true);
+        if (wrapTimerRef.current) clearTimeout(wrapTimerRef.current);
+        wrapTimerRef.current = setTimeout(() => setShowZeroOnWrap(false), 1100);
+      }
+    } else if (!wrapped && wrapKeyRef.current) {
+      // 서버가 currentLevel 갱신 → wrap 상태 해제
+      wrapKeyRef.current = '';
+      setShowZeroOnWrap(false);
+      if (wrapTimerRef.current) {
+        clearTimeout(wrapTimerRef.current);
+        wrapTimerRef.current = null;
+      }
     }
-    const sinceWrap = wrapStartedAtRef.current ? Date.now() - wrapStartedAtRef.current : 0;
-    // wrap 진입 후 첫 1100ms만 sec=0 (트리거 발화) → 그 다음부터 다음 레벨 시간 자체 카운트다운
-    if (sinceWrap < 1100) {
+  }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
+
+  useEffect(() => {
+    return () => {
+      if (wrapTimerRef.current) clearTimeout(wrapTimerRef.current);
+    };
+  }, []);
+
+  if (pos && session && session.status === 'running' && pos.level > session.currentLevel) {
+    if (showZeroOnWrap) {
+      // 첫 1.1s만 sec=0 (트리거 발화 보장)
       const cur = (session.blindStructureLocked && session.blindStructureLocked.length > 0
         ? session.blindStructureLocked
         : session.blindStructure)?.find((l) => l.level === session.currentLevel);
@@ -388,11 +410,7 @@ export function useLiveTimelineTick(
         ante: cur?.ante ?? session.ante ?? 0,
       };
     }
-    // 1.1초 후엔 pos 그대로 = 다음 레벨 시간 표시 (서버 응답 안 와도 화면 즉시 진행)
-  } else if (wrapKeyRef.current !== '' && pos && session && pos.level <= session.currentLevel) {
-    // 서버가 currentLevel 갱신 — wrap 상태 해제
-    wrapKeyRef.current = '';
-    wrapStartedAtRef.current = null;
+    // 1.1s 후엔 pos 그대로 = 다음 레벨 카운트다운 (서버 응답 대기 X)
   }
 
   return pos;
