@@ -325,22 +325,25 @@ export function useLiveTimelineTick(
     session?.pausedAt?.toMillis(),
   ]);
 
-  // 2026-05-24 사용자 정정 #3: 드래그로 시간 당긴 후 자동 advance가 30~60초 지연되는 버그.
+  // 2026-05-24 사용자 정정 #3 + 2026-05-27 사용자 정정 #4 (PM 단독):
+  //   "0초 도달 즉시 블라인드업 TTS + 레벨 변경이 동시에 나와야 하는데
+  //    현재는 10초 카운트다운만 정상, 레벨 변경+사운드는 몇 분 후 늦게 나옴."
   //
-  // 결정적 원인:
-  //   - computeTimelinePosition은 elapsed >= cumulative 도달 즉시 다음 레벨로 wrap →
-  //     secondsLeft가 0이 아니라 다음 레벨 전체 시간으로 점프한다.
-  //   - 따라서 호출처(SessionControlPanel/LivePanel/m/live/display)의
-  //     `prev > 0 && sec === 0` 조건 useEffect가 한 tick도 sec=0 상태를 못 보고 통과 →
-  //     advanceLevelIfDue 영영 트리거 X. autoAdvanceLevel cron(1분)만 처리 = 사용자 호소.
+  // 결정적 원인 (2단 버그):
+  //   ① computeTimelinePosition은 elapsed >= cumulative 도달 즉시 다음 레벨로 wrap →
+  //      secondsLeft가 0이 아니라 다음 레벨 전체 시간으로 점프.
+  //      따라서 호출처(display/m/live/TournamentControlCenter)의
+  //      `prev > 0 && sec === 0` useEffect가 한 tick도 sec=0 상태를 못 보고 통과 →
+  //      ❌ TTS/playBlindUp 영영 트리거 X
+  //      ❌ advanceLevelIfDue 영영 트리거 X (advanceFiredKeyRef 가드는 sec=0과 별도 효과)
+  //   ② cron(1분 주기)이 결국 catch-up — 사용자에게는 "몇 분 후 쌩뚱맞게" 발화로 체감.
   //
-  // Fix: timeline이 인식한 `pos.level`이 서버 `session.currentLevel`보다 크다는 것은
-  //   "이 레벨은 이미 시간이 다 지나 다음 레벨로 넘어가야 한다"는 결정적 신호.
-  //   pos가 한 tick이라도 그 상태에 진입하면 즉시 advanceLevelIfDue(session.id, currentLevel) 호출.
-  //   - cycle key로 같은 expected level 중복 호출 차단
-  //   - 마지막 레벨이면 advanceLevelIfDue가 finishingAt만 박고 currentLevel 유지
-  //     → pos.isFinishing=true가 되며 자동 종료는 호출처의 finishingAt useEffect가 처리
-  //   - running 상태에서만 발사 (paused/break/ready/completed는 advance 대상 아님)
+  // Fix (2-pronged):
+  //   (A) pos가 다음 레벨로 wrap한 상태(pos.level > session.currentLevel)에서는
+  //       반환 시 secondsLeft를 0으로 강제. level은 서버 currentLevel을 유지 (호출처 동기화).
+  //       → 호출처의 `prev > 0 && sec === 0` 트리거가 자연 동작 → 즉시 TTS + advanceLevelIfDue 호출.
+  //   (B) 백업으로 여기서도 advanceLevelIfDue 직접 호출 (cron 대기 X).
+  //   결과: 0초 도달 → 화면 sec=0 한 tick 노출 → TTS+톤+advance 동시 발사 → 다음 tick에서 새 레벨.
   const advanceFiredKeyRef = useRef<string>('');
   useEffect(() => {
     if (!session || !pos) return;
@@ -354,6 +357,23 @@ export function useLiveTimelineTick(
       advanceFiredKeyRef.current = '';
     });
   }, [pos?.level, session?.id, session?.currentLevel, session?.status]);
+
+  // 2026-05-27 정정 #4 핵심: 다음 레벨 wrap 상태에서는 sec=0을 표면화.
+  //   서버가 아직 currentLevel을 안 올린 상태(advance 트랜잭션 진행 중 또는 직전)에서
+  //   호출처가 sec=0을 한 tick이라도 볼 수 있게 만들어 TTS/playBlindUp 트리거를 정상화.
+  if (pos && session && session.status === 'running' && pos.level > session.currentLevel) {
+    const cur = (session.blindStructureLocked && session.blindStructureLocked.length > 0
+      ? session.blindStructureLocked
+      : session.blindStructure)?.find((l) => l.level === session.currentLevel);
+    return {
+      level: session.currentLevel,
+      secondsLeft: 0,
+      isFinishing: false,
+      sb: cur?.sb ?? session.smallBlind ?? 0,
+      bb: cur?.bb ?? session.bigBlind ?? 0,
+      ante: cur?.ante ?? session.ante ?? 0,
+    };
+  }
 
   return pos;
 }

@@ -534,6 +534,25 @@ function SessionControlPanel({
   //   - cycle key로 같은 레벨 중복 호출 차단
   //   - 마지막 레벨이면 advanceLevelIfDue가 finishingAt만 박고 자동 종료 흐름은 위 useEffect가 처리
   // ───────────────────────────────────────────────────────────────────
+  // 2026-05-27 정정#4 (PM 단독): 사장 첫 클릭에서 audio + speech engine 워밍업.
+  //   playBlindUp() 첫 호출 시 voices 비어있으면 영어 default voice로 발화되는 버그 회피.
+  useEffect(() => {
+    let unlocked = false;
+    const unlock = () => {
+      if (unlocked) return;
+      unlocked = true;
+      import('@/lib/sounds').then(({ unlockAudio }) => unlockAudio()).catch(() => {});
+    };
+    window.addEventListener('click', unlock, { once: true });
+    window.addEventListener('touchstart', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
   const advanceFiredCycleRef = useRef<string>('');
   const prevSecRef = useRef<number | null>(null);
   useEffect(() => {
@@ -550,6 +569,9 @@ function SessionControlPanel({
       const cycleKey = `lv${lv}-${session.id}`;
       if (advanceFiredCycleRef.current !== cycleKey) {
         advanceFiredCycleRef.current = cycleKey;
+        // 2026-05-27 정정#4 (PM 단독): 컨트롤 페이지에서도 0초 도달 즉시 차임+TTS.
+        //   사장이 컨트롤 페이지만 켜놓고 LIVE 운영 중인 경우(TV 미연결) TTS가 안 들리던 누락 케이스.
+        import('@/lib/sounds').then(({ playBlindUp }) => playBlindUp()).catch(() => {});
         // 동적 import로 advanceLevelIfDue 호출 (TournamentControlCenter는 import 이미 가능)
         import('@/lib/live').then(({ advanceLevelIfDue }) => {
           void advanceLevelIfDue(session.id, lv).catch(() => {});

@@ -89,17 +89,26 @@ export function playFinalBeep(): void {
 /**
  * 블라인드 업! 알림 — 오락기 톤 차임(2음 상승) + 한국어 TTS "블라인드 업!".
  *
- * 사장 요청(2026-05-23 정정3):
+ * 사장 요청(2026-05-27 정정#4, PM 단독):
  *  · 한국 사장이 알아듣게 한국어로
  *  · 오락기처럼 명확·흥분된 톤
- *  · 카운트다운 비프 직후 즉시 발사
+ *  · 0초 도달 즉시 발사 (지연 X)
+ *  · TTS가 차임에 묻혀 안 들리던 버그 제거 — 둘 다 명확히 들리게
  *
- * 흐름:
- *   t=0ms      : 차임 시작 (C5 → G5, sine, gain 0.6, 0.3초)
- *   t=120ms    : 한국어 TTS "블라인드 업!" 발화 (rate 0.95 / pitch 1.5)
+ * 흐름 (재설계):
+ *   t=0ms      : 차임 시작 (C5 → G5, sine, gain 0.6, 0.36초)
+ *   t=0ms      : TTS "블라인드 업!" speak() 즉시 호출 (cancel() X, queue 대기 X)
+ *                → 브라우저 음성 엔진이 차임과 병렬 발화. 음역대 분리되어 둘 다 명확.
  *
- * 차임은 카운트다운 마지막 비프와 자연스럽게 이어지면서 청각 주의를 끌고,
- * TTS는 100ms만 늦춰 양쪽 사운드가 겹치지 않도록 분리.
+ * 사용자 보고("TTS가 안 들리고 톤만") 핵심 원인:
+ *  1) ❌ setTimeout(120ms) 안에서 speak — user gesture 컨텍스트 손실(일부 브라우저)
+ *  2) ❌ synth.cancel() — 직전 발화/큐 모두 취소 → 본 발화도 queue race로 무효화
+ *  3) ❌ pitch 1.5 — 일부 voice는 무성/매우 작게 발화
+ *
+ * Fix:
+ *  · setTimeout 제거. 호출처에서 직접 speak 호출 (사용자 click → 트리거 useEffect 내 호출 동일 task tick).
+ *  · cancel() 제거. 블라인드업은 5분에 한 번이라 큐 충돌 사실상 없음.
+ *  · pitch 1.0 (자연스러운 음성 + 볼륨 보장).
  *
  * 한국어 보이스 fallback:
  *  1. ko-KR 보이스 사용 가능 → 그 보이스 선택
@@ -109,39 +118,51 @@ export function playFinalBeep(): void {
 export function playBlindUp(): void {
   if (typeof window === 'undefined') return;
 
-  // 1) 오락기 차임 prefix (C5 → G5 상승 2음, sine + gain 0.6)
+  // 1) 오락기 차임 prefix (C5 → G5 상승 2음, sine + gain 0.6) — TTS와 병렬
   const ctx = getCtx();
   if (ctx) {
     tryResume(ctx);
     try {
       const t0 = ctx.currentTime;
-      playArcadeNote(ctx, 523, t0, 0.16);          // C5
-      playArcadeNote(ctx, 784, t0 + 0.13, 0.20);   // G5 (길게 강조)
+      playArcadeNote(ctx, 523, t0, 0.18);          // C5
+      playArcadeNote(ctx, 784, t0 + 0.15, 0.22);   // G5 (길게 강조)
     } catch {
       /* ignore */
     }
   }
 
-  // 2) 한국어 TTS — 120ms 후 발화 (차임과 분리)
+  // 2) 한국어 TTS — 즉시 발화 (cancel/setTimeout 없음, 차임과 병렬 동시 재생)
+  speakBlindUp();
+}
+
+/**
+ * 한국어 TTS "블라인드 업!" 단독 발화.
+ *
+ * playBlindUp()이 내부에서 호출하지만, 매장 사장이 TTS만 트리거 테스트하고 싶거나
+ * 사운드 설정에서 "음성만" 모드를 만들 때 사용. 차임 없이 깔끔.
+ *
+ * iOS Safari 호환:
+ *  · 첫 사용자 터치 후 unlockAudio()가 호출돼야 동작 (이미 TV/LIVE 페이지 첫 click 핸들러에서 처리).
+ *  · synth.cancel() 절대 호출 X — 일부 iOS Safari 버전에서 cancel 직후 speak가 묵음 처리됨.
+ */
+export function speakBlindUp(): void {
+  if (typeof window === 'undefined') return;
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
-  setTimeout(() => {
-    try {
-      synth.cancel();
-      const utter = new SpeechSynthesisUtterance('블라인드 업!');
-      utter.lang = 'ko-KR';
-      utter.rate = 0.95;
-      utter.pitch = 1.5;
-      utter.volume = 1.0;
-      // 한국어 보이스 명시 선택 — 일부 브라우저는 lang만으론 ko-KR 보이스 못 찾음
-      const voices = synth.getVoices();
-      const ko = voices.find((v) => v.lang === 'ko-KR') ?? voices.find((v) => v.lang.startsWith('ko'));
-      if (ko) utter.voice = ko;
-      synth.speak(utter);
-    } catch {
-      /* ignore — silent fallback */
-    }
-  }, 120);
+  try {
+    const utter = new SpeechSynthesisUtterance('블라인드 업!');
+    utter.lang = 'ko-KR';
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    // 한국어 보이스 명시 선택 — 일부 브라우저는 lang만으론 ko-KR 보이스 못 찾음
+    const voices = synth.getVoices();
+    const ko = voices.find((v) => v.lang === 'ko-KR') ?? voices.find((v) => v.lang.startsWith('ko'));
+    if (ko) utter.voice = ko;
+    synth.speak(utter);
+  } catch {
+    /* ignore — silent fallback */
+  }
 }
 
 /** 오락기 톤 차임 — sine wave + 빠른 attack + 자연 decay. */
@@ -164,9 +185,32 @@ function playArcadeNote(ctx: AudioContext, freq: number, startAt: number, durati
  * 모바일 Safari/iOS는 사용자 첫 터치 이전엔 AudioContext suspended.
  * 페이지 mount 시 한 번 호출하면 ready 상태로 (단 실제 깨어남은 첫 user gesture 시).
  * 사용자 제스처 핸들러 내부에서도 호출해서 확실하게 깨움.
+ *
+ * 추가 (2026-05-27 정정#4):
+ *  · SpeechSynthesis도 같이 prime — 첫 user gesture 안에서 무음 utterance 발화로
+ *    iOS Safari/Chrome의 speech engine을 깨워둠. voices 비동기 로딩도 트리거.
+ *  · 이걸 안 하면 첫 playBlindUp() 호출 시 voices가 빈 배열이라 ko-KR 보이스 못 찾음 →
+ *    영어 default voice로 발화 → 한국어 텍스트가 알아들을 수 없게 들림.
  */
 export function unlockAudio(): void {
   const ctx = getCtx();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  // SpeechSynthesis prime — 무음 utterance로 engine 깨움 + voices 강제 로드 트리거
+  if (typeof window !== 'undefined' && window.speechSynthesis) {
+    try {
+      // getVoices() 호출만으로 일부 브라우저는 비동기 로드 시작
+      window.speechSynthesis.getVoices();
+      // 무음 utterance — volume=0이라 실제 소리 없음. engine 워밍업만.
+      if (typeof SpeechSynthesisUtterance !== 'undefined') {
+        const warmup = new SpeechSynthesisUtterance(' ');
+        warmup.volume = 0;
+        warmup.rate = 10; // 빠르게 종료
+        warmup.lang = 'ko-KR';
+        window.speechSynthesis.speak(warmup);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 }
