@@ -115,8 +115,19 @@ export function playFinalBeep(): void {
  *  2. 사용 불가 → lang='ko-KR'만 지정 (브라우저 기본)
  *  3. 둘 다 실패 → silent (차임만 발사)
  */
+// Module-level cooldown — 같은 sec=0 cycle 안에서 메인 트리거(sec===0)와
+// 백업 트리거(currentLevel 변경 감지)가 거의 동시 발화하는 race 차단.
+// 2026-05-27 사용자 보고: "블라인블라인드업!" 2중 음성 → 1.5초 안엔 1회만.
+let lastBlindUpFiredAt = 0;
+const BLIND_UP_COOLDOWN_MS = 1500;
+
 export function playBlindUp(): void {
   if (typeof window === 'undefined') return;
+
+  // 1.5초 내 재호출 차단 — TTS 2중 발화 방지
+  const now = Date.now();
+  if (now - lastBlindUpFiredAt < BLIND_UP_COOLDOWN_MS) return;
+  lastBlindUpFiredAt = now;
 
   // 1) 오락기 차임 prefix (C5 → G5 상승 2음, sine + gain 0.6) — TTS와 병렬
   const ctx = getCtx();
@@ -149,6 +160,8 @@ export function speakBlindUp(): void {
   if (typeof window === 'undefined') return;
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
+  // 큐에 같은 발화가 이미 대기/진행 중이면 skip (iOS Safari race 추가 보호)
+  if (synth.speaking || synth.pending) return;
   try {
     const utter = new SpeechSynthesisUtterance('블라인드 업!');
     utter.lang = 'ko-KR';
