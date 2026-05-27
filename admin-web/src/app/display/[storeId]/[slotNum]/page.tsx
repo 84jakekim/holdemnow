@@ -711,6 +711,7 @@ export default function DisplayPage({
           displayedLevelLabel={displayedLevelLabel}
           nextDisplayedNumber={nextDisplayedNumber}
           compact={compactLandscape}
+          isFullscreenActive={isFullscreenActive}
         />
       ) : !session || session.status === 'completed' ? (
         <div className="relative flex-1 flex flex-col items-center justify-center">
@@ -1850,6 +1851,7 @@ function MobileLandscapeLayout({
   displayedLevelLabel,
   nextDisplayedNumber,
   compact = false,
+  isFullscreenActive = false,
 }: {
   session: LiveSession;
   structure: LiveSession['blindStructure'] | undefined;
@@ -1886,6 +1888,8 @@ function MobileLandscapeLayout({
    *  → 화면 가득 차고 잘림. compact=true면 clamp(24, vw, 48) 같이 가벼운 값.
    *  PC/태블릿은 compact=false (기본 유지). */
   compact?: boolean;
+  /** 2026-05-28 개선점 5: 전체화면 여부. true일 때만 컨트롤 행 자동 숨김 동작. */
+  isFullscreenActive?: boolean;
 }) {
   const barColor = lowTime ? display.accentColor : isCurrentBreak ? '#FFD166' : display.blindsColor;
   const timerColor = paused
@@ -1895,6 +1899,59 @@ function MobileLandscapeLayout({
     : isCurrentBreak
     ? '#FFD166'
     : display.timerColor;
+
+  // ─── 2026-05-28 개선점 5: 전체화면 컨트롤 자동 슬라이드 숨김 ───
+  // 전체화면 진입 후 3초 무입력 → 컨트롤 행 슬라이드 다운. 입력 감지 시 즉시 복귀 → 다시 3초 후 숨김.
+  // 일반 모드(isFullscreenActive=false)에서는 항상 노출.
+  const [ctrlVisible, setCtrlVisible] = useState(true);
+  const ctrlHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ctrlAreaRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isFullscreenActive || !canControl) return;
+
+    const resetTimer = () => {
+      setCtrlVisible(true);
+      if (ctrlHideTimerRef.current) clearTimeout(ctrlHideTimerRef.current);
+      ctrlHideTimerRef.current = setTimeout(() => setCtrlVisible(false), 3000);
+    };
+
+    // 진입 즉시 3초 카운트 시작
+    resetTimer();
+
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('touchstart', resetTimer, { passive: true });
+    window.addEventListener('keydown', resetTimer);
+
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('touchstart', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      if (ctrlHideTimerRef.current) clearTimeout(ctrlHideTimerRef.current);
+    };
+  }, [isFullscreenActive, canControl]);
+
+  // 전체화면 X → 항상 노출 상태 복원
+  useEffect(() => {
+    if (!isFullscreenActive) {
+      setCtrlVisible(true);
+      if (ctrlHideTimerRef.current) clearTimeout(ctrlHideTimerRef.current);
+    }
+  }, [isFullscreenActive]);
+
+  // hover 중엔 숨기지 않음 — 마우스가 컨트롤 영역에 들어오면 타이머 취소
+  const handleCtrlMouseEnter = () => {
+    if (!isFullscreenActive) return;
+    if (ctrlHideTimerRef.current) clearTimeout(ctrlHideTimerRef.current);
+    setCtrlVisible(true);
+  };
+  const handleCtrlMouseLeave = () => {
+    if (!isFullscreenActive) return;
+    ctrlHideTimerRef.current = setTimeout(() => setCtrlVisible(false), 3000);
+  };
+
+  // 전체화면 모드에서 컨트롤 행 표시 여부: 일반 모드 → 항상 true
+  const showCtrl = !isFullscreenActive || ctrlVisible;
 
   // 2026-05-24 PM 정정 #5건 통합: 단일 가로 layout (모든 폭 동일).
   // - 상단 헤더 row: 제목 + LEVEL 거대 폰트 중앙 정렬 (사용자 정정 #4)
@@ -2395,12 +2452,20 @@ function MobileLandscapeLayout({
           데이터 모델(marqueeText/Color/FontSize/Style/SpeedSec)은 backward compat 유지하되 UI 표시 X. */}
 
       {/* ─── 하단 컨트롤 행 — 권한자만 노출 (사용자 요구) ─── */}
+      {/* 2026-05-28 개선점 5: 전체화면 모드에서 3초 무입력 시 슬라이드 다운 숨김 */}
       {canControl ? (
         <div
+          ref={ctrlAreaRef}
+          onMouseEnter={handleCtrlMouseEnter}
+          onMouseLeave={handleCtrlMouseLeave}
           className="mt-2 flex items-center justify-center gap-1.5 flex-wrap rounded-xl px-2 py-1.5 border"
           style={{
             background: 'rgba(0,0,0,0.55)',
             borderColor: 'rgba(255,255,255,0.10)',
+            transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
+            transform: showCtrl ? 'translateY(0)' : 'translateY(110%)',
+            opacity: showCtrl ? 1 : 0,
+            pointerEvents: showCtrl ? 'auto' : 'none',
           }}
         >
           <CtrlButton
