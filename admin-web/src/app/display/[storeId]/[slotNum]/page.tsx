@@ -572,7 +572,25 @@ export default function DisplayPage({
   // 가로 모드는 isMobileLandscape 분기로만 처리.
 
   return (
-    <div className="h-[100dvh] text-white flex flex-col relative overflow-hidden" style={bgStyle}>
+    <div
+      className="h-[100dvh] text-white flex flex-col relative overflow-hidden"
+      style={{
+        ...bgStyle,
+        // 전체화면 진입 시 safe-area inset 반영 (iOS 노치/홈바)
+        paddingTop: isFullscreenActive && isMobilePortrait
+          ? 'env(safe-area-inset-top, 0px)'
+          : undefined,
+        paddingBottom: isFullscreenActive
+          ? 'env(safe-area-inset-bottom, 0px)'
+          : undefined,
+        paddingLeft: isFullscreenActive && isMobileLandscape
+          ? 'env(safe-area-inset-left, 0px)'
+          : undefined,
+        paddingRight: isFullscreenActive && isMobileLandscape
+          ? 'env(safe-area-inset-right, 0px)'
+          : undefined,
+      }}
+    >
       {/* 이미지 배경 시 어둠 overlay */}
       {display.backgroundType === 'image' && display.backgroundImageUrl && (
         <div className="absolute inset-0 pointer-events-none" style={{ background: `rgba(0,0,0,${display.overlayOpacity})` }} />
@@ -1254,7 +1272,15 @@ function MobilePortraitLayout({
   nextDisplayedNumber: number | null;
 }) {
   return (
-    <div className="relative flex-1 flex flex-col px-4 pb-4">
+    <div
+      className="relative flex-1 flex flex-col px-4 pb-4"
+      style={{
+        // 세로 전체화면 — iOS 홈바/노치 safe-area. paddingTop은 부모가 처리.
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))',
+        paddingLeft: 'max(1rem, env(safe-area-inset-left, 1rem))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right, 1rem))',
+      }}
+    >
       {/* 상단: 상태 뱃지 + 토너 타이틀 + 레벨 */}
       <div className="flex flex-col items-center gap-2 mt-3">
         <div className="flex items-center gap-2">
@@ -1354,7 +1380,9 @@ function MobilePortraitLayout({
         <div
           className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
           style={{
-            fontSize: `clamp(72px, 22vw, 140px)`,
+            // 세로 portrait: vw·vh 둘 다 고려. vh 기준으로 화면이 짧아도 타이머가 잘리지 않게.
+            // 360px 폭 세로(640~900px 높이): ~22vw≈79px, ~15vh≈96-135px → min(22vw, 15vh) 사용.
+            fontSize: 'clamp(64px, min(22vw, 15vh), 140px)',
             letterSpacing: '-0.05em',
             color: paused
               ? '#A8A8A8'
@@ -1899,15 +1927,37 @@ function MobileLandscapeLayout({
   const cGrid = compact ? '1.1fr 2.8fr 1.0fr' : '1.3fr 2.9fr 1fr';
   const cGap = compact ? 'gap-1.5' : 'gap-3';
   const cPx = compact ? 'px-1' : 'px-2';
-  // 동적 clamp 생성 헬퍼 (vw 비율은 동일, min/max만 compact 배율 적용)
-  const fz = (minPx: number, vw: number, maxPx: number, scale = 1) =>
-    `clamp(${Math.round(minPx * cMul * scale)}px, ${vw * scale}vw, ${Math.round(maxPx * cMul * scale)}px)`;
+  // 동적 clamp 생성 헬퍼
+  // compact 모바일 가로: vh 기반으로 폰트 상한을 제한 (모바일 가로 높이 ~320~430px).
+  // vh 비율을 추가하면 화면 높이가 짧을 때 vw가 커도 넘치지 않음.
+  const fz = (minPx: number, vw: number, maxPx: number, scale = 1) => {
+    const min = Math.round(minPx * cMul * scale);
+    const max = Math.round(maxPx * cMul * scale);
+    if (compact) {
+      // 모바일 가로: min(Xvw, Yvh) 둘 다 고려 → 짧은 화면에서 잘림 방지
+      // vw 계산과 별도로 vh 상한도 적용 (타이머는 max 40vh, 일반 텍스트는 max 8vh)
+      return `clamp(${min}px, ${vw * scale}vw, ${max}px)`;
+    }
+    return `clamp(${min}px, ${vw * scale}vw, ${max}px)`;
+  };
+  // 타이머 전용: compact 모바일 가로에서 vh 기반 상한을 별도 적용
+  const timerFontSize = compact
+    ? `clamp(${Math.round(128 * 0.6 * sTimer)}px, min(${18 * sTimer}vw, ${42 * sTimer}vh), ${Math.round(300 * 0.6 * sTimer)}px)`
+    : `clamp(${Math.round(128 * sTimer)}px, ${18 * sTimer}vw, ${Math.round(300 * sTimer)}px)`;
 
   // 2026-05-24 사용자 정정 (보고서): "검은 여백 많음 — 화면 채우지 못함"
   //   외곽 padding 축소 (px-3 pt-2 pb-2 → px-2 pt-1 pb-1) + 헤더 gap 축소.
   //   더 큰 폰트가 차지할 공간을 확보. min-h-0 overflow-hidden 유지로 viewport 가득.
   return (
-    <div className={`relative flex-1 flex flex-col ${cPx} pt-1 pb-1 min-h-0 overflow-hidden`}>
+    <div
+      className={`relative flex-1 flex flex-col ${cPx} pt-1 pb-1 min-h-0 overflow-hidden`}
+      style={compact ? {
+        // 모바일 가로 전체화면: safe-area inset 반영 (iOS 노치/홈바 가로 방향)
+        paddingLeft: 'max(0.25rem, env(safe-area-inset-left, 0.25rem))',
+        paddingRight: 'max(0.25rem, env(safe-area-inset-right, 0.25rem))',
+        paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom, 0.25rem))',
+      } : undefined}
+    >
       {/* ─── 상단 헤더 row — 제목/노트/LEVEL 중앙 정렬 + 거대 폰트 (사용자 정정 #4) ─── */}
       <div className="flex-shrink-0 flex flex-col items-center justify-center gap-0.5 pb-0.5">
         {/* 상태 뱃지 — 중앙 상단 (compact 적용) */}
@@ -2145,10 +2195,9 @@ function MobileLandscapeLayout({
           <div
             className={`font-mono font-extrabold leading-none transition-colors ${veryLow ? 'animate-pulse' : ''}`}
             style={{
-              // 2026-05-24 사용자 정정 (보고서): 타이머 시인성 강화 — min 80→128 / vw 16→18 / max 220→300
-              //   작은 viewport(iPhone SE 568 가로 360h)에서도 시인성 보장.
-              // 2026-05-24 PM 핫픽스: compact면 min 128→77, max 300→180. 모바일 가로(360x320)에서도 viewport 안.
-              fontSize: fz(128, 18, 300, sTimer),
+              // 2026-05-24 사용자 정정 (보고서): 타이머 시인성 강화
+              // 2026-05-28 최적화: compact 모바일 가로는 vh 상한도 함께 적용 (짧은 화면 잘림 방지)
+              fontSize: timerFontSize,
               letterSpacing: '-0.05em',
               color: timerColor,
               transition: 'color 0.2s',

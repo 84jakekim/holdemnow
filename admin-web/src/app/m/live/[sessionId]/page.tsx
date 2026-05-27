@@ -33,6 +33,7 @@ import {
   unlockAudio,
 } from '@/lib/sounds';
 import { resolveDisplayedLevel } from '@/lib/templates';
+import { useViewport } from '@/lib/useViewport';
 
 const SOUND_STORAGE_KEY = 'holdemnow:liveSoundOn';
 
@@ -201,6 +202,69 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
     prevLevelRef.current = currLevel;
   }, [session?.currentLevel, soundOn, session]);
 
+  // ─── 전체화면 + 뷰포트 분기 (2026-05-28 신설) ───────────────────
+  // /m/live 사용자 전용. 전체화면 진입 시 portrait/landscape에 따라 레이아웃 전환.
+  // 상금(prizePool) 절대 노출 금지 정책 유지.
+  const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  const [showLandscapeHint, setShowLandscapeHint] = useState(false);
+  const viewport = useViewport();
+  const isMobilePortrait = viewport.category === 'mobile-portrait';
+  const isMobileLandscape = viewport.category === 'mobile-landscape';
+
+  // fullscreenchange — state 동기화
+  useEffect(() => {
+    const onFsChange = () => {
+      const active = !!document.fullscreenElement;
+      setIsFullscreenActive(active);
+      if (!active) {
+        try {
+          const scr = screen as Screen & { orientation?: ScreenOrientation & { unlock?: () => void } };
+          scr.orientation?.unlock?.();
+        } catch {}
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange as EventListener);
+    };
+  }, []);
+
+  // 전체화면 진입 — 사용자 명시 터치 시만
+  const enterFullscreen = async () => {
+    unlockAudio();
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void>;
+    };
+    try {
+      if (!document.fullscreenElement) {
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      }
+    } catch {}
+    // 세로일 때 가로 lock 시도 (iOS Safari는 미지원)
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (isPortrait && isTouch) {
+      try {
+        const scr = screen as Screen & { orientation?: ScreenOrientation & { lock?: (o: string) => Promise<void> } };
+        if (scr.orientation?.lock) await scr.orientation.lock('landscape');
+        else {
+          setShowLandscapeHint(true);
+          setTimeout(() => setShowLandscapeHint(false), 5000);
+        }
+      } catch {
+        setShowLandscapeHint(true);
+        setTimeout(() => setShowLandscapeHint(false), 5000);
+      }
+    }
+  };
+
+  const exitFullscreen = async () => {
+    try { if (document.exitFullscreen) await document.exitFullscreen(); } catch {}
+  };
+
   if (session === undefined) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-6">
@@ -244,6 +308,365 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
   // BREAK일 땐 위험 강조 X (휴식 끝 카운트다운).
   const isWarning = !paused && !onBreak && sec > 0 && sec <= 10 && session.status === 'running';
 
+  // 전체화면 가로 모드 (landscape fullscreen) — read-only 타이머 + 우측 정보 패널
+  // 상금(prizePool) 절대 노출 금지 정책 적용
+  if (isFullscreenActive && isMobileLandscape) {
+    return (
+      <div
+        className="h-[100dvh] bg-[#0A0A0A] text-white flex flex-col relative overflow-hidden"
+        style={{
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
+      >
+        {/* 가로 회전 안내 띠 */}
+        {showLandscapeHint && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-black px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg">
+            <span>📱↻</span>
+            <span>기기를 가로로 돌려주세요</span>
+          </div>
+        )}
+
+        {/* 메인 2분할: 좌측 타이머 / 우측 정보 */}
+        <div className="flex-1 flex items-stretch min-h-0 px-1 pt-1 pb-1 gap-1.5">
+          {/* ── 좌: 레벨 + 거대 타이머 + 블라인드 ── */}
+          <div className="flex-1 flex flex-col items-center justify-center min-w-0">
+            {/* 상태 뱃지 */}
+            <div className="flex items-center gap-1.5 mb-1">
+              {onBreak ? (
+                <span className="text-[11px] font-extrabold tracking-[0.25em] px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(245,158,11,0.2)', color: '#FBBF24', border: '1px solid #F59E0B66' }}>
+                  ☕ BREAK
+                </span>
+              ) : paused ? (
+                <span className="text-[11px] font-extrabold tracking-[0.25em] text-amber-400">⏸ PAUSED</span>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[11px] font-extrabold tracking-[0.25em] text-red-500">LIVE</span>
+                </>
+              )}
+            </div>
+            {/* 레벨 */}
+            <div className="text-[10px] text-white/40 tracking-[0.25em] mb-0.5">
+              {(() => {
+                const disp = resolveDisplayedLevel(structureForNext, session.currentLevel);
+                if (disp.isBreak) return '☕ BREAK';
+                return `LEVEL ${disp.displayedNumber ?? session.currentLevel}`;
+              })()}
+            </div>
+            {/* 거대 타이머 — vh 기반으로 화면 높이 초과 방지 */}
+            <div
+              className={`font-mono font-extrabold leading-none ${isWarning ? 'animate-pulse' : ''}`}
+              style={{
+                fontSize: 'clamp(52px, min(16vw, 36vh), 180px)',
+                letterSpacing: '-0.05em',
+                color: onBreak ? '#FBBF24' : paused ? '#A8A8A8' : isWarning ? '#FF4757' : '#fff',
+              }}
+            >
+              {fmtTime(sec)}
+            </div>
+            {/* 블라인드 — BREAK 아닐 때만 */}
+            {!onBreak && (
+              <div className="mt-2 text-center">
+                <div className="text-[9px] text-white/40 tracking-[0.3em] mb-0.5">BLINDS</div>
+                <div
+                  className="font-mono font-extrabold"
+                  style={{
+                    fontSize: 'clamp(18px, min(4.5vw, 10vh), 44px)',
+                    color: '#FF1F8F',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {session.smallBlind.toLocaleString()}
+                  <span className="text-white/30 mx-1">/</span>
+                  {session.bigBlind.toLocaleString()}
+                </div>
+                {session.ante > 0 && (
+                  <div className="font-mono text-[10px] text-white/40 mt-0.5">
+                    Ante {session.ante.toLocaleString()}
+                  </div>
+                )}
+              </div>
+            )}
+            {onBreak && nextPlay && (
+              <div className="mt-2 text-[10px] text-amber-300/80 font-bold text-center">
+                끝나면 LV {nextPlay.displayedNumber} · {nextPlay.sb.toLocaleString()}/{nextPlay.bb.toLocaleString()}
+              </div>
+            )}
+          </div>
+
+          {/* ── 우: 정보 패널 (상금 절대 노출 금지) ── */}
+          <div
+            className="flex flex-col justify-center gap-1.5 w-[30%] max-w-[160px] min-w-[100px]"
+          >
+            {/* NEXT 블라인드 */}
+            {nextBlind && (
+              <div
+                className="rounded-xl px-2 py-1.5 border text-center"
+                style={{
+                  background: nextBlind.isBreak ? 'rgba(245,158,11,0.12)' : 'rgba(255,31,143,0.08)',
+                  borderColor: nextBlind.isBreak ? '#F59E0B44' : '#FF1F8F33',
+                }}
+              >
+                <div className="text-[9px] font-extrabold tracking-[0.3em] mb-0.5"
+                  style={{ color: nextBlind.isBreak ? '#FBBF24' : '#FF1F8F' }}>
+                  ▶ NEXT
+                </div>
+                {nextBlind.isBreak ? (
+                  <div className="text-amber-300 font-extrabold text-[13px]">
+                    ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[9px] text-white/40 font-bold tracking-widest">
+                      LV {resolveDisplayedLevel(structureForNext, nextBlind.level).displayedNumber ?? nextBlind.level}
+                    </div>
+                    <div className="font-mono font-extrabold text-white"
+                      style={{ fontSize: 'clamp(12px, 2.5vw, 18px)', letterSpacing: '-0.02em' }}>
+                      {nextBlind.sb.toLocaleString()}
+                      <span className="text-white/30 mx-0.5">/</span>
+                      {nextBlind.bb.toLocaleString()}
+                    </div>
+                    {nextBlind.ante ? (
+                      <div className="font-mono text-[9px] text-white/40">
+                        a {nextBlind.ante.toLocaleString()}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* PLAYERS */}
+            <div
+              className="rounded-xl px-2 py-1.5 border text-center"
+              style={{ background: 'rgba(0,0,0,0.45)', borderColor: 'rgba(255,255,255,0.10)' }}
+            >
+              <div className="text-[9px] text-white/40 tracking-[0.25em] mb-0.5">PLAYERS</div>
+              <div className="font-mono font-extrabold text-white"
+                style={{ fontSize: 'clamp(13px, 2.5vw, 20px)' }}>
+                {session.playersRemaining}/{session.totalPlayers}
+              </div>
+              <div className="text-[9px] text-white/40 mt-0.5">
+                {session.tablesRemaining}테이블
+              </div>
+            </div>
+
+            {/* LATE REG */}
+            <div
+              className="rounded-xl px-2 py-1.5 border text-center"
+              style={{ background: 'rgba(0,0,0,0.45)', borderColor: 'rgba(255,255,255,0.10)' }}
+            >
+              <div className="text-[9px] text-white/40 tracking-[0.25em] mb-0.5">LATE REG</div>
+              <div
+                className="font-mono font-extrabold"
+                style={{
+                  fontSize: 'clamp(12px, 2.5vw, 18px)',
+                  color: !session.lateRegClosed && lateMin <= 5 ? '#FF4757' : '#fff',
+                }}
+              >
+                {session.lateRegClosed ? '마감' : `${lateMin}분`}
+              </div>
+              {!session.lateRegClosed && (
+                <div className="text-[9px] text-white/40 mt-0.5">남음</div>
+              )}
+            </div>
+
+            {/* 전체화면 종료 버튼 */}
+            <button
+              type="button"
+              onClick={exitFullscreen}
+              className="rounded-lg px-2 py-1.5 text-[10px] font-bold border transition-all active:scale-95"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                borderColor: 'rgba(255,255,255,0.15)',
+                color: 'rgba(255,255,255,0.6)',
+              }}
+              aria-label="전체화면 종료"
+            >
+              ✕ 종료
+            </button>
+
+            {/* 사운드 토글 */}
+            <button
+              type="button"
+              onClick={() => { unlockAudio(); setSoundOn((s) => !s); }}
+              className="rounded-lg px-2 py-1 text-[10px] font-bold border transition-all active:scale-95"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                borderColor: 'rgba(255,255,255,0.10)',
+                color: 'rgba(255,255,255,0.5)',
+              }}
+              aria-label={soundOn ? '사운드 끄기' : '사운드 켜기'}
+            >
+              {soundOn ? '🔊' : '🔇'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 전체화면 세로 모드 (portrait fullscreen) — 타이머 중심 컴팩트 레이아웃
+  if (isFullscreenActive && isMobilePortrait) {
+    return (
+      <div
+        className="h-[100dvh] bg-[#0A0A0A] text-white flex flex-col relative overflow-hidden"
+        style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
+      >
+        {/* 가로 회전 안내 */}
+        {showLandscapeHint && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-black px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg">
+            <span>📱↻</span>
+            <span>기기를 가로로 돌려주세요</span>
+          </div>
+        )}
+
+        {/* 상단 컨트롤 행 */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 pt-3 pb-1">
+          <button
+            type="button"
+            onClick={exitFullscreen}
+            className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm"
+            aria-label="전체화면 종료"
+          >
+            ✕
+          </button>
+          <div className="text-center">
+            <div className="text-[10px] text-white/40 tracking-widest">{session.storeName}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { unlockAudio(); setSoundOn((s) => !s); }}
+            className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm"
+            aria-label={soundOn ? '사운드 끄기' : '사운드 켜기'}
+          >
+            {soundOn ? '🔊' : '🔇'}
+          </button>
+        </div>
+
+        {/* 상태 + 레벨 */}
+        <div className="flex-shrink-0 flex flex-col items-center gap-1 pt-2">
+          <div className="flex items-center gap-1.5">
+            {onBreak ? (
+              <span className="text-xs font-extrabold tracking-[0.25em] text-amber-400">☕ BREAK</span>
+            ) : paused ? (
+              <span className="text-xs font-extrabold tracking-[0.25em] text-amber-400">⏸ PAUSED</span>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-extrabold tracking-[0.25em] text-red-500">LIVE</span>
+              </>
+            )}
+          </div>
+          <div className="text-[10px] text-white/35 tracking-[0.25em]">
+            {(() => {
+              const disp = resolveDisplayedLevel(structureForNext, session.currentLevel);
+              if (disp.isBreak) return '☕ BREAK';
+              return `LEVEL ${disp.displayedNumber ?? session.currentLevel}`;
+            })()}
+          </div>
+        </div>
+
+        {/* 거대 타이머 — 세로 전체화면 vh 기반 */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          <div
+            className={`font-mono font-extrabold leading-none ${isWarning ? 'animate-pulse' : ''}`}
+            style={{
+              fontSize: 'clamp(72px, min(24vw, 18vh), 160px)',
+              letterSpacing: '-0.05em',
+              color: onBreak ? '#FBBF24' : paused ? '#A8A8A8' : isWarning ? '#FF4757' : '#fff',
+            }}
+          >
+            {fmtTime(sec)}
+          </div>
+          {onBreak && nextPlay && (
+            <div className="mt-2 text-amber-300/80 text-xs font-bold text-center">
+              끝나면 LV {nextPlay.displayedNumber} · {nextPlay.sb.toLocaleString()}/{nextPlay.bb.toLocaleString()}
+            </div>
+          )}
+
+          {/* 블라인드 */}
+          {!onBreak && (
+            <div className="mt-4 text-center">
+              <div className="text-[9px] text-white/35 tracking-[0.3em] mb-1">BLINDS</div>
+              <div className="font-mono font-extrabold" style={{ fontSize: 'clamp(24px, 6vw, 44px)', color: '#FF1F8F', letterSpacing: '-0.03em' }}>
+                {session.smallBlind.toLocaleString()}
+                <span className="text-white/30 mx-1.5">/</span>
+                {session.bigBlind.toLocaleString()}
+              </div>
+              {session.ante > 0 && (
+                <div className="font-mono text-xs text-white/40 mt-1">Ante {session.ante.toLocaleString()}</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 하단 정보 2열 + NEXT */}
+        <div className="flex-shrink-0 px-4 pb-4 flex flex-col gap-2">
+          {nextBlind && (
+            <div
+              className="rounded-xl px-4 py-2 border"
+              style={{
+                background: nextBlind.isBreak ? 'rgba(245,158,11,0.10)' : 'rgba(255,31,143,0.06)',
+                borderColor: nextBlind.isBreak ? '#F59E0B44' : '#FF1F8F2E',
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] font-extrabold tracking-[0.3em]"
+                  style={{ color: nextBlind.isBreak ? '#FBBF24' : '#FF1F8F' }}>
+                  ▶ NEXT
+                </div>
+                {nextBlind.isBreak ? (
+                  <div className="text-amber-300 font-extrabold text-sm">
+                    ☕ 휴식 {Math.round(nextBlind.durationSec / 60)}분
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-2">
+                    <div className="text-[10px] text-white/40 font-bold tracking-widest">
+                      LV {resolveDisplayedLevel(structureForNext, nextBlind.level).displayedNumber ?? nextBlind.level}
+                    </div>
+                    <div className="font-mono font-extrabold text-white text-lg">
+                      {nextBlind.sb.toLocaleString()}
+                      <span className="text-white/30 mx-1">/</span>
+                      {nextBlind.bb.toLocaleString()}
+                    </div>
+                    {nextBlind.ante ? (
+                      <div className="font-mono text-[10px] text-white/40">a {nextBlind.ante.toLocaleString()}</div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl px-3 py-2 border text-center"
+              style={{ background: 'rgba(0,0,0,0.40)', borderColor: 'rgba(255,255,255,0.10)' }}>
+              <div className="text-[9px] text-white/40 tracking-[0.25em] mb-0.5">PLAYERS</div>
+              <div className="font-mono font-extrabold text-white text-base">{session.playersRemaining}/{session.totalPlayers}</div>
+              <div className="text-[9px] text-white/35">{session.tablesRemaining}테이블</div>
+            </div>
+            <div className="rounded-xl px-3 py-2 border text-center"
+              style={{ background: 'rgba(0,0,0,0.40)', borderColor: 'rgba(255,255,255,0.10)' }}>
+              <div className="text-[9px] text-white/40 tracking-[0.25em] mb-0.5">LATE REG</div>
+              <div className="font-mono font-extrabold text-base"
+                style={{ color: !session.lateRegClosed && lateMin <= 5 ? '#FF4757' : '#fff' }}>
+                {session.lateRegClosed ? '마감' : `${lateMin}분`}
+              </div>
+              {!session.lateRegClosed && <div className="text-[9px] text-white/35">남음</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── 일반(비전체화면) 모드 — 기존 세로 스크롤 레이아웃 ───
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col">
       {/* 상단 — 닫기 / 사운드 / 공유 */}
@@ -414,6 +837,21 @@ export default function LiveFullscreen({ params }: { params: Promise<{ sessionId
 
       {/* 하단 CTA */}
       <div className="mt-auto px-5 pt-6 pb-8">
+        {/* 전체화면 버튼 — 일반 모드에서 타이머 아래 진입 경로 제공 */}
+        <button
+          type="button"
+          onClick={enterFullscreen}
+          className="w-full h-11 rounded-2xl font-extrabold text-sm mb-3 flex items-center justify-center gap-2 border transition-all active:scale-[0.98]"
+          style={{
+            background: 'rgba(255,31,143,0.10)',
+            border: '1px solid rgba(255,31,143,0.30)',
+            color: '#FF1F8F',
+          }}
+          aria-label="전체화면 타이머 보기"
+        >
+          <span>⛶</span>
+          <span>전체화면 타이머</span>
+        </button>
         <button
           onClick={() => {
             bumpStoreMetric(session.storeId, 'directionsClicks');
