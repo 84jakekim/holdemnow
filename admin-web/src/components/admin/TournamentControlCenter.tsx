@@ -556,12 +556,17 @@ function SessionControlPanel({
     };
   }, []);
 
-  // 2026-05-28 #11: sec=0 트리거 폐기 (lib hook이 wrap 즉시 다음 레벨로 가서 sec=0 못 봄).
-  // wrap 처리는 useLiveTimelineTick({ handleWrap: true })가 담당.
+  // 2026-05-28 #14: 카운트다운 비프 (10~1초) 추가. m/live 사용자 페이지엔 있지만
+  //   사장 컨트롤에는 없어서 사장이 마지막 10초 비프 못 들음. 추가.
+  //   wrap 시 블라인드업은 lib hook의 handleWrap이 담당. 여기는 비프만.
   const prevSecRef = useRef<number | null>(null);
   useEffect(() => {
+    const prev = prevSecRef.current;
+    if (session.status === 'running' && prev !== null && prev !== seconds && seconds >= 1 && seconds <= 10) {
+      import('@/lib/sounds').then(({ playCountdownBeep }) => playCountdownBeep()).catch(() => {});
+    }
     prevSecRef.current = seconds;
-  }, [seconds]);
+  }, [seconds, session.status]);
 
   // 마지막 레벨 자동 정리 (sanity guard 포함 — LivePanel과 동일 로직)
   const finishingMs = session.finishingAt?.toMillis?.();
