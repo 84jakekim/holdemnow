@@ -202,7 +202,7 @@ export default function SeriesPage({ params }: { params: Promise<{ seriesId: str
               협력 매장 ({partnerStores.length}곳)
             </div>
             <div className="text-[10px] text-gray-500">
-              위성 {series.satelliteCompleted}/{series.satelliteCount}
+              새틀라이트 {series.satelliteCompleted}/{series.satelliteCount}
             </div>
           </div>
           <div className="space-y-2">
@@ -222,7 +222,7 @@ export default function SeriesPage({ params }: { params: Promise<{ seriesId: str
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-gray-900">{st.name}</div>
-                  <div className="text-[11px] text-gray-500 mt-0.5">위성 예선 개최 매장</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">새틀라이트 개최 매장</div>
                 </div>
                 <span className="text-gray-400">›</span>
               </Link>

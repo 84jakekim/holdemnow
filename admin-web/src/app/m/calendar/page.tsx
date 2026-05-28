@@ -171,7 +171,7 @@ export default function CalendarPage() {
         {([
           { id: 'all', label: '전체' },
           { id: 'buyin-low', label: '바이인 5만↓' },
-          { id: 'satellite', label: '위성 예선' },
+          { id: 'satellite', label: '새틀라이트' },
         ] as { id: FilterId; label: string }[]).map((c) => {
           const active = filter === c.id;
           return (

@@ -573,6 +573,6 @@ export const TYPE_LABELS: Record<TournamentType, string> = {
   rebuy: '리바이',
   turbo: '터보',
   bounty: '바운티',
-  satellite: '위성 예선',
+  satellite: '새틀라이트',
   cash: '캐쉬',
 };

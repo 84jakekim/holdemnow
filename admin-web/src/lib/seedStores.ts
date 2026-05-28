@@ -56,7 +56,7 @@ export const DEMO_STORES = [
     addressDetail: '',
     phone: '051-552-0004',
     hours: '매일 17:00 - 익일 03:00',
-    description: '위성 예선 개최 매장. 동래 권역 인지도 1위.',
+    description: '새틀라이트 개최 매장. 동래 권역 인지도 1위.',
     facilities: ['주차', '식사'],
     lat: 35.2052,
     lng: 129.0832,

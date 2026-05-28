@@ -166,7 +166,7 @@ function OrganizerDashboard({ org, onActivate }: { org: Organizer; onActivate: (
         {[
           { label: '운영 시리즈', value: '0', tag: '시작 안 됨' },
           { label: '협력 매장', value: '0', tag: '시리즈에 매핑' },
-          { label: '위성 예선', value: '0/0', tag: '완료/전체' },
+          { label: '새틀라이트', value: '0/0', tag: '완료/전체' },
           { label: '본선 진출', value: '0', tag: '자동 집계' },
         ].map((k) => (
           <div key={k.label} className="bg-white border border-gray-200 rounded-xl p-4">
@@ -181,9 +181,9 @@ function OrganizerDashboard({ org, onActivate }: { org: Organizer; onActivate: (
         <div className="text-sm font-bold text-gray-900 mb-3">🎯 시작 가이드</div>
         <ol className="text-xs text-gray-600 space-y-2 list-decimal list-inside leading-relaxed">
           <li>좌측 <b>🏆 시리즈 관리</b>에서 첫 시리즈 생성 (이름·시즌·본선 일자·게런티)</li>
-          <li>협력 매장 5~15곳 선택 → 위성 예선 일정 일괄 등록 (v0.2)</li>
+          <li>협력 매장 5~15곳 선택 → 새틀라이트 일정 일괄 등록 (v0.2)</li>
           <li><b>📣 일괄 홍보</b>로 협력 매장 페이지에 시리즈 배너 자동 게시 (v0.2)</li>
-          <li>위성 예선 결과는 매장 어드민에서 입력 → 본선 진출자 자동 집계</li>
+          <li>새틀라이트 결과는 매장 어드민에서 입력 → 본선 진출자 자동 집계</li>
         </ol>
       </div>
     </>

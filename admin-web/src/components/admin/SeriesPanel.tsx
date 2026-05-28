@@ -87,7 +87,7 @@ export default function SeriesPanel({ organizerId }: { organizerId?: string } = 
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">🏆 시리즈</h1>
           <p className="text-sm text-gray-500 mt-1">
-            대회사 모드 — 시리즈 생성·협력 매장 매핑·위성 예선 자동 집계
+            대회사 모드 — 시리즈 생성·협력 매장 매핑·새틀라이트 자동 집계
           </p>
         </div>
         <button
@@ -104,7 +104,7 @@ export default function SeriesPanel({ organizerId }: { organizerId?: string } = 
         <EmptyState
           icon="🏆"
           title="등록된 시리즈가 없습니다"
-          desc='"+ 새 시리즈"로 시즌 단위 시리즈를 등록하세요. 협력 매장 매핑 후 위성 예선 결과를 입력하면 본선 진출자가 자동 집계됩니다.'
+          desc='"+ 새 시리즈"로 시즌 단위 시리즈를 등록하세요. 협력 매장 매핑 후 새틀라이트 결과를 입력하면 본선 진출자가 자동 집계됩니다.'
         />
       ) : (
         <div className="space-y-3">
@@ -144,7 +144,7 @@ function SeriesRow({ s, onEdit }: { s: Series; onEdit: () => void }) {
       </div>
       <div className="p-3 grid grid-cols-3 gap-2 text-center text-xs">
         <Stat label="협력 매장" value={`${s.partnerStoreIds.length}곳`} />
-        <Stat label="위성 예선" value={`${s.satelliteCompleted}/${s.satelliteCount}`} />
+        <Stat label="새틀라이트" value={`${s.satelliteCompleted}/${s.satelliteCount}`} />
         <Stat label="본선 확정" value={`${s.finalistCount}명`} />
       </div>
       <div className="px-3 pb-3 text-[11px] text-gray-500">
@@ -182,7 +182,7 @@ function SatelliteResultButton({ seriesId, partnerStoreIds }: { seriesId: string
     }
     setBusy(true);
     try {
-      // 데모: 임의 매장 1곳의 위성 예선 결과 2명 추가
+      // 데모: 임의 매장 1곳의 새틀라이트 결과 2명 추가
       const storeId = partnerStoreIds[Math.floor(Math.random() * partnerStoreIds.length)];
       const snap = await getDocs(collection(db, 'stores'));
       const storeDoc = snap.docs.find((d) => d.id === storeId);
@@ -203,7 +203,7 @@ function SatelliteResultButton({ seriesId, partnerStoreIds }: { seriesId: string
       disabled={busy}
       className="flex-1 py-2 rounded-lg bg-black text-white text-xs font-bold disabled:opacity-40"
     >
-      {busy ? '...' : '+ 위성 결과 (데모)'}
+      {busy ? '...' : '+ 새틀라이트 결과 (데모)'}
     </button>
   );
 }
@@ -230,7 +230,7 @@ function SeriesEditor({
   const [finalVenue, setFinalVenue] = useState(initial?.finalVenue ?? '');
   const [finalBuyIn, setFinalBuyIn] = useState(initial?.finalBuyIn ?? 1000000);
   const [finalGuarantee, setFinalGuarantee] = useState(initial?.finalGuarantee ?? 100000000);
-  const [seedRule, setSeedRule] = useState(initial?.seedRule ?? '각 매장 위성 예선 상위 2명 본선 직행');
+  const [seedRule, setSeedRule] = useState(initial?.seedRule ?? '각 매장 새틀라이트 상위 2명 본선 직행');
   const [partnerStoreIds, setPartnerStoreIds] = useState<string[]>(initial?.partnerStoreIds ?? []);
 
   const [allStores, setAllStores] = useState<{ id: string; name: string }[]>([]);
