@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { subscribeAllLiveSessions, type LiveSession, fmtTime, useLiveCountdown } from '@/lib/live';
 import { subscribeAllSeries, type Series } from '@/lib/series';
@@ -187,6 +187,44 @@ function ListMode() {
   const [storeSummaries, setStoreSummaries] = useState<Record<string, StoreSummary>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 내 주변 매장용 — 한 번만 fetch해서 NearbyStoresSection에 주입
+  const [nearbyStores, setNearbyStores] = useState<NearbyStore[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDocs(
+      query(
+        collection(db, 'stores'),
+        where('status', '==', 'active'),
+        where('isDemo', '==', false),
+      ),
+    ).then((snap) => {
+      if (cancelled) return;
+      setNearbyStores(
+        snap.docs.map((d) => {
+          const data = d.data() as {
+            name: string; address?: string; photoUrls?: string[];
+            facilities?: string[]; tier?: string;
+            lat?: number; lng?: number;
+            averageRating?: number; reviewCount?: number;
+          };
+          return {
+            id: d.id,
+            name: data.name,
+            address: data.address,
+            photoUrl: data.photoUrls?.[0],
+            facilities: data.facilities,
+            tier: data.tier,
+            lat: data.lat,
+            lng: data.lng,
+            averageRating: data.averageRating,
+            reviewCount: data.reviewCount,
+          };
+        }),
+      );
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const displayName =
     authState.status === 'authenticated'
@@ -359,7 +397,7 @@ function ListMode() {
       <div className="brand-strip-divider" />
 
       {/* ─ 내 주변 매장 */}
-      <NearbyStoresSection liveByStore={liveByStore} />
+      <NearbyStoresSection liveByStore={liveByStore} initialStores={nearbyStores} />
 
       {/* ─ 메이저 시리즈 */}
       {series.length > 0 && (
@@ -1431,8 +1469,8 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
 
 // ─── 내 주변 매장 ─────────────────────────────────────────────
 
-function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
-  const [stores, setStores] = useState<NearbyStore[]>([]);
+function NearbyStoresSection({ liveByStore, initialStores }: { liveByStore: Record<string, number>; initialStores: NearbyStore[] }) {
+  const [stores, setStores] = useState<NearbyStore[]>(initialStores);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [feedCfg, setFeedCfg] = useState<FeedConfig>(FEED_CONFIG_DEFAULT);
   const [radiusKm, setRadiusKm] = useState<number>(FEED_CONFIG_DEFAULT.nearbyRadiusDefaultKm);
@@ -1460,17 +1498,10 @@ function NearbyStoresSection({ liveByStore }: { liveByStore: Record<string, numb
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  // initialStores는 ListMode에서 한 번 fetch된 데이터 — 도착하면 로컬 상태에 반영
   useEffect(() => {
-    getDocs(collection(db, 'stores')).then((snap) => {
-      setStores(snap.docs.filter((d) => {
-        const data = d.data() as { status?: string; isDemo?: boolean };
-        return data.status === 'active' || data.isDemo === true;
-      }).map((d) => {
-        const data = d.data() as { name: string; address?: string; photoUrls?: string[]; facilities?: string[]; tier?: string; lat?: number; lng?: number; averageRating?: number; reviewCount?: number };
-        return { id: d.id, name: data.name, address: data.address, photoUrl: data.photoUrls?.[0], facilities: data.facilities, tier: data.tier, lat: data.lat, lng: data.lng, averageRating: data.averageRating, reviewCount: data.reviewCount };
-      }));
-    });
-  }, []);
+    if (initialStores.length > 0) setStores(initialStores);
+  }, [initialStores]);
 
   const sorted = useMemo(() => {
     return stores.map((s) => ({ ...s, distance: userLocation && typeof s.lat === 'number' && typeof s.lng === 'number' ? haversineMeters(userLocation, { lat: s.lat, lng: s.lng }) : undefined }))

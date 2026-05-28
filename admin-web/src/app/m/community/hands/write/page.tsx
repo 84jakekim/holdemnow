@@ -78,9 +78,11 @@ function HandWriteInner() {
 
   const uid = authState.status === 'authenticated' ? authState.user.uid : '';
   const displayName =
-    userDoc?.nickname ?? userDoc?.displayName ?? authState.status === 'authenticated'
-      ? (authState as { user: { displayName?: string | null } }).user?.displayName ?? '익명'
-      : '익명';
+    userDoc?.nickname ??
+    userDoc?.displayName ??
+    (authState.status === 'authenticated'
+      ? ((authState as { user: { displayName?: string | null } }).user?.displayName ?? '익명')
+      : '익명');
   const avatarUrl = authState.status === 'authenticated'
     ? ((authState as { user: { photoURL?: string | null } }).user?.photoURL ?? '')
     : '';
@@ -128,6 +130,7 @@ function HandWriteInner() {
   const handleSubmit = async () => {
     if (!title.trim()) { setError('제목을 입력해 주세요'); return; }
     if (!body.trim()) { setError('내용을 입력해 주세요'); return; }
+    if (!uid) { setError('로그인이 필요합니다'); return; }
     setError('');
     setSubmitting(true);
     try {
@@ -177,13 +180,13 @@ function HandWriteInner() {
         </div>
         <button
           onClick={handleSubmit}
-          disabled={submitting || !title.trim() || !body.trim()}
+          disabled={submitting || !title.trim() || !body.trim() || !uid}
           className="tap"
           style={{
             padding: '7px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800,
-            background: title.trim() && body.trim() ? 'var(--brand)' : 'var(--surface-2)',
-            color: title.trim() && body.trim() ? '#fff' : 'var(--text-3)',
-            border: 'none', cursor: title.trim() && body.trim() ? 'pointer' : 'default',
+            background: title.trim() && body.trim() && uid ? 'var(--brand)' : 'var(--surface-2)',
+            color: title.trim() && body.trim() && uid ? '#fff' : 'var(--text-3)',
+            border: 'none', cursor: title.trim() && body.trim() && uid ? 'pointer' : 'default',
           }}
         >
           {submitting ? '저장 중…' : '등록'}

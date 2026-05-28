@@ -38,6 +38,22 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "isDemo", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "handAnalysisPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "regionCode", "order": "ASCENDING" },
         { "fieldPath": "averageRating", "order": "DESCENDING" }
       ]
