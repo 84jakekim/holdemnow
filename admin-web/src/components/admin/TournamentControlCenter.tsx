@@ -1404,6 +1404,9 @@ function DisplaySettingsPane({
         <ScaleSlider label="타이머" value={local.timerScale} onChange={(v) => update('timerScale', v)} />
         <ScaleSlider label="블라인드" value={local.blindsScale} onChange={(v) => update('blindsScale', v)} />
         <ScaleSlider label="통계" value={local.statsScale} onChange={(v) => update('statsScale', v)} />
+        <div className="text-[10px] leading-snug mt-1.5 px-0.5" style={{ color: 'var(--text-3)' }}>
+          권장: 1.1 (TV 시청 거리 2m 기준). 핸드폰 모드는 0.9~1.0 권장
+        </div>
       </Section>
 
       {/* 💰 상금 분배표(우측 사이드) 옵션 — 2026-05-23 정정으로 완전 폐기.
@@ -1450,31 +1453,6 @@ function DisplaySettingsPane({
           onChange={(e) => update('noteText', e.target.value)}
           placeholder="예) GTD 100만 · 리바인 3회 · 18:30 디너"
           className="w-full text-[11px] rounded px-2 py-1.5 mb-2.5"
-          style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
-        />
-        <div className="text-[9.5px] mb-1.5 px-1 leading-tight"
-             style={{ color: 'var(--text-3)' }}>
-          ↓ 레거시 대회명·공지·스폰서 (비워두면 위 ✱ 경기 제목이 사용됨)
-        </div>
-        <input
-          value={local.customTournamentTitle}
-          onChange={(e) => update('customTournamentTitle', e.target.value)}
-          placeholder="대회명 (레거시 · 비우면 자동)"
-          className="w-full text-[11px] rounded px-2 py-1.5 mb-1.5"
-          style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
-        />
-        <input
-          value={local.announcement}
-          onChange={(e) => update('announcement', e.target.value)}
-          placeholder="공지 (사용 안 함 · 호환용)"
-          className="w-full text-[11px] rounded px-2 py-1.5 mb-1.5"
-          style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
-        />
-        <input
-          value={local.sponsorText}
-          onChange={(e) => update('sponsorText', e.target.value)}
-          placeholder="스폰서 줄"
-          className="w-full text-[11px] rounded px-2 py-1.5"
           style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
         />
       </Section>

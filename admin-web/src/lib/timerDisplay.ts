@@ -267,9 +267,9 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
 
   storeLogoUrl: '',
 
-  timerScale: 1.0,
-  blindsScale: 1.0,
-  statsScale: 1.0,
+  timerScale: 1.1,
+  blindsScale: 1.1,
+  statsScale: 1.1,
   titleScale: 1.0,
   levelScale: 1.0,
   anteScale: 1.0,
