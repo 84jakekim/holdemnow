@@ -61,6 +61,10 @@ export { autoCompleteReservations } from './notifications/autoCompleteReservatio
 // 대상: cancelled/rejected/completed/no_show + reservedFor < now-90d.
 // 활성(pending/confirmed) 및 cancelRequested=true 는 이중 가드로 절대 삭제 X.
 export { cleanupOldReservations } from './notifications/cleanupOldReservations';
+// 만료된 매장 데일리 글 자동 삭제 (매일 04:00 KST) — 2026-05-28
+// 대상: collectionGroup('posts')에서 expiresAt < now-3d. 첨부 Storage 이미지도 함께 정리.
+// pinned 글은 별도 컬렉션(pinnedPosts)이라 미해당 + path guard로 stores/{id}/posts/{id}만 대상.
+export { cleanupExpiredPosts } from './notifications/cleanupExpiredPosts';
 // 새 리뷰 작성 시 매장 owner에게 FCM 푸시.
 export { notifyStoreOnReview } from './notifications/notifyStoreOnReview';
 // 종료된 관심 토너 자동 삭제 — 매시간, 시작 시각+6h 지난 doc 정리
