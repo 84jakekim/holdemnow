@@ -3144,25 +3144,17 @@ function NextLevelCompactCard({
       className="rounded-xl border w-full flex flex-col py-2.5 px-2.5 gap-1.5"
       style={{ background: 'rgba(0,0,0,0.45)', borderColor: `${accent}35` }}
     >
-      {/* "NEXT LEVEL N" 큰 라벨 — 잘림 방지: word-break + overflow visible */}
+      {/* 2026-05-28 정정: "NEXT LEVEL N" 한 줄로 합쳐 공간 절약 */}
       <div
         className="font-extrabold leading-tight"
         style={{
           color: accent,
-          fontSize: 13,
-          letterSpacing: '0.06em',
-          // 줄바꿈 허용 — 좁은 공간에서 "NEXT LEVEL\n5" 형태로
-          wordBreak: 'break-word',
-          overflowWrap: 'break-word',
+          fontSize: 15,
+          letterSpacing: '0.04em',
+          whiteSpace: 'nowrap',
         }}
       >
-        NEXT LEVEL
-      </div>
-      <div
-        className="font-extrabold leading-none"
-        style={{ color: accent, fontSize: 26, letterSpacing: '-0.02em' }}
-      >
-        {levelNum}
+        NEXT LEVEL <span style={{ fontSize: 22, letterSpacing: '-0.02em' }}>{levelNum}</span>
       </div>
       {/* SB/BB */}
       <div
