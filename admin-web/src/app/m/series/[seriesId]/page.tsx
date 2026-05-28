@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   collection,
   documentId,
@@ -212,10 +213,9 @@ export default function SeriesPage({ params }: { params: Promise<{ seriesId: str
                 href={`/m/store/${st.id}`}
                 className="flex items-center gap-3 p-2.5 bg-white border border-gray-200 rounded-xl active:scale-[0.98] transition"
               >
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
+                <div className="relative w-10 h-10 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
                   {st.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" />
+                    <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="40px" />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-amber-100 to-amber-200" />
                   )}

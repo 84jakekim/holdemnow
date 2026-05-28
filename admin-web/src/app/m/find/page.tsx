@@ -2,6 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { collection, doc, getDocs, query, where, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -14,7 +16,17 @@ import { loadPopularStores, loadRecentlyJoinedStores, type PopularityStore } fro
 import { subscribeFeedConfig, FEED_CONFIG_DEFAULT, type FeedConfig } from '@/lib/feedConfig';
 import { useAuth } from '@/lib/hooks';
 import { coordToRegionLabel } from '@/lib/kakao';
-import { loadKakaoMaps, geocodeAddress, DEFAULT_CENTER } from '@/lib/kakao';
+import { geocodeAddress } from '@/lib/kakao';
+
+// 카카오맵 컴포넌트 — 지도 모드 진입 시에만 로드 (#6 lazy)
+const FindKakaoMap = dynamic(() => import('./FindKakaoMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--surface-2)' }}>
+      <div className="text-[13px]" style={{ color: 'var(--text-3)' }}>지도 불러오는 중...</div>
+    </div>
+  ),
+});
 import {
   loadActivePostsAll,
   subscribeActivePinnedPosts,
@@ -102,6 +114,25 @@ function FindPageInner() {
     searchParams.get('mode') === 'map' ? 'map' : 'list';
   const [mode, setMode] = useState<'list' | 'map'>(initialMode);
 
+  // ── 단일 watchPosition — #8 위치 추적 중복 가드
+  // MapMode / PopularStoresAvatarScroll / NewlyJoinedStoresSection / NearbyStoresSection이
+  // 각각 watchPosition을 등록하면 동시 최대 4개 watch ID가 생겨 배터리·메모리 낭비.
+  // FindPageInner 레벨에서 1개만 등록하고 props로 내려준다.
+  const [sharedLocation, setSharedLocation] = useState<LatLng | null>(null);
+  const [sharedLocationDenied, setSharedLocationDenied] = useState(false);
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setSharedLocationDenied(true);
+      return;
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setSharedLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setSharedLocationDenied(true),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
   const handleToggle = (m: 'list' | 'map') => {
     setMode(m);
     if (typeof window !== 'undefined') {
@@ -120,9 +151,9 @@ function FindPageInner() {
 
       {/* ── 컨텐츠 */}
       {mode === 'map' ? (
-        <MapMode />
+        <MapMode userLocation={sharedLocation} locationDenied={sharedLocationDenied} />
       ) : (
-        <ListMode />
+        <ListMode userLocation={sharedLocation} />
       )}
     </div>
   );
@@ -180,7 +211,7 @@ function FindHeader() {
 // 리스트 모드 — 기존 /m/page.tsx 매장 허브 콘텐츠 전부 이전
 // ═══════════════════════════════════════════════════════════════
 
-function ListMode() {
+function ListMode({ userLocation }: { userLocation: LatLng | null }) {
   const authState = useAuth();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
@@ -387,17 +418,17 @@ function ListMode() {
       <div className="brand-strip-divider mt-5" />
 
       {/* ─ 인기 매장 */}
-      <PopularStoresAvatarScroll liveByStore={liveByStore} />
+      <PopularStoresAvatarScroll liveByStore={liveByStore} userLocation={userLocation} />
 
       <div className="brand-strip-divider" />
 
       {/* ─ 새로 합류한 매장 */}
-      <NewlyJoinedStoresSection liveByStore={liveByStore} />
+      <NewlyJoinedStoresSection liveByStore={liveByStore} userLocation={userLocation} />
 
       <div className="brand-strip-divider" />
 
       {/* ─ 내 주변 매장 */}
-      <NearbyStoresSection liveByStore={liveByStore} initialStores={nearbyStores} />
+      <NearbyStoresSection liveByStore={liveByStore} initialStores={nearbyStores} userLocation={userLocation} />
 
       {/* ─ 메이저 시리즈 */}
       {series.length > 0 && (
@@ -533,29 +564,16 @@ function QuickNavCards() {
 // 카카오맵 SDK는 이 컴포넌트 마운트 시에만 로드됨
 // ═══════════════════════════════════════════════════════════════
 
-function MapMode() {
+function MapMode({ userLocation, locationDenied }: { userLocation: LatLng | null; locationDenied: boolean }) {
   const router = useRouter();
   const [stores, setStores] = useState<MapStoreSummary[]>([]);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
-  const [locationDenied, setLocationDenied] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const mapInstanceRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setLocationDenied(true); return;
-    }
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setLocationDenied(true),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  // userLocation / locationDenied는 FindPageInner 단일 watch에서 주입 (#8)
 
   useEffect(() => {
     let cancelled = false;
@@ -634,7 +652,7 @@ function MapMode() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 124px)', background: 'var(--bg)' }}>
       {/* 지도 영역 */}
       <div className="flex-1 relative">
-        <KakaoMap
+        <FindKakaoMap
           stores={storesWithCoords}
           liveCountByStore={liveCountByStore}
           selectedId={selectedId}
@@ -717,8 +735,8 @@ function MapMode() {
               padding: '12px',
             }}
           >
-            <div className="w-[60px] h-[60px] rounded-xl flex-shrink-0 overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-              {selected.photoUrl && <img src={selected.photoUrl} alt={selected.name} className="w-full h-full object-cover" />}
+            <div className="relative w-[60px] h-[60px] rounded-xl flex-shrink-0 overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+              {selected.photoUrl && <Image src={selected.photoUrl} alt={selected.name} fill className="object-cover" sizes="60px" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-1">
@@ -754,136 +772,7 @@ function MapMode() {
   );
 }
 
-// ─── 카카오 지도 컴포넌트 ─────────────────────────────────────
-
-function KakaoMap({
-  stores, liveCountByStore, selectedId, onSelect, onError, userLocation, locationDenied, mapInstanceRef,
-}: {
-  stores: MapStoreSummary[];
-  liveCountByStore: Record<string, number>;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onError: (msg: string | null) => void;
-  userLocation: LatLng | null;
-  locationDenied: boolean;
-  mapInstanceRef: React.MutableRefObject<any>;
-}) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const normalMarkersRef = useRef<Map<string, any>>(new Map());
-  const liveMarkersRef = useRef<Map<string, any>>(new Map());
-  const clustererRef = useRef<any>(null);
-  const userMarkerRef = useRef<any>(null);
-  const radiusCircleRef = useRef<any>(null);
-  const [mapReady, setMapReady] = useState(false);
-
-  useEffect(() => {
-    if (!userLocation && !locationDenied) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const maps = await loadKakaoMaps();
-        if (cancelled || !containerRef.current || mapInstanceRef.current) return;
-        const center = userLocation
-          ? new maps.LatLng(userLocation.lat, userLocation.lng)
-          : new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
-        mapInstanceRef.current = new maps.Map(containerRef.current, { center, level: 4 });
-        if (maps.MarkerClusterer) {
-          clustererRef.current = new maps.MarkerClusterer({
-            map: mapInstanceRef.current,
-            averageCenter: true, minLevel: 6, gridSize: 80,
-            disableClickZoom: false, calculator: [10, 30, 100, 300],
-            styles: clusterStyles(),
-          });
-        }
-        setMapReady(true);
-      } catch (e: unknown) {
-        onError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [onError, userLocation, locationDenied, mapInstanceRef]);
-
-  useEffect(() => {
-    if (!mapReady || !userLocation || !mapInstanceRef.current) return;
-    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
-    if (!maps) return;
-    const pos = new maps.LatLng(userLocation.lat, userLocation.lng);
-    if (userMarkerRef.current) {
-      userMarkerRef.current.setPosition(pos);
-    } else {
-      userMarkerRef.current = new maps.Marker({ position: pos, map: mapInstanceRef.current, image: buildUserMarker(maps), zIndex: 30 });
-    }
-    const initialRadius = radiusForZoomLevel(mapInstanceRef.current.getLevel());
-    if (radiusCircleRef.current) {
-      radiusCircleRef.current.setPosition(pos);
-      radiusCircleRef.current.setRadius(initialRadius);
-    } else {
-      radiusCircleRef.current = new maps.Circle({
-        center: pos, radius: initialRadius,
-        strokeWeight: 2, strokeColor: '#FF1F8F', strokeOpacity: 0.5, strokeStyle: 'solid',
-        fillColor: '#FF1F8F', fillOpacity: 0.08,
-      });
-      radiusCircleRef.current.setMap(mapInstanceRef.current);
-    }
-  }, [mapReady, userLocation, mapInstanceRef]);
-
-  useEffect(() => {
-    if (!mapReady || !mapInstanceRef.current) return;
-    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
-    if (!maps) return;
-    const map = mapInstanceRef.current;
-    const onZoom = () => { if (!radiusCircleRef.current) return; radiusCircleRef.current.setRadius(radiusForZoomLevel(map.getLevel())); };
-    maps.event.addListener(map, 'zoom_changed', onZoom);
-    return () => { maps.event.removeListener(map, 'zoom_changed', onZoom); };
-  }, [mapReady]);
-
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
-    if (!maps) return;
-    const clusterer = clustererRef.current;
-    const validStores = stores.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
-    const seenNormal = new Set<string>();
-    const seenLive = new Set<string>();
-    const newClusterMarkers: any[] = [];
-
-    for (const s of validStores) {
-      const live = liveCountByStore[s.id] || 0;
-      const isSelected = s.id === selectedId;
-      const pos = new maps.LatLng(s.lat!, s.lng!);
-      const image = getMarkerImage(maps, { name: s.name, live, selected: isSelected });
-      if (live > 0) {
-        seenLive.add(s.id);
-        const wasNormal = normalMarkersRef.current.get(s.id);
-        if (wasNormal) { if (clusterer) clusterer.removeMarker(wasNormal); else wasNormal.setMap(null); normalMarkersRef.current.delete(s.id); }
-        const existing = liveMarkersRef.current.get(s.id);
-        if (existing) { existing.setPosition(pos); existing.setImage(image); }
-        else {
-          const marker = new maps.Marker({ position: pos, map: mapInstanceRef.current, title: s.name, image, zIndex: 25 });
-          maps.event.addListener(marker, 'click', () => onSelect(s.id));
-          liveMarkersRef.current.set(s.id, marker);
-        }
-      } else {
-        seenNormal.add(s.id);
-        const wasLive = liveMarkersRef.current.get(s.id);
-        if (wasLive) { wasLive.setMap(null); liveMarkersRef.current.delete(s.id); }
-        const existing = normalMarkersRef.current.get(s.id);
-        if (existing) { existing.setPosition(pos); existing.setImage(image); }
-        else {
-          const marker = new maps.Marker({ position: pos, map: clusterer ? undefined : mapInstanceRef.current, title: s.name, image, zIndex: isSelected ? 20 : 10 });
-          maps.event.addListener(marker, 'click', () => onSelect(s.id));
-          normalMarkersRef.current.set(s.id, marker);
-          if (clusterer) newClusterMarkers.push(marker);
-        }
-      }
-    }
-    if (clusterer && newClusterMarkers.length > 0) clusterer.addMarkers(newClusterMarkers);
-    for (const [id, m] of normalMarkersRef.current) { if (!seenNormal.has(id)) { if (clusterer) clusterer.removeMarker(m); else m.setMap(null); normalMarkersRef.current.delete(id); } }
-    for (const [id, m] of liveMarkersRef.current) { if (!seenLive.has(id)) { m.setMap(null); liveMarkersRef.current.delete(id); } }
-  }, [stores, liveCountByStore, selectedId, onSelect, mapInstanceRef]);
-
-  return <div ref={containerRef} className="w-full h-full" />;
-}
+// KakaoMap 컴포넌트는 FindKakaoMap.tsx로 분리 → dynamic import (#6)
 
 // ─── 바텀 시트 ────────────────────────────────────────────────
 
@@ -912,8 +801,8 @@ function NearbyStoresSheet({
             const live = liveCountByStore[s.id] || 0;
             return (
               <button key={s.id} onClick={() => onItemClick(s.id)} className="w-full flex items-center gap-3 px-5 py-3.5 text-left transition active:bg-gray-50" style={{ borderBottom: '1px solid var(--border)' }}>
-                <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-                  {s.photoUrl && <img src={s.photoUrl} alt={s.name} className="w-full h-full object-cover" />}
+                <div className="relative w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+                  {s.photoUrl && <Image src={s.photoUrl} alt={s.name} fill className="object-cover" sizes="48px" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -936,63 +825,7 @@ function NearbyStoresSheet({
   );
 }
 
-// ─── 마커 유틸 (지도용) ───────────────────────────────────────
-
-const _markerImageCache = new Map<string, any>();
-function getMarkerImage(maps: any, opts: { name: string; live: number; selected: boolean }) {
-  const key = `${opts.live}|${opts.selected ? 's' : ''}|${opts.name}`;
-  const cached = _markerImageCache.get(key);
-  if (cached) return cached;
-  const img = buildMarkerImage(maps, opts);
-  _markerImageCache.set(key, img);
-  return img;
-}
-
-function buildMarkerImage(maps: any, opts: { name: string; live: number; selected: boolean }) {
-  const { name, live, selected } = opts;
-  const PILL_H = 26, TAIL_H = 7, height = PILL_H + TAIL_H;
-  const nameW = widthOf(name);
-  const safeName = escapeSvg(name);
-  if (live > 0) {
-    const liveLabel = live > 1 ? `LIVE ${live}` : 'LIVE';
-    const liveLabelW = liveLabel.length * 6;
-    const RIPPLE_PAD = 10, LEFT = 8, DOT = 6, G1 = 5, G2 = 8, RIGHT = 12;
-    const pillWidth = LEFT + DOT + G1 + liveLabelW + G2 + nameW + RIGHT;
-    const totalH = RIPPLE_PAD + PILL_H + TAIL_H, cx = pillWidth / 2;
-    const dotX = LEFT + DOT / 2, liveX = LEFT + DOT + G1, nameX = liveX + liveLabelW + G2;
-    const fill = '#E53E3E', stroke = selected ? '#7F1D1D' : '#C53030', sw = selected ? 2 : 1;
-    const rDotCx = dotX, rDotCy = RIPPLE_PAD + PILL_H / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="${totalH}" viewBox="0 0 ${pillWidth} ${totalH}"><circle cx="${rDotCx}" cy="${rDotCy}" r="3" fill="#E53E3E" opacity="0.6"><animate attributeName="r" values="4;14;4" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.55;0;0.55" dur="1.6s" repeatCount="indefinite"/></circle><rect x="0.5" y="${RIPPLE_PAD + 0.5}" width="${pillWidth-1}" height="${PILL_H-1}" rx="${PILL_H/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/><circle cx="${dotX}" cy="${RIPPLE_PAD + PILL_H/2}" r="${DOT/2}" fill="#fff"/><text x="${liveX}" y="${RIPPLE_PAD + PILL_H/2+4}" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="10" font-weight="800">${liveLabel}</text><text x="${nameX}" y="${RIPPLE_PAD + PILL_H/2+5}" fill="#fff" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800">${safeName}</text><polygon points="${cx-6},${RIPPLE_PAD+PILL_H} ${cx+6},${RIPPLE_PAD+PILL_H} ${cx},${RIPPLE_PAD+PILL_H+TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`;
-    const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-    return new maps.MarkerImage(url, new maps.Size(pillWidth, totalH), { offset: new maps.Point(cx, totalH) });
-  }
-  const PAD = 14, width = nameW + PAD * 2, cx = width / 2;
-  const fill = selected ? '#FF1F8F' : '#FFFFFF', textColor = selected ? '#fff' : '#111827';
-  const stroke = selected ? '#CC1072' : '#E5E7EB', sw = selected ? 2 : 1.5;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><filter id="s"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.12"/></filter><rect x="0.5" y="0.5" width="${width-1}" height="${PILL_H-1}" rx="${PILL_H/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" filter="url(#s)"/><text x="${cx}" y="${PILL_H/2+5}" fill="${textColor}" font-family="Pretendard,Inter,system-ui,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${safeName}</text><polygon points="${cx-6},${PILL_H} ${cx+6},${PILL_H} ${cx},${PILL_H+TAIL_H}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`;
-  const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(width, height), { offset: new maps.Point(cx, height) });
-}
-
-function widthOf(s: string) { return Array.from(s).reduce((sum, ch) => sum + (/[\x00-\x7F]/.test(ch) ? 7 : 12), 0); }
-function escapeSvg(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-
-function clusterStyles() {
-  const base = { color: '#FF1F8F', textAlign: 'center' as const, fontWeight: '800' as const, fontFamily: 'Inter,system-ui,sans-serif', border: '2px solid #FF1F8F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' };
-  return [
-    { ...base, width: '36px', height: '36px', borderRadius: '18px', lineHeight: '32px', fontSize: '12px' },
-    { ...base, width: '44px', height: '44px', borderRadius: '22px', lineHeight: '40px', fontSize: '13px' },
-    { ...base, width: '52px', height: '52px', borderRadius: '26px', lineHeight: '48px', fontSize: '14px' },
-    { ...base, width: '60px', height: '60px', borderRadius: '30px', lineHeight: '56px', fontSize: '15px' },
-    { ...base, width: '72px', height: '72px', borderRadius: '36px', lineHeight: '68px', fontSize: '16px' },
-  ];
-}
-
-function buildUserMarker(maps: any) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#FF1F8F" opacity="0.12"><animate attributeName="r" values="10;16;10" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.22;0.04;0.22" dur="2s" repeatCount="indefinite"/></circle><circle cx="18" cy="18" r="7" fill="#fff" filter="drop-shadow(0 1px 3px rgba(0,0,0,0.20))"/><circle cx="18" cy="18" r="5" fill="#FF1F8F"/></svg>`;
-  const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(36, 36), { offset: new maps.Point(18, 18) });
-}
+// 마커 유틸은 FindKakaoMap.tsx로 이동 (#6)
 
 // ═══════════════════════════════════════════════════════════════
 // 리스트 모드 서브 컴포넌트들 (기존 /m/page.tsx에서 이전)
@@ -1212,8 +1045,7 @@ function PinnedBanner({ post }: { post: PinnedPost }) {
       {photo ? (
         /* 사진 있으면 16:9 사진만. 테두리 제거. */
         <div className="relative w-full" style={{ aspectRatio: '16/9', background: 'var(--surface-2)' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo} alt={post.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+          <Image src={photo} alt={post.title} fill className="object-cover" sizes="100vw" />
         </div>
       ) : (
         /* 사진 없으면 제목·본문 요약 (16:9 비율 박스 안에) */
@@ -1249,8 +1081,7 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
         /* 세로 포스터(2:3) — 사장님이 카톡방용 세로 포스터 업로드해도 잘리지 않게.
          * 작은 카드(2개씩 노출) → 터치해서 상세 페이지에서 크게 본다. */
         <div className="relative w-full" style={{ aspectRatio: '2/3', background: 'var(--surface-2)' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo} alt={post.storeName ?? ''} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+          <Image src={photo} alt={post.storeName ?? ''} fill className="object-cover" sizes="(max-width: 430px) 50vw, 200px" />
           {post.imageUrls.length > 1 && (
             <span className="absolute top-2 right-2 text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>
               +{post.imageUrls.length - 1}
@@ -1312,27 +1143,17 @@ function StorePostMiniCard({ post }: { post: StorePost }) {
 
 // ─── 인기 매장 아바타 스크롤 ──────────────────────────────────
 
-function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string, number> }) {
+function PopularStoresAvatarScroll({ liveByStore, userLocation }: { liveByStore: Record<string, number>; userLocation: LatLng | null }) {
   const [stores, setStores] = useState<PopularityStore[]>([]);
-  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [appliedRadiusKm, setAppliedRadiusKm] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [feedCfg, setFeedCfg] = useState<FeedConfig>(FEED_CONFIG_DEFAULT);
+  // userLocation은 FindPageInner 단일 watch에서 주입 (#8)
 
   // 본사 어드민 반경 설정 구독 — 인기 매장 정책
   useEffect(() => {
     return subscribeFeedConfig(setFeedCfg, () => {});
-  }, []);
-
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) { setUserLocation(null); return; }
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setUserLocation(null),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   useEffect(() => {
@@ -1384,8 +1205,7 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
             <Link key={st.id} href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="flex flex-col items-center gap-1.5 flex-shrink-0 transition active:scale-95" style={{ width: 64 }}>
               <div className={`store-avatar-ring${isLive ? ' live-ring' : ''}`} style={{ width: 60, height: 60, position: 'relative' }}>
                 {photo
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={photo} alt={st.name} className="w-full h-full object-cover" style={{ borderRadius: '50%' }} />
+                  ? <Image src={photo} alt={st.name} fill className="object-cover" style={{ borderRadius: '50%' }} sizes="60px" />
                   : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)', borderRadius: '50%' }}><span className="text-[16px] font-extrabold" style={{ color: 'var(--brand)' }}>{st.name.charAt(0)}</span></div>
                 }
                 {isLive && <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white pulse-live" style={{ background: 'var(--live)' }} aria-label="LIVE 중" />}
@@ -1402,20 +1222,10 @@ function PopularStoresAvatarScroll({ liveByStore }: { liveByStore: Record<string
 
 // ─── 새로 합류한 매장 ─────────────────────────────────────────
 
-function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string, number> }) {
+function NewlyJoinedStoresSection({ liveByStore, userLocation }: { liveByStore: Record<string, number>; userLocation: LatLng | null }) {
   const [stores, setStores] = useState<PopularityStore[]>([]);
-  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) { setUserLocation(null); return; }
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setUserLocation(null),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  // userLocation은 FindPageInner 단일 watch에서 주입 (#8)
 
   useEffect(() => {
     let cancelled = false;
@@ -1446,8 +1256,7 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
             <Link key={st.id} href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover lift tap" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
               <div className="relative overflow-hidden" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
                 {photo
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={photo} alt={st.name} className="w-full h-full object-cover" />
+                  ? <Image src={photo} alt={st.name} fill className="object-cover" sizes="140px" />
                   : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[20px] font-extrabold" style={{ color: 'var(--brand)' }}>{st.name.charAt(0)}</span></div>
                 }
                 <span className="absolute top-2 left-2 text-[9px] font-extrabold rounded-full px-2 py-0.5" style={{ background: 'var(--brand)', color: '#fff' }}>NEW</span>
@@ -1469,9 +1278,9 @@ function NewlyJoinedStoresSection({ liveByStore }: { liveByStore: Record<string,
 
 // ─── 내 주변 매장 ─────────────────────────────────────────────
 
-function NearbyStoresSection({ liveByStore, initialStores }: { liveByStore: Record<string, number>; initialStores: NearbyStore[] }) {
+function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liveByStore: Record<string, number>; initialStores: NearbyStore[]; userLocation: LatLng | null }) {
   const [stores, setStores] = useState<NearbyStore[]>(initialStores);
-  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  // userLocation은 FindPageInner 단일 watch에서 주입 (#8)
   const [feedCfg, setFeedCfg] = useState<FeedConfig>(FEED_CONFIG_DEFAULT);
   const [radiusKm, setRadiusKm] = useState<number>(FEED_CONFIG_DEFAULT.nearbyRadiusDefaultKm);
   const [radiusManual, setRadiusManual] = useState(false);
@@ -1489,16 +1298,6 @@ function NearbyStoresSection({ liveByStore, initialStores }: { liveByStore: Reco
       setFeedCfg(cfg);
       if (!radiusManualRef.current) setRadiusKm(cfg.nearbyRadiusDefaultKm);
     }, () => {});
-  }, []);
-
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   // initialStores는 ListMode에서 한 번 fetch된 데이터 — 도착하면 로컬 상태에 반영
@@ -1593,7 +1392,7 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
   return (
     <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover lift tap" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
       <div className="relative overflow-hidden" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
-        {st.photoUrl ? <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[24px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.4 }}>{st.name.charAt(0)}</span></div>}
+        {st.photoUrl ? <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="140px" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[24px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.4 }}>{st.name.charAt(0)}</span></div>}
         <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
           {st.distance != null && <span className="text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)' }}>{formatDistance(st.distance)}</span>}
         </div>
@@ -1645,8 +1444,7 @@ function LiveHeroCard({ group, thumbnail }: { group: StoreGroup; thumbnail?: str
       <div className="relative overflow-hidden" style={{ aspectRatio: '16/9', background: poster.bg }}>
         {thumbnail ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={thumbnail} alt={group.storeName} className="absolute inset-0 w-full h-full object-cover" />
+            <Image src={thumbnail} alt={group.storeName} fill className="object-cover" sizes="220px" />
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.70) 100%)' }} />
           </>
         ) : (

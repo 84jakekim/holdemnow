@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -146,10 +147,9 @@ export default function SearchPage() {
                   onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
                 >
-                  <div className="w-12 h-12 rounded-lg bg-gray-200 flex-shrink-0 overflow-hidden">
+                  <div className="relative w-12 h-12 rounded-lg bg-gray-200 flex-shrink-0 overflow-hidden">
                     {st.photoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" />
+                      <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="48px" />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-amber-100 to-amber-200" />
                     )}

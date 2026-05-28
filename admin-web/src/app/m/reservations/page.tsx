@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useAuth, useStoreDoc } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import {
@@ -29,8 +30,20 @@ import {
 } from '@/lib/reservations';
 import { callPhone, openDirections } from '@/lib/actions';
 import { ensureStoreCoords } from '@/lib/storeGeocode';
-import InlineStoreMap from '@/components/mobile/reservations/InlineStoreMap';
 import NotificationBellButton from '@/components/mobile/NotificationBellButton';
+
+// 지도 — 예약 카드 확장 시에만 로드 (#6 lazy)
+const InlineStoreMap = dynamic(() => import('@/components/mobile/reservations/InlineStoreMap'), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="w-full rounded-xl flex items-center justify-center text-[12px]"
+      style={{ height: 160, background: 'var(--surface-2)', color: 'var(--text-3)' }}
+    >
+      지도 불러오는 중...
+    </div>
+  ),
+});
 
 type Tab = 'upcoming' | 'past';
 

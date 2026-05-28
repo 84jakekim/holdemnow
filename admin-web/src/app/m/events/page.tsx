@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   subscribeEvents,
   type EventDoc,
@@ -251,10 +252,9 @@ function CompactList({ items }: { items: EventDoc[] }) {
             href={`/m/events/${e.id}`}
             className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 active:bg-gray-100 transition"
           >
-            <div className="w-12 h-12 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden flex items-center justify-center">
+            <div className="relative w-12 h-12 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden flex items-center justify-center">
               {e.posterUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={e.posterUrl} alt={e.name} className="w-full h-full object-cover" />
+                <Image src={e.posterUrl} alt={e.name} fill className="object-cover" sizes="48px" />
               ) : (
                 <span className="text-xl">🏆</span>
               )}
@@ -306,10 +306,9 @@ function LargeList({ items }: { items: EventDoc[] }) {
           >
             <div className="flex">
               {/* 포스터 */}
-              <div className="w-28 h-36 bg-gray-100 flex-shrink-0 overflow-hidden flex items-center justify-center">
+              <div className="relative w-28 h-36 bg-gray-100 flex-shrink-0 overflow-hidden flex items-center justify-center">
                 {e.posterUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={e.posterUrl} alt={e.name} className="w-full h-full object-cover" />
+                  <Image src={e.posterUrl} alt={e.name} fill className="object-cover" sizes="112px" />
                 ) : (
                   <span className="text-4xl opacity-40">🏆</span>
                 )}
@@ -378,8 +377,7 @@ function AlbumGrid({ items }: { items: EventDoc[] }) {
           >
             <div className="aspect-[3/4] bg-gray-100 relative overflow-hidden flex items-center justify-center">
               {e.posterUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={e.posterUrl} alt={e.name} className="w-full h-full object-cover" />
+                <Image src={e.posterUrl} alt={e.name} fill className="object-cover" sizes="(max-width: 430px) 50vw, 200px" />
               ) : (
                 <span className="text-5xl opacity-40">🏆</span>
               )}

@@ -19,6 +19,26 @@ import type { NextConfig } from "next";
  *  - `/api/*`는 응답마다 핸들러가 직접 Cache-Control 결정 — 본 규칙 안 건드림.
  */
 const nextConfig: NextConfig = {
+  images: {
+    // Firebase Storage 및 기타 외부 이미지 도메인 허용 (#7 next/image 마이그레이션)
+    remotePatterns: [
+      {
+        // Firebase Storage (모든 프로젝트 버킷)
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      },
+      {
+        // Firebase Storage — storage.googleapis.com 직접 URL
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+      },
+      {
+        // 카카오 썸네일 (매장 사진이 카카오 Place API 경유하는 경우)
+        protocol: 'https',
+        hostname: '*.kakaocdn.net',
+      },
+    ],
+  },
   async headers() {
     const noCacheHeaders = [
       { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate, max-age=0' },

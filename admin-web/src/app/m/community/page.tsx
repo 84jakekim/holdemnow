@@ -17,6 +17,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   collection,
@@ -397,6 +398,7 @@ function JobCard({
       <div className="flex items-center gap-2.5 mb-2.5">
         <div
           style={{
+            position: 'relative',
             width: 38, height: 38, borderRadius: 11,
             background: 'linear-gradient(135deg,#fb7185,#ef4444)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -406,8 +408,7 @@ function JobCard({
           aria-hidden="true"
         >
           {job.storePhotoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={job.storePhotoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <Image src={job.storePhotoUrl} alt="" fill className="object-cover" sizes="38px" />
           ) : '🃏'}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>

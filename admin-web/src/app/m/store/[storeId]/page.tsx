@@ -2,7 +2,22 @@
 
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+
+// 카카오 미니맵 — 지도 섹션 진입 시에만 로드 (#6 lazy)
+const StoreMiniMap = dynamic(() => import('@/components/mobile/StoreMiniMap'), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="relative w-full overflow-hidden flex items-center justify-center"
+      style={{ height: 200, borderRadius: 'var(--r-xl)', border: '1px solid var(--border)', background: 'var(--surface-2)' }}
+    >
+      <span className="text-[13px]" style={{ color: 'var(--text-3)' }}>지도 불러오는 중...</span>
+    </div>
+  ),
+});
 import {
   doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
@@ -16,7 +31,7 @@ import { posterStyleFor, fmtBuyInTicketsMobile } from '@/lib/templates';
 import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { bumpStoreMetric, trackImpressionOnce } from '@/lib/analytics';
 import { enableNotifications, getNotificationPermission } from '@/lib/messaging';
-import { loadKakaoMaps, geocodeAddress } from '@/lib/kakao';
+import { geocodeAddress } from '@/lib/kakao';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
 import { subscribeStoreActivePost, type StorePost } from '@/lib/posts';
 import {
@@ -315,11 +330,13 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
         {/* 사진 */}
         {hasPhotos ? (
           <div className="absolute inset-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={photos[photoIndex]}
               alt={`${store.name} 사진 ${photoIndex + 1}`}
-              className="w-full h-full object-cover"
+              fill
+              className="object-cover"
+              sizes="100vw"
+              priority={photoIndex === 0}
             />
             {/* 상단 + 하단 그라데이션 (헤더 버튼 + 매장명 오버레이 가독성) */}
             <div
@@ -782,8 +799,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
                   style={{ background: 'var(--surface-2)' }}
                 >
                   {item.images?.[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover" />
+                    <Image src={item.images[0]} alt={item.title} fill className="object-cover" sizes="160px" />
                   ) : (
                     <span aria-hidden="true">
                       {item.category === 'chip' ? '🪙' : item.category === 'card' ? '🃏' : item.category === 'timer' ? '⏱' : '📦'}
@@ -951,73 +967,7 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   );
 }
 
-/* ============================================================
- * 미니맵 — 라이트 테두리
- * ========================================================== */
-function StoreMiniMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const maps = await loadKakaoMaps();
-        if (cancelled || !containerRef.current || mapRef.current) return;
-        const center = new maps.LatLng(lat, lng);
-        mapRef.current = new maps.Map(containerRef.current, { center, level: 3 });
-        const zoomControl = new maps.ZoomControl();
-        mapRef.current.addControl(zoomControl, maps.ControlPosition.TOPRIGHT);
-        markerRef.current = new maps.Marker({
-          position: center, map: mapRef.current,
-          image: buildNameBadgeMarker(maps, name), title: name,
-        });
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [lat, lng, name]);
-
-  useEffect(() => {
-    const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
-    if (!mapRef.current || !maps) return;
-    const pos = new maps.LatLng(lat, lng);
-    mapRef.current.setCenter(pos);
-    if (markerRef.current) markerRef.current.setPosition(pos);
-  }, [lat, lng]);
-
-  return (
-    <div
-      className="relative w-full overflow-hidden"
-      style={{ height: 200, borderRadius: 'var(--r-xl)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}
-    >
-      <div ref={containerRef} className="absolute inset-0" />
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
-          지도 로드 실패
-        </div>
-      )}
-    </div>
-  );
-}
-
-function buildNameBadgeMarker(maps: any, name: string) {
-  const widthOf = (s: string) => Array.from(s).reduce((sum, ch) => sum + (/[ -~]/.test(ch) ? 8 : 13), 0);
-  const PAD_X = 14, TAIL_H = 8, PILL_H = 28;
-  const width = Math.max(60, widthOf(name) + PAD_X * 2);
-  const height = PILL_H + TAIL_H;
-  const cx = width / 2;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width-1}" height="${PILL_H-1}" rx="${PILL_H/2}" fill="#FF1F8F" stroke="#CC1072" stroke-width="1.5"/><text x="${cx}" y="${PILL_H/2+5}" fill="#fff" font-family="Pretendard,Inter,system-ui,-apple-system,sans-serif" font-size="12" font-weight="800" text-anchor="middle">${escapeSvg(name)}</text><polygon points="${cx-6},${PILL_H} ${cx+6},${PILL_H} ${cx},${PILL_H+TAIL_H}" fill="#FF1F8F" stroke="#CC1072" stroke-width="1.5"/></svg>`;
-  const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return new maps.MarkerImage(url, new maps.Size(width, height), { offset: new maps.Point(cx, height) });
-}
-
-function escapeSvg(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+// StoreMiniMap은 StoreMiniMap.tsx로 분리 → dynamic import (#6)
 
 /* ============================================================
  * 세션 타이머 그리드 — 라이트 카드
@@ -1547,9 +1497,8 @@ function ActivePostCard({ post }: { post: StorePost }) {
           <div className="relative">
             <div ref={scrollRef} className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none" style={{ aspectRatio: '4/3' }}>
               {post.imageUrls.map((url, i) => (
-                <div key={url} className="w-full flex-shrink-0 snap-center" style={{ background: 'var(--surface-2)' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt={`${i + 1}`} className="w-full h-full object-cover" />
+                <div key={url} className="relative w-full flex-shrink-0 snap-center" style={{ background: 'var(--surface-2)' }}>
+                  <Image src={url} alt={`소식 사진 ${i + 1}`} fill className="object-cover" sizes="100vw" />
                 </div>
               ))}
             </div>
@@ -1942,12 +1891,11 @@ function ReviewCard({
             <button
               key={url}
               onClick={() => setLightboxUrl(url)}
-              className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 transition active:scale-95"
+              className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 transition active:scale-95"
               style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
               aria-label="사진 크게 보기"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="리뷰 사진" className="w-full h-full object-cover" />
+              <Image src={url} alt="리뷰 사진" fill className="object-cover" sizes="80px" />
             </button>
           ))}
         </div>
@@ -1995,8 +1943,14 @@ function ReviewCard({
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.92)' }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightboxUrl} alt="리뷰 사진 확대" className="max-w-full max-h-full object-contain" />
+          <Image
+            src={lightboxUrl}
+            alt="리뷰 사진 확대"
+            width={800}
+            height={800}
+            className="max-w-full max-h-full object-contain"
+            sizes="100vw"
+          />
         </div>
       )}
     </div>

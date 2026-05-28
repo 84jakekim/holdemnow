@@ -28,6 +28,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import {
   subscribeActivePostsAll,
   subscribeActivePinnedPosts,
@@ -39,7 +40,18 @@ import { haversineMeters, type LatLng } from '@/lib/geo';
 import { useTickingNow } from '@/lib/relativeTime';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import ChatPostCard from '@/components/mobile/posts/ChatPostCard';
+
+// 채팅형 소식 카드 — 초기 번들에서 분리, 스크롤 진입 시 로드 (#9 lazy)
+const ChatPostCard = dynamic(() => import('@/components/mobile/posts/ChatPostCard'), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="mx-4 mb-2 rounded-2xl animate-pulse"
+      style={{ height: 80, background: 'var(--surface-2)' }}
+      aria-hidden="true"
+    />
+  ),
+});
 
 const SCROLL_KEY = '/m/posts:scroll';
 const STICKY_BOTTOM_PX = 100;
