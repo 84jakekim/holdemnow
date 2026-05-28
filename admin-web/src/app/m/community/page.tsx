@@ -114,10 +114,12 @@ export default function CommunityIndexPage() {
   const activeTab = TABS.find((t) => t.id === tab)!;
   const composeHref = tab === 'hiring' ? '/m/community/jobs/new'
     : tab === 'seeking' ? '/m/community/dealers/me'
-    : '/m/community'; // 핸드분석은 v0.5 sprint — 일단 인덱스 유지
+    : '/m/community/hands/write'; // 핸드분석 작성 v0.5
 
-  // FAB 노출 조건: 구인 탭은 매장 owner만, 구직 탭은 모든 사용자, 핸드분석은 v0.5
-  const showFab = tab === 'seeking' || (tab === 'hiring' && isStoreOwner);
+  // FAB 노출 조건: 구인 탭은 매장 owner만, 구직 탭은 모든 사용자, 핸드분석은 로그인 사용자
+  const showFab = tab === 'seeking'
+    || (tab === 'hiring' && isStoreOwner)
+    || (tab === 'hand' && authState.status === 'authenticated');
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((j) => {
@@ -536,51 +538,112 @@ function SeekingTab() {
 }
 
 // ──────────────────────────────────────────────────────
-// 핸드분석 탭 — 신규 게시판 (v0.5 sprint 오픈 예정)
+// 핸드분석 탭 — 실제 목록으로 진입 (v0.5 오픈)
 // ──────────────────────────────────────────────────────
 function HandTab() {
   return (
-    <div style={{ padding: '20px 14px 16px' }}>
-      <div
-        className="lift"
-        style={{
-          background: 'var(--bg)', borderRadius: 16,
-          border: '1px solid rgba(255,31,143,0.18)',
-          padding: '22px 18px',
-          boxShadow: '0 2px 14px rgba(255,31,143,0.06)',
-        }}
-      >
-        <div style={{ fontSize: 36, marginBottom: 12 }} aria-hidden="true">🃏</div>
-        <h2 style={{ fontSize: 17, fontWeight: 900, letterSpacing: '-0.02em', marginBottom: 6 }}>
-          핸드분석 게시판 곧 오픈
-        </h2>
-        <p style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.6 }}>
-          실전 핸드를 공유하고 다른 사용자와 함께 복기·분석하는 공간입니다.<br />
-          블라인드·포지션·액션·결과를 등록하면 댓글로 전략을 토론할 수 있어요.
-        </p>
+    <HandTabContent />
+  );
+}
 
-        <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 12, background: 'var(--surface-2)' }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>
-            🎯 핸드분석으로 할 수 있는 것
-          </div>
-          <ul style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.7, paddingLeft: 4, listStyle: 'none' }}>
-            <li>· 블라인드 / 포지션 / 액션 / 결과 등록</li>
-            <li>· 콜·레이즈 시점의 의사결정 복기</li>
-            <li>· 다른 사용자의 추천 라인 댓글</li>
-            <li>· 매장 인스트럭터·고수 답글 (선택)</li>
-          </ul>
-        </div>
+function HandTabContent() {
+  const router = useRouter();
+  const [posts, setPosts] = useState<import('@/lib/handAnalysis').HandAnalysisPost[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-        <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 12, background: '#FEF3C7', border: '1px solid rgba(245,158,11,0.25)' }}>
-          <div style={{ fontSize: 11.5, color: '#92400E', lineHeight: 1.6 }}>
-            <b>⚠️ 현금/시드권 거래는 금지됩니다.</b><br />
-            이 게시판은 전략·복기 전용입니다. 위반 시 게시글 즉시 삭제 + 계정 제재.
-          </div>
-        </div>
+  useEffect(() => {
+    import('@/lib/handAnalysis').then(({ loadHandAnalysisPosts }) => {
+      loadHandAnalysisPosts({ pageSize: 10 }).then(({ posts: items }) => {
+        setPosts(items);
+        setLoaded(true);
+      });
+    });
+  }, []);
 
-        <div style={{ marginTop: 18, fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
-          출시 직후 v0.5 sprint에 오픈 예정 · 알림 받기는 마이 → 알림 설정에서
+  if (!loaded) {
+    return (
+      <div style={{ padding: '20px 14px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {[1, 2].map((i) => (
+          <div key={i} style={{ background: 'var(--bg)', borderRadius: 14, border: '1px solid var(--border)', height: 120 }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">🃏</div>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>아직 핸드분석 글이 없어요</div>
+        <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 20 }}>
+          실전 핸드를 공유하고 다른 플레이어와 함께 복기해 보세요.<br />
+          우하단 + 버튼으로 첫 번째 글을 작성해 보세요.
         </div>
+        <button
+          onClick={() => router.push('/m/community/hands')}
+          style={{ padding: '10px 20px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 12, fontWeight: 700, color: 'var(--text-1)', cursor: 'pointer' }}
+        >
+          게시판 전체 보기
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ padding: '10px 14px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {posts.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => router.push(`/m/community/hands/${p.id}`)}
+            className="lift tap"
+            style={{
+              background: 'var(--bg)', borderRadius: 14,
+              border: '1px solid var(--border)',
+              padding: '12px 14px', cursor: 'pointer',
+              textAlign: 'left', width: '100%',
+            }}
+          >
+            {p.position && (
+              <span style={{ display: 'inline-block', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 5, background: '#EFF6FF', color: '#2563EB', marginBottom: 6 }}>
+                {p.position.toUpperCase()}
+              </span>
+            )}
+            <div style={{ fontSize: 14, fontWeight: 900, lineHeight: 1.35, letterSpacing: '-0.02em', marginBottom: 4, color: 'var(--text-1)' }}>
+              {p.title}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>
+              {p.body}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--text-3)' }}>
+              <span>{p.authorName}</span>
+              <span style={{ marginLeft: 'auto' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ display: 'inline', marginRight: 2 }}>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+                {p.likeCount}
+              </span>
+              <span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ display: 'inline', marginRight: 2 }}>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                {p.commentCount}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+      <div style={{ padding: '12px 14px' }}>
+        <button
+          onClick={() => router.push('/m/community/hands')}
+          style={{
+            width: '100%', padding: '12px 0', borderRadius: 12,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            fontSize: 13, fontWeight: 700, color: 'var(--text-1)', cursor: 'pointer',
+          }}
+        >
+          전체 글 보기
+        </button>
       </div>
     </div>
   );

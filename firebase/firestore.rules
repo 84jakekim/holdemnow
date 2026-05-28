@@ -745,6 +745,57 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ===== 핸드분석 게시판 (handAnalysisPosts) — v0.5 =====
+    // - read: 누구나 (status='published' 필터는 클라이언트)
+    // - create: 인증 사용자, authorUid == 본인
+    // - update: 작성자 본인 (authorUid 변경 차단) 또는 platform_admin
+    // - delete: 작성자 본인 또는 platform_admin
+    //   실제 삭제 대신 status='deleted' soft delete 사용 — 데이터 보존.
+    // 조회수(viewCount)/좋아요(likeCount)/댓글수(commentCount) increment는
+    //   플랫폼 어드민 여부 무관하게 인증 사용자가 카운터 필드만 변경 허용.
+    match /handAnalysisPosts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0;
+      allow update: if isSignedIn() && (
+        // 작성자 본인 — authorUid 변경 차단
+        (resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorUid == resource.data.authorUid)
+        // 카운터 전용 — 인증 사용자가 조회수·좋아요·댓글 수만 변경
+        || request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['viewCount', 'likeCount', 'commentCount', 'updatedAt'])
+        || isPlatformAdmin()
+      );
+      allow delete: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isPlatformAdmin());
+
+      // 좋아요 서브컬렉션
+      match /likes/{uid} {
+        allow read: if true;
+        allow create: if isSignedIn() && request.auth.uid == uid;
+        allow delete: if isSignedIn() && request.auth.uid == uid;
+        allow update: if false;
+      }
+
+      // 댓글 서브컬렉션
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isSignedIn()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0;
+        allow update: if isSignedIn()
+          && resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorUid == resource.data.authorUid;
+        allow delete: if isSignedIn()
+          && (resource.data.authorUid == request.auth.uid || isPlatformAdmin());
+      }
+    }
+
     // ===== 그 외 모두 차단 (default deny) =====
     match /{document=**} {
       allow read, write: if false;
