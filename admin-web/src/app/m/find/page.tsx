@@ -1478,14 +1478,17 @@ function NearbyStoresSection({ liveByStore, initialStores }: { liveByStore: Reco
   const [listExpanded, setListExpanded] = useState(false);
 
   // 본사 어드민 반경 설정 구독
+  // 2026-05-28 #5 fix: stale closure 버그 — subscribe 콜백이 mount 시점 radiusManual=false만 보고
+  //   사용자가 manual로 반경 변경해도 cfg 갱신 시 덮어씀. ref로 최신 값 참조.
+  const radiusManualRef = useRef(radiusManual);
+  useEffect(() => {
+    radiusManualRef.current = radiusManual;
+  }, [radiusManual]);
   useEffect(() => {
     return subscribeFeedConfig((cfg) => {
       setFeedCfg(cfg);
-      // 사용자가 직접 확장한 적 없으면 본사 기본값으로 동기화
-      if (!radiusManual) setRadiusKm(cfg.nearbyRadiusDefaultKm);
+      if (!radiusManualRef.current) setRadiusKm(cfg.nearbyRadiusDefaultKm);
     }, () => {});
-    // radiusManual은 ref-like, dep 의도 회피
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
