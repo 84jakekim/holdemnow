@@ -481,12 +481,11 @@ service cloud.firestore {
       allow create, update, delete: if isSignedIn();
     }
 
-    // ===== 커뮤니티 (구인/구직/중고거래) =====
+    // ===== 커뮤니티 (구인/구직) =====
     // 통합 community 컬렉션 — type 분기. v0.1은 jobOffer만 활성.
     // - read: 누구나 (status='hidden'은 클라이언트 필터)
     // - jobOffer create: 매장 owner만(authorUid=본인 + storeId 매장 owner 검증)
     // - dealerProfile (v0.2): 본인 uid 프로필만
-    // - usedListing (v0.2): 매장 owner만
     // - update/delete: 작성자 본인 또는 platform_admin (모더레이션)
     match /community/{itemId} {
       allow read: if true;
@@ -496,15 +495,6 @@ service cloud.firestore {
           (request.resource.data.type == 'jobOffer'
             && isStoreOwner(request.resource.data.storeId))
           || (request.resource.data.type == 'dealerProfile')
-          // usedListing: 매장 owner(authorType='store') 또는 일반 사용자(authorType='user').
-          // 사용자 등록은 1일 3건 제한(클라 + writeRateLimits namespace='community')
-          // + 신고 누적 3건 시 autoHideOnReports가 자동 hidden 처리.
-          || (request.resource.data.type == 'usedListing'
-            && (
-              (request.resource.data.get('authorType', '') == 'store'
-                && isStoreOwner(request.resource.data.get('storeId', '')))
-              || request.resource.data.get('authorType', '') == 'user'
-            ))
         );
       // update — 작성자 본인만 본문 변경 가능. authorUid·type 변경 차단으로
       // 권한 escalation 방어(다른 사람 uid로 바꿔치기 금지). platform_admin은

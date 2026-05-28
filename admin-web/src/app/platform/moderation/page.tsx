@@ -8,7 +8,6 @@
  *   1) 매장 소식 (collectionGroup posts) — 오늘의 소식 24h 만료성
  *   2) 구인 (community where type=jobOffer)
  *   3) 딜러 프로필 (community where type=dealerProfile)
- *   4) 중고거래 (community where type=usedListing)
  *
  * 액션: 숨김/복구 (status 토글) + 삭제. 모두 platform_admin 권한으로 처리.
  *
@@ -34,7 +33,7 @@ import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { logAdminAction } from '@/lib/auditLog';
 
-type Tab = 'posts' | 'jobs' | 'dealers' | 'used' | 'reviews';
+type Tab = 'posts' | 'jobs' | 'dealers' | 'reviews';
 type SortBy = 'createdAt' | 'flagCount';
 
 interface PostRow {
@@ -52,7 +51,7 @@ interface PostRow {
 
 interface CommunityRow {
   id: string;
-  type: 'jobOffer' | 'dealerProfile' | 'usedListing' | string;
+  type: 'jobOffer' | 'dealerProfile' | string;
   title?: string;
   body?: string;
   displayName?: string;
@@ -82,7 +81,6 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'posts', label: '매장 소식', icon: '📢' },
   { id: 'jobs', label: '구인', icon: '💼' },
   { id: 'dealers', label: '딜러 프로필', icon: '🃏' },
-  { id: 'used', label: '중고거래', icon: '🛒' },
   { id: 'reviews', label: '리뷰', icon: '⭐' },
 ];
 
@@ -126,7 +124,6 @@ export default function ModerationPage() {
       {tab === 'posts' && <PostsTab />}
       {tab === 'jobs' && <CommunityTab type="jobOffer" />}
       {tab === 'dealers' && <CommunityTab type="dealerProfile" />}
-      {tab === 'used' && <CommunityTab type="usedListing" />}
       {tab === 'reviews' && <ReviewsTab />}
     </div>
   );
@@ -276,10 +273,10 @@ function PostsTab() {
 }
 
 /* ─────────────────────────────────────────────────────────────
- * community 탭 (jobOffer / dealerProfile / usedListing 공통)
+ * community 탭 (jobOffer / dealerProfile 공통)
  * ─────────────────────────────────────────────────────────────*/
 
-function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedListing' }) {
+function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' }) {
   const [items, setItems] = useState<CommunityRow[]>([]);
   const [filter, setFilter] = useState<'all' | 'active' | 'hidden' | 'closed'>('all');
   const [sortBy, setSortBy] = useState<SortBy>('createdAt');
@@ -359,7 +356,7 @@ function CommunityTab({ type }: { type: 'jobOffer' | 'dealerProfile' | 'usedList
     }
   };
 
-  const typeLabel = type === 'jobOffer' ? '구인' : type === 'dealerProfile' ? '딜러 프로필' : '중고거래';
+  const typeLabel = type === 'jobOffer' ? '구인' : '딜러 프로필';
 
   return (
     <div>

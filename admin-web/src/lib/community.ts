@@ -1,10 +1,10 @@
 /**
- * community.ts — 커뮤니티 (구인/구직/중고거래) 데이터 + CRUD
+ * community.ts — 커뮤니티 (구인/구직) 데이터 + CRUD
  *
  * 정책 (memory: project_holdemnow_community):
  * - 통합 `community/{itemId}` + type 분기 + authorType (SNS 호환)
- * - v0.1: jobOffer만 활성. 구직·중고는 v0.2~
- * - 만료: jobOffer/usedListing 30일, dealerProfile 무기한
+ * - v0.1: jobOffer만 활성. 구직은 v0.2~
+ * - 만료: jobOffer 30일, dealerProfile 무기한
  * - 모더레이션: flagCount ≥ 3 자동 hidden
  */
 'use client';
@@ -36,7 +36,7 @@ import {
 import { db, storage } from './firebase';
 import { stripUndefined } from './firestoreUtil';
 
-export type CommunityItemType = 'jobOffer' | 'dealerProfile' | 'usedListing';
+export type CommunityItemType = 'jobOffer' | 'dealerProfile';
 
 export type JobRole = 'dealer' | 'floor' | 'manager' | 'parttime';
 
@@ -175,49 +175,6 @@ export const AVAILABLE_SHIFT_LABELS: Record<AvailableShift, string> = {
   w5to6: '주 5~6회',
   negotiable: '협의 가능',
 };
-
-// ── usedListing ───────────────────────────────────────────────
-export type UsedCategory = 'chip' | 'card' | 'timer' | 'table' | 'tray' | 'etc';
-export type UsedCondition = 'new' | 'likenew' | 'used' | 'parts';
-export type DealStatus = 'selling' | 'reserved' | 'sold';
-
-/** usedListing — 매장 owner 전용 (authorType: 'store') */
-export interface UsedListing extends CommunityItem {
-  type: 'usedListing';
-  category: UsedCategory;
-  price: number;
-  priceNegotiable: boolean;
-  condition: UsedCondition;
-  dealStatus: DealStatus;
-  // images (1~4장), region, contact, expiresAt (30일) — CommunityItem 공통
-}
-
-export const USED_CATEGORY_LABELS: Record<UsedCategory, string> = {
-  chip: '칩',
-  card: '카드',
-  timer: '타이머',
-  table: '테이블',
-  tray: '딜러트레이',
-  etc: '기타',
-};
-
-export const USED_CONDITION_LABELS: Record<UsedCondition, string> = {
-  new: '새상품',
-  likenew: '거의새것',
-  used: '사용감있음',
-  parts: '부품용',
-};
-
-export const DEAL_STATUS_LABELS: Record<DealStatus, string> = {
-  selling: '판매중',
-  reserved: '예약중',
-  sold: '판매완료',
-};
-
-export function formatUsedPrice(price: number, negotiable: boolean): string {
-  if (negotiable) return `${price.toLocaleString('ko-KR')}원 (협의가능)`;
-  return `${price.toLocaleString('ko-KR')}원`;
-}
 
 export const JOB_ROLE_LABELS: Record<JobRole, string> = {
   dealer: '딜러',
@@ -503,8 +460,6 @@ export async function loadActiveJobsOnce(maxItems = 50): Promise<JobOffer[]> {
 // dealerProfile CRUD (v0.2 — 부모 에이전트가 Firestore 연결)
 // ─────────────────────────────────────────────────────────────
 
-const USED_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 중고 30일
-
 /**
  * 활성 딜러 프로필 실시간 구독 — 모바일 리스트용.
  * PLACEHOLDER: 빈 배열 반환. 부모 에이전트가 실 Firestore 연동으로 교체.
@@ -734,223 +689,6 @@ export async function uploadDealerImage(uid: string, file: File): Promise<string
   return uploadCommunityImage(`dealer_${uid}`, file);
 }
 
-// ─────────────────────────────────────────────────────────────
-// usedListing CRUD (v0.2 — 매장 owner 전용)
-// ─────────────────────────────────────────────────────────────
-
-/** 활성 중고 리스트 실시간 구독 — 모바일용 */
-export function subscribeActiveUsedListings(
-  _filter: { category?: UsedCategory; region?: string },
-  onChange: (items: UsedListing[]) => void,
-  onError: (e: Error) => void,
-): () => void {
-  try {
-    const now = Timestamp.now();
-    const q = query(
-      collection(db, COMMUNITY),
-      where('type', '==', 'usedListing'),
-      where('status', '==', 'active'),
-      where('expiresAt', '>', now),
-      orderBy('expiresAt', 'desc'),
-      orderBy('createdAt', 'desc'),
-      limit(50),
-    );
-    return onSnapshot(
-      q,
-      (snap) => onChange(snap.docs.map((d) => fromDoc(d.id, d.data()) as UsedListing)),
-      (e) => onError(e as Error),
-    );
-  } catch {
-    onChange([]);
-    return () => {};
-  }
-}
-
-/** 특정 매장의 활성 중고 리스트 — 매장 상세 '이 매장 판매 중' 섹션용 */
-export function subscribeStoreUsedListings(
-  storeId: string,
-  onChange: (items: UsedListing[]) => void,
-  onError: (e: Error) => void,
-): () => void {
-  try {
-    const now = Timestamp.now();
-    const q = query(
-      collection(db, COMMUNITY),
-      where('type', '==', 'usedListing'),
-      where('storeId', '==', storeId),
-      where('status', '==', 'active'),
-      where('expiresAt', '>', now),
-      orderBy('expiresAt', 'desc'),
-      limit(5),
-    );
-    return onSnapshot(
-      q,
-      (snap) => onChange(snap.docs.map((d) => fromDoc(d.id, d.data()) as UsedListing)),
-      (e) => onError(e as Error),
-    );
-  } catch {
-    onChange([]);
-    return () => {};
-  }
-}
-
-/** 매장 어드민 — 모든 중고 글 (만료/마감 포함) */
-export function subscribeStoreAllUsedListings(
-  storeId: string,
-  onChange: (items: UsedListing[]) => void,
-  onError: (e: Error) => void,
-): () => void {
-  try {
-    const q = query(
-      collection(db, COMMUNITY),
-      where('type', '==', 'usedListing'),
-      where('storeId', '==', storeId),
-      orderBy('createdAt', 'desc'),
-    );
-    return onSnapshot(
-      q,
-      (snap) => onChange(snap.docs.map((d) => fromDoc(d.id, d.data()) as UsedListing)),
-      (e) => onError(e as Error),
-    );
-  } catch {
-    onChange([]);
-    return () => {};
-  }
-}
-
-/** 단일 중고 글 실시간 구독 */
-export function subscribeUsedListing(
-  itemId: string,
-  onChange: (item: UsedListing | null) => void,
-  onError: (e: Error) => void,
-): () => void {
-  return onSnapshot(
-    doc(db, COMMUNITY, itemId),
-    (snap) => {
-      if (!snap.exists()) { onChange(null); return; }
-      onChange(fromDoc(snap.id, snap.data()) as UsedListing);
-    },
-    (e) => onError(e as Error),
-  );
-}
-
-export interface CreateUsedListingInput {
-  storeId: string;
-  storeName: string;
-  storePhotoUrl?: string;
-  authorUid: string;
-  title: string;
-  body: string;
-  category: UsedCategory;
-  price: number;
-  priceNegotiable: boolean;
-  condition: UsedCondition;
-  region?: string;
-  contact: { phone?: string; kakaoOpenChat?: string };
-  images: string[];   // 1~4장 필수
-}
-
-export async function createUsedListing(input: CreateUsedListingInput): Promise<string> {
-  const expiresAt = new Date(Date.now() + USED_TTL_MS);
-  const ref = await addDoc(collection(db, COMMUNITY), stripUndefined({
-    type: 'usedListing',
-    title: input.title,
-    body: input.body,
-    category: input.category,
-    price: input.price,
-    priceNegotiable: input.priceNegotiable,
-    condition: input.condition,
-    dealStatus: 'selling' as DealStatus,
-    images: input.images,
-    region: input.region ?? '',
-    contact: { phone: input.contact.phone ?? '', kakaoOpenChat: input.contact.kakaoOpenChat ?? '' },
-    status: 'active' as CommunityItemStatus,
-    flagCount: 0,
-    authorType: 'store',
-    authorUid: input.authorUid,
-    storeId: input.storeId,
-    storeName: input.storeName,
-    storePhotoUrl: input.storePhotoUrl ?? '',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    expiresAt: Timestamp.fromDate(expiresAt),
-  }));
-  return ref.id;
-}
-
-/**
- * 사용자(authorType='user') 중고 등록 — 매장 owner가 아닌 일반 사용자도 등록 가능 (2026-05-26 정책 완화).
- * 정책 (memory: project_holdemnow_community v0.2):
- *   - 1일 등록 한도 3건 (countUserUsedListingsToday로 클라 차단 + writeRateLimits 보강)
- *   - 신고 누적 3건 시 autoHideOnReports Cloud Function이 자동 status='hidden' 처리
- *   - 이미지 1~4장 필수, 만료 30일은 매장과 동일
- *   - storeId/storeName 없음 (authorType='user' 식별)
- */
-export interface CreateUserUsedListingInput {
-  authorUid: string;
-  authorDisplayName: string;
-  title: string;
-  body: string;
-  category: UsedCategory;
-  price: number;
-  priceNegotiable: boolean;
-  condition: UsedCondition;
-  region?: string;
-  contact: { phone?: string; kakaoOpenChat?: string };
-  images: string[];   // 1~4장 필수
-}
-
-export const USER_USED_DAILY_LIMIT = 3;
-
-/** 사용자 본인의 오늘(24h 안) 등록 건수 — 등록 한도 검증용 */
-export async function countUserUsedListingsToday(uid: string): Promise<number> {
-  try {
-    const since = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
-    const q = query(
-      collection(db, COMMUNITY),
-      where('type', '==', 'usedListing'),
-      where('authorUid', '==', uid),
-      where('createdAt', '>=', since),
-    );
-    const snap = await getCountFromServer(q);
-    return snap.data().count;
-  } catch {
-    return 0;
-  }
-}
-
-export async function createUserUsedListing(input: CreateUserUsedListingInput): Promise<string> {
-  // 1일 한도 검증
-  const todayCount = await countUserUsedListingsToday(input.authorUid);
-  if (todayCount >= USER_USED_DAILY_LIMIT) {
-    throw new Error(`하루 ${USER_USED_DAILY_LIMIT}건까지만 등록할 수 있습니다`);
-  }
-
-  const expiresAt = new Date(Date.now() + USED_TTL_MS);
-  const ref = await addDoc(collection(db, COMMUNITY), stripUndefined({
-    type: 'usedListing',
-    title: input.title,
-    body: input.body,
-    category: input.category,
-    price: input.price,
-    priceNegotiable: input.priceNegotiable,
-    condition: input.condition,
-    dealStatus: 'selling' as DealStatus,
-    images: input.images,
-    region: input.region ?? '',
-    contact: { phone: input.contact.phone ?? '', kakaoOpenChat: input.contact.kakaoOpenChat ?? '' },
-    status: 'active' as CommunityItemStatus,
-    flagCount: 0,
-    authorType: 'user',
-    authorUid: input.authorUid,
-    authorDisplayName: input.authorDisplayName,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    expiresAt: Timestamp.fromDate(expiresAt),
-  }));
-  return ref.id;
-}
-
 /**
  * 커뮤니티 아이템 신고 — reports/{itemId_reporterUid} 멱등.
  * Cloud Function autoHideOnReports가 동일 targetId 신고 3건 누적 시 자동 status='hidden'.
@@ -988,45 +726,6 @@ export async function hasReportedCommunityItem(itemId: string, uid: string): Pro
   } catch {
     return false;
   }
-}
-
-export type UpdateUsedListingInput = Partial<{
-  title: string;
-  body: string;
-  category: UsedCategory;
-  price: number;
-  priceNegotiable: boolean;
-  condition: UsedCondition;
-  dealStatus: DealStatus;
-  region: string;
-  contact: { phone?: string; kakaoOpenChat?: string };
-  images: string[];
-  status: CommunityItemStatus;
-}>;
-
-export async function updateUsedListing(itemId: string, updates: UpdateUsedListingInput): Promise<void> {
-  const patch: Record<string, unknown> = { ...updates, updatedAt: serverTimestamp() };
-  await updateDoc(doc(db, COMMUNITY, itemId), stripUndefined(patch));
-}
-
-export async function deleteUsedListing(itemId: string): Promise<void> {
-  try {
-    const snap = await getDoc(doc(db, COMMUNITY, itemId));
-    if (snap.exists()) {
-      const data = snap.data() as CommunityItem;
-      await Promise.all(
-        (data.images ?? []).map((url) => deleteCommunityImageByUrl(url).catch(() => {})),
-      );
-    }
-  } catch {
-    // ignore
-  }
-  await deleteDoc(doc(db, COMMUNITY, itemId));
-}
-
-/** 중고 이미지 업로드 (1~4장) */
-export async function uploadUsedImage(storeId: string, file: File): Promise<string> {
-  return uploadCommunityImage(`used_${storeId}`, file);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1119,47 +818,3 @@ export const PLACEHOLDER_DEALERS: DealerProfile[] = [
   },
 ];
 
-export const PLACEHOLDER_USED: UsedListing[] = [
-  {
-    id: 'used-demo-1',
-    type: 'usedListing',
-    title: '포커 칩 세트 1000개 판매',
-    body: '사용감 거의 없음. 박스 포함 판매합니다.\n부산 서면 직거래 가능.\n카톡 문의 주세요.',
-    category: 'chip',
-    price: 150000,
-    priceNegotiable: true,
-    condition: 'likenew',
-    dealStatus: 'selling',
-    images: [],
-    region: '부산 부산진구',
-    contact: { kakaoOpenChat: 'https://open.kakao.com/example' },
-    status: 'active',
-    createdAt: new Date(Date.now() - 86_400_000).toISOString(),
-    expiresAt: new Date(Date.now() + 29 * 86_400_000).toISOString(),
-    authorType: 'store',
-    authorUid: 'store-owner-uid-2',
-    storeId: 'store-demo-2',
-    storeName: '로얄홀덤 서면',
-  },
-  {
-    id: 'used-demo-2',
-    type: 'usedListing',
-    title: '딜러 트레이 2개 일괄 판매',
-    body: '6개월 사용. 깨끗하게 사용했습니다.\n해운대 직거래만 가능.',
-    category: 'tray',
-    price: 80000,
-    priceNegotiable: false,
-    condition: 'used',
-    dealStatus: 'selling',
-    images: [],
-    region: '부산 해운대구',
-    contact: { phone: '051-123-4567' },
-    status: 'active',
-    createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-    expiresAt: new Date(Date.now() + 27 * 86_400_000).toISOString(),
-    authorType: 'store',
-    authorUid: 'store-owner-uid-1',
-    storeId: 'store-demo-1',
-    storeName: '에이스클럽 해운대',
-  },
-];

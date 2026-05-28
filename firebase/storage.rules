@@ -59,7 +59,7 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && maxSize(5);
     }
 
-    // 커뮤니티 (구인/구직/중고) 이미지 — 인증 사용자만 업로드, 권한은 Firestore rules에서.
+    // 커뮤니티 (구인/구직) 이미지 — 인증 사용자만 업로드, 권한은 Firestore rules에서.
     match /community/{itemIdOrTemp}/{file=**} {
       allow read: if true;
       allow write: if isSignedIn() && isImage() && maxSize(5);

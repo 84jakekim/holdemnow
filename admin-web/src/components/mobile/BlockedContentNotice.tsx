@@ -6,7 +6,7 @@
  *
  * 사용 컨텍스트:
  *  - 매장 소식(stores/{sid}/posts/{pid}.status='hidden')
- *  - 구인/딜러/중고(community/{id}.status='hidden')
+ *  - 구인/딜러(community/{id}.status='hidden')
  *  - 본사 공지(pinnedPosts/{id}.active=false)
  *  - 홈 광고(homeAds/{id}.isActive=false)
  *

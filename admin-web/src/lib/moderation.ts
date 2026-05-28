@@ -17,7 +17,7 @@
  *
  * 호출 시점:
  *   - 리뷰 createReview/updateReview 전 moderateText() — 통과해야 진행
- *   - 커뮤니티 createJob/createDealerProfile/createUsedListing 전 moderateText()
+ *   - 커뮤니티 createJob/createDealerProfile 전 moderateText()
  *   - 매장 데일리 글 createStorePost 전 moderateText()
  *   - 작성 직전 checkWriteRateLimit() — uid+namespace 빈도 제한
  *

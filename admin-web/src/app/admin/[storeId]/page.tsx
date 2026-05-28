@@ -15,7 +15,6 @@ import AdsPanel from '@/components/admin/AdsPanel';
 import StatsPanel from '@/components/admin/StatsPanel';
 import PostsPanel from '@/components/admin/PostsPanel';
 import JobsPanel from '@/components/admin/JobsPanel';
-import UsedItemsPanel from '@/components/admin/UsedItemsPanel';
 import DealerPoolPanel from '@/components/admin/DealerPoolPanel';
 import ReservationsPanel from '@/components/admin/ReservationsPanel';
 import ReviewsAdminPanel from '@/components/admin/ReviewsAdminPanel';
@@ -38,7 +37,6 @@ const MENUS = [
   { id: 'posts', icon: '📢', label: '오늘의 소식' },
   { id: 'jobs', icon: '💼', label: '구인' },
   { id: 'dealers', icon: '🃏', label: '딜러 풀' },
-  { id: 'used', icon: '🛒', label: '중고거래' },
   { id: 'tournaments', icon: '📅', label: '예정 토너' },
   { id: 'reservations', icon: '📅', label: '예약 관리' },
   { id: 'reviews', icon: '⭐', label: '리뷰 답글' },
@@ -51,7 +49,7 @@ const MENUS = [
 // tournament는 LIVE+템플릿+디스플레이 통합 메뉴이므로 함께 차단
 // 'posts'(오늘의 소식)는 패널 내부에서 status별 안내 + 작성 버튼 disable로 처리
 // → 메뉴 자체는 열어둬서 사장이 미리 UI를 둘러보고 승인 후 즉시 사용 가능하게.
-const PENDING_DISABLED_MENUS = new Set(['tournament', 'jobs', 'dealers', 'used', 'tournaments', 'ads']);
+const PENDING_DISABLED_MENUS = new Set(['tournament', 'jobs', 'dealers', 'tournaments', 'ads']);
 
 function AdminPageInner({ storeId }: { storeId: string }) {
   const router = useRouter();
@@ -453,14 +451,13 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           {activeMenu === 'posts' && <PostsPanel storeId={storeId} storeName={store.name} isPlatformAdmin={isPlatformAdmin} />}
           {activeMenu === 'jobs' && <JobsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'dealers' && <DealerPoolPanel storeId={storeId} storeName={store.name} />}
-          {activeMenu === 'used' && <UsedItemsPanel storeId={storeId} storeName={store.name} storePhotoUrl={store.photoUrls?.[0]} />}
           {activeMenu === 'tournaments' && <TournamentsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'reservations' && <ReservationsPanel storeId={storeId} />}
           {activeMenu === 'reviews' && <ReviewsAdminPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'store' && <StoreInfoPanel storeId={storeId} />}
           {activeMenu === 'ads' && <AdsPanel storeId={storeId} storeName={store.name} />}
           {activeMenu === 'stats' && <StatsPanel storeId={storeId} />}
-          {!['dashboard', 'tournament', 'posts', 'jobs', 'dealers', 'used', 'tournaments', 'reservations', 'reviews', 'store', 'ads', 'stats'].includes(activeMenu) && (
+          {!['dashboard', 'tournament', 'posts', 'jobs', 'dealers', 'tournaments', 'reservations', 'reviews', 'store', 'ads', 'stats'].includes(activeMenu) && (
             <ComingSoon menu={MENUS.find((m) => m.id === activeMenu)!} />
           )}
         </div>

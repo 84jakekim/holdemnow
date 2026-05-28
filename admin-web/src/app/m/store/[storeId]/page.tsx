@@ -35,12 +35,6 @@ import { geocodeAddress } from '@/lib/kakao';
 import TournamentInterestStar from '@/components/mobile/TournamentInterestStar';
 import { subscribeStoreActivePost, type StorePost } from '@/lib/posts';
 import {
-  type UsedListing,
-  USED_CATEGORY_LABELS,
-  formatUsedPrice,
-  subscribeStoreUsedListings,
-} from '@/lib/community';
-import {
   subscribeStoreReviews,
   deleteReview,
   formatRating,
@@ -87,7 +81,6 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   const [loading, setLoading] = useState(true);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [activePost, setActivePost] = useState<StorePost | null>(null);
-  const [usedListings, setUsedListings] = useState<UsedListing[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewWriteOpen, setReviewWriteOpen] = useState(false);
@@ -109,12 +102,6 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
   // 매장 데일리 홍보 — 활성(미만료, published) 최신 1건
   useEffect(() => {
     const unsub = subscribeStoreActivePost(storeId, setActivePost, () => {});
-    return unsub;
-  }, [storeId]);
-
-  // 이 매장 중고 판매 중 (최대 5개)
-  useEffect(() => {
-    const unsub = subscribeStoreUsedListings(storeId, setUsedListings, () => {});
     return unsub;
   }, [storeId]);
 
@@ -754,72 +741,6 @@ export default function MobileStorePage({ params }: { params: Promise<{ storeId:
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          이 매장 판매 중 — 중고거래 가로 스크롤 (최대 5개)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {usedListings.length > 0 && (
-        <div className="py-5" style={{ borderBottom: '8px solid var(--bg-sub)' }}>
-          <div className="flex items-center justify-between px-5 mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-[14px] font-extrabold" style={{ color: 'var(--text-1)' }}>이 매장 판매 중</span>
-              <span
-                className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                style={{ background: 'rgba(255,31,143,0.10)', color: '#FF1F8F' }}
-              >
-                {usedListings.length}
-              </span>
-            </div>
-            <Link
-              href="/m/community/used"
-              className="text-[12px] font-bold"
-              style={{ color: 'var(--text-3)' }}
-            >
-              전체 보기
-            </Link>
-          </div>
-          <div className="flex gap-3 overflow-x-auto scrollbar-none px-5">
-            {usedListings.map((item) => (
-              <Link
-                key={item.id}
-                href={`/m/community/used/${item.id}`}
-                className="flex-shrink-0 w-36 rounded-2xl overflow-hidden transition active:scale-[0.98]"
-                style={{
-                  background: 'var(--surface-1)',
-                  border: '1px solid var(--border)',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                }}
-              >
-                {/* 이미지 */}
-                <div
-                  className="w-full aspect-square flex items-center justify-center text-3xl"
-                  style={{ background: 'var(--surface-2)' }}
-                >
-                  {item.images?.[0] ? (
-                    <Image src={item.images[0]} alt={item.title} fill className="object-cover" sizes="160px" />
-                  ) : (
-                    <span aria-hidden="true">
-                      {item.category === 'chip' ? '🪙' : item.category === 'card' ? '🃏' : item.category === 'timer' ? '⏱' : '📦'}
-                    </span>
-                  )}
-                </div>
-                {/* 정보 */}
-                <div className="p-2">
-                  <div className="text-[9px] font-bold mb-0.5" style={{ color: 'var(--text-3)' }}>
-                    {USED_CATEGORY_LABELS[item.category]}
-                  </div>
-                  <p className="text-[12px] font-bold leading-tight line-clamp-2" style={{ color: 'var(--text-1)' }}>
-                    {item.title}
-                  </p>
-                  <p className="text-[12px] font-extrabold mt-1" style={{ color: '#FF1F8F' }}>
-                    {formatUsedPrice(item.price, item.priceNegotiable)}
-                  </p>
-                </div>
-              </Link>
-            ))}
           </div>
         </div>
       )}
