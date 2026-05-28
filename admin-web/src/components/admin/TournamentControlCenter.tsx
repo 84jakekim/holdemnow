@@ -86,6 +86,9 @@ import {
   updateTimerDisplayPreset,
   deleteTimerDisplayPreset,
   resolvePrizePoolMode,
+  uploadTimerBackground,
+  deleteTimerBackgroundByUrl,
+  SAMPLE_TIMER_BACKGROUNDS,
   type TimerDisplayPreset,
 } from '@/lib/timerDisplay';
 import TemplatesPanel from './TemplatesPanel';
@@ -1379,12 +1382,10 @@ function DisplaySettingsPane({
           </div>
         )}
         {local.backgroundType === 'image' && (
-          <input
-            value={local.backgroundImageUrl}
-            onChange={(e) => update('backgroundImageUrl', e.target.value)}
-            placeholder="https://..."
-            className="w-full text-[11px] rounded px-2 py-1.5"
-            style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
+          <BgImageUploader
+            storeId={storeId}
+            currentUrl={local.backgroundImageUrl}
+            onUrl={(url) => update('backgroundImageUrl', url)}
           />
         )}
       </Section>
@@ -2715,6 +2716,175 @@ function ScaleSlider({ label, value, onChange }: { label: string; value: number;
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full"
       />
+    </div>
+  );
+}
+
+// ─── 배경 이미지 업로더 (2026-05-28 신규) ───────────────────────────────────
+// 파일 업로드 + URL 직접 입력 토글 + 미리보기 + 삭제 + 샘플 선택.
+// Firebase Storage: stores/{storeId}/timerBackgrounds/{timestamp}_{rand}.{ext}
+function BgImageUploader({
+  storeId,
+  currentUrl,
+  onUrl,
+}: {
+  storeId: string;
+  currentUrl: string;
+  onUrl: (url: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setUploadErr(null);
+    setUploading(true);
+    try {
+      const url = await uploadTimerBackground(storeId, file);
+      onUrl(url);
+    } catch (e) {
+      setUploadErr(e instanceof Error ? e.message : '업로드 실패');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    void handleFile(file);
+    // 동일 파일 재선택을 위해 input 초기화
+    e.target.value = '';
+  }
+
+  function handleRemove() {
+    if (currentUrl) {
+      // 삭제는 best-effort (실패해도 URL만 지움)
+      void deleteTimerBackgroundByUrl(currentUrl);
+    }
+    onUrl('');
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* 현재 이미지 미리보기 */}
+      {currentUrl && (
+        <div className="relative rounded overflow-hidden" style={{ aspectRatio: '16/9', background: '#111' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={currentUrl}
+            alt="배경 미리보기"
+            className="w-full h-full object-cover"
+          />
+          <button
+            onClick={handleRemove}
+            aria-label="배경 이미지 삭제"
+            className="absolute top-1 right-1 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold"
+            style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* 파일 업로드 버튼 */}
+      <div className="flex gap-1.5">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex-1 py-2 rounded text-[11px] font-bold flex items-center justify-center gap-1"
+          style={{
+            background: uploading ? 'var(--surface-3)' : 'var(--surface-2)',
+            color: uploading ? 'var(--text-3)' : 'var(--text-1)',
+            border: '1.5px dashed var(--border)',
+          }}
+        >
+          {uploading ? (
+            <>
+              <span
+                className="inline-block w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: 'var(--text-3)', borderTopColor: 'transparent' }}
+              />
+              업로드 중...
+            </>
+          ) : (
+            <>+ 이미지 파일 선택</>
+          )}
+        </button>
+        <button
+          onClick={() => setShowUrlInput((v) => !v)}
+          className="px-2.5 py-2 rounded text-[10px] font-bold"
+          style={{
+            background: showUrlInput ? '#1A1A2E' : 'var(--surface-2)',
+            color: showUrlInput ? '#7C8CF8' : 'var(--text-2)',
+            border: `1.5px solid ${showUrlInput ? '#7C8CF8' : 'var(--border)'}`,
+          }}
+        >
+          URL
+        </button>
+      </div>
+
+      {/* 숨김 파일 input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* URL 직접 입력 (토글) */}
+      {showUrlInput && (
+        <input
+          value={currentUrl}
+          onChange={(e) => onUrl(e.target.value)}
+          placeholder="https://..."
+          className="w-full text-[11px] rounded px-2 py-1.5"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
+        />
+      )}
+
+      {/* 에러 */}
+      {uploadErr && (
+        <div className="text-[10px] font-bold px-2 py-1 rounded" style={{ background: '#2D0A0A', color: '#F87171' }}>
+          {uploadErr}
+        </div>
+      )}
+
+      {/* 샘플 배경 */}
+      <div>
+        <div className="text-[9px] font-bold mb-1" style={{ color: 'var(--text-3)' }}>샘플 배경</div>
+        <div className="flex gap-1.5">
+          {SAMPLE_TIMER_BACKGROUNDS.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onUrl(s.url)}
+              title={s.label}
+              className="flex-1 rounded overflow-hidden text-[9px] font-bold py-1 flex flex-col items-center gap-0.5"
+              style={{
+                background: currentUrl === s.url ? '#1A1A2E' : 'var(--surface-2)',
+                color: currentUrl === s.url ? '#7C8CF8' : 'var(--text-2)',
+                border: `1.5px solid ${currentUrl === s.url ? '#7C8CF8' : 'var(--border)'}`,
+              }}
+            >
+              <span className="text-base leading-none">{s.emoji}</span>
+              <span className="truncate w-full text-center px-0.5">{s.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 최적화 힌트 */}
+      <div
+        className="text-[9px] leading-relaxed px-1.5 py-1 rounded space-y-0.5"
+        style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}
+      >
+        <div>권장 사이즈: 1920×1080 (Full HD, 16:9)</div>
+        <div>파일 형식: JPG, PNG, WebP</div>
+        <div>최대 용량: 5MB</div>
+      </div>
     </div>
   );
 }
