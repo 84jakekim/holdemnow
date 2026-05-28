@@ -53,6 +53,11 @@ export type BackgroundType = 'solid' | 'gradient' | 'image';
  */
 export type PrizePoolMode = 'hidden' | 'total' | 'distribution';
 
+/** TV 경기 제목 정렬/숨김 옵션 — 2026-05-28 신설.
+ *  'hidden': 제목 자체 mount 안 함 (titleText/heroTitle 모두 숨김).
+ *  'left'/'center'/'right': 컨테이너 justify + 텍스트 align 분기. */
+export type TitleAlign = 'left' | 'center' | 'right' | 'hidden';
+
 export interface TimerDisplaySettings {
   /** 배경 유형 */
   backgroundType: BackgroundType;
@@ -179,6 +184,11 @@ export interface TimerDisplaySettings {
    *  hidden / total / distribution.
    *  누락(레거시) → resolvePrizePoolMode가 showPrizePool 기반 추론 ('total' or 'hidden'). */
   prizePoolMode: PrizePoolMode;
+
+  /** 경기 제목 정렬/숨김 — 2026-05-28 신설.
+   *  TV 정중앙 상단 헤드라인(heroTitle)의 정렬 또는 완전 숨김.
+   *  누락(레거시) → 'center' 폴백 (기존 동작 유지). */
+  titleAlign: TitleAlign;
 }
 
 /**
@@ -282,6 +292,9 @@ export const DEFAULT_TIMER_DISPLAY: TimerDisplaySettings = {
 
   // PRIZE POOL 표시 모드 — 2026-05-23 신설. 디폴트 'total' (사용자 예시 케이스).
   prizePoolMode: 'total',
+
+  // 경기 제목 정렬/숨김 — 2026-05-28 신설. 디폴트 'center' (기존 동작 유지).
+  titleAlign: 'center',
 };
 
 /** ─── 다중 프리셋 저장 (Phase 2) ─────────────────────────────────
@@ -402,6 +415,12 @@ export function resolveTimerDisplay(
     (rawClean as Record<string, unknown>).prizePoolMode as PrizePoolMode | undefined,
     (rawClean as Record<string, unknown>).showPrizePool as boolean | undefined,
   );
+  // titleAlign 정규화 — 레거시 데이터 폴백 'center' (기존 동작 유지).
+  const rawAlign = (rawClean as Record<string, unknown>).titleAlign as TitleAlign | undefined;
+  merged.titleAlign =
+    rawAlign === 'left' || rawAlign === 'center' || rawAlign === 'right' || rawAlign === 'hidden'
+      ? rawAlign
+      : 'center';
   return merged;
 }
 

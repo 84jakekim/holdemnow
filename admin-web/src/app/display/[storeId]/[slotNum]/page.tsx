@@ -23,6 +23,7 @@ import {
 import {
   type TimerDisplaySettings,
   type PrizePoolMode,
+  type TitleAlign,
   DEFAULT_TIMER_DISPLAY,
   subscribeTimerDisplay,
   buildBackgroundCss,
@@ -571,6 +572,9 @@ export default function DisplayPage({
   // 셋째 줄 (마퀴) — 2026-05-24 PM 정정으로 UI 표시 완전 제거.
   // 데이터 모델(display.marqueeText 등)은 backward compat 유지하되 모든 layout에서 mount X.
 
+  // 경기 제목 정렬/숨김 — 2026-05-28 신설. 레거시 폴백 'center'.
+  const titleAlign: TitleAlign = (display.titleAlign ?? 'center') as TitleAlign;
+
   // CSS rotate fallback 폐기 (2026-05-23 핫픽스).
   // 외곽 wrapper transform 제거 — 누워서 보이던 버그(error.jpg) 해결.
   // 가로 모드는 isMobileLandscape 분기로만 처리.
@@ -672,6 +676,7 @@ export default function DisplayPage({
           lateMin={lateMin}
           heroTitle={heroTitle}
           display={display}
+          titleAlign={titleAlign}
           onEnterFullscreen={enterFullscreenMode}
           displayedLevelLabel={displayedLevelLabel}
           nextDisplayedNumber={nextDisplayedNumber}
@@ -702,6 +707,7 @@ export default function DisplayPage({
           lateMin={lateMin}
           heroTitle={heroTitle}
           display={display}
+          titleAlign={titleAlign}
           canControl={canControl}
           authLoading={authLoading}
           authedUid={authedUid}
@@ -770,26 +776,29 @@ export default function DisplayPage({
             )}
           </div>
 
-          {/* 첫째 줄 — 게임 타이틀 (titleText 채워졌으면 사용자 폰트 옵션 적용) */}
-          <div
-            className="mb-3 max-w-[90%] truncate text-center"
-            style={{
-              color: titleColor,
-              fontSize: titleStyled
-                ? `clamp(${Math.max(16, display.titleFontSize * 0.6)}px, ${display.titleFontSize / 18}vw, ${display.titleFontSize * 1.4}px)`
-                : '12px',
-              fontWeight: titleFontWeight,
-              fontStyle: titleFontStyle,
-              letterSpacing: titleStyled ? '-0.01em' : '0.15em',
-              lineHeight: 1.15,
-            }}
-          >
-            {heroTitle}
-          </div>
-          {/* 둘째 줄 — 게임 참고사항 (noteText 있을 때만) */}
-          {noteText && (
+          {/* 첫째 줄 — 게임 타이틀. titleAlign==='hidden'이면 mount X.
+              titleAlign으로 정렬 분기. 2026-05-28 신설. */}
+          {titleAlign !== 'hidden' && (
             <div
-              className="mb-3 max-w-[85%] text-center truncate"
+              className={`mb-3 max-w-[90%] truncate ${titleAlign === 'left' ? 'text-left self-start' : titleAlign === 'right' ? 'text-right self-end' : 'text-center'}`}
+              style={{
+                color: titleColor,
+                fontSize: titleStyled
+                  ? `clamp(${Math.max(16, display.titleFontSize * 0.6)}px, ${display.titleFontSize / 18}vw, ${display.titleFontSize * 1.4}px)`
+                  : '12px',
+                fontWeight: titleFontWeight,
+                fontStyle: titleFontStyle,
+                letterSpacing: titleStyled ? '-0.01em' : '0.15em',
+                lineHeight: 1.15,
+              }}
+            >
+              {heroTitle}
+            </div>
+          )}
+          {/* 둘째 줄 — 게임 참고사항 (noteText 있을 때만). titleAlign 숨김이면 같이 숨김. */}
+          {titleAlign !== 'hidden' && noteText && (
+            <div
+              className={`mb-3 max-w-[85%] truncate ${titleAlign === 'left' ? 'text-left self-start' : titleAlign === 'right' ? 'text-right self-end' : 'text-center'}`}
               style={{
                 color: display.noteColor,
                 fontSize: `clamp(${Math.max(10, display.noteFontSize * 0.7)}px, ${display.noteFontSize / 22}vw, ${display.noteFontSize * 1.3}px)`,
@@ -1244,6 +1253,7 @@ function MobilePortraitLayout({
   lateMin,
   heroTitle,
   display,
+  titleAlign,
   onEnterFullscreen,
   displayedLevelLabel,
   nextDisplayedNumber,
@@ -1263,6 +1273,7 @@ function MobilePortraitLayout({
   lateMin: number;
   heroTitle: string;
   display: TimerDisplaySettings;
+  titleAlign: TitleAlign;
   onEnterFullscreen: () => void;
   /** 2026-05-24 정정 #1: 브레이크는 레벨 번호 X. play 레벨만 displayedNumber. */
   displayedLevelLabel: string;
@@ -1279,7 +1290,8 @@ function MobilePortraitLayout({
       }}
     >
       {/* 상단: 상태 뱃지 + 토너 타이틀 + 레벨 */}
-      <div className="flex flex-col items-center gap-2 mt-3">
+      {/* titleAlign에 따라 items-* 분기 (hidden일 때는 뱃지만 남음) */}
+      <div className={`flex flex-col gap-2 mt-3 ${titleAlign === 'left' ? 'items-start' : titleAlign === 'right' ? 'items-end' : 'items-center'}`}>
         <div className="flex items-center gap-2">
           {paused ? (
             <span className="font-extrabold tracking-[0.25em] text-xs" style={{ color: '#FFD166' }}>
@@ -1304,14 +1316,15 @@ function MobilePortraitLayout({
             </>
           )}
         </div>
-        {/* 첫째 줄 — 게임 타이틀 (titleText 채워졌으면 사용자 옵션 적용) */}
-        {(() => {
+        {/* 첫째 줄 — 게임 타이틀. titleAlign==='hidden'이면 mount X */}
+        {titleAlign !== 'hidden' && (() => {
           const titled = !!(display.titleText && display.titleText.trim().length > 0);
           const bold = titled && display.titleStyle.includes('bold');
           const italic = titled && display.titleStyle.includes('italic');
+          const textAlignClass = titleAlign === 'left' ? 'text-left' : titleAlign === 'right' ? 'text-right' : 'text-center';
           return (
             <div
-              className="text-center max-w-full truncate px-2"
+              className={`${textAlignClass} max-w-full truncate px-2`}
               style={{
                 color: titled ? display.titleColor : display.textColor,
                 opacity: titled ? 1 : 0.85,
@@ -1328,10 +1341,10 @@ function MobilePortraitLayout({
             </div>
           );
         })()}
-        {/* 둘째 줄 — 게임 참고사항 */}
-        {display.noteText && display.noteText.trim().length > 0 && (
+        {/* 둘째 줄 — 게임 참고사항 (titleAlign 숨김이어도 note는 별도 — 단, 일관성 위해 같이 숨김) */}
+        {titleAlign !== 'hidden' && display.noteText && display.noteText.trim().length > 0 && (
           <div
-            className="text-center max-w-full truncate px-2"
+            className={`${titleAlign === 'left' ? 'text-left' : titleAlign === 'right' ? 'text-right' : 'text-center'} max-w-full truncate px-2`}
             style={{
               color: display.noteColor,
               fontSize: `clamp(${Math.max(10, display.noteFontSize * 0.6)}px, ${display.noteFontSize / 28}vw, ${display.noteFontSize}px)`,
@@ -1827,6 +1840,7 @@ function MobileLandscapeLayout({
   lateMin,
   heroTitle,
   display,
+  titleAlign,
   canControl,
   authLoading,
   authedUid,
@@ -1859,6 +1873,7 @@ function MobileLandscapeLayout({
   lateMin: number;
   heroTitle: string;
   display: TimerDisplaySettings;
+  titleAlign: TitleAlign;
   canControl: boolean;
   authLoading: boolean;
   authedUid: string | null;
@@ -2003,9 +2018,10 @@ function MobileLandscapeLayout({
         paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom, 0.25rem))',
       } : undefined}
     >
-      {/* ─── 상단 헤더 row — 제목/노트/LEVEL 중앙 정렬 + 거대 폰트 (사용자 정정 #4) ─── */}
-      <div className="flex-shrink-0 flex flex-col items-center justify-center gap-0.5 pb-0.5">
-        {/* 상태 뱃지 — 중앙 상단 (compact 적용) */}
+      {/* ─── 상단 헤더 row — 제목/노트/LEVEL 정렬 + 거대 폰트 (사용자 정정 #4)
+           2026-05-28: titleAlign에 따라 items-* 분기 ─── */}
+      <div className={`flex-shrink-0 flex flex-col gap-0.5 pb-0.5 ${titleAlign === 'left' ? 'items-start' : titleAlign === 'right' ? 'items-end' : 'items-center justify-center'}`}>
+        {/* 상태 뱃지 — 상단 (compact 적용) */}
         <div className="flex items-center gap-2">
           {paused ? (
             <span className="font-extrabold tracking-[0.3em]" style={{ color: '#FFD166', fontSize: fz(11, 1.3, 16) }}>
@@ -2030,30 +2046,33 @@ function MobileLandscapeLayout({
             </>
           )}
         </div>
-        {/* 제목 (heroTitle) — 거대 중앙 정렬. 사용자: "제목또한 중앙상단에 배치되며 잘보여야한다. 현재는 폰트가 너무 작음"
-            2026-05-24 사용자 정정: titleScale 배율로 매장이 실시간 미세조정. */}
-        <div
-          className="text-center truncate max-w-[95%]"
-          title={heroTitle}
-          style={{
-            color: titled ? display.titleColor : display.textColor,
-            opacity: titled ? 1 : 0.9,
-            // 2026-05-24 사용자 정정 (#2 보고서): "상단 제목 거의 안 보임" — 작은 viewport에서 min에 수렴.
-            //   기존 clamp(20, 3vw, 38) → clamp(30, 4vw, 56). min 1.5배 / max 1.5배.
-            //   2026-05-24 PM 핫픽스: compact=true(모바일 가로)면 min/max를 60%로 줄임.
-            fontSize: fz(30, 4, 56, sTitle),
-            fontWeight: titleBold ? 800 : 700,
-            fontStyle: titleItalic ? 'italic' : 'normal',
-            letterSpacing: '-0.01em',
-            lineHeight: 1.1,
-          }}
-        >
-          {heroTitle}
-        </div>
-        {/* 노트 (있을 때만) — 중앙 정렬. titleScale와 같은 배율을 적용 (부제 — 한 묶음 톤). */}
-        {display.noteText && display.noteText.trim().length > 0 && (
+        {/* 제목 (heroTitle) — titleAlign==='hidden'이면 mount X.
+            2026-05-24 사용자 정정: titleScale 배율로 매장이 실시간 미세조정.
+            2026-05-28: titleAlign으로 정렬 분기. */}
+        {titleAlign !== 'hidden' && (
           <div
-            className="text-center truncate max-w-[90%]"
+            className={`${titleAlign === 'left' ? 'text-left' : titleAlign === 'right' ? 'text-right' : 'text-center'} truncate max-w-[95%]`}
+            title={heroTitle}
+            style={{
+              color: titled ? display.titleColor : display.textColor,
+              opacity: titled ? 1 : 0.9,
+              // 2026-05-24 사용자 정정 (#2 보고서): "상단 제목 거의 안 보임" — 작은 viewport에서 min에 수렴.
+              //   기존 clamp(20, 3vw, 38) → clamp(30, 4vw, 56). min 1.5배 / max 1.5배.
+              //   2026-05-24 PM 핫픽스: compact=true(모바일 가로)면 min/max를 60%로 줄임.
+              fontSize: fz(30, 4, 56, sTitle),
+              fontWeight: titleBold ? 800 : 700,
+              fontStyle: titleItalic ? 'italic' : 'normal',
+              letterSpacing: '-0.01em',
+              lineHeight: 1.1,
+            }}
+          >
+            {heroTitle}
+          </div>
+        )}
+        {/* 노트 (있을 때만) — titleAlign==='hidden'이면 같이 숨김. 정렬은 title과 동일. */}
+        {titleAlign !== 'hidden' && display.noteText && display.noteText.trim().length > 0 && (
+          <div
+            className={`${titleAlign === 'left' ? 'text-left' : titleAlign === 'right' ? 'text-right' : 'text-center'} truncate max-w-[90%]`}
             style={{
               color: display.noteColor,
               // 2026-05-24 사용자 정정: 노트도 비례 키움 (제목 톤 일관성). compact 적용.

@@ -90,6 +90,7 @@ import {
   deleteTimerBackgroundByUrl,
   SAMPLE_TIMER_BACKGROUNDS,
   type TimerDisplayPreset,
+  type TitleAlign,
 } from '@/lib/timerDisplay';
 import TemplatesPanel from './TemplatesPanel';
 
@@ -1445,6 +1446,45 @@ function DisplaySettingsPane({
           }}
           aria-label="경기 제목 (TV 첫째 줄)"
         />
+        {/* 경기 제목 정렬/숨김 — 2026-05-28 신설 */}
+        {(() => {
+          const alignOpts: { value: TitleAlign; label: string }[] = [
+            { value: 'left',   label: '좌측' },
+            { value: 'center', label: '중앙' },
+            { value: 'right',  label: '우측' },
+            { value: 'hidden', label: '숨김' },
+          ];
+          const current: TitleAlign = (local.titleAlign ?? 'center') as TitleAlign;
+          return (
+            <div className="flex gap-1 mb-2" role="group" aria-label="경기 제목 정렬">
+              {alignOpts.map(({ value, label }) => {
+                const active = current === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => update('titleAlign', value)}
+                    className="flex-1 text-[10px] font-bold py-1.5 rounded transition-all"
+                    style={{
+                      background: active
+                        ? value === 'hidden' ? '#444' : 'rgba(16,185,129,0.25)'
+                        : 'var(--surface-2)',
+                      color: active
+                        ? value === 'hidden' ? '#ccc' : 'rgb(16,185,129)'
+                        : 'var(--text-3)',
+                      border: active
+                        ? value === 'hidden' ? '1px solid #666' : '1px solid rgba(16,185,129,0.6)'
+                        : '1px solid var(--border)',
+                    }}
+                    aria-pressed={active}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
         <div className="text-[10px] tracking-wider mb-1.5 px-1"
              style={{ color: 'var(--text-3)' }}>
           📝 부제 (제목 바로 아래 · 선택)
