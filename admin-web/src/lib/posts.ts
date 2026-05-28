@@ -452,6 +452,70 @@ export async function createStorePost(input: {
   return ref.id;
 }
 
+/**
+ * 재등록 — 기존 글의 본문 데이터를 그대로 복사해 새 글 생성.
+ * - 새 createdAt = now, expiresAt = now + 24h, 새 doc ID
+ * - 이미지는 Storage URL 재사용 (재업로드 없음)
+ * - cleanupExpiredPosts cron이 이미 삭제한 이미지 URL은 fetch HEAD로 확인 후 빈 배열 fallback
+ * - 1일 작성 한도(POST_DAILY_LIMIT_FREE) 동일 가드 적용
+ */
+export async function repostStorePost(
+  storeId: string,
+  postId: string,
+  authorUid: string,
+): Promise<string> {
+  // 원본 글 조회
+  const snap = await getDoc(doc(postsCol(storeId), postId));
+  if (!snap.exists()) throw new Error('원본 글을 찾을 수 없습니다');
+  const src = { id: snap.id, ...(snap.data() as Omit<StorePost, 'id'>) } as StorePost;
+
+  // 1일 작성 한도 가드 (free tier 3건/24h)
+  const recentCount = await countRecentPostsByStore(storeId, authorUid);
+  if (recentCount >= POST_DAILY_LIMIT_FREE) {
+    throw new PostGuardError(
+      'rate_limit',
+      `오늘의 소식은 하루에 ${POST_DAILY_LIMIT_FREE}건까지 작성할 수 있어요. 24시간 후 다시 재등록해주세요.`,
+    );
+  }
+
+  // 이미지 URL 유효성 확인 — cleanupExpiredPosts cron(3일 후 삭제)에 의해
+  // 이미 제거된 이미지라면 HEAD 요청이 실패하므로 빈 배열로 fallback.
+  let imageUrls: string[] = [];
+  if ((src.imageUrls ?? []).length > 0) {
+    const checks = await Promise.all(
+      src.imageUrls.map((url) =>
+        fetch(url, { method: 'HEAD' })
+          .then((r) => (r.ok ? url : null))
+          .catch(() => null),
+      ),
+    );
+    imageUrls = checks.filter((u): u is string => u !== null);
+  }
+
+  const nowTs = Timestamp.now();
+  const ref = await addDoc(postsCol(storeId), stripUndefined({
+    storeId,
+    storeName: src.storeName ?? '',
+    body: src.body ?? '',
+    headline: src.headline ?? '',
+    cardColor: src.cardColor ?? 'white',
+    cardEmoji: src.cardEmoji ?? '',
+    cardEmojis: src.cardEmojis ?? [],
+    imageUrls,
+    eventTags: src.eventTags ?? [],
+    ctaUrl: src.ctaUrl ?? '',
+    ctaLabel: src.ctaLabel ?? '',
+    authorType: 'store' as PostAuthorType,
+    authorUid,
+    status: 'published' as PostStatus,
+    flagCount: 0,
+    createdAt: nowTs,
+    serverCreatedAt: serverTimestamp(),
+    expiresAt: expiresFromNow(),
+  }));
+  return ref.id;
+}
+
 export async function updateStorePost(
   storeId: string,
   postId: string,

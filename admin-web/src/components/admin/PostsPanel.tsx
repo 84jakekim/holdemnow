@@ -10,6 +10,7 @@ import {
   createStorePost,
   updateStorePost,
   deleteStorePost,
+  repostStorePost,
   uploadPostImage,
   deletePostImageByUrl,
   MAX_POST_IMAGES,
@@ -17,6 +18,7 @@ import {
   POST_CARD_COLORS,
   POST_CARD_EMOJI_GROUPS,
   POST_CARD_EMOJIS_MAX,
+  PostGuardError,
   graphemeLength,
   truncateGraphemes,
 } from '@/lib/posts';
@@ -44,6 +46,12 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<StorePost | 'new' | null>(null);
   const [activating, setActivating] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+
+  const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   useEffect(() => {
     // 금지어 캐시 prime — 첫 글 작성도 즉시 새 사전 적용
@@ -226,10 +234,27 @@ export default function PostsPanel({ storeId, storeName, isPlatformAdmin = false
               key={p.id}
               post={p}
               storeId={storeId}
+              authorUid={authState.user.uid}
               now={now}
               onEdit={() => setEditing(p)}
+              onRepostResult={(ok, msg) => showToast(msg, ok ? 'ok' : 'err')}
             />
           ))}
+        </div>
+      )}
+
+      {/* 토스트 알림 */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all ${
+            toast.type === 'ok'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-red-600 text-white'
+          }`}
+          role="alert"
+          aria-live="polite"
+        >
+          {toast.msg}
         </div>
       )}
 
@@ -339,13 +364,17 @@ function LivePreviewCard({
 function PostRow({
   post,
   storeId,
+  authorUid,
   now,
   onEdit,
+  onRepostResult,
 }: {
   post: StorePost;
   storeId: string;
+  authorUid: string;
   now: number;
   onEdit: () => void;
+  onRepostResult: (ok: boolean, msg: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const expMs = post.expiresAt?.toMillis() ?? 0;
@@ -362,6 +391,21 @@ function PostRow({
     if (!window.confirm('이 소식을 삭제할까요? 첨부 이미지도 같이 삭제됩니다.')) return;
     setBusy(true);
     try { await deleteStorePost(storeId, post.id); } finally { setBusy(false); }
+  };
+
+  const repost = async () => {
+    setBusy(true);
+    try {
+      await repostStorePost(storeId, post.id, authorUid);
+      onRepostResult(true, '재등록 완료! 24시간 활성화됩니다.');
+    } catch (e: unknown) {
+      const msg = e instanceof PostGuardError
+        ? e.message
+        : (e instanceof Error ? e.message : '재등록에 실패했습니다');
+      onRepostResult(false, msg);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const toggleHidden = async () => {
@@ -410,6 +454,14 @@ function PostRow({
         {!isActive && !isExpired && (
           <button onClick={toggleHidden} disabled={busy} className="text-[11px] font-bold px-3 py-1.5 rounded-md border border-gray-200 disabled:opacity-40">노출</button>
         )}
+        <button
+          onClick={repost}
+          disabled={busy}
+          title="같은 내용으로 새 글 생성 (24h 활성). 하루 3건 한도 적용."
+          className="text-[11px] font-bold px-3 py-1.5 rounded-md border border-pink-300 text-pink-700 bg-pink-50 hover:bg-pink-100 disabled:opacity-40"
+        >
+          재등록
+        </button>
         <button onClick={onEdit} className="text-[11px] font-bold px-3 py-1.5 rounded-md border border-gray-200">수정</button>
         <button onClick={remove} disabled={busy} className="text-[11px] font-bold px-3 py-1.5 rounded-md border border-red-200 text-red-600 disabled:opacity-40">삭제</button>
       </div>
