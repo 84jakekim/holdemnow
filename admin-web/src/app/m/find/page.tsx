@@ -23,10 +23,11 @@ const FindKakaoMap = dynamic(() => import('./FindKakaoMap'), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--surface-2)' }}>
-      <div className="text-[13px]" style={{ color: 'var(--text-3)' }}>지도 불러오는 중...</div>
+      <div className="skeleton h-full w-full" aria-label="지도 로딩 중" />
     </div>
   ),
 });
+const MapLoadError = dynamic(() => import('@/components/mobile/MapLoadError'), { ssr: false });
 import {
   loadActivePostsAll,
   subscribeActivePinnedPosts,
@@ -704,11 +705,14 @@ function MapMode({ userLocation, locationDenied }: { userLocation: LatLng | null
 
         {/* 지도 에러 */}
         {mapError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 px-8 text-center" style={{ background: 'var(--bg-sub)' }}>
-            <div className="text-4xl mb-3" aria-hidden="true">🗺️</div>
-            <div className="text-[15px] font-bold mb-2" style={{ color: 'var(--text-1)' }}>지도가 일시적으로 표시되지 않습니다</div>
-            <div className="text-[12px] leading-relaxed mb-5" style={{ color: 'var(--text-3)' }}>매장 목록은 정상 사용 가능합니다.</div>
-            <button onClick={() => setSheetOpen(true)} className="px-5 h-11 rounded-2xl text-[13px] font-extrabold text-white" style={{ background: 'var(--brand)' }}>
+          <div className="absolute inset-0 z-20">
+            <MapLoadError layout="overlay" />
+            {/* 하단 — 매장 목록 보기 보조 버튼 */}
+            <button
+              onClick={() => setSheetOpen(true)}
+              className="absolute bottom-4 left-4 right-4 h-11 rounded-2xl text-[13px] font-extrabold text-white z-30"
+              style={{ background: 'var(--brand)', boxShadow: '0 2px 12px rgba(255,31,143,0.35)' }}
+            >
               내 주변 매장 목록 보기
             </button>
           </div>

@@ -2,6 +2,7 @@
 
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import {
   subscribeEvent,
@@ -15,6 +16,8 @@ import { callPhone, openDirections, shareContent } from '@/lib/actions';
 import { loadKakaoMaps } from '@/lib/kakao';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+const MapLoadError = dynamic(() => import('@/components/mobile/MapLoadError'), { ssr: false });
 
 export default function EventDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
@@ -190,7 +193,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
             <div className="text-sm text-gray-600 mt-0.5">{event.venueAddress}</div>
           )}
           {event.lat != null && event.lng != null && (
-            <VenueMap lat={event.lat} lng={event.lng} name={event.venueName ?? event.name} />
+            <VenueMap
+              lat={event.lat}
+              lng={event.lng}
+              name={event.venueName ?? event.name}
+              address={event.venueAddress}
+            />
           )}
           {event.venueAddress && (
             <button
@@ -279,10 +287,22 @@ function InfoCell({ label, value, highlight }: { label: string; value: string; h
  * 대회장 위치 — 카카오맵 mini view
  * ========================================================== */
 
-function VenueMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
+function VenueMap({
+  lat,
+  lng,
+  name,
+  address,
+}: {
+  lat: number;
+  lng: number;
+  name: string;
+  address?: string;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [mapError, setMapError] = useState(false);
 
   useEffect(() => {
+    setMapError(false);
     let cancelled = false;
     (async () => {
       try {
@@ -290,10 +310,9 @@ function VenueMap({ lat, lng, name }: { lat: number; lng: number; name: string }
         if (cancelled || !containerRef.current) return;
         const center = new maps.LatLng(lat, lng);
         const map = new maps.Map(containerRef.current, { center, level: 4 });
-        // 마커
         new maps.Marker({ position: center, map, title: name });
       } catch (e) {
-        console.warn('VenueMap load failed', e);
+        if (!cancelled) setMapError(true);
       }
     })();
     return () => {
@@ -301,5 +320,16 @@ function VenueMap({ lat, lng, name }: { lat: number; lng: number; name: string }
     };
   }, [lat, lng, name]);
 
-  return <div ref={containerRef} className="mt-3 w-full h-48 rounded-xl overflow-hidden border border-gray-200 bg-gray-100" />;
+  return (
+    <div className="mt-3 w-full h-48 rounded-xl overflow-hidden border border-gray-200 relative" style={{ background: 'var(--surface-2)' }}>
+      <div ref={containerRef} className="absolute inset-0" />
+      {mapError && (
+        <MapLoadError
+          address={address}
+          layout="overlay"
+          compact
+        />
+      )}
+    </div>
+  );
 }

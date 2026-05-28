@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { loadKakaoMaps } from '@/lib/kakao';
+import MapLoadError from '@/components/mobile/MapLoadError';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -25,7 +26,19 @@ function buildNameBadgeMarker(maps: any, name: string) {
   return new maps.MarkerImage(url, new maps.Size(width, height), { offset: new maps.Point(cx, height) });
 }
 
-export default function StoreMiniMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
+export default function StoreMiniMap({
+  lat,
+  lng,
+  name,
+  address,
+  kakaoPlaceId,
+}: {
+  lat: number;
+  lng: number;
+  name: string;
+  address?: string;
+  kakaoPlaceId?: string;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -33,6 +46,7 @@ export default function StoreMiniMap({ lat, lng, name }: { lat: number; lng: num
 
   useEffect(() => {
     let cancelled = false;
+    setError(null);
     (async () => {
       try {
         const maps = await loadKakaoMaps();
@@ -67,9 +81,12 @@ export default function StoreMiniMap({ lat, lng, name }: { lat: number; lng: num
     >
       <div ref={containerRef} className="absolute inset-0" />
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm" style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
-          지도 로드 실패
-        </div>
+        <MapLoadError
+          address={address}
+          kakaoPlaceId={kakaoPlaceId}
+          layout="overlay"
+          compact
+        />
       )}
     </div>
   );

@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadKakaoMaps } from '@/lib/kakao';
 import { haversineMeters, formatDistance } from '@/lib/geo';
+import MapLoadError from '@/components/mobile/MapLoadError';
 
 interface Props {
   storeId: string;
@@ -20,6 +21,8 @@ interface Props {
   storeLat?: number | null;
   storeLng?: number | null;
   storeAddress?: string;
+  /** 카카오플레이스 ID — fallback 딥링크에서 사용 */
+  kakaoPlaceId?: string;
   /** 카드 너비에 맞춰 높이만 지정. 기본 160. */
   height?: number;
   /** pending 상태에서 약간 흐림 처리 (PM 결정: 지도 50% opacity). */
@@ -34,6 +37,7 @@ export default function InlineStoreMap({
   storeLat,
   storeLng,
   storeAddress,
+  kakaoPlaceId,
   height = 160,
   dimmed = false,
 }: Props) {
@@ -190,12 +194,12 @@ export default function InlineStoreMap({
       </div>
 
       {error && (
-        <div
-          className="absolute inset-0 flex items-center justify-center text-[11px] px-3"
-          style={{ background: 'rgba(255,255,255,0.92)', color: 'var(--text-3)' }}
-        >
-          지도를 불러올 수 없습니다 ({error.slice(0, 40)})
-        </div>
+        <MapLoadError
+          address={storeAddress}
+          kakaoPlaceId={kakaoPlaceId}
+          layout="overlay"
+          compact
+        />
       )}
 
       {/* 키 prop 변화로 mapRef 누수 방지용 (정적) */}
