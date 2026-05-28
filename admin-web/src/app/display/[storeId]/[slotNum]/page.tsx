@@ -305,7 +305,11 @@ export default function DisplayPage({
   //    서버 currentLevel update까지 10~20초 지연되던 버그 회피
   useEffect(() => {
     const prev = prevSecRef.current;
-    if (session?.status === 'running' && audioReady) {
+    // 2026-05-28 #15: audioReady 조건 제거. iOS Safari 핸드폰은 fullscreen API
+    //   미지원이라 enterFullscreenMode 거쳐도 audioReady가 false 유지될 수 있음.
+    //   카운트다운 비프 안 들리는 버그. AudioContext가 suspended면 playCountdownBeep
+    //   내부에서 자동 tryResume → silent fallback이라 사이드 이펙트 없음.
+    if (session?.status === 'running') {
       // 10초~1초 매초 1회 비프. prev !== sec로 매 tick 비교.
       if (soundWarn30Effective && prev !== null && prev !== sec && sec >= 1 && sec <= 10) {
         playCountdownBeep();
