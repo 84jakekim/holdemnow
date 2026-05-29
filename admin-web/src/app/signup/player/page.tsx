@@ -281,9 +281,9 @@ export default function PlayerSignupPage() {
             )}
           </div>
 
-          {/* 본인 확인 안내 */}
+          {/* 수집 안내 */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 text-[12px] text-amber-800 leading-relaxed">
-            본인 확인을 위해 실명·휴대폰 정보를 수집합니다 (필수)
+            서비스 이용 및 알림 수신을 위해 실명·휴대폰 정보를 수집합니다 (필수)
           </div>
 
           {/* 실명 */}
