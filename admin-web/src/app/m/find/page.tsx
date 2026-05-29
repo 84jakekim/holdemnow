@@ -249,8 +249,9 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
 
   useEffect(() => {
     let cancelled = false;
-    // 2026-05-29 fix: isDemo 서버 필터 제거. Firestore where==false는 필드 자체 없는
-    //   문서를 제외 → 실제 매장(isDemo 필드 미정의)이 모두 빠지는 버그. 클라이언트 필터로.
+    // 2026-05-29 fix #2: 데모 매장 100개도 내 주변 매장 섹션에 노출.
+    //   다른 섹션(인기/새로합류/지도/목록)은 데모 표시 → 일관성 + 베타 출시 전 빈 화면 회피.
+    //   서버 쿼리는 status==active만, 데모/실 매장 모두 포함.
     getDocs(
       query(
         collection(db, 'stores'),
@@ -259,9 +260,7 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
     ).then((snap) => {
       if (cancelled) return;
       setNearbyStores(
-        snap.docs
-          .filter((d) => (d.data() as { isDemo?: boolean }).isDemo !== true)
-          .map((d) => {
+        snap.docs.map((d) => {
           const data = d.data() as {
             name: string; address?: string; photoUrls?: string[];
             facilities?: string[]; tier?: string;
