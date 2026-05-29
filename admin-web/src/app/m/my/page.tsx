@@ -35,10 +35,32 @@ const DEFAULT_PREFS: NotificationPrefs = {
   marketing: false,
 };
 
+const PREFS_CACHE_KEY = 'holdemnow:notifPrefs';
+
+function loadCachedPrefs(): NotificationPrefs {
+  if (typeof window === 'undefined') return DEFAULT_PREFS;
+  try {
+    const raw = window.localStorage.getItem(PREFS_CACHE_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    const parsed = JSON.parse(raw) as Partial<NotificationPrefs>;
+    return { ...DEFAULT_PREFS, ...parsed };
+  } catch {
+    return DEFAULT_PREFS;
+  }
+}
+
+function saveCachedPrefs(prefs: NotificationPrefs): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PREFS_CACHE_KEY, JSON.stringify(prefs));
+  } catch { /* private mode */ }
+}
+
 export default function MyPage() {
   const authState = useAuth();
   const router = useRouter();
-  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+  // 2026-05-29: localStorage 캐시로 초기화 — 매 mount마다 DEFAULT(off)로 깜빡이는 현상 차단
+  const [prefs, setPrefs] = useState<NotificationPrefs>(() => loadCachedPrefs());
   const [profile, setProfile] = useState<ProfileFields>({});
   const [loading, setLoading] = useState(true);
   const [favCount, setFavCount] = useState(0);
@@ -116,7 +138,10 @@ export default function MyPage() {
         const data = snap.data() as
           | { notificationPrefs?: NotificationPrefs; displayName?: string; bio?: string; phone?: string }
           | undefined;
-        if (data?.notificationPrefs) setPrefs(data.notificationPrefs);
+        if (data?.notificationPrefs) {
+          setPrefs(data.notificationPrefs);
+          saveCachedPrefs(data.notificationPrefs);
+        }
         setProfile({ displayName: data?.displayName, bio: data?.bio, phone: data?.phone });
         setLoading(false);
       },
@@ -129,6 +154,7 @@ export default function MyPage() {
     if (authState.status !== 'authenticated') return;
     const next = { ...prefs, [key]: !prefs[key] };
     setPrefs(next);
+    saveCachedPrefs(next);
     await setDoc(
       doc(db, 'users', authState.user.uid),
       { notificationPrefs: next, updatedAt: serverTimestamp() },
