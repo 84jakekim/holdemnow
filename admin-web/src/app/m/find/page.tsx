@@ -178,24 +178,49 @@ export default function FindPage() {
 
 function FindHeader() {
   return (
-    <header className="sticky top-0 z-30 pr-home-hero">
-      <div className="pr-home-hero-content px-4 h-14 flex items-center justify-between gap-3">
-        <div
-          className="text-[19px] font-black tracking-tight"
-          style={{ color: '#FFFFFF', textShadow: '0 1px 4px rgba(0,0,0,0.18)' }}
-        >
-          🏠 매장찾기
-        </div>
-        <div className="flex items-center gap-1">
-          <Link
-            href="/m/search"
-            aria-label="검색"
-            className="hero-pink-action w-10 h-10 flex items-center justify-center rounded-full"
+    <header
+      className="sticky top-0 z-30"
+      style={{
+        background: 'linear-gradient(120deg, #FF1F8F 0%, #FF6BAA 100%)',
+        position: 'sticky',
+      }}
+    >
+      <div className="px-4 flex items-center gap-2.5" style={{ height: 64 }}>
+        {/* 홈 아이콘 + 타이틀 */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div
+            className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(255,255,255,0.22)' }}
+            aria-hidden="true"
           >
             <svg
               width="18" height="18" viewBox="0 0 24 24"
               fill="none" stroke="#FFFFFF"
-              strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"
+              strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </div>
+          <div
+            className="text-[20px] font-black tracking-tight leading-none"
+            style={{ color: '#FFFFFF', textShadow: '0 1px 6px rgba(0,0,0,0.18)', letterSpacing: '-0.02em' }}
+          >
+            매장찾기
+          </div>
+        </div>
+        {/* 액션 버튼 그룹 */}
+        <div className="flex items-center gap-1.5">
+          <Link
+            href="/m/search"
+            aria-label="검색"
+            className="w-10 h-10 flex items-center justify-center rounded-full transition active:scale-90"
+            style={{ background: 'rgba(255,255,255,0.20)' }}
+          >
+            <svg
+              width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="#FFFFFF"
+              strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
               aria-hidden="true"
             >
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -361,13 +386,26 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
 
   return (
     <div>
-      {/* 위치 표시 바 */}
-      <div
-        className="px-4 py-2.5 flex items-center gap-1.5"
-        style={{ background: 'var(--bg-sub)', borderBottom: '1px solid var(--border)' }}
+      {/* 위치 표시 바 — 탭 가능한 버튼 형식 */}
+      <button
+        className="w-full flex items-center gap-1.5 tap"
+        style={{
+          margin: '10px 16px 0',
+          width: 'calc(100% - 32px)',
+          padding: '10px 14px',
+          borderRadius: 12,
+          background: 'var(--surface-2)',
+          border: 'none',
+          cursor: 'default',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+        aria-label="현재 위치"
+        disabled
       >
         <svg
-          width="11" height="11" viewBox="0 0 24 24"
+          width="13" height="13" viewBox="0 0 24 24"
           fill="none" stroke="var(--brand)" strokeWidth="2.4"
           strokeLinecap="round" strokeLinejoin="round"
           aria-hidden="true"
@@ -375,15 +413,24 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
           <circle cx="12" cy="10" r="3"/>
         </svg>
-        <span className="text-[12px]" style={{ color: 'var(--text-2)' }}>
+        <span className="text-[13px] font-extrabold" style={{ color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
           {regionLabel ?? '위치 확인 중'}
         </span>
+        <svg
+          width="11" height="11" viewBox="0 0 24 24"
+          fill="none" stroke="var(--text-3)" strokeWidth="2.5"
+          strokeLinecap="round" strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ marginLeft: 2 }}
+        >
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
         {displayName && (
-          <span className="ml-auto text-[11px]" style={{ color: 'var(--text-3)' }}>
+          <span className="ml-auto text-[11px] font-bold" style={{ color: 'var(--text-3)' }}>
             {displayName}님
           </span>
         )}
-      </div>
+      </button>
 
       {/* ─ LIVE 섹션 헤더 + 큰 카드 + 작은 카드 슬라이더 */}
       {!loading && !error && (
@@ -411,22 +458,14 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
       {/* ─ 대회정보·커뮤니티 2-column 카드 */}
       <QuickNavCards />
 
-      <div className="brand-strip-divider" />
-
       {/* ─ 오늘의 매장 소식 */}
       <DailyPostsFeed />
 
-      <div className="brand-strip-divider mt-5" />
-
-      {/* ─ 인기 매장 */}
+      {/* ─ 인기 매장 — 두꺼운 섹션 구분선 */}
       <PopularStoresAvatarScroll liveByStore={liveByStore} userLocation={userLocation} />
-
-      <div className="brand-strip-divider" />
 
       {/* ─ 새로 합류한 매장 */}
       <NewlyJoinedStoresSection liveByStore={liveByStore} userLocation={userLocation} />
-
-      <div className="brand-strip-divider" />
 
       {/* ─ 내 주변 매장 */}
       <NearbyStoresSection liveByStore={liveByStore} initialStores={nearbyStores} userLocation={userLocation} />
@@ -434,8 +473,7 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
       {/* ─ 메이저 시리즈 */}
       {series.length > 0 && (
         <>
-          <div className="brand-strip-divider mt-5" />
-          <section aria-label="메이저 시리즈" className="pb-6">
+          <section aria-label="메이저 시리즈" className="pb-6" style={{ marginTop: 8, borderTop: '8px solid var(--bg-sub)' }}>
             <div className="px-4 flex items-center justify-between mb-4 pt-5">
               <div>
                 <div className="text-[17px] font-extrabold tracking-tight" style={{ color: 'var(--text-1)' }}>
@@ -477,83 +515,85 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
 function QuickNavCards() {
   return (
     <section aria-label="빠른 이동" className="px-4 py-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2.5">
         {/* 대회정보 — 골드 시그니처 */}
         <Link
           href="/m/events"
           aria-label="대회정보"
-          className="pr-card lift tap relative overflow-hidden flex items-center gap-2.5"
+          className="lift tap relative overflow-hidden"
           style={{
-            background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 60%, #FCD34D 100%)',
-            border: 'none',
-            padding: '14px 14px',
-            minHeight: 72,
+            borderRadius: 16,
+            padding: '16px 14px',
+            background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
+            boxShadow: '0 6px 18px rgba(245,158,11,0.32)',
             color: '#fff',
+            border: 'none',
+            display: 'block',
           }}
         >
-          {/* 우상단 backdrop 글로우 */}
+          {/* 배경 이모지 — opacity 0.22 */}
           <span
             aria-hidden="true"
-            className="absolute pointer-events-none"
             style={{
-              top: -24,
-              right: -24,
-              width: 90,
-              height: 90,
-              background: 'radial-gradient(circle, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 70%)',
+              position: 'absolute', top: -8, right: -6,
+              fontSize: 54, opacity: 0.22, pointerEvents: 'none',
+              lineHeight: 1,
             }}
-          />
-          <span className="text-[28px] leading-none flex-shrink-0 relative z-10" aria-hidden="true">🏆</span>
-          <div className="flex-1 min-w-0 relative z-10">
-            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>
-              TOURNAMENT
-            </div>
-            <div className="h3" style={{ color: '#fff', fontSize: 17, lineHeight: 1.1 }}>
-              대회정보
+          >🏆</span>
+          <div style={{ position: 'relative' }}>
+            {/* 아이콘 박스 */}
+            <div style={{
+              width: 34, height: 34, borderRadius: 10,
+              background: 'rgba(255,255,255,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18, marginBottom: 24,
+            }} aria-hidden="true">🏆</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.14em', opacity: 0.85 }}>TOURNAMENT</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+              <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.02em' }}>대회정보</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.9 }}><path d="M9 18l6-6-6-6"/></svg>
             </div>
           </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 relative z-10" style={{ opacity: 0.9 }}>
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
         </Link>
 
         {/* 커뮤니티 — 핫핑크 시그니처 */}
         <Link
           href="/m/community"
           aria-label="커뮤니티"
-          className="pr-card lift tap relative overflow-hidden flex items-center gap-2.5"
+          className="lift tap relative overflow-hidden"
           style={{
-            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 60%, #FFB3D4 100%)',
-            border: 'none',
-            padding: '14px 14px',
-            minHeight: 72,
+            borderRadius: 16,
+            padding: '16px 14px',
+            background: 'linear-gradient(135deg, #FF1F8F 0%, #FF6BAA 100%)',
+            boxShadow: '0 6px 18px rgba(255,31,143,0.32)',
             color: '#fff',
+            border: 'none',
+            display: 'block',
           }}
         >
-          {/* 우상단 backdrop 글로우 */}
+          {/* 배경 이모지 — opacity 0.22 */}
           <span
             aria-hidden="true"
-            className="absolute pointer-events-none"
             style={{
-              top: -24,
-              right: -24,
-              width: 90,
-              height: 90,
-              background: 'radial-gradient(circle, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 70%)',
+              position: 'absolute', top: -8, right: -6,
+              fontSize: 54, opacity: 0.22, pointerEvents: 'none',
+              lineHeight: 1,
             }}
-          />
-          <span className="text-[28px] leading-none flex-shrink-0 relative z-10" aria-hidden="true">💬</span>
-          <div className="flex-1 min-w-0 relative z-10">
-            <div className="section-title" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>
-              COMMUNITY
-            </div>
-            <div className="h3" style={{ color: '#fff', fontSize: 17, lineHeight: 1.1 }}>
-              커뮤니티
+          >💬</span>
+          <div style={{ position: 'relative' }}>
+            {/* 아이콘 박스 */}
+            <div style={{
+              width: 34, height: 34, borderRadius: 10,
+              background: 'rgba(255,255,255,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18, marginBottom: 24,
+            }} aria-hidden="true">💬</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.14em', opacity: 0.85 }}>COMMUNITY</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+              <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.02em' }}>커뮤니티</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.9 }}><path d="M9 18l6-6-6-6"/></svg>
             </div>
           </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0 relative z-10" style={{ opacity: 0.9 }}>
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
         </Link>
       </div>
     </section>
@@ -861,7 +901,7 @@ function DailyPostsFeed() {
   if (loaded && pinned.length === 0 && posts.length === 0) return null;
 
   return (
-    <section aria-label="오늘의 매장 소식" className="py-5">
+    <section aria-label="오늘의 매장 소식" className="py-5" style={{ borderTop: '8px solid var(--bg-sub)' }}>
       <div className="px-4 flex items-end justify-between mb-3">
         <div>
           <div className="section-title" style={{ marginBottom: 2 }}>TODAY'S NEWS</div>
@@ -1185,36 +1225,76 @@ function PopularStoresAvatarScroll({ liveByStore, userLocation }: { liveByStore:
   if (loaded && stores.length === 0) return null;
 
   return (
-    <section aria-label="내 주변 인기 매장" className="py-5">
-      <div className="px-4 flex items-end justify-between mb-3">
+    <section aria-label="내 주변 인기 매장" className="py-5" style={{ borderTop: '8px solid var(--bg-sub)' }}>
+      <div className="px-4 flex items-end justify-between mb-1">
         <div>
           <div className="section-title" style={{ marginBottom: 2 }}>POPULAR NEARBY</div>
           <div className="h3" style={{ color: 'var(--text-1)' }}>내 주변 인기 매장</div>
-          {appliedRadiusKm != null && (
-            <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-              {expanded ? `주변 매장이 적어 ${appliedRadiusKm}km까지 범위를 넓혔어요` : `반경 ${appliedRadiusKm}km · LIVE 운영 활발한 매장 우선`}
-            </div>
-          )}
         </div>
-        <button onClick={() => window.location.href = '/m/find?mode=map'} className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60 mb-0.5" style={{ color: 'var(--brand)' }}>
+        <button onClick={() => window.location.href = '/m/find?mode=map'} className="text-[12px] font-bold flex items-center gap-0.5 transition active:opacity-60 mb-0.5" style={{ color: 'var(--brand)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
           지도로 보기
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       </div>
-      <div className="pl-4 flex gap-4 overflow-x-auto scrollbar-none pb-1">
-        {stores.map((st) => {
+      {appliedRadiusKm != null && (
+        <div className="px-4 mb-3 text-[11px]" style={{ color: 'var(--text-3)' }}>
+          {expanded ? `주변 매장이 적어 ${appliedRadiusKm}km까지 범위를 넓혔어요` : `반경 ${appliedRadiusKm}km · LIVE 운영 활발한 매장 우선`}
+        </div>
+      )}
+      <div className="pl-4 flex gap-4 overflow-x-auto scrollbar-none pb-2">
+        {stores.map((st, i) => {
           const isLive = (liveByStore[st.id] || 0) > 0;
           const photo = st.photoUrls[0];
+          const rankTop3 = i < 3;
           return (
-            <Link key={st.id} href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="flex flex-col items-center gap-1.5 flex-shrink-0 transition active:scale-95" style={{ width: 64 }}>
-              <div className={`store-avatar-ring${isLive ? ' live-ring' : ''}`} style={{ width: 60, height: 60, position: 'relative' }}>
-                {photo
-                  ? <Image src={photo} alt={st.name} fill className="object-cover" style={{ borderRadius: '50%' }} sizes="60px" />
-                  : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)', borderRadius: '50%' }}><span className="text-[16px] font-extrabold" style={{ color: 'var(--brand)' }}>{st.name.charAt(0)}</span></div>
-                }
-                {isLive && <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white pulse-live" style={{ background: 'var(--live)' }} aria-label="LIVE 중" />}
+            <Link key={st.id} href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="flex flex-col items-center flex-shrink-0 transition active:scale-95" style={{ width: 72, gap: 8 }}>
+              {/* 아바타 — 핸드오프: 68px roundedSquare(22px radius) */}
+              <div style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    width: 68, height: 68,
+                    borderRadius: 22,
+                    background: photo ? 'var(--surface-2)' : 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)',
+                    boxShadow: 'var(--shadow-card)',
+                    border: isLive ? '2px solid var(--live)' : '2px solid var(--bg)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {photo
+                    ? <Image src={photo} alt={st.name} fill className="object-cover" sizes="68px" />
+                    : <span className="text-[22px] font-extrabold" style={{ color: 'var(--brand)' }}>{st.name.charAt(0)}</span>
+                  }
+                </div>
+                {/* 순위 배지 — 1~3위: brand, 4위~: surface-3 */}
+                <span style={{
+                  position: 'absolute', top: -4, left: -4,
+                  width: 20, height: 20, borderRadius: 99,
+                  background: rankTop3 ? 'var(--brand)' : 'var(--surface-3)',
+                  color: rankTop3 ? '#fff' : 'var(--text-2)',
+                  fontSize: 10, fontWeight: 900,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '2px solid var(--bg)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>{i + 1}</span>
+                {/* LIVE 도트 */}
+                {isLive && (
+                  <span
+                    className="absolute pulse-live"
+                    style={{ bottom: 2, right: 2, width: 14, height: 14, borderRadius: 99, background: 'var(--live)', border: '2px solid var(--bg)' }}
+                    aria-label="LIVE 중"
+                  />
+                )}
               </div>
-              <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: 'var(--text-2)', width: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.name}</span>
+              <div style={{ width: 72, textAlign: 'center' }}>
+                <div className="text-[11px] font-bold leading-tight" style={{ color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.name}</div>
+                {st.distance != null && (
+                  <div className="mono text-[9px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+                    {st.distance < 1000 ? `${Math.round(st.distance)}m` : `${(st.distance / 1000).toFixed(1)}km`}
+                  </div>
+                )}
+              </div>
             </Link>
           );
         })}
@@ -1242,7 +1322,7 @@ function NewlyJoinedStoresSection({ liveByStore, userLocation }: { liveByStore: 
   if (loaded && stores.length === 0) return null;
 
   return (
-    <section aria-label="새로 합류한 매장" className="py-5">
+    <section aria-label="새로 합류한 매장" className="py-5" style={{ borderTop: '8px solid var(--bg-sub)' }}>
       <div className="px-4 flex items-end justify-between mb-3">
         <div>
           <div className="section-title" style={{ marginBottom: 2 }}>NEW STORES</div>
@@ -1336,7 +1416,7 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
   if (stores.length === 0) return null;
 
   return (
-    <section aria-label="내 주변 매장" className="pt-5">
+    <section aria-label="내 주변 매장" className="pt-5" style={{ borderTop: '8px solid var(--bg-sub)' }}>
       <div className="px-4 flex items-end justify-between mb-4">
         <div>
           <div className="section-title" style={{ marginBottom: 2 }}>NEARBY</div>
@@ -1417,8 +1497,8 @@ function NearbyStoreListRow({ store: st, live, rank }: { store: NearbyStore; liv
   return (
     <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="flex items-center gap-3 px-4 py-3 transition active:bg-gray-50 tap" style={{ borderBottom: '1px solid var(--border)' }}>
       <span className="w-6 text-center text-[13px] font-extrabold flex-shrink-0 stat-number" style={{ color: rank <= 3 ? 'var(--brand)' : 'var(--text-3)' }}>{rank}</span>
-      <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-        {st.photoUrl ? <img src={st.photoUrl} alt={st.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[14px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.5 }}>{st.name.charAt(0)}</span></div>}
+      <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden relative" style={{ background: 'var(--surface-2)' }}>
+        {st.photoUrl ? <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="48px" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[14px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.5 }}>{st.name.charAt(0)}</span></div>}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
@@ -1498,17 +1578,47 @@ function LiveHeroCard({ group, thumbnail }: { group: StoreGroup; thumbnail?: str
 function LiveEmptyState() {
   return (
     <div className="mx-4">
-      <button onClick={() => window.location.href = '/m/find?mode=map'} className="block w-full rounded-3xl overflow-hidden card-hover text-left" style={{ background: 'linear-gradient(135deg, var(--brand-pale) 0%, #fff 100%)', border: '1px solid rgba(255,31,143,0.15)', padding: '24px 20px' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'var(--brand)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="#fff" stroke="none"/><path d="M16.5 7.5a6.5 6.5 0 010 9M7.5 7.5a6.5 6.5 0 000 9"/></svg>
-          </div>
-          <div>
-            <div className="text-[15px] font-extrabold" style={{ color: 'var(--text-1)' }}>현재 진행 중인 LIVE 없음</div>
-            <div className="text-[12px] mt-0.5" style={{ color: 'var(--text-2)' }}>주변 홀덤펍 지도로 탐색하기 →</div>
+      <div
+        style={{
+          borderRadius: 18,
+          padding: '22px 18px',
+          background: 'linear-gradient(135deg, var(--surface-1), var(--brand-pale))',
+          border: '1px dashed rgba(255,31,143,0.30)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+        }}
+      >
+        {/* Ripple pulse ring (핸드오프 패턴) */}
+        <div style={{ position: 'relative', width: 56, height: 56, flexShrink: 0 }}>
+          <span style={{ position: 'absolute', inset: 0, borderRadius: 99, background: 'rgba(255,31,143,0.12)', animation: 'findPulseRing 2s ease-out infinite' }} />
+          <span style={{ position: 'absolute', inset: 8, borderRadius: 99, background: 'rgba(255,31,143,0.18)', animation: 'findPulseRing 2s ease-out infinite', animationDelay: '0.5s' }} />
+          <div style={{ position: 'absolute', inset: 16, borderRadius: 99, background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" fill="#fff" stroke="none"/>
+              <path d="M16.5 7.5a6.5 6.5 0 010 9M7.5 7.5a6.5 6.5 0 000 9"/>
+            </svg>
           </div>
         </div>
-      </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.015em', color: 'var(--text-1)' }}>현재 진행 중인 LIVE 없음</div>
+          <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3, lineHeight: 1.5 }}>주변 홀덤펍 지도로 탐색해보세요</div>
+          <button
+            onClick={() => window.location.href = '/m/find?mode=map'}
+            className="tap"
+            style={{
+              marginTop: 10, padding: '7px 14px', borderRadius: 99,
+              fontSize: 11, fontWeight: 800,
+              background: 'var(--bg)', color: 'var(--brand)',
+              border: '1px solid rgba(255,31,143,0.25)',
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            지도로 탐색
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
