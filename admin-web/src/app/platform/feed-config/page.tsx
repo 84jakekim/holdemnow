@@ -3,12 +3,14 @@
 /**
  * /platform/feed-config — 본사 어드민 사용자 반경 설정
  *
- * 3 섹션 카드:
+ * 4 섹션 카드:
  *  1) 💬 채팅방 반경 (/m/posts) — 디폴트 + 옵션 + 매장수·24h 글수 미리보기
  *  2) ⭐ 내 주변 인기 매장 (/m/find 인기 매장 섹션) — 디폴트 + 옵션 + 자동확장
  *  3) 📍 내 주변 매장 (/m/find 매장 리스트) — 디폴트 + 옵션 + 자동확장
+ *  4) 🎬 지금 LIVE 전체보기 (/m/live) — 디폴트 + 옵션
  *
- * 단일 doc(meta/feedConfig) 머지 저장. 모든 모바일 클라이언트에 즉시 반영.
+ * 섹션별 개별 저장 + 하단 일괄 저장 버튼. 단일 doc(meta/feedConfig) 머지 저장.
+ * saveFeedConfig가 FeedConfigInput(Partial)을 받아 prev와 머지하므로 부분 저장 안전.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -64,7 +66,13 @@ export default function FeedConfigPage() {
   const [liveListDefault, setLiveListDefault] = useState<number>(FEED_CONFIG_DEFAULT.liveListRadiusKm);
   const [liveListOptions, setLiveListOptions] = useState<number[]>(FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm);
 
-  const [saving, setSaving] = useState(false);
+  // ─── 섹션별 saving 상태 ───
+  const [savingChat, setSavingChat] = useState(false);
+  const [savingPopular, setSavingPopular] = useState(false);
+  const [savingNearby, setSavingNearby] = useState(false);
+  const [savingLive, setSavingLive] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
+
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,34 +156,134 @@ export default function FeedConfigPage() {
   }, [chatDefault, storeCoords]);
   const chatEmptyRisk = chatStoresInRadius < 5;
 
-  const hasChanges = useMemo(() => {
+  const eqArr = (a: number[], b: number[]) =>
+    a.length === b.length && a.every((v, i) => v === b[i]);
+
+  const chatDirty = useMemo(() => {
     if (!loaded) return false;
-    const eqArr = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
     return (
       chatDefault !== cfg.defaultRadiusKm ||
-      !eqArr(chatOptions, cfg.radiusOptions) ||
+      !eqArr(chatOptions, cfg.radiusOptions)
+    );
+  }, [loaded, cfg, chatDefault, chatOptions]);
+
+  const popularDirty = useMemo(() => {
+    if (!loaded) return false;
+    return (
       popularDefault !== cfg.popularRadiusDefaultKm ||
       !eqArr(popularOptions, cfg.popularRadiusOptionsKm) ||
       popularAuto !== cfg.popularAutoExpand ||
-      popularAutoMax !== cfg.popularAutoExpandMaxKm ||
+      popularAutoMax !== cfg.popularAutoExpandMaxKm
+    );
+  }, [loaded, cfg, popularDefault, popularOptions, popularAuto, popularAutoMax]);
+
+  const nearbyDirty = useMemo(() => {
+    if (!loaded) return false;
+    return (
       nearbyDefault !== cfg.nearbyRadiusDefaultKm ||
       !eqArr(nearbyOptions, cfg.nearbyRadiusOptionsKm) ||
       nearbyAuto !== cfg.nearbyAutoExpand ||
-      nearbyAutoMax !== cfg.nearbyAutoExpandMaxKm ||
+      nearbyAutoMax !== cfg.nearbyAutoExpandMaxKm
+    );
+  }, [loaded, cfg, nearbyDefault, nearbyOptions, nearbyAuto, nearbyAutoMax]);
+
+  const liveDirty = useMemo(() => {
+    if (!loaded) return false;
+    return (
       liveListDefault !== (cfg.liveListRadiusKm ?? FEED_CONFIG_DEFAULT.liveListRadiusKm) ||
       !eqArr(liveListOptions, cfg.liveListRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm)
     );
-  }, [
-    loaded, cfg,
-    chatDefault, chatOptions,
-    popularDefault, popularOptions, popularAuto, popularAutoMax,
-    nearbyDefault, nearbyOptions, nearbyAuto, nearbyAutoMax,
-    liveListDefault, liveListOptions,
-  ]);
+  }, [loaded, cfg, liveListDefault, liveListOptions]);
 
-  const onSave = async () => {
+  const hasChanges = chatDirty || popularDirty || nearbyDirty || liveDirty;
+
+  const showToast = (msg: string) => {
+    setSavedMsg(msg);
+    setError(null);
+    window.setTimeout(() => setSavedMsg(null), 3000);
+  };
+
+  const onSaveChat = async () => {
     if (!actorUid) { setError('로그인 필요'); return; }
-    setSaving(true);
+    setSavingChat(true);
+    setError(null);
+    try {
+      await saveFeedConfig(
+        { defaultRadiusKm: chatDefault, radiusOptions: chatOptions },
+        { actorUid, actorEmail },
+      );
+      showToast('채팅방 반경 저장 완료 — 즉시 반영');
+    } catch (e) {
+      setError(`저장 실패: ${(e as Error).message}`);
+    } finally {
+      setSavingChat(false);
+    }
+  };
+
+  const onSavePopular = async () => {
+    if (!actorUid) { setError('로그인 필요'); return; }
+    setSavingPopular(true);
+    setError(null);
+    try {
+      await saveFeedConfig(
+        {
+          popularRadiusDefaultKm: popularDefault,
+          popularRadiusOptionsKm: popularOptions,
+          popularAutoExpand: popularAuto,
+          popularAutoExpandMaxKm: popularAutoMax,
+        },
+        { actorUid, actorEmail },
+      );
+      showToast('내 주변 인기 매장 반경 저장 완료 — 즉시 반영');
+    } catch (e) {
+      setError(`저장 실패: ${(e as Error).message}`);
+    } finally {
+      setSavingPopular(false);
+    }
+  };
+
+  const onSaveNearby = async () => {
+    if (!actorUid) { setError('로그인 필요'); return; }
+    setSavingNearby(true);
+    setError(null);
+    try {
+      await saveFeedConfig(
+        {
+          nearbyRadiusDefaultKm: nearbyDefault,
+          nearbyRadiusOptionsKm: nearbyOptions,
+          nearbyAutoExpand: nearbyAuto,
+          nearbyAutoExpandMaxKm: nearbyAutoMax,
+        },
+        { actorUid, actorEmail },
+      );
+      showToast('내 주변 매장 반경 저장 완료 — 즉시 반영');
+    } catch (e) {
+      setError(`저장 실패: ${(e as Error).message}`);
+    } finally {
+      setSavingNearby(false);
+    }
+  };
+
+  const onSaveLive = async () => {
+    if (!actorUid) { setError('로그인 필요'); return; }
+    setSavingLive(true);
+    setError(null);
+    try {
+      await saveFeedConfig(
+        { liveListRadiusKm: liveListDefault, liveListRadiusOptionsKm: liveListOptions },
+        { actorUid, actorEmail },
+      );
+      showToast('지금 LIVE 전체보기 반경 저장 완료 — 즉시 반영');
+    } catch (e) {
+      setError(`저장 실패: ${(e as Error).message}`);
+    } finally {
+      setSavingLive(false);
+    }
+  };
+
+  const onSaveAll = async () => {
+    if (!actorUid) { setError('로그인 필요'); return; }
+    setSavingAll(true);
     setError(null);
     setSavedMsg(null);
     try {
@@ -196,12 +304,11 @@ export default function FeedConfigPage() {
         },
         { actorUid, actorEmail },
       );
-      setSavedMsg('저장 완료 — 모바일 클라이언트에 즉시 반영됩니다');
-      window.setTimeout(() => setSavedMsg(null), 3000);
+      showToast('4 섹션 전체 저장 완료 — 즉시 반영');
     } catch (e) {
       setError(`저장 실패: ${(e as Error).message}`);
     } finally {
-      setSaving(false);
+      setSavingAll(false);
     }
   };
 
@@ -264,6 +371,9 @@ export default function FeedConfigPage() {
         showSlider
         sliderMax={MAX_RADIUS_KM}
         sliderHint={chatEmptyRisk ? '반경 안 매장이 5곳 미만 — 빈상태 위험' : undefined}
+        dirty={chatDirty}
+        onSave={onSaveChat}
+        saving={savingChat}
       >
         <div className="grid grid-cols-3 gap-2 mt-4">
           <Metric label="반경 안 매장" value={`${chatStoresInRadius}곳`} sub={`전체 ${storeCoords.length}곳`} danger={chatEmptyRisk} />
@@ -283,6 +393,9 @@ export default function FeedConfigPage() {
         onOptions={setPopularOptions}
         sliderMax={100}
         showSlider
+        dirty={popularDirty}
+        onSave={onSavePopular}
+        saving={savingPopular}
       >
         <AutoExpandRow
           enabled={popularAuto}
@@ -304,6 +417,9 @@ export default function FeedConfigPage() {
         onOptions={setNearbyOptions}
         sliderMax={200}
         showSlider
+        dirty={nearbyDirty}
+        onSave={onSaveNearby}
+        saving={savingNearby}
       >
         <AutoExpandRow
           enabled={nearbyAuto}
@@ -325,19 +441,22 @@ export default function FeedConfigPage() {
         onOptions={setLiveListOptions}
         sliderMax={200}
         showSlider
+        dirty={liveDirty}
+        onSave={onSaveLive}
+        saving={savingLive}
       />
 
 
-      {/* 액션 */}
+      {/* 하단 일괄 저장 버튼 */}
       <section className="flex items-center gap-3 sticky bottom-4 z-10">
         <button
           type="button"
-          onClick={onSave}
-          disabled={!hasChanges || saving}
+          onClick={onSaveAll}
+          disabled={!hasChanges || savingAll}
           className="rounded-xl px-6 py-3 text-sm font-bold disabled:opacity-40"
           style={{ background: 'var(--gold)', color: '#0F1419', boxShadow: '0 4px 14px rgba(0,0,0,0.15)' }}
         >
-          {saving ? '저장 중…' : '저장 (3 섹션 일괄 · 즉시 반영)'}
+          {savingAll ? '저장 중…' : '4 섹션 일괄 · 즉시 반영'}
         </button>
         {savedMsg && <span className="text-xs font-semibold" style={{ color: 'var(--gold)' }}>✓ {savedMsg}</span>}
         {error && <span className="text-xs font-semibold" style={{ color: '#E03030' }}>⚠ {error}</span>}
@@ -380,6 +499,9 @@ function RadiusSectionCard({
   showSlider,
   sliderMax,
   sliderHint,
+  dirty,
+  onSave,
+  saving,
   children,
 }: {
   icon: string;
@@ -392,6 +514,9 @@ function RadiusSectionCard({
   showSlider?: boolean;
   sliderMax: number;
   sliderHint?: string;
+  dirty?: boolean;
+  onSave?: () => void;
+  saving?: boolean;
   children?: React.ReactNode;
 }) {
   const [optionInput, setOptionInput] = useState('');
@@ -421,16 +546,49 @@ function RadiusSectionCard({
   return (
     <section
       className="rounded-2xl p-5"
-      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+      style={{
+        background: 'var(--surface-1)',
+        border: dirty ? '1px solid rgba(236,72,153,0.5)' : '1px solid var(--border)',
+        transition: 'border-color 0.15s',
+      }}
     >
-      <div className="flex items-baseline justify-between mb-1 flex-wrap">
-        <h2 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
-          <span style={{ fontSize: 18 }}>{icon}</span>
-          {title}
-        </h2>
-        <span className="text-xl font-extrabold" style={{ color: 'var(--gold)' }}>
-          {formatRadiusKm(defaultKm)}
-        </span>
+      {/* 섹션 헤더 행 */}
+      <div className="flex items-start justify-between mb-1 gap-2">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
+            <span style={{ fontSize: 18 }}>{icon}</span>
+            {title}
+            {dirty && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(236,72,153,0.15)', color: '#EC4899' }}
+              >
+                변경됨
+              </span>
+            )}
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-xl font-extrabold" style={{ color: 'var(--gold)' }}>
+            {formatRadiusKm(defaultKm)}
+          </span>
+          {onSave && (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={!dirty || saving}
+              className="rounded-lg px-3 py-1.5 text-xs font-bold disabled:opacity-40 transition-opacity"
+              style={{
+                background: dirty ? '#EC4899' : 'var(--surface-2)',
+                color: dirty ? '#fff' : 'var(--text-3)',
+                border: '1px solid transparent',
+              }}
+              aria-label={`${title} 저장`}
+            >
+              {saving ? '…' : '저장'}
+            </button>
+          )}
+        </div>
       </div>
       <p className="text-[11px] mb-3" style={{ color: 'var(--text-3)' }}>{subtitle}</p>
 
