@@ -274,31 +274,6 @@ export default function MyPage() {
       </div>
       <div style={{ borderBottom: '6px solid var(--surface-2)' }} />
 
-      {/* ── 알림 설정 ── */}
-      <div className="px-5 py-5" style={{ borderBottom: '6px solid var(--surface-2)' }}>
-        <div className="text-base font-extrabold mb-4" style={{ color: 'var(--text-1)' }}>알림 설정</div>
-
-        {/* 알림 권한 진단 카드 — 권한 + 토큰 상태 표시 + 활성화 버튼 */}
-        <NotificationStatusCard
-          permission={pushPermission}
-          tokenCount={pushTokenCount}
-          busy={pushBusy}
-          error={pushError}
-          onEnable={handleEnableNotifications}
-        />
-
-        {loading ? (
-          <div className="text-sm" style={{ color: 'var(--text-3)' }}>로딩…</div>
-        ) : (
-          <div>
-            <PrefRow label="즐겨찾기 매장 LIVE 시작" desc="실시간 즉시 알림" value={prefs.favLive} onToggle={() => togglePref('favLive')} />
-            <PrefRow label="관심 토너 시작 1시간 전" desc="미리 알려드려요" value={prefs.tournamentStart} onToggle={() => togglePref('tournamentStart')} />
-            <PrefRow label="늦은 등록 마감 임박" desc="관심 토너 등록 30분 전" value={prefs.lateRegImminent} onToggle={() => togglePref('lateRegImminent')} />
-            <PrefRow label="매장·시리즈 마케팅" desc="광고성 알림 (선택)" value={prefs.marketing} onToggle={() => togglePref('marketing')} />
-          </div>
-        )}
-      </div>
-
       {/* ── 메뉴 (2026-05-27 핸드오프 톤) ── */}
       <div className="px-5 py-4" style={{ borderBottom: '6px solid var(--surface-2)' }}>
         <div
@@ -377,6 +352,38 @@ export default function MyPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* ── 알림 설정 ── */}
+      <div className="px-5 py-5" style={{ borderBottom: '6px solid var(--surface-2)' }}>
+        <div className="text-base font-extrabold mb-4" style={{ color: 'var(--text-1)' }}>알림 설정</div>
+
+        {/* 알림 권한 진단 카드 — 권한 + 토큰 상태 표시 + 활성화 버튼 */}
+        <NotificationStatusCard
+          permission={pushPermission}
+          tokenCount={pushTokenCount}
+          busy={pushBusy}
+          error={pushError}
+          onEnable={handleEnableNotifications}
+        />
+
+        {loading ? (
+          <div className="text-sm" style={{ color: 'var(--text-3)' }}>로딩…</div>
+        ) : (
+          <div
+            style={{
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 14,
+              overflow: 'hidden',
+            }}
+          >
+            <PrefRow icon="🔴" label="즐겨찾기 매장 LIVE 시작" desc="실시간 즉시 알림" value={prefs.favLive} onToggle={() => togglePref('favLive')} />
+            <PrefRow icon="⏰" label="관심 토너 시작 1시간 전" desc="시작 1시간 전 미리 알려드려요" value={prefs.tournamentStart} onToggle={() => togglePref('tournamentStart')} />
+            <PrefRow icon="⏳" label="참가 마감 임박" desc="관심 토너 참가 마감 30분 전" value={prefs.lateRegImminent} onToggle={() => togglePref('lateRegImminent')} />
+            <PrefRow icon="📢" label="매장 대회 마케팅" desc="광고성 알림 (선택)" value={prefs.marketing} onToggle={() => togglePref('marketing')} isLast />
+          </div>
+        )}
       </div>
 
       {/* ── 최근 방문 매장 ── */}
@@ -765,19 +772,43 @@ function NotificationStatusCard({
   );
 }
 
-function PrefRow({ label, desc, value, onToggle }: {
-  label: string; desc: string; value: boolean; onToggle: () => void;
+function PrefRow({ icon, label, desc, value, onToggle, isLast }: {
+  icon: string; label: string; desc: string; value: boolean; onToggle: () => void; isLast?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
-      <div className="flex-1 min-w-0 pr-3">
+    <div
+      className="flex items-center gap-3 px-3.5 py-3"
+      style={{ borderBottom: isLast ? 'none' : '1px solid var(--border)' }}
+    >
+      {/* 아이콘 뱃지 */}
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          background: value ? 'rgba(255,31,143,0.10)' : 'var(--surface-2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 17,
+          flexShrink: 0,
+          transition: 'background 0.2s',
+        }}
+        aria-hidden="true"
+      >
+        {icon}
+      </div>
+      {/* 텍스트 */}
+      <div className="flex-1 min-w-0">
         <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{label}</div>
         <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>{desc}</div>
       </div>
+      {/* 토글 */}
       <button
         onClick={onToggle}
         role="switch"
         aria-checked={value}
+        aria-label={label}
         className="relative w-11 h-6 rounded-full flex-shrink-0 transition"
         style={{ background: value ? 'var(--brand)' : 'var(--surface-3)' }}
       >
