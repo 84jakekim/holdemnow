@@ -397,6 +397,13 @@ export default function FeedConfigPage() {
         icon="💬"
         title="채팅방 반경"
         subtitle="/m/posts (오늘의 매장 소식 채팅방)"
+        conditions={[
+          { label: '노출 대상', value: '매장이 등록한 "오늘의 소식" 글 (24h 만료)' },
+          { label: '위치 필터', value: '사용자 위치 기준 반경 안의 매장 글만' },
+          { label: '자동 확장', value: '반경 안 글이 부족하면 옵션의 더 큰 반경으로 자동 확장 (라더식)' },
+          { label: '위치 거부', value: '위치 권한 없으면 999km(전국) 자동 적용' },
+          { label: '정렬', value: '최신 게시순 (createdAt DESC)' },
+        ]}
         defaultKm={chatDefault}
         onDefault={setChatDefault}
         options={chatOptions}
@@ -420,6 +427,15 @@ export default function FeedConfigPage() {
         icon="⭐"
         title="내 주변 인기 매장"
         subtitle="/m/find 인기 매장 섹션 · LIVE 가중치 정렬"
+        conditions={[
+          { label: '노출 대상', value: '활성 매장 (status===active, 좌표 있음)' },
+          { label: '위치 필터', value: '사용자 위치 기준 반경 안의 매장만' },
+          { label: '자동 확장', value: '결과가 5개 미만이면 다음 옵션 단계로 확장 (최대값까지)' },
+          { label: '정렬', value: '인기점수순 = 즐겨찾기 + 길찾기 + LIVE×2 + 수동부스트 (+신규 30일 +30%)' },
+          { label: '안전 장치', value: '가입 24h 이내 매장은 모든 신호 0 처리 (셀프 어뷰징 차단)' },
+          { label: '최대 노출', value: '10개' },
+          { label: '위치 거부', value: '거리 무시하고 전국 점수순 노출' },
+        ]}
         defaultKm={popularDefault}
         onDefault={setPopularDefault}
         options={popularOptions}
@@ -444,6 +460,13 @@ export default function FeedConfigPage() {
         icon="📍"
         title="내 주변 매장"
         subtitle="/m/find 매장 리스트 + 지도 모드"
+        conditions={[
+          { label: '노출 대상', value: '활성 매장 (좌표 있음, 데모 매장 포함)' },
+          { label: '위치 필터', value: '사용자 위치 기준 반경 안의 매장만' },
+          { label: '자동 확장', value: '결과가 부족하면 다음 옵션 단계로 확장 (최대값까지)' },
+          { label: '정렬', value: '거리순 (가까운 순)' },
+          { label: '위치 거부', value: '리스트 노출 안 됨 (위치 권한 안내 표시)' },
+        ]}
         defaultKm={nearbyDefault}
         onDefault={setNearbyDefault}
         options={nearbyOptions}
@@ -468,6 +491,13 @@ export default function FeedConfigPage() {
         icon="🎬"
         title="지금 LIVE 전체보기"
         subtitle="/m/live 페이지의 카드 노출 반경"
+        conditions={[
+          { label: '노출 대상', value: '현재 LIVE 진행 중인 매장 (liveSessions where status=live)' },
+          { label: '위치 필터', value: '사용자 위치 기준 반경 안의 매장만' },
+          { label: '자동 확장', value: '없음 (단일 반경 — 결과 적어도 확장 X)' },
+          { label: '정렬', value: '거리순 (가까운 순)' },
+          { label: '위치 거부', value: '리스트 노출 안 됨 (위치 권한 안내 표시)' },
+        ]}
         defaultKm={liveListDefault}
         onDefault={setLiveListDefault}
         options={liveListOptions}
@@ -484,6 +514,14 @@ export default function FeedConfigPage() {
         icon="🆕"
         title="새로 합류한 매장"
         subtitle="/m/find 'NEW STORES' 섹션의 노출 반경 (가입 30일 이내)"
+        conditions={[
+          { label: '노출 대상', value: '가입 30일 이내 활성 매장 (데모 매장 포함)' },
+          { label: '위치 필터', value: '사용자 위치 기준 반경 안의 매장만 (좌표 없는 매장 제외)' },
+          { label: '자동 확장', value: '없음 (단일 반경 — 신규 매장 노출 한도 보장)' },
+          { label: '정렬', value: '거리순 (가까운 순)' },
+          { label: '위치 거부', value: '전국 가입 최신순으로 fallback' },
+          { label: '최대 노출', value: '10개' },
+        ]}
         defaultKm={newlyJoinedDefault}
         onDefault={setNewlyJoinedDefault}
         options={newlyJoinedOptions}
@@ -542,6 +580,7 @@ function RadiusSectionCard({
   icon,
   title,
   subtitle,
+  conditions,
   defaultKm,
   onDefault,
   options,
@@ -557,6 +596,8 @@ function RadiusSectionCard({
   icon: string;
   title: string;
   subtitle: string;
+  /** 관리자가 한눈에 노출 조건을 이해할 수 있도록 카드 상단에 표시되는 조건 목록. */
+  conditions?: { label: string; value: string }[];
   defaultKm: number;
   onDefault: (n: number) => void;
   options: number[];
@@ -641,6 +682,30 @@ function RadiusSectionCard({
         </div>
       </div>
       <p className="text-[11px] mb-3" style={{ color: 'var(--text-3)' }}>{subtitle}</p>
+
+      {/* 노출 조건 안내 박스 — 관리자 가독성 */}
+      {conditions && conditions.length > 0 && (
+        <div
+          className="rounded-xl p-3 mb-4 text-[11px] leading-relaxed"
+          style={{
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-2)',
+          }}
+        >
+          <div className="font-extrabold mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-1)' }}>
+            <span aria-hidden>📋</span> 노출 조건
+          </div>
+          <ul className="space-y-1">
+            {conditions.map((c, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span className="font-bold flex-shrink-0" style={{ color: 'var(--gold)', minWidth: 56 }}>{c.label}</span>
+                <span>{c.value}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {showSlider && (
         <>
