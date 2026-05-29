@@ -71,6 +71,7 @@ const MENU_GROUPS: MenuGroup[] = [
       { id: 'notices', icon: '📢', label: '팝업 공지', href: '/platform/notices' },
       { id: 'pinned', icon: '📌', label: '홈 고정 공지', href: '/platform/pinned' },
       { id: 'feed-config', icon: '📍', label: '반경 설정', href: '/platform/feed-config' },
+      { id: 'popularity', icon: '🔥', label: '인기 매장 컨트롤', href: '/platform/popularity' },
       { id: 'moderation-keywords', icon: '🚫', label: '금지어 사전', href: '/platform/moderation-keywords' },
       { id: 'marketing', icon: '📣', label: '마케팅 푸시', href: '/platform/marketing' },
     ],

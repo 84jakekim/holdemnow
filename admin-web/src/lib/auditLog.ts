@@ -16,6 +16,8 @@ export type AuditAction =
   | 'send_password_reset'
   | 'change_status'
   | 'change_role'
+  // 인기 매장 컨트롤
+  | 'change_score_boost'
   // 모더레이션 액션 (platform/moderation)
   | 'hide'
   | 'restore'

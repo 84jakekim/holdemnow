@@ -1,6 +1,6 @@
 'use client';
 
-import { collection, doc, getDoc, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { haversineMeters, type LatLng } from './geo';
 
@@ -54,6 +54,11 @@ export interface PopularityStore {
   _score?: number;
   /** 신규 매장 여부 (가입 30일 이내) */
   isNew?: boolean;
+  /** 점수 분해 — 본사 어드민 모니터링 노출용 */
+  favoriteAdds?: number;
+  directionsClicks?: number;
+  /** 본사 어드민 수동 부스트 (가산점). 음수 가능 — 감점도 됨. */
+  scoreBoost?: number;
 }
 
 interface StoreDocData {
@@ -66,6 +71,8 @@ interface StoreDocData {
   status?: string;
   liveSessionCount?: number;
   createdAt?: Timestamp;
+  /** 본사 어드민 수동 부스트 */
+  scoreBoost?: number;
 }
 
 interface MetricsDocData {
@@ -104,6 +111,9 @@ async function loadActiveStoresWithMetrics(): Promise<{
       tier: s.data.tier,
       liveSessionCount: s.data.liveSessionCount ?? 0,
       createdAt: s.data.createdAt,
+      scoreBoost: s.data.scoreBoost ?? 0,
+      favoriteAdds: metricsResults[i].favoriteAdds ?? 0,
+      directionsClicks: metricsResults[i].directionsClicks ?? 0,
     },
     metrics: metricsResults[i],
   }));
@@ -119,10 +129,10 @@ function isNewStore(createdAt?: Timestamp): boolean {
   return Date.now() - createdAt.toMillis() < NEW_BOOST_DAYS * 24 * 60 * 60 * 1000;
 }
 
-function computeBaseScore(metrics: MetricsDocData, liveCount: number): number {
+function computeBaseScore(metrics: MetricsDocData, liveCount: number, scoreBoost = 0): number {
   const fav = metrics.favoriteAdds ?? 0;
   const dir = metrics.directionsClicks ?? 0;
-  return fav * 1.0 + dir * 1.0 + liveCount * 2.0;
+  return fav * 1.0 + dir * 1.0 + liveCount * 2.0 + scoreBoost;
 }
 
 function applyDistancePenalty(score: number, distanceM?: number): number {
@@ -187,7 +197,7 @@ export async function loadPopularStores(
       // 가입 24시간 이내는 신호 무시 (셀프 어뷰징 견제)
       const liveCount = isWithin24h(store.createdAt) ? 0 : (store.liveSessionCount ?? 0);
       const muted = isWithin24h(store.createdAt) ? {} : metrics;
-      const base = computeBaseScore(muted, liveCount);
+      const base = computeBaseScore(muted, liveCount, store.scoreBoost ?? 0);
       const score = applyNewBoost(base, store.createdAt);
       return { ...store, _score: score, isNew: isNewStore(store.createdAt) };
     });
@@ -212,7 +222,7 @@ export async function loadPopularStores(
     const scored = inRadius.map(({ store, metrics }) => {
       const liveCount = isWithin24h(store.createdAt) ? 0 : (store.liveSessionCount ?? 0);
       const muted = isWithin24h(store.createdAt) ? {} : metrics;
-      const base = computeBaseScore(muted, liveCount);
+      const base = computeBaseScore(muted, liveCount, store.scoreBoost ?? 0);
       const boosted = applyNewBoost(base, store.createdAt);
       const final = applyDistancePenalty(boosted, store.distance);
       return { ...store, _score: final, isNew: isNewStore(store.createdAt) };
@@ -260,4 +270,33 @@ export async function loadRecentlyJoinedStores(
   });
 
   return news.slice(0, limitCount);
+}
+
+// ─── 본사 어드민 모니터링 전용 ─────────────────────────────────
+
+/**
+ * 본사 어드민 인기 매장 모니터링용 — 활성 매장 전체의 점수 분해 + 최종 점수.
+ * 거리감점·반경 필터 X (전국 매장 평탄 비교).
+ * 점수 = favoriteAdds + directionsClicks + liveSessionCount×2 + scoreBoost (+ 신규부스트 30%)
+ * 가입 24h 이내 매장은 신호 0 처리.
+ */
+export async function loadAllStoresForMonitor(): Promise<PopularityStore[]> {
+  const all = await loadActiveStoresWithMetrics();
+  const scored = all.map(({ store, metrics }) => {
+    const liveCount = isWithin24h(store.createdAt) ? 0 : (store.liveSessionCount ?? 0);
+    const muted = isWithin24h(store.createdAt) ? {} : metrics;
+    const base = computeBaseScore(muted, liveCount, store.scoreBoost ?? 0);
+    const score = applyNewBoost(base, store.createdAt);
+    return { ...store, _score: score, isNew: isNewStore(store.createdAt) };
+  });
+  scored.sort((a, b) => (b._score ?? 0) - (a._score ?? 0));
+  return scored;
+}
+
+/** 본사 어드민 수동 부스트 저장 — 매장의 scoreBoost 필드 갱신. */
+export async function updateScoreBoost(storeId: string, scoreBoost: number): Promise<void> {
+  await updateDoc(doc(db, 'stores', storeId), {
+    scoreBoost,
+    scoreBoostUpdatedAt: serverTimestamp(),
+  });
 }
