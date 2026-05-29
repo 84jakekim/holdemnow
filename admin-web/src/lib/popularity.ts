@@ -241,11 +241,19 @@ export async function loadPopularStores(
 /**
  * "🆕 새로 합류한 매장" 섹션용. 가입 30일 이내, 거리순.
  * 인기 신호와 무관 — 신규 매장 노출 보장.
+ *
+ * @param options.radiusKm — 본사 어드민 feedConfig에서 주입. 사용자 위치 있을 때만 적용.
+ *   사용자 위치 X 또는 radiusKm 미지정 시 반경 필터 없음 (전국 최신순).
  */
 export async function loadRecentlyJoinedStores(
   userLocation: LatLng | null,
-  limitCount = 10,
+  options: { limitCount?: number; radiusKm?: number } = {},
 ): Promise<PopularityStore[]> {
+  const limitCount = options.limitCount ?? 10;
+  const radiusM = userLocation && options.radiusKm != null && options.radiusKm > 0
+    ? options.radiusKm * 1000
+    : null;
+
   const all = await loadActiveStoresWithMetrics();
   const news = all
     .filter(({ store }) => isNewStore(store.createdAt))
@@ -255,6 +263,12 @@ export async function loadRecentlyJoinedStores(
           ? haversineMeters(userLocation, { lat: store.lat, lng: store.lng })
           : undefined;
       return { ...store, distance, isNew: true };
+    })
+    // 반경 필터 — userLocation + radiusM 둘 다 있을 때만. 좌표 없는 매장은 통과.
+    .filter((s) => {
+      if (radiusM == null) return true;
+      if (s.distance == null) return false; // 좌표 없으면 반경 비교 불가 → 제외
+      return s.distance <= radiusM;
     });
 
   // 위치 있으면 거리순, 없으면 최신 가입순

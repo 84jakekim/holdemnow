@@ -65,6 +65,12 @@ export interface FeedConfig {
   /** 추후 사용자 토글용 옵션 (현재는 본사 디폴트만 적용). */
   liveListRadiusOptionsKm: number[];
 
+  // ===== 새로 합류한 매장 섹션 (2026-05-29 신설) =====
+  /** "🆕 새로 합류한 매장" 섹션 반경 (km). 사용자 위치 기반 필터. */
+  newlyJoinedRadiusKm: number;
+  /** 추후 사용자 토글용 옵션. */
+  newlyJoinedRadiusOptionsKm: number[];
+
   updatedAt?: Timestamp;
   updatedBy?: string;
 }
@@ -86,6 +92,9 @@ export const FEED_CONFIG_DEFAULT: FeedConfig = {
 
   liveListRadiusKm: 30,
   liveListRadiusOptionsKm: [10, 20, 30, 50, 100],
+
+  newlyJoinedRadiusKm: 30,
+  newlyJoinedRadiusOptionsKm: [10, 20, 30, 50, 100],
 };
 
 const FEED_CONFIG_REF = doc(db, 'meta', 'feedConfig');
@@ -174,6 +183,12 @@ export async function saveFeedConfig(
       next.nearbyAutoExpand ?? prev.nearbyAutoExpand,
     nearbyAutoExpandMaxKm:
       next.nearbyAutoExpandMaxKm ?? prev.nearbyAutoExpandMaxKm,
+
+    liveListRadiusKm: next.liveListRadiusKm ?? prev.liveListRadiusKm,
+    liveListRadiusOptionsKm: next.liveListRadiusOptionsKm ?? prev.liveListRadiusOptionsKm,
+
+    newlyJoinedRadiusKm: next.newlyJoinedRadiusKm ?? prev.newlyJoinedRadiusKm,
+    newlyJoinedRadiusOptionsKm: next.newlyJoinedRadiusOptionsKm ?? prev.newlyJoinedRadiusOptionsKm,
   };
 
   const normalized = normalizeConfig(merged);
@@ -197,6 +212,10 @@ export async function saveFeedConfig(
       // 지금 LIVE 전체보기 (2026-05-27 HOTFIX — 저장 누락 버그 fix)
       liveListRadiusKm: normalized.liveListRadiusKm,
       liveListRadiusOptionsKm: normalized.liveListRadiusOptionsKm,
+
+      // 새로 합류한 매장 (2026-05-29 신설)
+      newlyJoinedRadiusKm: normalized.newlyJoinedRadiusKm,
+      newlyJoinedRadiusOptionsKm: normalized.newlyJoinedRadiusOptionsKm,
 
       updatedAt: serverTimestamp(),
       updatedBy: meta.actorUid,
@@ -320,6 +339,16 @@ function normalizeConfig(raw: Partial<FeedConfig>): FeedConfig {
     liveListRadiusOptionsKm: sanitizeOptions(
       raw.liveListRadiusOptionsKm,
       FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm,
+    ),
+
+    newlyJoinedRadiusKm: clampRadius(
+      raw.newlyJoinedRadiusKm,
+      FEED_CONFIG_DEFAULT.newlyJoinedRadiusKm,
+      500,
+    ),
+    newlyJoinedRadiusOptionsKm: sanitizeOptions(
+      raw.newlyJoinedRadiusOptionsKm,
+      FEED_CONFIG_DEFAULT.newlyJoinedRadiusOptionsKm,
     ),
 
     updatedAt: raw.updatedAt,

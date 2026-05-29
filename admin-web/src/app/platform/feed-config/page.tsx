@@ -65,12 +65,16 @@ export default function FeedConfigPage() {
   // 4) 지금 LIVE 전체보기 (2026-05-27 신설)
   const [liveListDefault, setLiveListDefault] = useState<number>(FEED_CONFIG_DEFAULT.liveListRadiusKm);
   const [liveListOptions, setLiveListOptions] = useState<number[]>(FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm);
+  // 5) 새로 합류한 매장 (2026-05-29 신설)
+  const [newlyJoinedDefault, setNewlyJoinedDefault] = useState<number>(FEED_CONFIG_DEFAULT.newlyJoinedRadiusKm);
+  const [newlyJoinedOptions, setNewlyJoinedOptions] = useState<number[]>(FEED_CONFIG_DEFAULT.newlyJoinedRadiusOptionsKm);
 
   // ─── 섹션별 saving 상태 ───
   const [savingChat, setSavingChat] = useState(false);
   const [savingPopular, setSavingPopular] = useState(false);
   const [savingNearby, setSavingNearby] = useState(false);
   const [savingLive, setSavingLive] = useState(false);
+  const [savingNewly, setSavingNewly] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
 
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -98,6 +102,8 @@ export default function FeedConfigPage() {
           setNearbyAutoMax(next.nearbyAutoExpandMaxKm);
           setLiveListDefault(next.liveListRadiusKm ?? FEED_CONFIG_DEFAULT.liveListRadiusKm);
           setLiveListOptions(next.liveListRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm);
+          setNewlyJoinedDefault(next.newlyJoinedRadiusKm ?? FEED_CONFIG_DEFAULT.newlyJoinedRadiusKm);
+          setNewlyJoinedOptions(next.newlyJoinedRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.newlyJoinedRadiusOptionsKm);
           setLoaded(true);
         }
       },
@@ -195,7 +201,15 @@ export default function FeedConfigPage() {
     );
   }, [loaded, cfg, liveListDefault, liveListOptions]);
 
-  const hasChanges = chatDirty || popularDirty || nearbyDirty || liveDirty;
+  const newlyDirty = useMemo(() => {
+    if (!loaded) return false;
+    return (
+      newlyJoinedDefault !== (cfg.newlyJoinedRadiusKm ?? FEED_CONFIG_DEFAULT.newlyJoinedRadiusKm) ||
+      !eqArr(newlyJoinedOptions, cfg.newlyJoinedRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.newlyJoinedRadiusOptionsKm)
+    );
+  }, [loaded, cfg, newlyJoinedDefault, newlyJoinedOptions]);
+
+  const hasChanges = chatDirty || popularDirty || nearbyDirty || liveDirty || newlyDirty;
 
   const showToast = (msg: string) => {
     setSavedMsg(msg);
@@ -281,6 +295,23 @@ export default function FeedConfigPage() {
     }
   };
 
+  const onSaveNewly = async () => {
+    if (!actorUid) { setError('로그인 필요'); return; }
+    setSavingNewly(true);
+    setError(null);
+    try {
+      await saveFeedConfig(
+        { newlyJoinedRadiusKm: newlyJoinedDefault, newlyJoinedRadiusOptionsKm: newlyJoinedOptions },
+        { actorUid, actorEmail },
+      );
+      showToast('새로 합류한 매장 반경 저장 완료 — 즉시 반영');
+    } catch (e) {
+      setError(`저장 실패: ${(e as Error).message}`);
+    } finally {
+      setSavingNewly(false);
+    }
+  };
+
   const onSaveAll = async () => {
     if (!actorUid) { setError('로그인 필요'); return; }
     setSavingAll(true);
@@ -301,10 +332,12 @@ export default function FeedConfigPage() {
           nearbyAutoExpandMaxKm: nearbyAutoMax,
           liveListRadiusKm: liveListDefault,
           liveListRadiusOptionsKm: liveListOptions,
+          newlyJoinedRadiusKm: newlyJoinedDefault,
+          newlyJoinedRadiusOptionsKm: newlyJoinedOptions,
         },
         { actorUid, actorEmail },
       );
-      showToast('4 섹션 전체 저장 완료 — 즉시 반영');
+      showToast('5 섹션 전체 저장 완료 — 즉시 반영');
     } catch (e) {
       setError(`저장 실패: ${(e as Error).message}`);
     } finally {
@@ -446,6 +479,22 @@ export default function FeedConfigPage() {
         saving={savingLive}
       />
 
+      {/* 5) 새로 합류한 매장 (2026-05-29 사용자 요청) */}
+      <RadiusSectionCard
+        icon="🆕"
+        title="새로 합류한 매장"
+        subtitle="/m/find 'NEW STORES' 섹션의 노출 반경 (가입 30일 이내)"
+        defaultKm={newlyJoinedDefault}
+        onDefault={setNewlyJoinedDefault}
+        options={newlyJoinedOptions}
+        onOptions={setNewlyJoinedOptions}
+        sliderMax={200}
+        showSlider
+        dirty={newlyDirty}
+        onSave={onSaveNewly}
+        saving={savingNewly}
+      />
+
 
       {/* 하단 일괄 저장 버튼 */}
       <section className="flex items-center gap-3 sticky bottom-4 z-10">
@@ -456,7 +505,7 @@ export default function FeedConfigPage() {
           className="rounded-xl px-6 py-3 text-sm font-bold disabled:opacity-40"
           style={{ background: 'var(--gold)', color: '#0F1419', boxShadow: '0 4px 14px rgba(0,0,0,0.15)' }}
         >
-          {savingAll ? '저장 중…' : '4 섹션 일괄 · 즉시 반영'}
+          {savingAll ? '저장 중…' : '5 섹션 일괄 · 즉시 반영'}
         </button>
         {savedMsg && <span className="text-xs font-semibold" style={{ color: 'var(--gold)' }}>✓ {savedMsg}</span>}
         {error && <span className="text-xs font-semibold" style={{ color: '#E03030' }}>⚠ {error}</span>}
@@ -473,6 +522,7 @@ export default function FeedConfigPage() {
           <div>⭐ 인기 매장: <b>{formatRadiusKm(cfg.popularRadiusDefaultKm)}</b> · {cfg.popularRadiusOptionsKm.map(formatRadiusKm).join(' · ')} · 자동확장 {cfg.popularAutoExpand ? `ON(최대 ${formatRadiusKm(cfg.popularAutoExpandMaxKm)})` : 'OFF'}</div>
           <div>📍 주변 매장: <b>{formatRadiusKm(cfg.nearbyRadiusDefaultKm)}</b> · {cfg.nearbyRadiusOptionsKm.map(formatRadiusKm).join(' · ')} · 자동확장 {cfg.nearbyAutoExpand ? `ON(최대 ${formatRadiusKm(cfg.nearbyAutoExpandMaxKm)})` : 'OFF'}</div>
           <div>🎬 지금 LIVE 전체보기: <b>{formatRadiusKm(cfg.liveListRadiusKm ?? FEED_CONFIG_DEFAULT.liveListRadiusKm)}</b> · {(cfg.liveListRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.liveListRadiusOptionsKm).map(formatRadiusKm).join(' · ')}</div>
+          <div>🆕 새로 합류한 매장: <b>{formatRadiusKm(cfg.newlyJoinedRadiusKm ?? FEED_CONFIG_DEFAULT.newlyJoinedRadiusKm)}</b> · {(cfg.newlyJoinedRadiusOptionsKm ?? FEED_CONFIG_DEFAULT.newlyJoinedRadiusOptionsKm).map(formatRadiusKm).join(' · ')}</div>
         </div>
         {cfg.updatedAt && (
           <div className="mt-2" style={{ color: 'var(--text-3)' }}>

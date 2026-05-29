@@ -1311,15 +1311,21 @@ function PopularStoresAvatarScroll({ liveByStore, userLocation }: { liveByStore:
 function NewlyJoinedStoresSection({ liveByStore, userLocation }: { liveByStore: Record<string, number>; userLocation: LatLng | null }) {
   const [stores, setStores] = useState<PopularityStore[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [feedCfg, setFeedCfg] = useState<FeedConfig>(FEED_CONFIG_DEFAULT);
   // userLocation은 FindPageInner 단일 watch에서 주입 (#8)
+
+  // 본사 어드민 반경 설정 구독
+  useEffect(() => {
+    return subscribeFeedConfig(setFeedCfg, () => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    loadRecentlyJoinedStores(userLocation).then((list) => {
+    loadRecentlyJoinedStores(userLocation, { radiusKm: feedCfg.newlyJoinedRadiusKm }).then((list) => {
       if (cancelled) return; setStores(list); setLoaded(true);
     }).catch(() => { if (!cancelled) setLoaded(true); });
     return () => { cancelled = true; };
-  }, [userLocation]);
+  }, [userLocation, feedCfg.newlyJoinedRadiusKm]);
 
   if (loaded && stores.length === 0) return null;
 
@@ -1331,7 +1337,9 @@ function NewlyJoinedStoresSection({ liveByStore, userLocation }: { liveByStore: 
           <div className="h3 flex items-center gap-1.5" style={{ color: 'var(--text-1)' }}>
             <span>새로 합류한 매장</span>
           </div>
-          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>최근 30일 가입 · {userLocation ? '거리순' : '가입 최신순'}</div>
+          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+            최근 30일 가입 · {userLocation ? `반경 ${feedCfg.newlyJoinedRadiusKm}km · 거리순` : '가입 최신순'}
+          </div>
         </div>
       </div>
       <div className="pl-4 flex gap-3 overflow-x-auto scrollbar-none pb-2">
