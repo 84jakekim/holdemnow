@@ -1580,14 +1580,34 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
           <div className="text-[12px] mt-0.5 flex items-center gap-1 flex-wrap" style={{ color: 'var(--text-3)' }}>
             {userLocation ? `현재 위치 기준 · 반경 ${radiusKm}km · ` : '위치 권한 허용 시 거리 표시'}
             {userLocation && <span className="font-bold stat-number" style={{ color: 'var(--brand)' }}>{visible.length}개</span>}
-            {activeSort !== 'distance' && (
-              <span
-                className="ml-1 text-[11px] font-semibold rounded-full px-1.5 py-0.5"
-                style={{ background: 'rgba(255,31,143,0.1)', color: 'var(--brand)' }}
-              >
-                {activeSortLabel}으로 정렬됨
-              </span>
-            )}
+            {activeSort !== 'distance' && (() => {
+              // 정렬 기준에 실제 부합하는 매장 수 — UX 혼란 차단
+              let matchCount: number | null = null;
+              if (activeSort === 'live') {
+                matchCount = visible.filter((s) => (liveByStore[s.id] ?? 0) > 0).length;
+              } else if (activeSort === 'open') {
+                matchCount = visible.filter((s) => isOpenNow(s.hours)).length;
+              } else if (activeSort === 'rating') {
+                matchCount = visible.filter((s) => (s.reviewCount ?? 0) > 0).length;
+              }
+              const zero = matchCount === 0;
+              return (
+                <span
+                  className="ml-1 text-[11px] font-semibold rounded-full px-1.5 py-0.5"
+                  style={{
+                    background: zero ? 'rgba(245,158,11,0.12)' : 'rgba(255,31,143,0.1)',
+                    color: zero ? '#D97706' : 'var(--brand)',
+                  }}
+                >
+                  {activeSortLabel}으로 정렬됨
+                  {matchCount != null && (
+                    zero
+                      ? ` · 해당 매장 없음(거리순 표시)`
+                      : ` · ${matchCount}곳`
+                  )}
+                </span>
+              );
+            })()}
           </div>
         </div>
         <button onClick={() => window.location.href = '/m/find?mode=map'} className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60 mb-1" style={{ color: 'var(--brand)' }}>
@@ -1709,17 +1729,28 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
           </div>
         )}
 
-        {/* 거리 뱃지 */}
-        {st.distance != null && (
-          <div className="absolute top-2 left-2">
+        {/* 거리 + 평점 뱃지 (좌상단 그룹) */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+          {st.distance != null && (
             <span
               className="text-[10px] font-bold rounded-full px-2 py-0.5"
               style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
             >
               {formatDistance(st.distance)}
             </span>
-          </div>
-        )}
+          )}
+          {(st.reviewCount ?? 0) > 0 && st.averageRating != null && (
+            <span
+              className="text-[10px] font-bold rounded-full px-2 py-0.5 inline-flex items-center gap-0.5"
+              style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+              aria-label={`평점 ${st.averageRating.toFixed(1)}점 / 리뷰 ${st.reviewCount}개`}
+            >
+              <span aria-hidden style={{ color: '#FFD43B' }}>★</span>
+              {st.averageRating.toFixed(1)}
+              <span style={{ opacity: 0.7 }}>({st.reviewCount})</span>
+            </span>
+          )}
+        </div>
 
         {/* LIVE 뱃지 */}
         {live > 0 && (
