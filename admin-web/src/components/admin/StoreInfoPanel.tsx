@@ -9,8 +9,18 @@ import {
   uploadStorePhoto,
   deleteStorePhotoByUrl,
 } from '@/lib/storeInfo';
+import { moderateText } from '@/lib/moderation';
 import { geocodeAddress } from '@/lib/kakao';
 import BusinessHoursPicker from '@/components/common/BusinessHoursPicker';
+
+const PITCH_MAX = 40;
+const PITCH_EXAMPLES = [
+  '우리 매장 딜러가 예뻐요',
+  'AA 하루 10번 나옴',
+  '신규 가입 시 칩 +50%',
+  '주차 100% 무료',
+  '오프닝 이벤트 진행 중',
+];
 
 interface Props {
   storeId: string;
@@ -24,6 +34,7 @@ interface FormState {
   hours: string;
   description: string;
   facilities: string[];
+  pitch: string;
 }
 
 function toForm(store: StoreDoc): FormState {
@@ -35,6 +46,7 @@ function toForm(store: StoreDoc): FormState {
     hours: store.hours ?? '',
     description: store.description ?? '',
     facilities: store.facilities ?? [],
+    pitch: store.pitch ?? '',
   };
 }
 
@@ -45,6 +57,7 @@ export default function StoreInfoPanel({ storeId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [pitchExamplesOpen, setPitchExamplesOpen] = useState(false);
   const photoUrls = store?.photoUrls ?? [];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,7 +93,28 @@ export default function StoreInfoPanel({ storeId }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const updates: Parameters<typeof updateStoreInfo>[1] = { ...form };
+      // pitch 모더레이션 — 입력된 경우에만 검사
+      const pitchTrimmed = form.pitch.trim();
+      if (pitchTrimmed.length > 0) {
+        const modResult = moderateText(pitchTrimmed, { allowEmpty: false, maxLength: PITCH_MAX });
+        if (!modResult.ok) {
+          setError(modResult.message ?? '한마디 자랑에 부적절한 내용이 포함됐어요');
+          setSaving(false);
+          return;
+        }
+      }
+
+      const updates: Parameters<typeof updateStoreInfo>[1] = {
+        name: form.name,
+        address: form.address,
+        addressDetail: form.addressDetail,
+        phone: form.phone,
+        hours: form.hours,
+        description: form.description,
+        facilities: form.facilities,
+        // pitch: 빈 문자열이면 null로 저장해서 Firestore에서 필드 제거 (사용자 앱 카드 노출 차단)
+        pitch: pitchTrimmed.length > 0 ? pitchTrimmed : null,
+      };
       // 주소가 바뀌었으면 카카오 Geocoder로 lat/lng 재계산
       const addressChanged = (store?.address ?? '') !== form.address;
       if (addressChanged && form.address.trim()) {
@@ -268,6 +302,75 @@ export default function StoreInfoPanel({ storeId }: Props) {
             ))}
           </div>
         </Field>
+
+        {/* 한마디 자랑 (pitch) */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[10px] font-bold text-gray-500 tracking-wider">
+              한마디 자랑
+              <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-extrabold tracking-widest" style={{ background: '#FFF0F7', color: '#FF1F8F' }}>
+                NEW
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPitchExamplesOpen((v) => !v)}
+              className="text-[10px] font-semibold transition hover:opacity-70"
+              style={{ color: '#FF1F8F', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              {pitchExamplesOpen ? '예시 닫기 ↑' : '예시 보기 ↓'}
+            </button>
+          </div>
+
+          {pitchExamplesOpen && (
+            <div className="mb-2 rounded-xl p-3 flex flex-col gap-1.5" style={{ background: '#FFF0F7', border: '1px solid rgba(255,31,143,0.15)' }}>
+              <div className="text-[10px] font-extrabold mb-1" style={{ color: '#FF1F8F' }}>예시 클릭 시 바로 적용돼요</div>
+              {PITCH_EXAMPLES.map((ex) => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => { update('pitch', ex); setPitchExamplesOpen(false); }}
+                  className="text-left text-[12px] font-medium py-1.5 px-2.5 rounded-lg transition hover:bg-pink-100"
+                  style={{ color: '#333', background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,31,143,0.10)' }}
+                >
+                  &ldquo;{ex}&rdquo;
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="relative">
+            <input
+              className="form-input pr-14"
+              value={form.pitch}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.length <= PITCH_MAX) update('pitch', v);
+              }}
+              placeholder="예: 신규 가입 시 칩 +50% 증정"
+              maxLength={PITCH_MAX}
+              aria-label="한마디 자랑 입력 (최대 40자)"
+            />
+            <span
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold tabular-nums"
+              style={{ color: form.pitch.length >= PITCH_MAX ? '#EF4444' : form.pitch.length > 30 ? '#F59E0B' : '#aaa' }}
+            >
+              {form.pitch.length}/{PITCH_MAX}
+            </span>
+          </div>
+          <div className="text-[10px] mt-1.5" style={{ color: '#888' }}>
+            입력 시 모바일 매장 카드에 바로 표시돼요. 비워두면 노출 안 됩니다.
+          </div>
+
+          {/* 미리보기 */}
+          {form.pitch.trim().length > 0 && (
+            <div className="mt-2 rounded-xl px-3 py-2.5 flex items-center gap-2" style={{ background: 'linear-gradient(90deg, rgba(255,31,143,0.08) 0%, rgba(255,107,170,0.06) 100%)', border: '1px solid rgba(255,31,143,0.18)' }}>
+              <span style={{ fontSize: 14 }}>💬</span>
+              <span className="text-[12px] font-bold italic" style={{ color: '#FF1F8F' }}>&ldquo;{form.pitch.trim()}&rdquo;</span>
+              <span className="ml-auto text-[10px]" style={{ color: '#bbb' }}>앱 카드 미리보기</span>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-3 pt-2">
           <button

@@ -86,6 +86,8 @@ export interface StoreDoc {
   photoUrls?: string[];
   status?: 'active' | 'paused' | 'closed' | 'pending';
   tier?: 'free' | 'premium' | 'vip';
+  /** 사장 한마디 자랑 — 최대 40자, 입력 안 하면 undefined (사용자 앱 카드에 조건부 노출). */
+  pitch?: string;
 }
 
 export function useStoreDoc(storeId: string | null) {

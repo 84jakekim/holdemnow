@@ -69,6 +69,8 @@ interface NearbyStore {
   distance?: number;
   averageRating?: number;
   reviewCount?: number;
+  /** 사장 한마디 자랑 — 최대 40자, 없으면 undefined */
+  pitch?: string;
 }
 
 // 지도용 추가 필드
@@ -266,6 +268,7 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
             facilities?: string[]; tier?: string;
             lat?: number; lng?: number;
             averageRating?: number; reviewCount?: number;
+            pitch?: string;
           };
           return {
             id: d.id,
@@ -278,6 +281,7 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
             lng: data.lng,
             averageRating: data.averageRating,
             reviewCount: data.reviewCount,
+            pitch: data.pitch,
           };
         }),
       );
@@ -1481,22 +1485,132 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
   );
 }
 
+// ─── 시설 아이콘 매핑 ─────────────────────────────────────────
+
+const FACILITY_ICON: Record<string, string> = {
+  '주차': '🚗', '발렛': '🅿️', '식사': '🍱', '24시간': '🌙',
+  '흡연실': '🚬', '룸': '🚪', '여성전용시간': '👩', 'VIP룸': '💎',
+};
+
 function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: number }) {
   useEffect(() => { trackImpressionOnce(st.id, 'find-nearby'); }, [st.id]);
+  const hasPitch = !!(st.pitch?.trim());
+  const facilityLabels = (st.facilities ?? []).slice(0, 2);
+
   return (
-    <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="w-[140px] flex-shrink-0 rounded-2xl overflow-hidden card-hover lift tap" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)' }}>
+    <Link
+      href={`/m/store/${st.id}`}
+      onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
+      className="flex-shrink-0 rounded-2xl overflow-hidden card-hover lift tap"
+      style={{
+        width: hasPitch ? 160 : 140,
+        background: 'var(--surface-1)',
+        border: hasPitch ? '1.5px solid rgba(255,31,143,0.22)' : '1px solid var(--border)',
+        boxShadow: hasPitch ? '0 4px 16px rgba(255,31,143,0.10), var(--shadow-card)' : 'var(--shadow-card)',
+        transition: 'width 0.2s',
+      }}
+      aria-label={`${st.name}${hasPitch ? ` — ${st.pitch}` : ''}`}
+    >
+      {/* 이미지 영역 */}
       <div className="relative overflow-hidden" style={{ aspectRatio: '4/3', background: 'var(--surface-2)' }}>
-        {st.photoUrl ? <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="140px" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[24px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.4 }}>{st.name.charAt(0)}</span></div>}
-        <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
-          {st.distance != null && <span className="text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)' }}>{formatDistance(st.distance)}</span>}
-        </div>
-        {live > 0 && <div className="absolute top-2 right-2"><span className="badge-live" style={{ fontSize: 9, padding: '2px 6px' }}><span className="dot" />LIVE</span></div>}
-        <div className="absolute bottom-0 left-0 right-0 h-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 100%)' }} aria-hidden="true" />
+        {st.photoUrl ? (
+          <Image
+            src={st.photoUrl}
+            alt={st.name}
+            fill
+            className="object-cover transition-transform duration-300"
+            sizes={hasPitch ? '160px' : '140px'}
+            style={{ transformOrigin: 'center' }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}>
+            <span className="text-[28px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.3 }}>{st.name.charAt(0)}</span>
+          </div>
+        )}
+
+        {/* 거리 뱃지 */}
+        {st.distance != null && (
+          <div className="absolute top-2 left-2">
+            <span
+              className="text-[10px] font-bold rounded-full px-2 py-0.5"
+              style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+            >
+              {formatDistance(st.distance)}
+            </span>
+          </div>
+        )}
+
+        {/* LIVE 뱃지 */}
+        {live > 0 && (
+          <div className="absolute top-2 right-2">
+            <span className="badge-live" style={{ fontSize: 9, padding: '2px 6px' }}>
+              <span className="dot pulse-live" />LIVE
+            </span>
+          </div>
+        )}
+
+        {/* 하단 그라데이션 */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-12 pointer-events-none"
+          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)' }}
+          aria-hidden="true"
+        />
+
+        {/* pitch 없을 때 — 시설 태그 오버레이 (하단) */}
+        {!hasPitch && facilityLabels.length > 0 && (
+          <div className="absolute bottom-1.5 left-2 right-2 flex gap-1">
+            {facilityLabels.map((f) => (
+              <span key={f} className="text-[9px] font-bold rounded-full px-1.5 py-0.5 flex items-center gap-0.5" style={{ background: 'rgba(0,0,0,0.52)', color: '#fff', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
+                {FACILITY_ICON[f] ?? ''}{f}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-      <div className="px-2.5 pt-2.5 pb-2">
-        <div className="text-[13px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{st.name}</div>
-        {(st.reviewCount ?? 0) > 0 && <div className="mt-1"><RatingChip rating={st.averageRating} count={st.reviewCount} size="sm" /></div>}
-        {st.address && <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>{st.address.split(' ').slice(1, 3).join(' ')}</div>}
+
+      {/* 하단 정보 */}
+      <div className="px-2.5 pt-2 pb-2">
+        <div className="text-[13px] font-bold truncate leading-tight" style={{ color: 'var(--text-1)' }}>{st.name}</div>
+
+        {/* pitch 인용 — 핑크 그라데이션 배경 */}
+        {hasPitch && (
+          <div
+            className="mt-1.5 rounded-lg px-2 py-1.5 flex items-start gap-1"
+            style={{
+              background: 'linear-gradient(90deg, rgba(255,31,143,0.09) 0%, rgba(255,107,170,0.06) 100%)',
+              border: '1px solid rgba(255,31,143,0.15)',
+            }}
+          >
+            <span style={{ fontSize: 11, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>💬</span>
+            <span
+              className="text-[11px] font-semibold italic leading-snug line-clamp-2"
+              style={{ color: '#D4176C' }}
+            >
+              {st.pitch}
+            </span>
+          </div>
+        )}
+
+        {/* pitch 없을 때 — 평점 또는 주소 대체 */}
+        {!hasPitch && (
+          <>
+            {(st.reviewCount ?? 0) > 0
+              ? <div className="mt-1"><RatingChip rating={st.averageRating} count={st.reviewCount} size="sm" /></div>
+              : live > 0
+                ? (
+                  <div className="mt-1 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 pulse-live" style={{ background: 'var(--live)' }} />
+                    <span className="text-[10px] font-bold" style={{ color: 'var(--live)' }}>지금 LIVE 운영 중</span>
+                  </div>
+                )
+                : st.address && (
+                  <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>
+                    {st.address.split(' ').slice(1, 3).join(' ')}
+                  </div>
+                )
+            }
+          </>
+        )}
       </div>
     </Link>
   );
@@ -1504,23 +1618,76 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
 
 function NearbyStoreListRow({ store: st, live, rank }: { store: NearbyStore; live: number; rank: number }) {
   useEffect(() => { trackImpressionOnce(st.id, 'find-nearby-list'); }, [st.id]);
+  const hasPitch = !!(st.pitch?.trim());
+  const facilityLabels = (st.facilities ?? []).slice(0, 3);
+
   return (
-    <Link href={`/m/store/${st.id}`} onClick={() => bumpStoreMetric(st.id, 'cardClicks')} className="flex items-center gap-3 px-4 py-3 transition active:bg-gray-50 tap" style={{ borderBottom: '1px solid var(--border)' }}>
-      <span className="w-6 text-center text-[13px] font-extrabold flex-shrink-0 stat-number" style={{ color: rank <= 3 ? 'var(--brand)' : 'var(--text-3)' }}>{rank}</span>
+    <Link
+      href={`/m/store/${st.id}`}
+      onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
+      className="flex items-start gap-3 px-4 py-3 transition active:bg-gray-50 tap"
+      style={{ borderBottom: '1px solid var(--border)' }}
+    >
+      {/* 순위 */}
+      <span className="w-6 text-center text-[13px] font-extrabold flex-shrink-0 stat-number mt-0.5" style={{ color: rank <= 3 ? 'var(--brand)' : 'var(--text-3)' }}>{rank}</span>
+
+      {/* 썸네일 */}
       <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden relative" style={{ background: 'var(--surface-2)' }}>
-        {st.photoUrl ? <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="48px" /> : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[14px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.5 }}>{st.name.charAt(0)}</span></div>}
+        {st.photoUrl
+          ? <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="48px" />
+          : <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}><span className="text-[14px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.5 }}>{st.name.charAt(0)}</span></div>
+        }
+        {live > 0 && (
+          <span className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full pulse-live border border-white" style={{ background: 'var(--live)' }} aria-label="LIVE 중" />
+        )}
       </div>
+
+      {/* 텍스트 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-[14px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{st.name}</span>
+          {live > 0 && <span className="badge-live flex-shrink-0"><span className="dot" />LIVE</span>}
         </div>
-        <div className="text-[12px] mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>
-          {st.distance != null && <span className="font-semibold stat-number" style={{ color: 'var(--text-2)' }}>{formatDistance(st.distance)} · </span>}
-          {st.address ? st.address.split(' ').slice(1, 3).join(' ') : ''}
-        </div>
+
+        {/* pitch */}
+        {hasPitch ? (
+          <div className="mt-1 flex items-center gap-1">
+            <span style={{ fontSize: 11 }}>💬</span>
+            <span className="text-[11px] font-semibold italic truncate" style={{ color: '#D4176C' }}>{st.pitch}</span>
+          </div>
+        ) : (
+          <div className="text-[12px] mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>
+            {st.distance != null && <span className="font-semibold stat-number" style={{ color: 'var(--text-2)' }}>{formatDistance(st.distance)} · </span>}
+            {st.address ? st.address.split(' ').slice(1, 3).join(' ') : ''}
+          </div>
+        )}
+
+        {/* 거리 (pitch 있을 때도 거리는 별도 표시) */}
+        {hasPitch && st.distance != null && (
+          <div className="text-[11px] mt-0.5 stat-number" style={{ color: 'var(--text-3)' }}>
+            {formatDistance(st.distance)}
+          </div>
+        )}
+
+        {/* 평점 */}
         {(st.reviewCount ?? 0) > 0 && <div className="mt-0.5"><RatingChip rating={st.averageRating} count={st.reviewCount} size="sm" /></div>}
+
+        {/* 시설 태그 — pitch 없고 평점도 없을 때 */}
+        {!hasPitch && (st.reviewCount ?? 0) === 0 && facilityLabels.length > 0 && (
+          <div className="flex gap-1 mt-1 flex-wrap">
+            {facilityLabels.map((f) => (
+              <span key={f} className="text-[10px] rounded-full px-1.5 py-0.5" style={{ background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                {FACILITY_ICON[f] ?? ''} {f}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-      {live > 0 ? <span className="badge-live flex-shrink-0"><span className="dot" />LIVE</span> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)', flexShrink: 0 }} aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>}
+
+      {/* 우측 */}
+      {live > 0 ? null : (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)', flexShrink: 0, marginTop: 2 }} aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+      )}
     </Link>
   );
 }

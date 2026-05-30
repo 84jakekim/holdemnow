@@ -28,6 +28,7 @@ export async function updateStoreInfo(
     description?: string;
     facilities?: string[];
     photoUrls?: string[];
+    pitch?: string | null;
   },
 ) {
   // 주소 변경 시 regionCode 자동 동기화 — `where regionCode in […]` 필터 일관성.
