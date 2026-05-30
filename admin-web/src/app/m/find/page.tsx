@@ -71,6 +71,10 @@ interface NearbyStore {
   reviewCount?: number;
   /** 사장 한마디 자랑 — 최대 40자, 없으면 undefined */
   pitch?: string;
+  /** 영업시간 문자열 (예: "매일 17:00 - 익일 03:00") */
+  hours?: string;
+  /** Firestore createdAt timestamp (ms epoch 또는 ISO string) */
+  createdAt?: number;
 }
 
 // 지도용 추가 필드
@@ -269,7 +273,22 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
             lat?: number; lng?: number;
             averageRating?: number; reviewCount?: number;
             pitch?: string;
+            hours?: string;
+            createdAt?: { toMillis?: () => number; seconds?: number } | number | string;
           };
+          // createdAt은 Firestore Timestamp / number(ms) / ISO string 모두 지원
+          let createdAtMs: number | undefined;
+          if (data.createdAt != null) {
+            if (typeof data.createdAt === 'object' && 'toMillis' in data.createdAt && typeof data.createdAt.toMillis === 'function') {
+              createdAtMs = data.createdAt.toMillis();
+            } else if (typeof data.createdAt === 'object' && 'seconds' in data.createdAt && typeof data.createdAt.seconds === 'number') {
+              createdAtMs = data.createdAt.seconds * 1000;
+            } else if (typeof data.createdAt === 'number') {
+              createdAtMs = data.createdAt;
+            } else if (typeof data.createdAt === 'string') {
+              createdAtMs = Date.parse(data.createdAt) || undefined;
+            }
+          }
           return {
             id: d.id,
             name: data.name,
@@ -282,6 +301,8 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
             averageRating: data.averageRating,
             reviewCount: data.reviewCount,
             pitch: data.pitch,
+            hours: data.hours,
+            createdAt: createdAtMs,
           };
         }),
       );
@@ -1374,6 +1395,114 @@ function NewlyJoinedStoresSection({ liveByStore, userLocation }: { liveByStore: 
   );
 }
 
+// ─── 내 주변 매장 — 정렬 유틸 ────────────────────────────────
+
+type NearbySort = 'distance' | 'live' | 'open' | 'rating' | 'new';
+
+const NEARBY_SORT_OPTIONS: { value: NearbySort; label: string; emoji: string }[] = [
+  { value: 'distance', label: '거리순', emoji: '📍' },
+  { value: 'live',     label: 'LIVE',   emoji: '🔴' },
+  { value: 'open',     label: '영업 중', emoji: '🟢' },
+  { value: 'rating',   label: '평점순',  emoji: '⭐' },
+  { value: 'new',      label: '신규순',  emoji: '🆕' },
+];
+
+const NEARBY_SORT_KEY = 'holdemnow:nearbySort';
+
+function loadSavedSort(): NearbySort {
+  if (typeof window === 'undefined') return 'distance';
+  try {
+    const v = window.localStorage.getItem(NEARBY_SORT_KEY);
+    if (v === 'distance' || v === 'live' || v === 'open' || v === 'rating' || v === 'new') return v;
+  } catch { /* noop */ }
+  return 'distance';
+}
+
+/**
+ * 영업 중 여부 판단
+ * 지원 패턴:
+ *   "매일 17:00 - 익일 03:00"
+ *   "매일 18:00 - 02:00"
+ *   "17:00 - 03:00"
+ *   "17:00 ~ 03:00"
+ * 파싱 실패 시 true 반환 (영업 중으로 가정)
+ */
+function isOpenNow(hours?: string): boolean {
+  if (!hours) return true;
+  try {
+    const timeRe = /(\d{1,2}):(\d{2})\s*[-~]\s*(?:익일\s*)?(\d{1,2}):(\d{2})/;
+    const m = hours.match(timeRe);
+    if (!m) return true;
+    const openH = parseInt(m[1], 10);
+    const openMin = parseInt(m[2], 10);
+    const closeH = parseInt(m[3], 10);
+    const closeMin = parseInt(m[4], 10);
+    const openTotal = openH * 60 + openMin;
+    let closeTotal = closeH * 60 + closeMin;
+    // 익일 패턴이거나 닫는 시간이 여는 시간보다 작으면 자정 넘김
+    const isNextDay = /익일/.test(hours) || closeTotal < openTotal;
+    if (isNextDay) closeTotal += 24 * 60;
+    const now = new Date();
+    let nowTotal = now.getHours() * 60 + now.getMinutes();
+    // 자정 이후(00:00~06:00)에 closeTotal이 24h를 넘는 경우 현재 시각도 +24h 처리
+    if (isNextDay && nowTotal < openTotal) nowTotal += 24 * 60;
+    return nowTotal >= openTotal && nowTotal < closeTotal;
+  } catch { return true; }
+}
+
+function sortNearbyStores(stores: NearbyStore[], sort: NearbySort, liveByStore: Record<string, number>): NearbyStore[] {
+  const distCmp = (a: NearbyStore, b: NearbyStore) => {
+    if (a.distance != null && b.distance != null) return a.distance - b.distance;
+    if (a.distance != null) return -1;
+    if (b.distance != null) return 1;
+    return 0;
+  };
+
+  switch (sort) {
+    case 'distance':
+      return [...stores].sort(distCmp);
+
+    case 'live': {
+      return [...stores].sort((a, b) => {
+        const la = (liveByStore[a.id] ?? 0) > 0 ? 1 : 0;
+        const lb = (liveByStore[b.id] ?? 0) > 0 ? 1 : 0;
+        if (lb !== la) return lb - la;
+        return distCmp(a, b);
+      });
+    }
+
+    case 'open': {
+      return [...stores].sort((a, b) => {
+        const oa = isOpenNow(a.hours) ? 1 : 0;
+        const ob = isOpenNow(b.hours) ? 1 : 0;
+        if (ob !== oa) return ob - oa;
+        return distCmp(a, b);
+      });
+    }
+
+    case 'rating': {
+      return [...stores].sort((a, b) => {
+        const ra = a.averageRating ?? -1;
+        const rb = b.averageRating ?? -1;
+        if (rb !== ra) return rb - ra;
+        return distCmp(a, b);
+      });
+    }
+
+    case 'new': {
+      return [...stores].sort((a, b) => {
+        const ca = a.createdAt ?? 0;
+        const cb = b.createdAt ?? 0;
+        if (cb !== ca) return cb - ca;
+        return distCmp(a, b);
+      });
+    }
+
+    default:
+      return [...stores].sort(distCmp);
+  }
+}
+
 // ─── 내 주변 매장 ─────────────────────────────────────────────
 
 function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liveByStore: Record<string, number>; initialStores: NearbyStore[]; userLocation: LatLng | null }) {
@@ -1383,6 +1512,12 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
   const [radiusKm, setRadiusKm] = useState<number>(FEED_CONFIG_DEFAULT.nearbyRadiusDefaultKm);
   const [radiusManual, setRadiusManual] = useState(false);
   const [listExpanded, setListExpanded] = useState(false);
+  const [activeSort, setActiveSort] = useState<NearbySort>(loadSavedSort);
+
+  const handleSortChange = (s: NearbySort) => {
+    setActiveSort(s);
+    try { window.localStorage.setItem(NEARBY_SORT_KEY, s); } catch { /* noop */ }
+  };
 
   // 본사 어드민 반경 설정 구독
   // 2026-05-28 #5 fix: stale closure 버그 — subscribe 콜백이 mount 시점 radiusManual=false만 보고
@@ -1404,9 +1539,14 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
   }, [initialStores]);
 
   const sorted = useMemo(() => {
-    return stores.map((s) => ({ ...s, distance: userLocation && typeof s.lat === 'number' && typeof s.lng === 'number' ? haversineMeters(userLocation, { lat: s.lat, lng: s.lng }) : undefined }))
-      .sort((a, b) => { if (a.distance != null && b.distance != null) return a.distance - b.distance; if (a.distance != null) return -1; if (b.distance != null) return 1; return 0; });
-  }, [stores, userLocation]);
+    const withDist = stores.map((s) => ({
+      ...s,
+      distance: userLocation && typeof s.lat === 'number' && typeof s.lng === 'number'
+        ? haversineMeters(userLocation, { lat: s.lat, lng: s.lng })
+        : undefined,
+    }));
+    return sortNearbyStores(withDist, activeSort, liveByStore);
+  }, [stores, userLocation, activeSort, liveByStore]);
 
   const visible = useMemo(() => {
     if (!userLocation) return sorted;
@@ -1429,21 +1569,62 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
 
   if (stores.length === 0) return null;
 
+  const activeSortLabel = NEARBY_SORT_OPTIONS.find((o) => o.value === activeSort)?.label ?? '거리순';
+
   return (
     <section aria-label="내 주변 매장" className="pt-5" style={{ borderTop: '8px solid var(--bg-sub)' }}>
-      <div className="px-4 flex items-end justify-between mb-4">
+      <div className="px-4 flex items-end justify-between mb-3">
         <div>
           <div className="section-title" style={{ marginBottom: 2 }}>NEARBY</div>
           <div className="h3" style={{ color: 'var(--text-1)' }}>내 주변 매장</div>
-          <div className="text-[12px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+          <div className="text-[12px] mt-0.5 flex items-center gap-1 flex-wrap" style={{ color: 'var(--text-3)' }}>
             {userLocation ? `현재 위치 기준 · 반경 ${radiusKm}km · ` : '위치 권한 허용 시 거리 표시'}
             {userLocation && <span className="font-bold stat-number" style={{ color: 'var(--brand)' }}>{visible.length}개</span>}
+            {activeSort !== 'distance' && (
+              <span
+                className="ml-1 text-[11px] font-semibold rounded-full px-1.5 py-0.5"
+                style={{ background: 'rgba(255,31,143,0.1)', color: 'var(--brand)' }}
+              >
+                {activeSortLabel}으로 정렬됨
+              </span>
+            )}
           </div>
         </div>
         <button onClick={() => window.location.href = '/m/find?mode=map'} className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60 mb-1" style={{ color: 'var(--brand)' }}>
           지도로 보기
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
         </button>
+      </div>
+
+      {/* 정렬 selector — 가로 스크롤 pill */}
+      <div
+        className="pl-4 flex gap-2 overflow-x-auto scrollbar-none pb-2 mb-3"
+        role="group"
+        aria-label="정렬 기준 선택"
+      >
+        {NEARBY_SORT_OPTIONS.map((opt) => {
+          const isActive = activeSort === opt.value;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => handleSortChange(opt.value)}
+              aria-pressed={isActive}
+              className="flex-shrink-0 flex items-center gap-1 rounded-full text-[12px] font-semibold transition-all active:scale-95"
+              style={{
+                height: 32,
+                padding: '0 12px',
+                background: isActive ? 'var(--brand)' : 'var(--surface-2)',
+                color: isActive ? '#fff' : 'var(--text-2)',
+                border: isActive ? '1.5px solid var(--brand)' : '1.5px solid var(--border)',
+                boxShadow: isActive ? '0 2px 8px rgba(255,31,143,0.25)' : 'none',
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: 13 }}>{opt.emoji}</span>
+              {opt.label}
+            </button>
+          );
+        })}
+        <div className="w-2 flex-shrink-0" aria-hidden="true" />
       </div>
 
       {/* 가로 스크롤 */}
