@@ -639,7 +639,9 @@ function StatCard({
         background: emphasize
           ? `linear-gradient(135deg, ${accent}14, var(--surface-1))`
           : 'var(--surface-1)',
-        border: `1px solid ${emphasize ? `${accent}55` : 'var(--border)'}`,
+        borderTop: `1px solid ${emphasize ? `${accent}55` : 'var(--border)'}`,
+        borderRight: `1px solid ${emphasize ? `${accent}55` : 'var(--border)'}`,
+        borderBottom: `1px solid ${emphasize ? `${accent}55` : 'var(--border)'}`,
         borderLeft: `4px solid ${accent}`,
         borderRadius: 'var(--r-lg)',
         boxShadow: 'var(--shadow-card)',
