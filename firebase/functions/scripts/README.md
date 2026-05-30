@@ -60,3 +60,36 @@ node preLaunchReset.js --execute
 ```bash
 node dumpCompletedSessions.js
 ```
+
+---
+
+### `seedDemoPosts.js` — 데모 매장 "오늘의 소식" 가상 시드
+
+**언제**: 베타·출시 직후 홈 캐러셀이 비어 보이지 않도록 콘텐츠를 채울 때.
+
+**용도**:
+- `stores where isDemo === true` 매장 중 10곳(서면/해운대/광안리/동래/대연/장전/사상/하단/양산 등)에
+  가상 "오늘의 소식" 글 1건씩 등록.
+- 24h 만료(`expiresAt = now + 24h`), `status='published'`, `authorUid='demo-seeder'`.
+- 글 톤은 토너/이벤트/채용/시설/캐쉬/주차/식음 등 10종 다양화.
+
+**멱등성**:
+- 매장별로 `authorUid='demo-seeder'` 글이 1건이라도 있으면 skip.
+- 재실행 안전.
+
+**실행**:
+```bash
+# 1. dry-run (출력만, 미작성)
+node seedDemoPosts.js
+
+# 2. 실제 실행
+node seedDemoPosts.js --execute
+
+# 3. 회수 (시더 글 일괄 삭제)
+node seedDemoPosts.js --unseed --execute
+```
+
+**참고**:
+- 카드 색상/이모지는 `admin-web/src/lib/posts.ts`의 화이트리스트와 동기.
+- 24h 후 자동 만료되므로, 지속 노출하려면 주기 재실행 또는 cron 권장.
+
