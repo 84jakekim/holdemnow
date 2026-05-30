@@ -1737,14 +1737,24 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
           aria-hidden="true"
         />
 
-        {/* pitch 없을 때 — 시설 태그 오버레이 (하단) */}
+        {/* pitch 없을 때 — 시설 태그 오버레이 (하단): 단일 칩 한 줄 + ·구분 + 잘림 */}
         {!hasPitch && facilityLabels.length > 0 && (
-          <div className="absolute bottom-1.5 left-2 right-2 flex gap-1">
-            {facilityLabels.map((f) => (
-              <span key={f} className="text-[9px] font-bold rounded-full px-1.5 py-0.5 flex items-center gap-0.5" style={{ background: 'rgba(0,0,0,0.52)', color: '#fff', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
-                {FACILITY_ICON[f] ?? ''}{f}
-              </span>
-            ))}
+          <div className="absolute bottom-1.5 left-2 right-2 flex">
+            <span
+              className="text-[9px] font-bold rounded-full px-1.5 py-0.5 inline-flex items-center max-w-full overflow-hidden"
+              style={{
+                background: 'rgba(0,0,0,0.55)',
+                color: '#fff',
+                backdropFilter: 'blur(4px)',
+                WebkitBackdropFilter: 'blur(4px)',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {facilityLabels
+                .map((f) => `${FACILITY_ICON[f] ?? ''}${f}`)
+                .join(' · ')}
+            </span>
           </div>
         )}
       </div>

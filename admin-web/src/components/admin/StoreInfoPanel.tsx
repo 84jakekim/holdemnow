@@ -285,6 +285,27 @@ export default function StoreInfoPanel({ storeId }: Props) {
         </Field>
 
         <Field label={`시설 (${form.facilities.length}개 선택)`}>
+          {/* 노출 위치 안내 — 매장 사장님이 이 기능을 활용할 수 있도록 */}
+          <div
+            className="rounded-xl p-3 mb-3 text-[12px] leading-relaxed"
+            style={{
+              background: 'rgba(255,31,143,0.06)',
+              border: '1px solid rgba(255,31,143,0.18)',
+              color: '#5C1A3B',
+            }}
+          >
+            <div className="font-extrabold mb-1 flex items-center gap-1" style={{ color: '#C4156D' }}>
+              <span aria-hidden>📍</span> 어디에 노출되나요?
+            </div>
+            <ul className="space-y-0.5 ml-1">
+              <li>• <b>사용자 앱 매장 카드</b> — '내 주변 매장' 섹션에서 사진 위 작은 칩으로 노출 (선택한 것 중 처음 2개)</li>
+              <li>• <b>매장 상세 페이지</b> — 시설 태그 전체 표시</li>
+              <li>• <b>매장 찾기 필터</b> — 사용자가 시설별로 매장을 검색할 수 있음</li>
+            </ul>
+            <div className="mt-1.5 text-[11px]" style={{ color: '#8B3563' }}>
+              💡 자주 어필하고 싶은 특징을 <b>먼저(맨 앞)</b> 선택하세요 — 카드에 처음 2개만 보입니다.
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {FACILITY_OPTIONS.map((f) => (
               <button
