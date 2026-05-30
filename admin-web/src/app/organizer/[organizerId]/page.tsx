@@ -19,11 +19,12 @@ const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드' },
   { id: 'events', icon: '🎫', label: '대회 등록' },
   { id: 'series', icon: '🏆', label: '시리즈 관리' },
-  { id: 'partners', icon: '🏪', label: '협력 매장' },
-  { id: 'broadcast', icon: '📣', label: '일괄 홍보' },
-  { id: 'finalists', icon: '👥', label: '본선 진출자' },
-  { id: 'ads', icon: '💼', label: '광고 패키지' },
-  { id: 'stats', icon: '📈', label: '통계 리포트' },
+  // v0.2 출시 전 hide — 라우트·ComingSoon 패널은 유지
+  { id: 'partners', icon: '🏪', label: '협력 매장', hidden: true },
+  { id: 'broadcast', icon: '📣', label: '일괄 홍보', hidden: true },
+  { id: 'finalists', icon: '👥', label: '본선 진출자', hidden: true },
+  { id: 'ads', icon: '💼', label: '광고 패키지', hidden: true },
+  { id: 'stats', icon: '📈', label: '통계 리포트', hidden: true },
 ];
 
 function OrganizerAdminPageInner({ organizerId }: { organizerId: string }) {
@@ -98,7 +99,7 @@ function OrganizerAdminPageInner({ organizerId }: { organizerId: string }) {
         </div>
 
         <nav className="flex-1 p-2 overflow-y-auto">
-          {MENUS.map((m) => (
+          {MENUS.filter((m) => !m.hidden).map((m) => (
             <button
               key={m.id}
               onClick={() => setActiveMenu(m.id)}
