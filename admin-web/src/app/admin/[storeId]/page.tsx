@@ -7,6 +7,7 @@ import { auth } from '@/lib/firebase';
 import { useAuth, useStoreDoc, useUserDoc, hasRole } from '@/lib/hooks';
 import AuthGate from '@/components/AuthGate';
 import AdminAccessDenied from '@/components/admin/AdminAccessDenied';
+import StoreApprovalGate from '@/components/admin/StoreApprovalGate';
 import TournamentControlCenter from '@/components/admin/TournamentControlCenter';
 import Link from 'next/link';
 import StoreInfoPanel from '@/components/admin/StoreInfoPanel';
@@ -150,6 +151,25 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const isOwner = store.ownerUid === currentUid;
   if (!isOwner && !isPlatformAdmin) {
     return <AdminAccessDenied isLoggedIn myStoreId={userDoc?.storeId ?? null} />;
+  }
+
+  // 승인 게이트 (2026-06): 승인되지 않은 매장 owner는 어드민 접속 차단.
+  // platform_admin은 심사를 위해 우회. active 매장만 통과.
+  // (데모 매장은 status 미설정 → 'active' 간주하여 통과)
+  const gateStatus = store.status;
+  if (
+    isOwner &&
+    !isPlatformAdmin &&
+    gateStatus &&
+    gateStatus !== 'active'
+  ) {
+    return (
+      <StoreApprovalGate
+        storeName={store.name}
+        status={gateStatus as 'pending' | 'rejected' | 'suspended' | 'paused' | 'closed'}
+        rejectionReason={(store as { rejectionReason?: string }).rejectionReason}
+      />
+    );
   }
 
   const isPending = store.status === 'pending';

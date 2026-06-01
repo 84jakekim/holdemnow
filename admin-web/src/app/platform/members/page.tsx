@@ -19,6 +19,7 @@ import { db } from '@/lib/firebase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import MembersTabExportButton from '@/components/platform/MembersTabExportButton';
+import { summarizeReview, type StoreApplicationData } from '@/lib/storeReview';
 import {
   createPlatformAdmin,
   validateAdminUsername,
@@ -68,7 +69,7 @@ interface AdminRow {
   organizerId?: string;
 }
 
-interface StoreRow {
+interface StoreRow extends StoreApplicationData {
   id: string;
   name: string;
   ownerUid?: string;
@@ -890,6 +891,7 @@ function StoreCard({
             {store.isDemo && (
               <span className="text-[9px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 font-extrabold">DEMO</span>
             )}
+            {store.status === 'pending' && !store.isDemo && <ReviewMetChip store={store} />}
           </div>
           <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
             {store.representativeName && (
@@ -1051,6 +1053,21 @@ function RoleBadge({ user }: { user: { roles?: string[]; role?: string; storeId?
       style={{ background: '#F3F4F6', color: '#6B7280' }}
     >
       일반
+    </span>
+  );
+}
+
+// 심사 충족 요약 칩 — pending 매장 카드에 "충족 N/M" 한눈 표시
+function ReviewMetChip({ store }: { store: StoreApplicationData }) {
+  const s = summarizeReview(store);
+  const ok = s.canApprove;
+  return (
+    <span
+      className="text-[9px] font-extrabold rounded px-1.5 py-0.5"
+      style={ok ? { background: '#DCFCE7', color: '#15803D' } : { background: '#FEF3C7', color: '#B45309' }}
+      title={ok ? '필수 항목 전부 충족 — 승인 가능' : `필수 미충족 ${s.unmetRequired.length}건`}
+    >
+      충족 {s.metCount}/{s.totalCount}
     </span>
   );
 }

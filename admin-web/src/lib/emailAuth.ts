@@ -40,8 +40,10 @@ export interface StoreSignupPayload {
   passwordHint: string;
   recoveryLast4: string; // 보조 복구 연락처 마지막 4자리
 
-  // Step 2 — 매장 기본 (사업자등록증 대신 매장 간판 사진으로 실존 확인)
+  // Step 2 — 매장 기본 (간판 사진 + 사업자등록번호로 실존·합법 확인)
   storeName: string;
+  /** 사업자등록번호 (XXX-XX-XXXXX) — 불법 사설업체 필터링용 본사 심사 핵심 항목. 필수. */
+  businessRegistrationNumber: string;
   /** @deprecated storeAddress 제거 — roadAddress + detailAddress 합본 사용. 기존 호환을 위해 optional 유지 */
   storeAddress?: string;
   roadAddress: string;    // 도로명 주소 (다음 우편번호 선택 결과)
@@ -152,6 +154,7 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
   await setDoc(newStoreRef, stripUndefined({
     ownerUid: uid,
     name: payload.storeName.trim(),
+    businessRegistrationNumber: payload.businessRegistrationNumber.trim(), // 본사 심사 — 불법 사설업체 필터
     address: combinedAddress,           // 기존 호환 필드
     regionCode,                          // 광역 단위 한글 키 ("부산"/"경남" 등) — Phase B
     roadAddress: payload.roadAddress.trim(),

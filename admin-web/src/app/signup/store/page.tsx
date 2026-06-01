@@ -12,6 +12,8 @@ import Link from 'next/link';
 import {
   signupAsStore,
   validatePassword,
+  validateBusinessReg,
+  formatBusinessReg,
   type StoreSignupPayload,
 } from '@/lib/emailAuth';
 import BusinessHoursPicker from '@/components/common/BusinessHoursPicker';
@@ -36,6 +38,7 @@ const INITIAL: FormState = {
   passwordHint: '',
   recoveryLast4: '',
   storeName: '',
+  businessRegistrationNumber: '',
   roadAddress: '',
   detailAddress: '',
   jibunAddress: '',
@@ -99,7 +102,8 @@ export default function StoreSignupPage() {
     if (step === 3) {
       return (
         form.representativeName.trim().length >= 1 &&
-        form.representativePhone.trim().length >= 7
+        form.representativePhone.trim().length >= 7 &&
+        validateBusinessReg(form.businessRegistrationNumber.trim())
       );
     }
     if (step === 4) {
@@ -120,6 +124,7 @@ export default function StoreSignupPage() {
         passwordHint: form.passwordHint,
         recoveryLast4: form.recoveryLast4,
         storeName: form.storeName,
+        businessRegistrationNumber: form.businessRegistrationNumber,
         roadAddress: form.roadAddress,
         detailAddress: form.detailAddress,
         jibunAddress: form.jibunAddress,
@@ -468,6 +473,27 @@ export default function StoreSignupPage() {
           {/* ── Step 3: 대표자 ── */}
           {step === 3 && (
             <>
+              <Field label="사업자등록번호">
+                <input
+                  className="form-input font-mono tracking-wide"
+                  value={form.businessRegistrationNumber}
+                  onChange={(e) => update('businessRegistrationNumber', formatBusinessReg(e.target.value))}
+                  placeholder="000-00-00000"
+                  inputMode="numeric"
+                  maxLength={12}
+                />
+                {form.businessRegistrationNumber && !validateBusinessReg(form.businessRegistrationNumber) && (
+                  <FieldError>사업자등록번호 10자리를 정확히 입력하세요</FieldError>
+                )}
+                {form.businessRegistrationNumber && validateBusinessReg(form.businessRegistrationNumber) && (
+                  <FieldOk>형식이 올바릅니다</FieldOk>
+                )}
+                <div className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                  합법 매장 확인을 위해 본사가 사업자등록번호를 심사합니다.
+                  불법 사설업체는 등록이 제한됩니다.
+                </div>
+              </Field>
+
               <Field label="대표자명">
                 <input
                   className="form-input"
@@ -530,6 +556,7 @@ export default function StoreSignupPage() {
                 <div className="font-bold text-gray-900 mb-2 text-sm">신청 정보 요약</div>
                 <SummaryRow label="이메일" value={form.email} />
                 <SummaryRow label="매장명" value={form.storeName} />
+                <SummaryRow label="사업자번호" value={form.businessRegistrationNumber} />
                 <SummaryRow label="주소" value={`${form.roadAddress} ${form.detailAddress}`.trim()} />
                 <SummaryRow label="대표자" value={form.representativeName} />
                 <SummaryRow label="연락처" value={form.representativePhone} />
