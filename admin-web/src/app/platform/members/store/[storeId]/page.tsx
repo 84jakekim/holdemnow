@@ -15,6 +15,7 @@ import MemberDetailHeader, { type MemberStatus } from '@/components/platform/Mem
 import IdentityVerificationCard from '@/components/platform/IdentityVerificationCard';
 import ConsentSummaryCard from '@/components/platform/ConsentSummaryCard';
 import StoreInfoCard from '@/components/platform/StoreInfoCard';
+import { summarizeReview, type StoreApplicationData, type EvaluatedCriterion } from '@/lib/storeReview';
 
 // =====================================================================
 // 타입
@@ -40,7 +41,10 @@ interface StoreDetail {
   representativeName?: string;
   representativePhone?: string;
   businessRegistrationNumber?: string;
+  regionCode?: string;
+  photoUrls?: string[];
   status?: StoreStatus;
+  reviewChecklist?: Record<string, boolean>;
   createdAt?: { toDate: () => Date } | null;
   signupApplication?: {
     submittedAt?: string;
@@ -189,6 +193,19 @@ export default function StoreDetailPage() {
     }
   };
 
+  const toggleManualCriterion = async (cid: string, next: boolean) => {
+    if (!store) return;
+    setStore((s) => s ? { ...s, reviewChecklist: { ...(s.reviewChecklist ?? {}), [cid]: next } } : s);
+    try {
+      await updateDoc(doc(db, 'stores', storeId), {
+        [`reviewChecklist.${cid}`]: next,
+        updatedAt: serverTimestamp(),
+      });
+    } catch {
+      showToast('심사 체크 저장 실패', 'error');
+    }
+  };
+
   if (loading) return <div className="text-sm text-gray-500 p-8">로딩 중…</div>;
   if (!store) return <div className="text-sm text-red-500 p-8">매장을 찾을 수 없습니다.</div>;
 
@@ -233,6 +250,9 @@ export default function StoreDetailPage() {
               <InfoRow label="가입일시" value={fmtDate(store.createdAt)} />
             </div>
           </div>
+
+          {/* 심사 기준 — 충족/미충족 (자동) + 담당자 수동 확인 */}
+          <ReviewChecklistCard store={store} onToggle={toggleManualCriterion} />
 
           {/* 매장 상세 정보 */}
           <StoreInfoCard
@@ -305,6 +325,69 @@ function StatRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
       <span className="text-[12px] text-gray-600">{label}</span>
       <span className="text-[12px] font-bold text-gray-900">{value}</span>
+    </div>
+  );
+}
+
+// 심사 기준 카드 — 자동(✅/⚠️) + 수동 체크(저장). storeReview SSOT 사용.
+function ReviewChecklistCard({
+  store,
+  onToggle,
+}: {
+  store: StoreApplicationData;
+  onToggle: (cid: string, next: boolean) => void;
+}) {
+  const summary = summarizeReview(store);
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-extrabold text-gray-900">심사 기준</h3>
+        <span
+          className="text-[11px] font-extrabold rounded px-2 py-0.5"
+          style={summary.canApprove ? { background: '#DCFCE7', color: '#15803D' } : { background: '#FEF3C7', color: '#B45309' }}
+          title={summary.canApprove ? '필수 항목 전부 충족 — 승인 가능' : `필수 미충족 ${summary.unmetRequired.length}건`}
+        >
+          충족 {summary.metCount}/{summary.totalCount}
+        </span>
+      </div>
+
+      <div className="text-[10px] font-bold text-gray-400 mb-1.5">자동 판정</div>
+      <div className="space-y-1.5 mb-4">
+        {summary.auto.map((c) => <AutoRow key={c.id} c={c} />)}
+      </div>
+
+      <div className="text-[10px] font-bold text-gray-400 mb-1.5">담당자 확인</div>
+      <div className="space-y-1.5">
+        {summary.manual.map((c) => (
+          <label key={c.id} className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 cursor-pointer border"
+            style={c.met ? { background: 'rgba(22,163,74,.06)', borderColor: 'rgba(22,163,74,.25)' } : { background: '#fff', borderColor: '#E5E7EB' }}>
+            <input type="checkbox" checked={c.met} onChange={(e) => onToggle(c.id, e.target.checked)} className="mt-0.5 w-4 h-4 accent-green-600" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                {c.label}
+                {c.required && <span className="text-[9px] font-extrabold text-red-600">필수</span>}
+              </div>
+              <div className="text-[10.5px] text-gray-500 mt-0.5">{c.hint}</div>
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AutoRow({ c }: { c: EvaluatedCriterion }) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 border"
+      style={c.met ? { background: 'rgba(22,163,74,.05)', borderColor: 'rgba(22,163,74,.2)' } : { background: 'rgba(245,158,11,.05)', borderColor: 'rgba(245,158,11,.25)' }}>
+      <span className="text-sm leading-5">{c.met ? '✅' : '⚠️'}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+          {c.label}
+          {c.required && <span className="text-[9px] font-extrabold text-red-600">필수</span>}
+        </div>
+        {c.detail && <div className="text-[10.5px] text-gray-500 mt-0.5 break-words">{c.detail}</div>}
+      </div>
     </div>
   );
 }
