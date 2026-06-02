@@ -14,6 +14,7 @@ import { enableNotifications, getNotificationPermission, isMessagingSupported } 
 import { moderateText, checkWriteRateLimit } from '@/lib/moderation';
 import { normalizePhone } from '@/lib/phone';
 import { setUserPhone } from '@/lib/userProfile';
+import { changePassword, deleteOwnAccount, validatePassword } from '@/lib/emailAuth';
 
 interface ProfileFields {
   displayName?: string;
@@ -69,6 +70,8 @@ export default function MyPage() {
   const [reservationActiveCount, setReservationActiveCount] = useState(0);
   const [logoutSheetOpen, setLogoutSheetOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [pushTokenCount, setPushTokenCount] = useState<number | null>(null);
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported' | 'unknown'>('unknown');
   const [pushBusy, setPushBusy] = useState(false);
@@ -174,6 +177,8 @@ export default function MyPage() {
   }
 
   const user = authState.user;
+  // 이메일/비밀번호 가입자만 비밀번호 변경 노출 (소셜 로그인은 해당 제공자에서 관리)
+  const isPasswordUser = user.providerData.some((p) => p.providerId === 'password');
   // Firestore profile.displayName이 가장 신뢰 가능한 최신값. fallback: auth displayName.
   const displayName = profile.displayName ?? user.displayName ?? '플레이어';
   const initials = (displayName?.[0] ?? user.email?.[0] ?? '?').toUpperCase();
@@ -400,13 +405,17 @@ export default function MyPage() {
           }}
         >
           {([
+            ...(isPasswordUser
+              ? [{ label: '비밀번호 변경', emoji: '🔑', action: 'changePw' as const }]
+              : []),
             { label: '약관 및 정책', emoji: '📜', go: '/legal' as const },
             { label: '로그아웃', emoji: '🚪', action: 'logout' as const },
-          ] as Array<{ label: string; emoji: string; go?: '/legal'; action?: 'logout' }>).map((it, i, arr) => (
+          ] as Array<{ label: string; emoji: string; go?: '/legal'; action?: 'logout' | 'changePw' }>).map((it, i, arr) => (
             <button
               key={it.label}
               onClick={() => {
                 if (it.action === 'logout') setLogoutSheetOpen(true);
+                else if (it.action === 'changePw') setPwOpen(true);
                 else if (it.go) router.push(it.go);
               }}
               className="w-full tap"
@@ -461,11 +470,22 @@ export default function MyPage() {
           ))}
         </div>
 
+        {/* 회원 탈퇴 — 눈에 띄지 않게 하단에 배치 */}
+        <div style={{ textAlign: 'center', marginTop: 18 }}>
+          <button
+            onClick={() => setWithdrawOpen(true)}
+            className="text-[11px] underline underline-offset-2"
+            style={{ color: 'var(--text-3)' }}
+          >
+            회원 탈퇴
+          </button>
+        </div>
+
         <div
           className="mono"
           style={{
             textAlign: 'center',
-            marginTop: 18,
+            marginTop: 12,
             fontSize: 10,
             color: 'var(--text-3)',
           }}
@@ -492,6 +512,238 @@ export default function MyPage() {
           onClose={() => setEditOpen(false)}
         />
       )}
+
+      {/* 비밀번호 변경 시트 */}
+      {pwOpen && <ChangePasswordSheet onClose={() => setPwOpen(false)} />}
+
+      {/* 회원 탈퇴 시트 */}
+      {withdrawOpen && (
+        <WithdrawSheet
+          isPasswordUser={isPasswordUser}
+          onClose={() => setWithdrawOpen(false)}
+          onDone={() => router.replace('/m')}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * 비밀번호 변경 시트 — 현재 비번 재인증 + 새 비번 설정
+ * ========================================================== */
+function ChangePasswordSheet({ onClose }: { onClose: () => void }) {
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newPwConfirm, setNewPwConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const save = async () => {
+    setError(null);
+    const v = validatePassword(newPw);
+    if (v) { setError(v); return; }
+    if (newPw !== newPwConfirm) { setError('새 비밀번호 확인이 일치하지 않습니다'); return; }
+    setBusy(true);
+    try {
+      await changePassword(currentPw, newPw);
+      setDone(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(
+        /wrong-password|invalid-credential/.test(msg)
+          ? '현재 비밀번호가 올바르지 않습니다'
+          : msg,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 bg-black/55 z-50 flex items-end justify-center">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-t-3xl px-5 pt-3 pb-6"
+        style={{ background: 'var(--surface-1)' }}
+      >
+        <div className="flex justify-center mb-3">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border)' }} />
+        </div>
+
+        {done ? (
+          <div className="py-4 text-center">
+            <div className="text-lg font-extrabold mb-1" style={{ color: 'var(--text-1)' }}>비밀번호가 변경되었습니다</div>
+            <div className="text-[12px] mb-5" style={{ color: 'var(--text-3)' }}>다음 로그인부터 새 비밀번호를 사용하세요.</div>
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-xl text-sm font-extrabold text-white"
+              style={{ background: 'var(--brand)' }}
+            >
+              완료
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="text-lg font-extrabold mb-1" style={{ color: 'var(--text-1)' }}>비밀번호 변경</div>
+            <div className="text-[11px] mb-4" style={{ color: 'var(--text-3)' }}>보안을 위해 현재 비밀번호를 먼저 확인합니다</div>
+
+            <div className="space-y-3.5">
+              <PwInput label="현재 비밀번호" value={currentPw} onChange={setCurrentPw} placeholder="현재 비밀번호" autoComplete="current-password" />
+              <PwInput label="새 비밀번호" value={newPw} onChange={setNewPw} placeholder="8자 이상, 영문+숫자" autoComplete="new-password" />
+              <PwInput label="새 비밀번호 확인" value={newPwConfirm} onChange={setNewPwConfirm} placeholder="다시 입력" autoComplete="new-password" />
+            </div>
+
+            {error && (
+              <div className="mt-3 px-3 py-2 rounded-lg text-[12px] font-bold" style={{ background: 'rgba(229,62,62,0.10)', color: 'var(--live)' }}>
+                {error}
+              </div>
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={onClose}
+                disabled={busy}
+                className="flex-1 py-3 rounded-xl text-sm font-bold disabled:opacity-40"
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
+              >
+                취소
+              </button>
+              <button
+                onClick={save}
+                disabled={busy}
+                className="flex-1 py-3 rounded-xl text-sm font-extrabold text-white disabled:opacity-50"
+                style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-brand)' }}
+              >
+                {busy ? '변경 중…' : '변경'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PwInput({
+  label, value, onChange, placeholder, autoComplete,
+}: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; autoComplete?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-[11px] font-bold mb-1.5" style={{ color: 'var(--text-2)' }}>{label}</label>
+      <input
+        type="password"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
+      />
+    </div>
+  );
+}
+
+/* ============================================================
+ * 회원 탈퇴 시트 — 안내 + (이메일 가입자) 비번 확인 + 실행
+ * ========================================================== */
+function WithdrawSheet({
+  isPasswordUser,
+  onClose,
+  onDone,
+}: {
+  isPasswordUser: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = confirmText.trim() === '탈퇴' && (!isPasswordUser || password.length > 0);
+
+  const handleWithdraw = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await deleteOwnAccount(isPasswordUser ? password : undefined);
+      onDone();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(
+        /requires-recent-login/.test(msg)
+          ? '보안을 위해 다시 로그인한 뒤 탈퇴를 진행해 주세요'
+          : msg,
+      );
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 bg-black/55 z-50 flex items-end justify-center">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-t-3xl px-5 pt-3 pb-6"
+        style={{ background: 'var(--surface-1)' }}
+      >
+        <div className="flex justify-center mb-3">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border)' }} />
+        </div>
+
+        <div className="text-lg font-extrabold mb-1" style={{ color: 'var(--live)' }}>회원 탈퇴</div>
+        <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(229,62,62,0.08)', border: '1px solid rgba(229,62,62,0.25)' }}>
+          <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-2)' }}>
+            탈퇴하면 계정과 즐겨찾기·관심 토너·예약 등 개인 데이터가 삭제되며 <b>되돌릴 수 없습니다.</b>
+            동일 이메일로 다시 가입할 수는 있지만 기존 데이터는 복구되지 않습니다.
+          </p>
+        </div>
+
+        <div className="space-y-3.5">
+          <div>
+            <label className="block text-[11px] font-bold mb-1.5" style={{ color: 'var(--text-2)' }}>
+              확인을 위해 <b style={{ color: 'var(--live)' }}>탈퇴</b> 라고 입력하세요
+            </label>
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="탈퇴"
+              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
+            />
+          </div>
+          {isPasswordUser && (
+            <PwInput label="현재 비밀번호" value={password} onChange={setPassword} placeholder="비밀번호 확인" autoComplete="current-password" />
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-3 px-3 py-2 rounded-lg text-[12px] font-bold" style={{ background: 'rgba(229,62,62,0.10)', color: 'var(--live)' }}>
+            {error}
+          </div>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 py-3 rounded-xl text-sm font-bold disabled:opacity-40"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
+          >
+            취소
+          </button>
+          <button
+            onClick={handleWithdraw}
+            disabled={busy || !canSubmit}
+            className="flex-1 py-3 rounded-xl text-sm font-extrabold text-white disabled:opacity-40"
+            style={{ background: 'var(--live, #E53E3E)' }}
+          >
+            {busy ? '처리 중…' : '탈퇴하기'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

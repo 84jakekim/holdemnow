@@ -28,7 +28,7 @@ import { useTheme } from '@/lib/theme';
 import { subscribeStoreMetrics, type StoreMetrics } from '@/lib/analytics';
 import { loadLastNDays, periodTotals, type DailyMetricsDoc, type MetricField } from '@/lib/dailyMetrics';
 import { subscribeStoreReservations } from '@/lib/reservations';
-import { changePassword, syncPasswordRecovery, validatePassword } from '@/lib/emailAuth';
+import { changePassword, syncPasswordRecovery, validatePassword, deleteOwnAccount } from '@/lib/emailAuth';
 import { RabbitLogo } from '@/components/ui';
 
 const MENUS = [
@@ -61,6 +61,7 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [showPwModal, setShowPwModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [unreadReservationCount, setUnreadReservationCount] = useState(0);
   // 모바일 드로어 — lg(1024px) 미만에서 햄버거로 토글
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -354,6 +355,13 @@ function AdminPageInner({ storeId }: { storeId: string }) {
           >
             로그아웃
           </button>
+          <button
+            onClick={() => setShowWithdrawModal(true)}
+            className="text-[11px] underline underline-offset-2 block"
+            style={{ color: 'var(--text-3)' }}
+          >
+            회원 탈퇴
+          </button>
         </div>
       </aside>
   );
@@ -388,6 +396,16 @@ function AdminPageInner({ storeId }: { storeId: string }) {
         <ChangePasswordModal
           email={authState.user.email ?? ''}
           onClose={() => setShowPwModal(false)}
+        />
+      )}
+
+      {/* 회원 탈퇴 모달 */}
+      {showWithdrawModal && (
+        <WithdrawModal
+          storeName={store?.name}
+          isPasswordUser={authState.user.providerData?.some((p) => p.providerId === 'password') ?? false}
+          onClose={() => setShowWithdrawModal(false)}
+          onDone={() => router.replace('/login/business')}
         />
       )}
 
@@ -972,6 +990,110 @@ function ChangePasswordModal({ email, onClose }: { email: string; onClose: () =>
             `}</style>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// 회원 탈퇴 모달 — 매장 어드민. 탈퇴 시 소유 매장은 폐업(closed) 처리됨.
+// =====================================================================
+
+function WithdrawModal({
+  storeName,
+  isPasswordUser,
+  onClose,
+  onDone,
+}: {
+  storeName?: string;
+  isPasswordUser: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = confirmText.trim() === '탈퇴' && (!isPasswordUser || password.length > 0);
+
+  const handleWithdraw = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await deleteOwnAccount(isPasswordUser ? password : undefined);
+      onDone();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(
+        /requires-recent-login/.test(msg)
+          ? '보안을 위해 다시 로그인한 뒤 탈퇴를 진행해 주세요'
+          : /wrong-password|invalid-credential/.test(msg)
+            ? '현재 비밀번호가 올바르지 않습니다'
+            : msg,
+      );
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+        <div className="font-extrabold text-red-600 mb-1">회원 탈퇴</div>
+        <div className="rounded-xl bg-red-50 border border-red-200 p-3 mb-4">
+          <p className="text-xs text-red-800 leading-relaxed">
+            탈퇴하면 계정이 삭제되고 <b>{storeName ? `"${storeName}" 매장은 폐업 처리`: '운영 중인 매장은 폐업 처리'}</b>되어
+            더 이상 노출되지 않습니다. 이 작업은 <b>되돌릴 수 없습니다.</b> 매장 데이터(리뷰·기록)는 보존되나
+            재개하려면 본사에 문의가 필요합니다.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold text-gray-700 block mb-1">
+              확인을 위해 <b className="text-red-600">탈퇴</b> 라고 입력하세요
+            </label>
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="탈퇴"
+              className="w-full px-3 py-2.5 rounded-lg text-sm border-[1.5px] border-gray-200 outline-none focus:border-red-400"
+            />
+          </div>
+          {isPasswordUser && (
+            <div>
+              <label className="text-xs font-bold text-gray-700 block mb-1">현재 비밀번호</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="비밀번호 확인"
+                autoComplete="current-password"
+                className="w-full px-3 py-2.5 rounded-lg text-sm border-[1.5px] border-gray-200 outline-none focus:border-red-400"
+              />
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} disabled={busy} className="flex-1 py-2.5 rounded-xl border-[1.5px] border-gray-200 font-bold text-sm disabled:opacity-40">
+            취소
+          </button>
+          <button
+            onClick={handleWithdraw}
+            disabled={!canSubmit || busy}
+            className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition disabled:opacity-40"
+            style={{ background: '#DC2626' }}
+          >
+            {busy ? '처리 중…' : '탈퇴하기'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -59,6 +59,8 @@ interface PlayerRow {
 interface AdminRow {
   id: string;
   email?: string;
+  username?: string;
+  loginId?: string;
   displayName?: string;
   providers?: string[];
   status?: 'active' | 'suspended';
@@ -109,6 +111,8 @@ function MembersPageInner() {
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
+  // uid → 로그인 아이디(이메일) 맵 — 매장/대회사 카드에 owner 이메일 노출용 (추가 구독 없이 users 스냅샷 재사용)
+  const [ownerEmailByUid, setOwnerEmailByUid] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [adminSearch, setAdminSearch] = useState('');
   const [adminModalOpen, setAdminModalOpen] = useState(false);
@@ -144,6 +148,14 @@ function MembersPageInner() {
             u.role === 'platform_admin';
 
           setAdmins(all.filter(isPlatformAdmin) as AdminRow[]);
+
+          // uid → email 맵 — 매장/대회사 owner 이메일 노출용
+          const emailMap: Record<string, string> = {};
+          for (const u of all) {
+            if (u.email) emailMap[u.id] = u.email;
+          }
+          setOwnerEmailByUid(emailMap);
+
           setPlayers(
             all.filter((u) => {
               if (isPlatformAdmin(u)) return false; // 어드민은 일반 탭에서 제외
@@ -256,6 +268,8 @@ function MembersPageInner() {
     const q = adminSearch.toLowerCase();
     if (!q) return true;
     return (
+      (a.loginId ?? '').toLowerCase().includes(q) ||
+      (a.username ?? '').toLowerCase().includes(q) ||
       (a.email ?? '').toLowerCase().includes(q) ||
       (a.displayName ?? '').toLowerCase().includes(q)
     );
@@ -358,7 +372,9 @@ function MembersPageInner() {
                           <span className="font-bold text-gray-900">{a.displayName ?? '(이름 없음)'}</span>
                           <RoleBadge user={a} />
                         </div>
-                        <div className="text-[11px] text-gray-500 font-mono mt-0.5">{a.email ?? a.id.slice(0, 16) + '…'}</div>
+                        <div className="text-[11px] text-gray-500 font-mono mt-0.5">
+                          {a.loginId ?? a.username ?? a.email ?? a.id.slice(0, 16) + '…'}
+                        </div>
                         {a.storeId && (
                           <div className="text-[10px] text-gray-400 mt-0.5">매장도 운영 중</div>
                         )}
@@ -551,6 +567,7 @@ function MembersPageInner() {
                 <StoreCard
                   key={s.id}
                   store={s}
+                  ownerEmail={s.ownerUid ? ownerEmailByUid[s.ownerUid] : undefined}
                   onApprove={() => approveStore(s.id)}
                   onReject={() => setRejectModal({ id: s.id, type: 'store', name: s.name })}
                   onSuspend={() => { if (window.confirm(`"${s.name}" 매장을 정지하시겠습니까?`)) suspendStore(s.id); }}
@@ -608,6 +625,7 @@ function MembersPageInner() {
                 <OrganizerCard
                   key={o.id}
                   org={o}
+                  ownerEmail={o.ownerUid ? ownerEmailByUid[o.ownerUid] : undefined}
                   onApprove={() => approveOrg(o.id)}
                   onReject={() => setRejectModal({ id: o.id, type: 'organizer', name: o.companyName ?? o.name ?? o.id })}
                   onSuspend={() => { if (window.confirm(`"${o.companyName ?? o.name}" 대회사를 정지하시겠습니까?`)) suspendOrg(o.id); }}
@@ -865,6 +883,7 @@ export default function MembersPage() {
 
 function StoreCard({
   store,
+  ownerEmail,
   onApprove,
   onReject,
   onSuspend,
@@ -872,6 +891,7 @@ function StoreCard({
   onCardClick,
 }: {
   store: StoreRow;
+  ownerEmail?: string;
   onApprove: () => void;
   onReject: () => void;
   onSuspend: () => void;
@@ -894,6 +914,9 @@ function StoreCard({
             {store.status === 'pending' && !store.isDemo && <ReviewMetChip store={store} />}
           </div>
           <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
+            {ownerEmail && (
+              <div>로그인 아이디: <b className="text-gray-700 font-mono">{ownerEmail}</b></div>
+            )}
             {store.representativeName && (
               <div>대표자: <b className="text-gray-700">{store.representativeName}</b> {store.representativePhone && `· ${store.representativePhone}`}</div>
             )}
@@ -941,6 +964,7 @@ function StoreCard({
 
 function OrganizerCard({
   org,
+  ownerEmail,
   onApprove,
   onReject,
   onSuspend,
@@ -948,6 +972,7 @@ function OrganizerCard({
   onCardClick,
 }: {
   org: OrganizerRow;
+  ownerEmail?: string;
   onApprove: () => void;
   onReject: () => void;
   onSuspend: () => void;
@@ -967,6 +992,9 @@ function OrganizerCard({
             <StatusBadge status={org.status ?? 'pending'} type="org" />
           </div>
           <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
+            {ownerEmail && (
+              <div>로그인 아이디: <b className="text-gray-700 font-mono">{ownerEmail}</b></div>
+            )}
             {org.representativeName && <div>대표자: <b className="text-gray-700">{org.representativeName}</b></div>}
             {org.contactPerson?.name && (
               <div>담당자: {org.contactPerson.name} {org.contactPerson.phone && `· ${org.contactPerson.phone}`}</div>

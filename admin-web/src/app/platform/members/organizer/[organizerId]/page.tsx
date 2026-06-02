@@ -207,9 +207,11 @@ export default function OrganizerDetailPage() {
           {isEmailProvider && (
             <IdentityVerificationCard
               email={owner?.email ?? ''}
+              loginId={owner?.email}
               passwordHint={owner?.passwordHint}
               recoveryLast4={owner?.recoveryLast4}
               onSendPasswordReset={handleSendPasswordReset}
+              targetUid={org.ownerUid}
             />
           )}
 

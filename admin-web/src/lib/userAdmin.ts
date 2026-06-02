@@ -56,6 +56,31 @@ export async function getUserAuthInfo(uid: string): Promise<UserAuthInfo> {
 }
 
 /**
+ * 임시 비밀번호 강제 발급 (platform_admin only).
+ * 원본 비밀번호는 조회 불가 → 새 임시 비번으로 덮어쓰고 그 평문을 반환.
+ * CS 담당자가 사용자에게 즉시 안내 후, 사용자가 로그인하여 직접 변경하도록 유도.
+ */
+export interface SetTemporaryPasswordResult {
+  success: boolean;
+  tempPassword: string;
+  email: string | null;
+  loginId: string | null;
+  providers: string[];
+}
+
+export async function setTemporaryPasswordByAdmin(input: {
+  targetUid?: string;
+  targetEmail?: string;
+}): Promise<SetTemporaryPasswordResult> {
+  const fn = httpsCallable<typeof input, SetTemporaryPasswordResult>(
+    getFunctions(app, 'asia-northeast3'),
+    'setTemporaryPasswordByAdmin',
+  );
+  const res = await fn(input);
+  return res.data;
+}
+
+/**
  * 사용자 검색 (이메일·닉네임 부분 일치) — 본사 어드민용.
  * users 컬렉션을 firestore에서 fetch + 클라이언트 필터.
  * 베타 규모(< 수천 명) OK. v0.2에서 Algolia 등 검색 전용 인프라.

@@ -21,6 +21,11 @@ export { kakaoCustomToken } from './auth/kakaoCustomToken';
 export { sendPasswordResetByAdmin } from './admin/sendPasswordResetByAdmin';
 // 사용자 인증 방식 조회 (platform_admin only) — providers/hasPassword/hasGoogle/hasKakao
 export { getUserAuthInfo } from './admin/getUserAuthInfo';
+// 임시 비밀번호 강제 발급 (platform_admin only) — 원본 비번 조회 불가 → 임시 비번으로 덮어쓰고 평문 반환(CS용).
+export { setTemporaryPasswordByAdmin } from './admin/setTemporaryPasswordByAdmin';
+
+// ===== Account — 본인 회원 탈퇴 (player/store/organizer 공용) =====
+export { deleteOwnAccount } from './account/deleteOwnAccount';
 
 // ===== YouTube — 채널 페이지 메타 추출 (API key 불필요, og:meta 파싱) =====
 export { getYoutubeChannelMeta } from './youtube/getYoutubeChannelMeta';

@@ -15,6 +15,8 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
 } from 'firebase/auth';
+import { httpsCallable, getFunctions } from 'firebase/functions';
+import { app } from './firebase';
 import {
   doc,
   setDoc,
@@ -479,6 +481,50 @@ export async function fetchRecoveryInfo(email: string): Promise<{
 
 export async function sendPasswordReset(email: string) {
   await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+}
+
+// =====================================================================
+// 회원 탈퇴 (본인)
+// =====================================================================
+
+export interface DeleteOwnAccountResult {
+  success: boolean;
+  closedStoreId?: string;
+  closedOrganizerId?: string;
+}
+
+/**
+ * 본인 회원 탈퇴. Cloud Function이 Firestore 정리 + 매장/대회사 폐업 처리 +
+ * Firebase Auth 계정 삭제를 한 번에 수행한다.
+ *
+ * 이메일/비밀번호 계정은 보안상 최근 로그인 검증(재인증)이 필요할 수 있어,
+ * currentPassword가 주어지면 호출 전에 재인증을 시도한다 (실패해도 함수는 진행 가능하나
+ * Auth deleteUser 단계에서 requires-recent-login이 날 수 있으므로 권장).
+ */
+export async function deleteOwnAccount(currentPassword?: string): Promise<DeleteOwnAccountResult> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('로그인 상태가 아닙니다');
+
+  // 이메일/비번 계정이고 비번을 받았으면 재인증 (recent-login 보강)
+  if (currentPassword && user.email) {
+    try {
+      const cred = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, cred);
+    } catch {
+      throw new Error('현재 비밀번호가 올바르지 않습니다');
+    }
+  }
+
+  const fn = httpsCallable<Record<string, never>, DeleteOwnAccountResult>(
+    getFunctions(app, 'asia-northeast3'),
+    'deleteOwnAccount',
+  );
+  const res = await fn({});
+
+  // 서버에서 Auth 계정이 삭제됐으므로 로컬 세션도 정리
+  try { await auth.signOut(); } catch { /* ignore */ }
+
+  return res.data;
 }
 
 // =====================================================================

@@ -21,6 +21,8 @@ import ConsentSummaryCard from '@/components/platform/ConsentSummaryCard';
 interface UserDetail {
   uid: string;
   email?: string;
+  username?: string;
+  loginId?: string;
   displayName?: string;
   realName?: string;
   nickname?: string;
@@ -181,6 +183,9 @@ export default function UserDetailPage() {
           <div className="bg-white border border-gray-200 rounded-2xl p-4">
             <h3 className="text-sm font-extrabold text-gray-900 mb-3">계정 정보</h3>
             <div className="space-y-2.5">
+              {(user.loginId ?? user.username) && (
+                <InfoRow label="로그인 아이디" value={user.loginId ?? user.username} />
+              )}
               <InfoRow label="이메일" value={user.email} />
               <InfoRow label="실명" value={user.realName} />
               <InfoRow label="닉네임" value={user.nickname ?? user.displayName} />
@@ -200,9 +205,11 @@ export default function UserDetailPage() {
           {isEmailProvider && (
             <IdentityVerificationCard
               email={user.email ?? ''}
+              loginId={user.loginId ?? user.username ?? user.email}
               passwordHint={user.passwordHint}
               recoveryLast4={user.recoveryLast4}
               onSendPasswordReset={handleSendPasswordReset}
+              targetUid={uid}
             />
           )}
 
