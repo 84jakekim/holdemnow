@@ -26,7 +26,9 @@ import { collection, addDoc, doc, onSnapshot, serverTimestamp } from 'firebase/f
 const APPLY_HREF = '/signup/store';
 
 // 랜딩 실시간 카운터 — 본사 대시보드(/platform/prereg)가 meta/landingStats에 집계 기록.
-// 매장: 실제 사전등록 매장 수, 유저: preRegLeads(출시알림) 수. 미존재 시 null → 폴백 표기.
+// 표시값 = 기준 오프셋(baseStoreCount/baseLeadCount, 본사가 조절) + 실제(storeCount/leadCount).
+//   → 초반 실데이터가 적어도 사회적 증거용 기준값을 깔고, 신청이 쌓일수록 실제분이 가산됨.
+// 미존재 시 null → 폴백 표기.
 interface LandingStats { storeCount: number; leadCount: number; }
 function useLandingStats(): LandingStats | null {
   const [stats, setStats] = useState<LandingStats | null>(null);
@@ -36,7 +38,10 @@ function useLandingStats(): LandingStats | null {
       (snap) => {
         if (snap.exists()) {
           const d = snap.data();
-          setStats({ storeCount: Number(d.storeCount ?? 0), leadCount: Number(d.leadCount ?? 0) });
+          setStats({
+            storeCount: Number(d.storeCount ?? 0) + Number(d.baseStoreCount ?? 0),
+            leadCount: Number(d.leadCount ?? 0) + Number(d.baseLeadCount ?? 0),
+          });
         } else {
           setStats(null);
         }

@@ -17,7 +17,7 @@
  * 보안: /platform/* 레이아웃이 platform_admin 게이팅. preRegLeads read·meta write는 rules에서 본사만 허용.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -66,6 +66,37 @@ export default function PreRegPage() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [tab, setTab] = useState<'stores' | 'leads'>('stores');
   const [loaded, setLoaded] = useState({ s: false, l: false });
+
+  // 랜딩 표시 기준값(오프셋) — 표시 = 기준 + 실제
+  const [baseStore, setBaseStore] = useState('');
+  const [baseLead, setBaseLead] = useState('');
+  const [baseSaved, setBaseSaved] = useState({ s: 0, l: 0 });
+  const [savingBase, setSavingBase] = useState(false);
+  const baseInit = useRef(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'meta', 'landingStats'), (snap) => {
+      const d = snap.exists() ? snap.data() : {};
+      const s = Number(d.baseStoreCount ?? 0);
+      const l = Number(d.baseLeadCount ?? 0);
+      setBaseSaved({ s, l });
+      if (!baseInit.current) { setBaseStore(String(s)); setBaseLead(String(l)); baseInit.current = true; }
+    }, () => {});
+    return unsub;
+  }, []);
+
+  const saveBase = async () => {
+    setSavingBase(true);
+    try {
+      await setDoc(doc(db, 'meta', 'landingStats'), {
+        baseStoreCount: Math.max(0, parseInt(baseStore || '0', 10) || 0),
+        baseLeadCount: Math.max(0, parseInt(baseLead || '0', 10) || 0),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } finally {
+      setSavingBase(false);
+    }
+  };
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'stores'), (snap) => {
@@ -161,6 +192,34 @@ export default function PreRegPage() {
         <Kpi label="심사 대기" value={stat.pending} tone="#F59E0B" />
         <Kpi label="승인 완료" value={stat.active} tone="#10B981" />
         <Kpi label="출시알림 신청" value={leads.length} tone="#FF1F8F" />
+      </div>
+
+      {/* 랜딩 표시 기준값 (사회적 증거 오프셋) */}
+      <div className="rounded-xl p-4 mb-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>🎚️ 랜딩 표시 기준값 (오프셋)</div>
+        <div className="text-[11px] mt-1 mb-3" style={{ color: 'var(--text-3)' }}>
+          랜딩 표시 = <b>기준값 + 실제</b>. 초반 숫자가 약해 보이지 않도록 기준값을 깔아둡니다. (0이면 순수 실데이터)
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>기준 매장 수</span>
+            <input value={baseStore} onChange={(e) => setBaseStore(e.target.value.replace(/\D/g, ''))} inputMode="numeric"
+              className="mono" style={{ width: 110, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', fontSize: 13 }} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>기준 대기 유저</span>
+            <input value={baseLead} onChange={(e) => setBaseLead(e.target.value.replace(/\D/g, ''))} inputMode="numeric"
+              className="mono" style={{ width: 110, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', fontSize: 13 }} />
+          </label>
+          <button onClick={saveBase} disabled={savingBase} className="px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-40"
+            style={{ background: 'var(--gold)', color: '#0F1419' }}>
+            {savingBase ? '저장 중…' : '저장'}
+          </button>
+        </div>
+        <div className="text-[11px] mt-3" style={{ color: 'var(--text-2)' }}>
+          현재 랜딩 표시 예상: 매장 <b style={{ color: 'var(--gold)' }}>{(baseSaved.s + stat.total).toLocaleString()}</b>곳 · 대기 유저 <b style={{ color: '#FF1F8F' }}>{(baseSaved.l + leads.length).toLocaleString()}</b>명
+          <span style={{ color: 'var(--text-3)' }}> (기준 {baseSaved.s}/{baseSaved.l} + 실제 {stat.total}/{leads.length})</span>
+        </div>
       </div>
 
       {/* 차트 2열 */}
