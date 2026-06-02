@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks';
 import AnonymousPrompt from '@/components/mobile/AnonymousPrompt';
 import LogoutConfirmSheet from '@/components/mobile/LogoutConfirmSheet';
 import RecentVisitsSection from '@/components/mobile/my/RecentVisitsSection';
+import NoticeBoardSection from '@/components/mobile/my/NoticeBoardSection';
 import NotificationBellButton from '@/components/mobile/NotificationBellButton';
 import { doc, setDoc, onSnapshot, serverTimestamp, collection, collectionGroup, query, where } from 'firebase/firestore';
 import { enableNotifications, getNotificationPermission, isMessagingSupported } from '@/lib/messaging';
@@ -358,6 +359,9 @@ export default function MyPage() {
           ))}
         </div>
       </div>
+
+      {/* ── 공지사항 게시판 (본사 고정 공지 모아보기) ── */}
+      <NoticeBoardSection />
 
       {/* ── 알림 설정 ── */}
       <div className="px-5 py-5" style={{ borderBottom: '6px solid var(--surface-2)' }}>
