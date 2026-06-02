@@ -780,8 +780,8 @@ function PreRegHub({ onToast, stats }: { onToast: (msg: string) => void; stats: 
           </p>
         </Reveal>
 
-        <div className="prereg-grid" style={{ display: 'grid', gridTemplateColumns: 'var(--hub-cols, 1fr)', gap: 16, alignItems: 'stretch' }}>
-          <Reveal>
+        <div className="prereg-grid" style={{ display: 'grid', gridTemplateColumns: 'var(--hub-cols, 1fr)', gap: 16, alignItems: 'stretch', minWidth: 0 }}>
+          <Reveal style={{ minWidth: 0 }}>
             <Link href={APPLY_HREF} className="tap" style={{ display: 'block', textDecoration: 'none', height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 20, padding: 'clamp(20px, 5vw, 28px)', background: 'linear-gradient(150deg, #FF1F8F 0%, #E01077 55%, #831843 120%)', boxShadow: '0 16px 44px rgba(255,31,143,.4)', color: '#fff' }}>
               <div aria-hidden="true" style={{ position: 'absolute', top: -24, right: -18, opacity: .18 }}><HNMark size={130} variant="mark" /></div>
               <div style={{ position: 'relative' }}>
@@ -802,8 +802,8 @@ function PreRegHub({ onToast, stats }: { onToast: (msg: string) => void; stats: 
             </Link>
           </Reveal>
 
-          <Reveal delay={.08}>
-            <div style={{ height: '100%', borderRadius: 20, padding: 'clamp(20px, 5vw, 24px)', background: 'var(--navy)', color: '#fff', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <Reveal delay={.08} style={{ minWidth: 0 }}>
+            <div style={{ height: '100%', borderRadius: 20, padding: 'clamp(20px, 5vw, 24px)', background: 'var(--navy)', color: '#fff', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <div aria-hidden="true" style={{ position: 'absolute', bottom: '-20%', right: '-15%', width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,.3), transparent 66%)' }} />
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 99, background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.16)', fontSize: 11, fontWeight: 800 }}>🙋 플레이어</div>
@@ -821,7 +821,7 @@ function PreRegHub({ onToast, stats }: { onToast: (msg: string) => void; stats: 
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.6)', marginBottom: 6 }}>연락받을 번호</div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input value={tel} onChange={(e) => setTel(e.target.value)} placeholder="010-0000-0000" inputMode="tel"
-                        style={{ flex: 1, minWidth: 0, padding: '13px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.06)', color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
+                        style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '13px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.06)', color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
                         onFocus={(e) => (e.target.style.borderColor = '#FF6BAA')} onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,.18)')} />
                       <button type="submit" disabled={submitting} className="tap" style={{ padding: '0 20px', borderRadius: 12, background: 'linear-gradient(135deg,#FF1F8F,#FF6BAA)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 900, cursor: 'pointer', whiteSpace: 'nowrap', opacity: submitting ? 0.6 : 1 }}>{submitting ? '…' : '신청'}</button>
                     </div>
@@ -937,6 +937,8 @@ export default function LandingPage() {
           --shadow-float: 0 10px 30px rgba(14,21,37,.10), 0 3px 8px rgba(14,21,37,.06);
           --mono:'JetBrains Mono','SF Mono',Menlo,monospace;
         }
+        html, body { overflow-x: clip; max-width: 100%; }
+        #prereg { overflow-x: clip; }
         .mono{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
         .badge-live{ display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; font-size:10px; font-weight:800; color:#fff; background:var(--live); letter-spacing:.06em; }
         .badge-live .dot{ width:5px; height:5px; border-radius:999px; background:#fff; animation:pulse 1.6s infinite; }
