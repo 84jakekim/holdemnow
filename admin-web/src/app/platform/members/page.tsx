@@ -19,6 +19,7 @@ import { db } from '@/lib/firebase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import MembersTabExportButton from '@/components/platform/MembersTabExportButton';
+import PlayerCsActionCell from '@/components/platform/PlayerCsActionCell';
 import { summarizeReview, type StoreApplicationData } from '@/lib/storeReview';
 import {
   createPlatformAdmin,
@@ -492,22 +493,28 @@ function MembersPageInner() {
                       <td className="p-3">
                         <StatusBadge status={p.status ?? 'active'} type="user" />
                       </td>
-                      <td className="p-3 text-right">
-                        {p.status === 'suspended' ? (
-                          <button
-                            onClick={() => activatePlayer(p.id)}
-                            className="text-[10px] font-bold bg-green-600 text-white rounded px-2 py-1 hover:bg-green-700"
-                          >
-                            복구
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => { if (window.confirm('이 사용자를 정지하시겠습니까?')) suspendPlayer(p.id); }}
-                            className="text-[10px] font-bold bg-gray-200 text-gray-700 rounded px-2 py-1 hover:bg-gray-300"
-                          >
-                            정지
-                          </button>
-                        )}
+                      <td className="p-3">
+                        <div
+                          className="flex items-center justify-end gap-1.5 flex-wrap"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <PlayerCsActionCell uid={p.id} email={p.email} providers={p.providers} />
+                          {p.status === 'suspended' ? (
+                            <button
+                              onClick={() => activatePlayer(p.id)}
+                              className="text-[10px] font-bold bg-green-600 text-white rounded px-2 py-1 hover:bg-green-700"
+                            >
+                              복구
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { if (window.confirm('이 사용자를 정지하시겠습니까?')) suspendPlayer(p.id); }}
+                              className="text-[10px] font-bold bg-gray-200 text-gray-700 rounded px-2 py-1 hover:bg-gray-300"
+                            >
+                              정지
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

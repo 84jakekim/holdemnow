@@ -1009,7 +1009,7 @@ export default function PlatformDashboard() {
             createdAt 내림차순 · 최근 10명
           </div>
           <Link
-            href="/platform/users"
+            href="/platform/members?tab=players"
             style={{ fontSize: 11, color: 'var(--brand)', fontWeight: 700, textDecoration: 'none' }}
           >
             전체 보기 →

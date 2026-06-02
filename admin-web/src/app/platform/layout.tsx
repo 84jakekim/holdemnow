@@ -49,7 +49,6 @@ const MENU_GROUPS: MenuGroup[] = [
       { id: 'dashboard', icon: '📊', label: '대시보드', href: '/platform' },
       { id: 'live', icon: '🎬', label: '전국 LIVE', href: '/platform/live' },
       { id: 'members', icon: '👥', label: '회원 관리', href: '/platform/members' },
-      { id: 'users', icon: '👥', label: '사용자 관리', href: '/platform/users' },
     ],
   },
   {
