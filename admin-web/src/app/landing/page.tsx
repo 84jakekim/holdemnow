@@ -20,8 +20,33 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 const APPLY_HREF = '/signup/store';
+
+// 랜딩 실시간 카운터 — 본사 대시보드(/platform/prereg)가 meta/landingStats에 집계 기록.
+// 매장: 실제 사전등록 매장 수, 유저: preRegLeads(출시알림) 수. 미존재 시 null → 폴백 표기.
+interface LandingStats { storeCount: number; leadCount: number; }
+function useLandingStats(): LandingStats | null {
+  const [stats, setStats] = useState<LandingStats | null>(null);
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'meta', 'landingStats'),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          setStats({ storeCount: Number(d.storeCount ?? 0), leadCount: Number(d.leadCount ?? 0) });
+        } else {
+          setStats(null);
+        }
+      },
+      () => setStats(null),
+    );
+    return unsub;
+  }, []);
+  return stats;
+}
 
 // ─────────────────────────────────────────────────────────────
 // SVG 토끼 마크
@@ -207,10 +232,10 @@ function HeroPhonePeek() {
 }
 
 // ═══════════════════════════════════════════════ TRUST STRIP
-function TrustStrip() {
+function TrustStrip({ stats }: { stats: LandingStats | null }) {
   const items = [
-    { n: '47', l: '사전등록 매장' },
-    { n: '1,280+', l: '출시 대기 유저' },
+    { n: stats ? stats.storeCount.toLocaleString() : '47', l: '사전등록 매장' },
+    { n: stats ? `${stats.leadCount.toLocaleString()}+` : '1,280+', l: '출시 대기 유저' },
     { n: '전국', l: '서비스 지역' },
     { n: '100%', l: '사업자 인증' },
   ];
@@ -579,19 +604,37 @@ function PlayerExperience() {
 }
 
 // ═══════════════════════════════════════════════ PRE-REG HUB
-function PreRegHub({ onToast }: { onToast: (msg: string) => void }) {
+function PreRegHub({ onToast, stats }: { onToast: (msg: string) => void; stats: LandingStats | null }) {
   const [storeName, setStoreName] = useState('');
   const [tel, setTel] = useState('');
-  const [waiting, setWaiting] = useState(1280);
+  // 표시 대기 수: 실데이터(leadCount) 우선, 미동기화 시 1,280 폴백. 제출 시 낙관적 +1.
+  const [bump, setBump] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const waiting = (stats ? stats.leadCount : 1280) + bump;
 
-  const notify = (e: React.FormEvent) => {
+  const notify = async (e: React.FormEvent) => {
     e.preventDefault();
     const telOk = tel.replace(/\D/g, '').length >= 9;
     if (!storeName.trim()) { onToast('자주 가는 매장명을 입력해 주세요'); return; }
     if (!telOk) { onToast('연락받을 번호를 입력해 주세요'); return; }
-    setWaiting((w) => w + 1);
-    setStoreName(''); setTel('');
-    onToast('신청 완료! 출시되면 가장 먼저 알려드릴게요 🔔');
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await addDoc(collection(db, 'preRegLeads'), {
+        type: 'player',
+        storeName: storeName.trim().slice(0, 100),
+        phone: tel.trim().slice(0, 30),
+        source: 'landing',
+        createdAt: serverTimestamp(),
+      });
+      setBump((b) => b + 1);
+      setStoreName(''); setTel('');
+      onToast('신청 완료! 출시되면 가장 먼저 알려드릴게요 🔔');
+    } catch {
+      onToast('잠시 후 다시 시도해 주세요 🙏');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -652,7 +695,7 @@ function PreRegHub({ onToast }: { onToast: (msg: string) => void }) {
                       <input value={tel} onChange={(e) => setTel(e.target.value)} placeholder="010-0000-0000" inputMode="tel"
                         style={{ flex: 1, minWidth: 0, padding: '13px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.06)', color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
                         onFocus={(e) => (e.target.style.borderColor = '#FF6BAA')} onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,.18)')} />
-                      <button type="submit" className="tap" style={{ padding: '0 20px', borderRadius: 12, background: 'linear-gradient(135deg,#FF1F8F,#FF6BAA)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 900, cursor: 'pointer', whiteSpace: 'nowrap' }}>신청</button>
+                      <button type="submit" disabled={submitting} className="tap" style={{ padding: '0 20px', borderRadius: 12, background: 'linear-gradient(135deg,#FF1F8F,#FF6BAA)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 900, cursor: 'pointer', whiteSpace: 'nowrap', opacity: submitting ? 0.6 : 1 }}>{submitting ? '…' : '신청'}</button>
                     </div>
                   </div>
                 </form>
@@ -735,6 +778,7 @@ function Footer({ onScrollTo }: { onScrollTo: (id: string) => void }) {
 // ═══════════════════════════════════════════════ PAGE
 export default function LandingPage() {
   const [toast, toastNode] = useToast();
+  const stats = useLandingStats();
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
     if (el) {
@@ -745,10 +789,10 @@ export default function LandingPage() {
   return (
     <div style={{ fontFamily: "'Pretendard','Noto Sans KR',sans-serif", letterSpacing: '-.01em', background: 'var(--paper)', color: 'var(--ink-1)', overflowX: 'hidden' }}>
       <Hero onScrollTo={scrollTo} />
-      <TrustStrip />
+      <TrustStrip stats={stats} />
       <FeatureShowcase />
       <PlayerExperience />
-      <PreRegHub onToast={toast} />
+      <PreRegHub onToast={toast} stats={stats} />
       <StepsSection />
       <Footer onScrollTo={scrollTo} />
       {toastNode}

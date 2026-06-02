@@ -1,0 +1,344 @@
+'use client';
+
+/**
+ * /platform/prereg — 사전등록 현황 (본사 총괄)
+ *
+ * 랜딩페이지(/landing)로 유입되는 사전등록을 한 곳에서 관리·분석:
+ *   - 매장 사전등록: stores 컬렉션(데모 제외 = 실제 신청). 매장명·주소·대표자·연락처·사업자번호·상태
+ *   - 출시알림 신청: preRegLeads 컬렉션(랜딩 "출시 알림" 폼). 매장명·연락처
+ *
+ * 구성:
+ *   1) 대시보드 — KPI 4종 + 일별 신규 추이 + 매장 심사 상태 분포 + 유저 대기 매장 TOP + 지역 분포
+ *   2) DB 테이블 — 탭(매장 / 유저), CSV 내보내기
+ *
+ * 사이드이펙트: 로드 시 meta/landingStats에 실제 카운트 동기화
+ *   → 랜딩 TrustStrip "사전등록 매장 / 출시 대기 유저" 숫자가 실데이터로 실시간 갱신됨.
+ *
+ * 보안: /platform/* 레이아웃이 platform_admin 게이팅. preRegLeads read·meta write는 rules에서 본사만 허용.
+ */
+
+import { useEffect, useMemo, useState } from 'react';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+interface StoreRow {
+  id: string;
+  name?: string;
+  address?: string;
+  roadAddress?: string;
+  representativeName?: string;
+  representativePhone?: string;
+  phone?: string;
+  businessRegistrationNumber?: string;
+  status?: 'pending' | 'active' | 'rejected' | 'suspended' | 'paused' | 'closed';
+  isDemo?: boolean;
+  regionCode?: string;
+  createdAt?: { toDate: () => Date };
+}
+interface LeadRow {
+  id: string;
+  storeName?: string;
+  phone?: string;
+  source?: string;
+  createdAt?: { toDate: () => Date };
+}
+
+function fmtDate(d?: { toDate: () => Date }): string {
+  if (!d?.toDate) return '—';
+  const x = d.toDate();
+  return `${x.getFullYear()}.${String(x.getMonth() + 1).padStart(2, '0')}.${String(x.getDate()).padStart(2, '0')}`;
+}
+function dayKey(d: Date): string {
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+function downloadCsv(filename: string, rows: (string | number)[][]) {
+  const esc = (v: string | number) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = '﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+export default function PreRegPage() {
+  const [stores, setStores] = useState<StoreRow[]>([]);
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [tab, setTab] = useState<'stores' | 'leads'>('stores');
+  const [loaded, setLoaded] = useState({ s: false, l: false });
+
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db, 'stores'), (snap) => {
+      setStores(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StoreRow, 'id'>) })));
+      setLoaded((p) => ({ ...p, s: true }));
+    }, () => setLoaded((p) => ({ ...p, s: true })));
+    const u2 = onSnapshot(collection(db, 'preRegLeads'), (snap) => {
+      setLeads(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LeadRow, 'id'>) })));
+      setLoaded((p) => ({ ...p, l: true }));
+    }, () => setLoaded((p) => ({ ...p, l: true })));
+    return () => { u1(); u2(); };
+  }, []);
+
+  // 실제 사전등록 매장 = 데모 제외
+  const apps = useMemo(() => stores.filter((s) => !s.isDemo), [stores]);
+
+  const stat = useMemo(() => {
+    const pending = apps.filter((s) => s.status === 'pending').length;
+    const active = apps.filter((s) => s.status === 'active').length;
+    const rejected = apps.filter((s) => s.status === 'rejected').length;
+    const suspended = apps.filter((s) => (s.status === 'suspended' || s.status === 'paused' || s.status === 'closed')).length;
+    return { total: apps.length, pending, active, rejected, suspended };
+  }, [apps]);
+
+  // meta/landingStats 동기화 — 랜딩 실시간 카운터 소스
+  useEffect(() => {
+    if (!loaded.s || !loaded.l) return;
+    setDoc(doc(db, 'meta', 'landingStats'), {
+      storeCount: apps.length,
+      leadCount: leads.length,
+      updatedAt: serverTimestamp(),
+    }, { merge: true }).catch(() => {});
+  }, [loaded.s, loaded.l, apps.length, leads.length]);
+
+  // 일별 신규 추이 (최근 14일)
+  const trend = useMemo(() => {
+    const days: { key: string; store: number; lead: number }[] = [];
+    const idx = new Map<string, number>();
+    const now = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now); d.setDate(now.getDate() - i);
+      const k = dayKey(d);
+      idx.set(k, days.length);
+      days.push({ key: k, store: 0, lead: 0 });
+    }
+    apps.forEach((s) => { const t = s.createdAt?.toDate?.(); if (t) { const i = idx.get(dayKey(t)); if (i != null) days[i].store++; } });
+    leads.forEach((l) => { const t = l.createdAt?.toDate?.(); if (t) { const i = idx.get(dayKey(t)); if (i != null) days[i].lead++; } });
+    const max = Math.max(1, ...days.map((d) => d.store + d.lead));
+    return { days, max };
+  }, [apps, leads]);
+
+  // 유저 대기 매장 TOP (출시알림에서 매장명 빈도)
+  const topWanted = useMemo(() => {
+    const m = new Map<string, number>();
+    leads.forEach((l) => { const n = (l.storeName ?? '').trim(); if (n) m.set(n, (m.get(n) ?? 0) + 1); });
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [leads]);
+
+  // 지역 분포 (매장 regionCode)
+  const regions = useMemo(() => {
+    const m = new Map<string, number>();
+    apps.forEach((s) => { const r = (s.regionCode ?? '기타').trim() || '기타'; m.set(r, (m.get(r) ?? 0) + 1); });
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [apps]);
+
+  const exportStores = () => {
+    downloadCsv(`사전등록_매장_${Date.now()}.csv`, [
+      ['매장명', '주소', '대표자', '연락처', '매장전화', '사업자번호', '상태', '신청일'],
+      ...apps.map((s) => [s.name ?? '', s.roadAddress ?? s.address ?? '', s.representativeName ?? '', s.representativePhone ?? '', s.phone ?? '', s.businessRegistrationNumber ?? '', s.status ?? '', fmtDate(s.createdAt)]),
+    ]);
+  };
+  const exportLeads = () => {
+    downloadCsv(`출시알림_신청_${Date.now()}.csv`, [
+      ['매장명', '연락처', '유입', '신청일'],
+      ...leads.map((l) => [l.storeName ?? '', l.phone ?? '', l.source ?? '', fmtDate(l.createdAt)]),
+    ]);
+  };
+
+  const sortedApps = useMemo(() => [...apps].sort((a, b) => (b.createdAt?.toDate?.()?.getTime() ?? 0) - (a.createdAt?.toDate?.()?.getTime() ?? 0)), [apps]);
+  const sortedLeads = useMemo(() => [...leads].sort((a, b) => (b.createdAt?.toDate?.()?.getTime() ?? 0) - (a.createdAt?.toDate?.()?.getTime() ?? 0)), [leads]);
+
+  return (
+    <div>
+      <div className="mb-6">
+        <div className="section-title" style={{ color: 'var(--gold)' }}>PRE-REGISTRATION</div>
+        <h1 className="h2" style={{ color: 'var(--text-1)' }}>📝 사전등록 현황</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>랜딩페이지 유입 — 매장 사전등록 · 출시알림 신청 통합 관리</p>
+      </div>
+
+      {/* KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <Kpi label="사전등록 매장" value={stat.total} tone="var(--gold)" />
+        <Kpi label="심사 대기" value={stat.pending} tone="#F59E0B" />
+        <Kpi label="승인 완료" value={stat.active} tone="#10B981" />
+        <Kpi label="출시알림 신청" value={leads.length} tone="#FF1F8F" />
+      </div>
+
+      {/* 차트 2열 */}
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        {/* 일별 추이 */}
+        <Panel title="일별 신규 신청 (최근 14일)">
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120, marginTop: 6 }}>
+            {trend.days.map((d) => {
+              const total = d.store + d.lead;
+              const h = (total / trend.max) * 100;
+              return (
+                <div key={d.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={`${d.key} · 매장 ${d.store} · 유저 ${d.lead}`}>
+                  <div style={{ width: '100%', maxWidth: 18, height: `${h}%`, minHeight: total > 0 ? 4 : 0, borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', background: 'var(--surface-2)' }}>
+                    <div style={{ height: `${total ? (d.store / total) * 100 : 0}%`, background: 'var(--gold)' }} />
+                    <div style={{ height: `${total ? (d.lead / total) * 100 : 0}%`, background: '#FF1F8F' }} />
+                  </div>
+                  <div style={{ fontSize: 8, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{d.key}</div>
+                </div>
+              );
+            })}
+          </div>
+          <Legend items={[{ c: 'var(--gold)', l: '매장' }, { c: '#FF1F8F', l: '유저' }]} />
+        </Panel>
+
+        {/* 심사 상태 분포 */}
+        <Panel title="매장 심사 상태 분포">
+          <BarList items={[
+            { l: '심사 대기', v: stat.pending, c: '#F59E0B' },
+            { l: '승인 완료', v: stat.active, c: '#10B981' },
+            { l: '반려', v: stat.rejected, c: '#EF4444' },
+            { l: '정지·종료', v: stat.suspended, c: '#9CA3AF' },
+          ]} total={Math.max(1, stat.total)} />
+        </Panel>
+
+        {/* 유저 대기 매장 TOP */}
+        <Panel title="유저가 기다리는 매장 TOP">
+          {topWanted.length === 0 ? (
+            <Empty label="아직 출시알림 신청이 없습니다" />
+          ) : (
+            <BarList items={topWanted.map(([name, n], i) => ({ l: `${i + 1}. ${name}`, v: n, c: i === 0 ? '#FF1F8F' : 'var(--brand, #FF6BAA)' }))} total={Math.max(1, topWanted[0][1])} suffix="명" />
+          )}
+        </Panel>
+
+        {/* 지역 분포 */}
+        <Panel title="매장 지역 분포">
+          {regions.length === 0 ? (
+            <Empty label="등록된 매장이 없습니다" />
+          ) : (
+            <BarList items={regions.map(([r, n]) => ({ l: r, v: n, c: '#06B6D4' }))} total={Math.max(1, stat.total)} suffix="곳" />
+          )}
+        </Panel>
+      </div>
+
+      {/* 테이블 */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {([['stores', `매장 사전등록 (${apps.length})`], ['leads', `출시알림 신청 (${leads.length})`]] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className="px-4 py-2 rounded-lg text-sm font-bold transition"
+            style={tab === id ? { background: 'var(--gold)', color: '#0F1419' } : { background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }}>
+            {label}
+          </button>
+        ))}
+        <button onClick={tab === 'stores' ? exportStores : exportLeads} className="ml-auto px-3 py-2 rounded-lg text-xs font-bold"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}>
+          ⬇ CSV 내보내기
+        </button>
+      </div>
+
+      {tab === 'stores' ? (
+        <TableWrap empty={sortedApps.length === 0} emptyLabel="사전등록된 매장이 없습니다">
+          <thead>
+            <tr>{['매장명', '주소', '대표자', '연락처', '사업자번호', '상태', '신청일'].map((h) => <Th key={h}>{h}</Th>)}</tr>
+          </thead>
+          <tbody>
+            {sortedApps.map((s) => (
+              <tr key={s.id} style={{ borderTop: '1px solid var(--border)' }}>
+                <Td><b style={{ color: 'var(--text-1)' }}>{s.name || '—'}</b></Td>
+                <Td>{s.roadAddress || s.address || '—'}</Td>
+                <Td>{s.representativeName || '—'}</Td>
+                <Td mono>{s.representativePhone || s.phone || '—'}</Td>
+                <Td mono>{s.businessRegistrationNumber || '—'}</Td>
+                <Td><StatusPill status={s.status ?? 'pending'} /></Td>
+                <Td>{fmtDate(s.createdAt)}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </TableWrap>
+      ) : (
+        <TableWrap empty={sortedLeads.length === 0} emptyLabel="출시알림 신청이 없습니다">
+          <thead>
+            <tr>{['매장명', '연락처', '유입', '신청일'].map((h) => <Th key={h}>{h}</Th>)}</tr>
+          </thead>
+          <tbody>
+            {sortedLeads.map((l) => (
+              <tr key={l.id} style={{ borderTop: '1px solid var(--border)' }}>
+                <Td><b style={{ color: 'var(--text-1)' }}>{l.storeName || '—'}</b></Td>
+                <Td mono>{l.phone || '—'}</Td>
+                <Td>{l.source || 'landing'}</Td>
+                <Td>{fmtDate(l.createdAt)}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </TableWrap>
+      )}
+    </div>
+  );
+}
+
+// ── 서브 컴포넌트 ──────────────────────────────────────────
+function Kpi({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <div className="text-[11px] font-bold" style={{ color: 'var(--text-3)' }}>{label}</div>
+      <div className="text-3xl font-extrabold mt-1" style={{ color: tone }}>{value.toLocaleString()}</div>
+    </div>
+  );
+}
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <div className="text-xs font-extrabold mb-2" style={{ color: 'var(--text-2)' }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+function BarList({ items, total, suffix = '' }: { items: { l: string; v: number; c: string }[]; total: number; suffix?: string }) {
+  return (
+    <div className="flex flex-col gap-2 mt-1">
+      {items.map((it) => (
+        <div key={it.l} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 96, fontSize: 11, fontWeight: 600, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.l}</div>
+          <div style={{ flex: 1, height: 16, borderRadius: 5, background: 'var(--surface-2)', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, (it.v / total) * 100)}%`, height: '100%', background: it.c, borderRadius: 5, minWidth: it.v > 0 ? 4 : 0 }} />
+          </div>
+          <div className="mono" style={{ width: 40, textAlign: 'right', fontSize: 12, fontWeight: 800, color: 'var(--text-1)' }}>{it.v}{suffix}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function Legend({ items }: { items: { c: string; l: string }[] }) {
+  return (
+    <div style={{ display: 'flex', gap: 14, marginTop: 10, justifyContent: 'center' }}>
+      {items.map((it) => (
+        <div key={it.l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-2)' }}>
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: it.c }} />{it.l}
+        </div>
+      ))}
+    </div>
+  );
+}
+function Empty({ label }: { label: string }) {
+  return <div className="text-xs py-6 text-center" style={{ color: 'var(--text-3)' }}>{label}</div>;
+}
+function TableWrap({ children, empty, emptyLabel }: { children: React.ReactNode; empty: boolean; emptyLabel: string }) {
+  if (empty) {
+    return <div className="rounded-xl p-10 text-center text-sm" style={{ background: 'var(--surface-1)', border: '1px dashed var(--border)', color: 'var(--text-3)' }}>{emptyLabel}</div>;
+  }
+  return (
+    <div className="rounded-xl overflow-x-auto" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <table className="w-full text-sm" style={{ minWidth: 640 }}>{children}</table>
+    </div>
+  );
+}
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="text-left p-3 text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-3)' }}>{children}</th>;
+}
+function Td({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
+  return <td className={`p-3 ${mono ? 'mono' : ''}`} style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{children}</td>;
+}
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { bg: string; fg: string; label: string }> = {
+    pending: { bg: 'rgba(245,158,11,.15)', fg: '#F59E0B', label: '심사 대기' },
+    active: { bg: 'rgba(16,185,129,.15)', fg: '#10B981', label: '활성' },
+    rejected: { bg: 'rgba(239,68,68,.15)', fg: '#EF4444', label: '반려' },
+    suspended: { bg: 'rgba(156,163,175,.18)', fg: '#9CA3AF', label: '정지' },
+    paused: { bg: 'rgba(156,163,175,.18)', fg: '#9CA3AF', label: '중단' },
+    closed: { bg: 'rgba(239,68,68,.15)', fg: '#EF4444', label: '종료' },
+  };
+  const s = map[status] ?? { bg: 'var(--surface-2)', fg: 'var(--text-2)', label: status };
+  return <span className="text-[10px] font-extrabold rounded px-2 py-0.5" style={{ background: s.bg, color: s.fg }}>{s.label}</span>;
+}

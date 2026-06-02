@@ -55,6 +55,7 @@ const MENU_GROUPS: MenuGroup[] = [
   {
     title: '심사',
     items: [
+      { id: 'prereg', icon: '📝', label: '사전등록 현황', href: '/platform/prereg' },
       { id: 'stores', icon: '🏬', label: '매장 심사', href: '/platform/stores' },
       { id: 'organizers', icon: '🏢', label: '대회사 심사', href: '/platform/organizers' },
     ],

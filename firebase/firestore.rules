@@ -414,6 +414,21 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== 사전등록 리드 (랜딩 "출시 알림" 신청) =====
+    // 랜딩페이지는 비로그인 공개 페이지 → anonymous create 허용.
+    // 단 연락처(PII)가 담기므로 read/관리는 본사(platform_admin)만.
+    // 필드 검증으로 스팸/오염 방지: type='player' + 매장명·연락처 길이 제한.
+    match /preRegLeads/{leadId} {
+      allow create: if request.resource.data.type == 'player'
+        && request.resource.data.storeName is string
+        && request.resource.data.storeName.size() > 0
+        && request.resource.data.storeName.size() <= 100
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() >= 7
+        && request.resource.data.phone.size() <= 30;
+      allow read, update, delete: if isPlatformAdmin();
+    }
+
     // ===== 시리즈 (대회사) — v0.1: 인증된 사용자 = ownerUid로 직접 검증 =====
     match /series/{seriesId} {
       allow read: if true;                               // 모바일 시리즈 페이지 누구나
