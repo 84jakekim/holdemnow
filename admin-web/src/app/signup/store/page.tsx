@@ -164,24 +164,25 @@ export default function StoreSignupPage() {
               <path d="M20 6L9 17l-5-5" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <div className="text-xl font-extrabold text-gray-900 mb-2">가입 신청 완료!</div>
+          <div className="text-xl font-extrabold text-gray-900 mb-2">사전등록 완료!</div>
           <div className="text-sm text-gray-600 leading-relaxed mb-6">
-            <b className="text-gray-900">{form.storeName}</b> 매장의 가입 신청이 접수되었습니다.
+            <b className="text-gray-900">{form.storeName}</b> 매장의 사전등록이 접수되었습니다.
             <br />
-            본사 심사 후 승인 안내를 드립니다.
+            핑크래빗 앱 정식 런칭 시 가입하신 연락처로 안내 메시지를 보내드립니다.
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left text-xs text-amber-800 leading-relaxed mb-6">
-            <div className="font-bold text-amber-900 mb-1">심사 안내</div>
-            심사는 영업일 기준 1~3일 소요됩니다. 승인 후 등록하신 이메일로 안내 메일이 발송되며, 어드민 페이지에 접근하실 수 있습니다.
+            <div className="font-bold text-amber-900 mb-1">📣 런칭 안내</div>
+            지금은 정식 출시 전 <b>사전등록</b> 기간입니다. 앱이 런칭되면 가입하신 <b>대표 연락처</b>로
+            오픈 소식과 이용 방법을 메시지로 안내드리니, 지금 따로 로그인하지 않으셔도 됩니다.
             <br /><br />
             문의: 카카오톡 채널 <b>Pink Rabbit</b> 또는 이메일 <b>admin@holdemnow.com</b>
           </div>
           <Link
-            href="/login"
+            href="/landing"
             className="block w-full py-3.5 rounded-xl font-bold text-sm text-white text-center"
             style={{ background: '#FF1F8F' }}
           >
-            로그인 페이지로
+            확인
           </Link>
         </div>
       </main>

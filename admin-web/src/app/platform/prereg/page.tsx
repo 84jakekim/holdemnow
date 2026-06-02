@@ -55,6 +55,15 @@ function fmtDate(d?: { toDate: () => Date }): string {
 function dayKey(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 }
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function fmtDayLabel(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  const wd = WEEKDAYS[new Date(y, m - 1, d).getDay()];
+  return `${m}/${d} (${wd})`;
+}
 function downloadCsv(filename: string, rows: (string | number)[][]) {
   const esc = (v: string | number) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const csv = '﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n');
@@ -163,6 +172,34 @@ export default function PreRegPage() {
     return { days, max };
   }, [apps, leads]);
 
+  // 일자별 가입 신청 집계 (실시간) — 날짜별 매장/유저 건수 + 누적
+  const daily = useMemo(() => {
+    const map = new Map<string, { store: number; lead: number; ts: number }>();
+    const bump = (t: Date | undefined, k: 'store' | 'lead') => {
+      if (!t) return;
+      const key = ymd(t);
+      if (!map.has(key)) map.set(key, { store: 0, lead: 0, ts: new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() });
+      map.get(key)![k]++;
+    };
+    apps.forEach((s) => bump(s.createdAt?.toDate?.(), 'store'));
+    leads.forEach((l) => bump(l.createdAt?.toDate?.(), 'lead'));
+    // 오늘은 0건이라도 항상 표시
+    const now = new Date();
+    const todayKey = ymd(now);
+    if (!map.has(todayKey)) map.set(todayKey, { store: 0, lead: 0, ts: new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() });
+    // 오름차순 누적 계산 후 최신순 정렬
+    const asc = [...map.entries()].sort((a, b) => a[1].ts - b[1].ts);
+    const withCum: { key: string; store: number; lead: number; total: number; cum: number }[] = [];
+    let running = 0;
+    for (const [key, v] of asc) {
+      running += v.store + v.lead;
+      withCum.push({ key, store: v.store, lead: v.lead, total: v.store + v.lead, cum: running });
+    }
+    const rows = withCum.reverse();
+    const todayRow = rows.find((r) => r.key === todayKey);
+    return { rows, todayKey, todayTotal: todayRow ? todayRow.total : 0, grandTotal: running };
+  }, [apps, leads]);
+
   // 유저 대기 매장 TOP (출시알림에서 매장명 빈도)
   const topWanted = useMemo(() => {
     const m = new Map<string, number>();
@@ -240,6 +277,56 @@ export default function PreRegPage() {
         <Kpi label="심사 대기" value={stat.pending} tone="#F59E0B" />
         <Kpi label="승인 완료" value={stat.active} tone="#10B981" />
         <Kpi label="출시알림 신청" value={leads.length} tone="#FF1F8F" />
+      </div>
+
+      {/* 일자별 가입 신청 현황 — 하루하루 실시간 카운트 */}
+      <div className="rounded-xl p-4 mb-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="flex items-end justify-between mb-3 flex-wrap gap-2">
+          <div>
+            <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>📅 일자별 가입 신청 현황</div>
+            <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>매장 사전등록 · 출시알림을 날짜별로 집계 (실시간 갱신)</div>
+          </div>
+          <div className="flex gap-4">
+            <div className="text-right">
+              <div className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>오늘 신규</div>
+              <div className="text-2xl font-extrabold mono" style={{ color: 'var(--gold)' }}>{daily.todayTotal}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>누적 합계</div>
+              <div className="text-2xl font-extrabold mono" style={{ color: 'var(--text-1)' }}>{daily.grandTotal}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ maxHeight: 340, overflowY: 'auto' }} className="rounded-lg" >
+          <table className="w-full text-sm">
+            <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--surface-1)' }}>
+              <tr>
+                <Th>날짜</Th>
+                <th className="text-right p-2.5 text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-3)' }}>매장</th>
+                <th className="text-right p-2.5 text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-3)' }}>출시알림</th>
+                <th className="text-right p-2.5 text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-3)' }}>합계</th>
+                <th className="text-right p-2.5 text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-3)' }}>누적</th>
+              </tr>
+            </thead>
+            <tbody>
+              {daily.rows.map((r) => {
+                const isToday = r.key === daily.todayKey;
+                return (
+                  <tr key={r.key} style={{ borderTop: '1px solid var(--border)', background: isToday ? 'rgba(245,158,11,0.10)' : 'transparent' }}>
+                    <td className="p-2.5" style={{ fontSize: 12.5, color: 'var(--text-1)', fontWeight: isToday ? 800 : 500 }}>
+                      {fmtDayLabel(r.key)}
+                      {isToday && <span className="ml-2 text-[9px] font-extrabold rounded px-1.5 py-0.5" style={{ background: 'var(--gold)', color: '#0F1419' }}>오늘</span>}
+                    </td>
+                    <td className="p-2.5 text-right mono" style={{ fontSize: 12.5, color: r.store ? 'var(--gold)' : 'var(--text-3)', fontWeight: 700 }}>{r.store}</td>
+                    <td className="p-2.5 text-right mono" style={{ fontSize: 12.5, color: r.lead ? '#FF1F8F' : 'var(--text-3)', fontWeight: 700 }}>{r.lead}</td>
+                    <td className="p-2.5 text-right mono" style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 800 }}>{r.total}</td>
+                    <td className="p-2.5 text-right mono" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{r.cum}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* 랜딩 표시 기준값 (사회적 증거 오프셋) */}
