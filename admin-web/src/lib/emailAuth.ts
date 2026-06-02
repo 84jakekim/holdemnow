@@ -30,6 +30,7 @@ import { auth, db, storage } from './firebase';
 import { stripUndefined } from './firestoreUtil';
 import { setUserPhone } from './userProfile';
 import { normalizePhone } from './phone';
+import { regionCodeFromAddress } from './geo';
 
 // =====================================================================
 // 타입 정의
@@ -147,7 +148,8 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
     .join(' ');
   // regionCode 자동 산출 — `where regionCode in […]` 필터 + 광고 슬롯 분배용.
   // 도로명 주소 우선, 없으면 지번 주소, 그래도 없으면 합본.
-  const { regionCodeFromAddress } = await import('./geo');
+  // ⚠️ 정적 import 사용 — 과거 동적 import('./geo')는 배포 직후 옛 빌드 페이지에서
+  //    제출 시 사라진 청크를 fetch하려다 "신청 중"에서 멈추는 hang을 유발했음.
   const regionCode = regionCodeFromAddress(
     payload.roadAddress.trim() || payload.jibunAddress.trim() || combinedAddress,
   );
