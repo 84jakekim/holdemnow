@@ -258,6 +258,129 @@ function TrustStrip({ stats }: { stats: LandingStats | null }) {
   );
 }
 
+// ═══════════════════════════════════════════════ LIVE SPOTLIGHT
+// "지금 LIVE" 핵심 기능 전용 섹션 — 매장 타이머 시작 → 앱 LIVE 노출 → 유저 참가 결정
+function LiveSpotlight() {
+  const [s, setS] = useState(554);
+  useEffect(() => {
+    const id = setInterval(() => setS((v) => (v > 0 ? v - 1 : 600)), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const mm = String(Math.floor(s / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  const userStats: [string, string][] = [['바이인', '30,000'], ['스택', '30,000'], ['남은시간', `${mm}:${ss}`], ['참가', '24/30']];
+
+  return (
+    <section style={{ background: 'linear-gradient(180deg, #14091A 0%, #2A0E1F 50%, #14091A 100%)', color: '#fff', padding: '58px 20px 60px', position: 'relative', overflow: 'hidden' }}>
+      <div aria-hidden="true" style={{ position: 'absolute', top: '20%', left: '50%', transform: 'translateX(-50%)', width: 460, height: 460, borderRadius: '50%', background: 'radial-gradient(circle, rgba(229,62,62,.22), transparent 62%)' }} />
+      <div style={{ position: 'relative', maxWidth: 980, margin: '0 auto' }}>
+        <Reveal style={{ textAlign: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 99, background: 'rgba(229,62,62,.18)', border: '1px solid rgba(229,62,62,.4)', marginBottom: 16 }}>
+            <span className="badge-live"><span className="dot" />지금 LIVE</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#FFC7C7' }}>우리 앱의 심장</span>
+          </div>
+          <h2 style={{ margin: 0, fontSize: 'clamp(26px, 7vw, 40px)', fontWeight: 900, letterSpacing: '-.035em', lineHeight: 1.12 }}>
+            토너 타이머가 켜지는 순간,<br />
+            <span style={{ background: 'linear-gradient(135deg,#FF1F8F,#FF6BAA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>온 동네가 알게 됩니다</span>
+          </h2>
+          <p style={{ margin: '16px auto 0', maxWidth: 520, fontSize: 'clamp(14px,3.6vw,16px)', color: 'rgba(255,255,255,.74)', lineHeight: 1.62 }}>
+            매장이 타이머를 시작하면 앱에 <b style={{ color: '#fff' }}>&lsquo;지금 LIVE&rsquo;</b>로 표시됩니다.
+            사장님은 매장 상황을 실시간으로 알리고, 플레이어는 진행 상황을 보고 <b style={{ color: '#fff' }}>참가 여부를 바로 결정</b>합니다.
+          </p>
+        </Reveal>
+
+        {/* 3-step 흐름 */}
+        <Reveal>
+          <div className="live-flow" style={{ display: 'grid', gridTemplateColumns: 'var(--live-cols, 1fr)', gap: 14, alignItems: 'stretch', marginTop: 34 }}>
+            {/* STEP 1 — 매장: 타이머 시작 */}
+            <div style={{ position: 'relative', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 20, padding: '22px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <span className="mono" style={{ position: 'absolute', top: 14, left: 16, fontSize: 11, fontWeight: 900, color: 'rgba(255,255,255,.3)' }}>01</span>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#FF6BAA', letterSpacing: '.08em', marginBottom: 14 }}>🏪 매장</div>
+              <div style={{ width: '100%', maxWidth: 200, background: 'linear-gradient(135deg,rgba(255,31,143,.16),rgba(255,31,143,.04))', border: '1px solid rgba(255,31,143,.3)', borderRadius: 16, padding: '16px 14px' }}>
+                <div style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,.4)', letterSpacing: '.14em' }}>LEVEL 6 · BLINDS</div>
+                <div className="mono" style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, color: '#FF1F8F', marginTop: 4, textShadow: '0 3px 16px rgba(255,31,143,.5)' }}>{mm}:{ss}</div>
+                <div className="mono" style={{ fontSize: 11, fontWeight: 800, marginTop: 4 }}>1,000 / 2,000</div>
+                <div style={{ marginTop: 12, padding: '9px 0', borderRadius: 10, background: 'linear-gradient(135deg,#FF1F8F,#FF6BAA)', fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 99, background: '#fff', animation: 'pulse 1.6s infinite' }} />타이머 시작됨
+                </div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-.02em', marginTop: 16 }}>타이머 ON</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.62)', marginTop: 5, lineHeight: 1.5 }}>토너를 시작하면 별도 조작 없이 자동으로 LIVE 송출이 켜집니다.</div>
+            </div>
+
+            {/* STEP 2 — 앱: 지금 LIVE 노출 */}
+            <div style={{ position: 'relative', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 20, padding: '22px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <span className="mono" style={{ position: 'absolute', top: 14, left: 16, fontSize: 11, fontWeight: 900, color: 'rgba(255,255,255,.3)' }}>02</span>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#FF6BAA', letterSpacing: '.08em', marginBottom: 14 }}>📲 앱</div>
+              <div style={{ width: '100%', maxWidth: 200, borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,.12)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'rgba(255,255,255,.06)' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 99, background: 'var(--live)', animation: 'pulse 1.6s infinite' }} />
+                  <span style={{ fontSize: 10, fontWeight: 800 }}>지금 LIVE · 6곳</span>
+                </div>
+                <div style={{ aspectRatio: '16/10', background: 'linear-gradient(135deg,#9F1239,#BE185D,#581C87)', position: 'relative' }}>
+                  <div style={{ position: 'absolute', top: 8, left: 8 }}><span className="badge-live" style={{ fontSize: 8, padding: '2px 6px' }}><span className="dot" style={{ width: 4, height: 4 }} />LIVE</span></div>
+                  <div style={{ position: 'absolute', bottom: 8, left: 9, right: 9, textAlign: 'left' }}>
+                    <div style={{ fontSize: 8.5, fontWeight: 700, opacity: .85 }}>원더카드클럽 · 0.8km</div>
+                    <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '-.01em' }}>데일리 30T 진행중</div>
+                    <div className="mono" style={{ fontSize: 8.5, fontWeight: 700, marginTop: 2 }}>⏱ {mm}:{ss} · 👥 24/30</div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-.02em', marginTop: 16 }}>&lsquo;지금 LIVE&rsquo;로 노출</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.62)', marginTop: 5, lineHeight: 1.5 }}>지도·홈·내 주변 피드에 우리 매장이 실시간으로 떠오릅니다.</div>
+            </div>
+
+            {/* STEP 3 — 유저: 참가 결정 */}
+            <div style={{ position: 'relative', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 20, padding: '22px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <span className="mono" style={{ position: 'absolute', top: 14, left: 16, fontSize: 11, fontWeight: 900, color: 'rgba(255,255,255,.3)' }}>03</span>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#FF6BAA', letterSpacing: '.08em', marginBottom: 14 }}>🙋 플레이어</div>
+              <div style={{ width: '100%', maxWidth: 200, background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 22px rgba(0,0,0,.3)' }}>
+                <div style={{ padding: '10px 12px', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 7.5, fontWeight: 800, padding: '1px 5px', borderRadius: 4, background: 'rgba(16,185,129,.14)', color: '#047857' }}>참가가능</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 800, color: '#0E1525' }}>좌석 6석 남음</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 8px', marginTop: 9 }}>
+                    {userStats.map((r, i) => (
+                      <div key={i}>
+                        <div style={{ fontSize: 7, fontWeight: 700, color: '#98A1B2', letterSpacing: '.04em' }}>{r[0]}</div>
+                        <div className="mono" style={{ fontSize: 10, fontWeight: 800, color: '#0E1525', marginTop: 1 }}>{r[1]}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 11, padding: '8px 0', borderRadius: 9, background: 'linear-gradient(135deg,#FF1F8F,#FF6BAA)', color: '#fff', fontSize: 10.5, fontWeight: 900, textAlign: 'center' }}>지금 참가 신청 →</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-.02em', marginTop: 16 }}>참가 여부 결정</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.62)', marginTop: 5, lineHeight: 1.5 }}>진행 상황을 보고 &ldquo;지금 갈까?&rdquo;를 즉시 판단하고 예약합니다.</div>
+            </div>
+          </div>
+        </Reveal>
+
+        {/* 양방향 가치 요약 */}
+        <Reveal>
+          <div className="live-value" style={{ display: 'grid', gridTemplateColumns: 'var(--live-val-cols, 1fr)', gap: 12, marginTop: 18 }}>
+            <div style={{ borderRadius: 16, padding: '16px 18px', background: 'rgba(255,31,143,.1)', border: '1px solid rgba(255,31,143,.25)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>🏪</span>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 900, letterSpacing: '-.01em' }}>사장님 — 빈자리를 실시간으로 채운다</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginTop: 3, lineHeight: 1.5 }}>&ldquo;지금 게임 돈다&rdquo;를 동네에 즉시 알려 모객. 전단지·단톡방보다 빠릅니다.</div>
+              </div>
+            </div>
+            <div style={{ borderRadius: 16, padding: '16px 18px', background: 'rgba(124,58,237,.12)', border: '1px solid rgba(124,58,237,.3)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>🙋</span>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 900, letterSpacing: '-.01em' }}>플레이어 — 헛걸음 없이 바로 참가</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginTop: 3, lineHeight: 1.5 }}>진행 레벨·인원·좌석을 보고 갈지 말지 결정. 도착하니 끝났더라가 사라집니다.</div>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 // ═══════════════════════════════════════════════ FEATURE SHOWCASE
 function FeatureRow({ flip, badge, badgeColor, title, body, points, visual }: {
   flip: boolean; badge: string; badgeColor: string; title: string; body: string; points: string[]; visual: React.ReactNode;
@@ -437,7 +560,7 @@ function FeatureShowcase() {
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <Reveal style={{ textAlign: 'center', marginBottom: 8 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: 'var(--brand-pale)', color: 'var(--brand-dim)', fontSize: 11.5, fontWeight: 800, marginBottom: 14 }}>
-            ⚡ 사장님이 먼저 등록하는 이유
+            ⚡ &lsquo;LIVE&rsquo; 말고도, 이만큼 더
           </div>
           <h2 style={{ margin: 0, fontSize: 'clamp(24px, 6.4vw, 36px)', fontWeight: 900, letterSpacing: '-.03em', lineHeight: 1.18, color: 'var(--ink-1)' }}>
             전단지·입소문 시대는 끝.<br />
@@ -449,10 +572,10 @@ function FeatureShowcase() {
         </Reveal>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginTop: 36 }}>
-          <FeatureRow flip={false} badge="대표 기능" badgeColor="var(--live)"
-            title="게임 켜면, 단골 폰에 자동 알림"
-            body="손님이 즐겨찾기한 매장에 게임이 열리면 푸시가 갑니다. 전단지 100장보다 강력한 실시간 LIVE 홍보. 빈 테이블을 손님으로 채우세요."
-            points={['즐겨찾기 손님에게 자동 푸시', '게임 ON/OFF만 누르면 끝', '도달률·반응 실시간 확인']}
+          <FeatureRow flip={false} badge="단골 알림" badgeColor="var(--live)"
+            title="즐겨찾기한 단골 폰에 바로 푸시"
+            body="LIVE가 켜지면 우리 매장을 즐겨찾기한 손님 폰에 푸시 알림까지 갑니다. 잠금화면에 뜨는 가장 빠른 모객, 전단지 100장보다 강력합니다."
+            points={['즐겨찾기 손님에게 자동 푸시', '잠금화면 알림으로 즉시 도달', '도달률·반응 실시간 확인']}
             visual={<LiveAlertMock />} />
           <FeatureRow flip badge="무료 제공" badgeColor="var(--success)"
             title="매장 TV가 프로 토너 전광판으로"
@@ -659,28 +782,28 @@ function PreRegHub({ onToast, stats }: { onToast: (msg: string) => void; stats: 
 
         <div className="prereg-grid" style={{ display: 'grid', gridTemplateColumns: 'var(--hub-cols, 1fr)', gap: 16, alignItems: 'stretch' }}>
           <Reveal>
-            <Link href={APPLY_HREF} className="tap" style={{ display: 'block', textDecoration: 'none', height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 22, padding: '28px 24px', background: 'linear-gradient(150deg, #FF1F8F 0%, #E01077 55%, #831843 120%)', boxShadow: '0 16px 44px rgba(255,31,143,.4)', color: '#fff' }}>
-              <div aria-hidden="true" style={{ position: 'absolute', top: -24, right: -18, opacity: .18 }}><HNMark size={150} variant="mark" /></div>
+            <Link href={APPLY_HREF} className="tap" style={{ display: 'block', textDecoration: 'none', height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 20, padding: 'clamp(20px, 5vw, 28px)', background: 'linear-gradient(150deg, #FF1F8F 0%, #E01077 55%, #831843 120%)', boxShadow: '0 16px 44px rgba(255,31,143,.4)', color: '#fff' }}>
+              <div aria-hidden="true" style={{ position: 'absolute', top: -24, right: -18, opacity: .18 }}><HNMark size={130} variant="mark" /></div>
               <div style={{ position: 'relative' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 99, background: 'rgba(255,255,255,.2)', fontSize: 11, fontWeight: 800, letterSpacing: '.02em', backdropFilter: 'blur(6px)' }}>🏪 매장 사장님</div>
-                <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-.025em', lineHeight: 1.2, marginTop: 16 }}>내 매장 등록 신청</div>
-                <div style={{ fontSize: 13, opacity: .92, marginTop: 8, lineHeight: 1.55, maxWidth: 320 }}>TV 전광판·외침·LIVE 알림까지 — 지금 등록하면 모두 <b>무료</b>로 시작합니다.</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 16 }}>
+                <div style={{ fontSize: 'clamp(20px, 5.4vw, 24px)', fontWeight: 900, letterSpacing: '-.025em', lineHeight: 1.2, marginTop: 14 }}>내 매장 등록 신청</div>
+                <div style={{ fontSize: 12.5, opacity: .92, marginTop: 8, lineHeight: 1.55 }}>TV 전광판·외침·LIVE 알림까지 — 지금 등록하면 모두 <b>무료</b>로 시작합니다.</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
                   {['🆓 노출 무료', '📺 무료 전광판', '✅ 사업자 인증'].map((t) => (
-                    <span key={t} style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 99, background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.2)' }}>{t}</span>
+                    <span key={t} style={{ fontSize: 10.5, fontWeight: 700, padding: '5px 9px', borderRadius: 99, background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.2)' }}>{t}</span>
                   ))}
                 </div>
-                <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '15px 18px', borderRadius: 14, background: '#fff', color: 'var(--brand-dim)', boxShadow: '0 6px 18px rgba(0,0,0,.18)' }}>
-                  <span style={{ fontSize: 15.5, fontWeight: 900, letterSpacing: '-.01em' }}>등록 신청하러 가기</span>
-                  <span style={{ fontSize: 18, fontWeight: 900 }}>→</span>
+                <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 16px', borderRadius: 13, background: '#fff', color: 'var(--brand-dim)', boxShadow: '0 6px 18px rgba(0,0,0,.18)' }}>
+                  <span style={{ fontSize: 'clamp(14px, 3.8vw, 15.5px)', fontWeight: 900, letterSpacing: '-.01em' }}>등록 신청하러 가기</span>
+                  <span style={{ fontSize: 17, fontWeight: 900 }}>→</span>
                 </div>
-                <div style={{ fontSize: 11.5, opacity: .8, marginTop: 10, textAlign: 'center' }}>베타 서비스 출시 시 알려드립니다</div>
+                <div style={{ fontSize: 11, opacity: .8, marginTop: 10, textAlign: 'center' }}>베타 서비스 출시 시 알려드립니다</div>
               </div>
             </Link>
           </Reveal>
 
           <Reveal delay={.08}>
-            <div style={{ height: '100%', borderRadius: 22, padding: '24px 22px', background: 'var(--navy)', color: '#fff', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ height: '100%', borderRadius: 20, padding: 'clamp(20px, 5vw, 24px)', background: 'var(--navy)', color: '#fff', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div aria-hidden="true" style={{ position: 'absolute', bottom: '-20%', right: '-15%', width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,.3), transparent 66%)' }} />
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 99, background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.16)', fontSize: 11, fontWeight: 800 }}>🙋 플레이어</div>
@@ -795,6 +918,7 @@ export default function LandingPage() {
     <div style={{ fontFamily: "'Pretendard','Noto Sans KR',sans-serif", letterSpacing: '-.01em', background: 'var(--paper)', color: 'var(--ink-1)', overflowX: 'hidden' }}>
       <Hero onScrollTo={scrollTo} />
       <TrustStrip stats={stats} />
+      <LiveSpotlight />
       <FeatureShowcase />
       <PlayerExperience />
       <PreRegHub onToast={toast} stats={stats} />
@@ -827,6 +951,8 @@ export default function LandingPage() {
           .feature-row{ --cols: 1fr 1.05fr; }
           .prereg-grid{ --hub-cols: 1.05fr 1fr; }
           .pe-lead{ --pe-cols: 0.85fr 1.15fr; }
+          .live-flow{ --live-cols: 1fr 1fr 1fr; }
+          .live-value{ --live-val-cols: 1fr 1fr; }
         }
       `}</style>
     </div>
