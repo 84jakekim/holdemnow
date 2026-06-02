@@ -21,6 +21,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
+// 매장 사장에게 배포할 사전등록 랜딩 공개 URL.
+// 본사 어드민은 별도 호스트(holdemnow-admin)라 window.origin이 랜딩(메인 백엔드)과 다름 → 상수로 고정.
+const LANDING_URL = 'https://holdemnow--holdemnow-prod.us-east4.hosted.app/landing';
+
 interface StoreRow {
   id: string;
   name?: string;
@@ -73,6 +77,17 @@ export default function PreRegPage() {
   const [baseSaved, setBaseSaved] = useState({ s: 0, l: 0 });
   const [savingBase, setSavingBase] = useState(false);
   const baseInit = useRef(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(LANDING_URL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // clipboard 권한 거부 등 — 사용자가 직접 입력란을 선택/복사할 수 있게 fallback (no-op)
+    }
+  };
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'meta', 'landingStats'), (snap) => {
@@ -184,6 +199,39 @@ export default function PreRegPage() {
         <div className="section-title" style={{ color: 'var(--gold)' }}>PRE-REGISTRATION</div>
         <h1 className="h2" style={{ color: 'var(--text-1)' }}>📝 사전등록 현황</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>랜딩페이지 유입 — 매장 사전등록 · 출시알림 신청 통합 관리</p>
+      </div>
+
+      {/* 사전등록 링크 — 매장 사장에게 배포 */}
+      <div className="rounded-xl p-4 mb-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>🔗 사전등록 링크</div>
+        <div className="text-[11px] mt-1 mb-3" style={{ color: 'var(--text-3)' }}>
+          매장 사장님께 이 링크를 보내 사전등록을 받으세요. (카톡·문자 등에 붙여넣기)
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            readOnly
+            value={LANDING_URL}
+            onFocus={(e) => e.currentTarget.select()}
+            className="mono"
+            style={{ flex: 1, minWidth: 240, padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', fontSize: 12.5 }}
+          />
+          <button
+            onClick={copyLink}
+            className="px-4 py-2 rounded-lg text-sm font-extrabold transition"
+            style={{ background: copied ? '#10B981' : 'var(--gold)', color: '#0F1419' }}
+          >
+            {copied ? '✓ 복사됨' : '📋 링크 복사'}
+          </button>
+          <a
+            href={LANDING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 rounded-lg text-sm font-bold"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
+          >
+            열기 ↗
+          </a>
+        </div>
       </div>
 
       {/* KPI */}
