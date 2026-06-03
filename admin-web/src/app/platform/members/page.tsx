@@ -122,6 +122,7 @@ function MembersPageInner() {
   // "해당 조건의 매장이 없습니다"로 빈 화면처럼 보이던 문제. 심사 대기 건수는 탭 배지 +
   // "심사 대기 (N)" 칩으로 이미 노출되므로 'all' 기본이 발견성 손실 없이 혼란만 제거한다.
   const [storeFilter, setStoreFilter] = useState<'all' | 'pending' | 'active' | 'rejected' | 'suspended'>('all');
+  const [storeSearch, setStoreSearch] = useState('');
   const [orgFilter, setOrgFilter] = useState<'all' | 'pending' | 'active' | 'rejected'>('all');
   const [playerSearch, setPlayerSearch] = useState('');
 
@@ -257,10 +258,31 @@ function MembersPageInner() {
     setRejectReason('');
   };
 
-  // 필터
+  // 필터 + 검색
+  // 매장 코드 = 사업자번호 / doc id (고유값) 도 검색 대상. 연락처·사업자번호는 하이픈 무시 숫자 매칭.
   const filteredStores = stores.filter((s) => {
-    if (storeFilter === 'all') return true;
-    return s.status === storeFilter;
+    if (storeFilter !== 'all' && s.status !== storeFilter) return false;
+    const q = storeSearch.trim().toLowerCase();
+    if (!q) return true;
+    const ownerEmail = s.ownerUid ? ownerEmailByUid[s.ownerUid] : undefined;
+    const hay = [
+      s.name, s.roadAddress, s.address, s.representativeName,
+      s.businessRegistrationNumber, s.regionCode, ownerEmail, s.id,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    if (hay.includes(q)) return true;
+    // 숫자만 입력(연락처·사업자번호 검색)이면 하이픈 제거 후 비교
+    const qDigits = q.replace(/\D/g, '');
+    if (qDigits.length >= 2) {
+      const numHay = [s.phone, s.representativePhone, s.businessRegistrationNumber]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\D/g, '');
+      if (numHay.includes(qDigits)) return true;
+    }
+    return false;
   });
 
   const filteredOrgs = organizers.filter((o) => {
@@ -531,6 +553,35 @@ function MembersPageInner() {
       {/* ── Tab 2: 매장 ── */}
       {activeTab === 'stores' && !loading && (
         <div>
+          {/* 검색 — 매장명·주소·대표자·연락처·사업자번호·매장코드 */}
+          <div className="mb-3">
+            <div className="relative max-w-md">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">🔍</span>
+              <input
+                className="form-input w-full"
+                style={{ paddingLeft: 34, paddingRight: 32 }}
+                value={storeSearch}
+                onChange={(e) => setStoreSearch(e.target.value)}
+                placeholder="매장명·주소·대표자·연락처·사업자번호·매장코드 검색"
+              />
+              {storeSearch && (
+                <button
+                  onClick={() => setStoreSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs px-1"
+                  aria-label="검색 지우기"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {storeSearch.trim() && (
+              <div className="text-[11px] text-gray-500 mt-1.5">
+                &lsquo;{storeSearch.trim()}&rsquo; 검색 결과 <b className="text-gray-700">{filteredStores.length}</b>곳
+                {storeFilter !== 'all' && <span className="text-gray-400"> (현재 상태 필터 적용 중)</span>}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-1.5 mb-4 flex-wrap items-center">
             {(
               [
@@ -924,6 +975,9 @@ function StoreCard({
             {store.status === 'pending' && !store.isDemo && <ReviewMetChip store={store} />}
           </div>
           <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
+            {store.businessRegistrationNumber && (
+              <div>매장코드(사업자번호): <b className="text-gray-700 font-mono">{store.businessRegistrationNumber}</b></div>
+            )}
             {ownerEmail && (
               <div>로그인 아이디: <b className="text-gray-700 font-mono">{ownerEmail}</b></div>
             )}
