@@ -280,6 +280,9 @@ export default function MyPage() {
       </div>
       <div style={{ borderBottom: '6px solid var(--surface-2)' }} />
 
+      {/* ── 공지사항 게시판 (본사 고정 공지 모아보기) — 프로필 바로 아래 상단 배치 ── */}
+      <NoticeBoardSection />
+
       {/* ── 메뉴 (2026-05-27 핸드오프 톤) ── */}
       <div className="px-5 py-4" style={{ borderBottom: '6px solid var(--surface-2)' }}>
         <div
@@ -359,9 +362,6 @@ export default function MyPage() {
           ))}
         </div>
       </div>
-
-      {/* ── 공지사항 게시판 (본사 고정 공지 모아보기) ── */}
-      <NoticeBoardSection />
 
       {/* ── 알림 설정 ── */}
       <div className="px-5 py-5" style={{ borderBottom: '6px solid var(--surface-2)' }}>
