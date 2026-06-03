@@ -409,17 +409,13 @@ export default function MyPage() {
           }}
         >
           {([
-            ...(isPasswordUser
-              ? [{ label: '비밀번호 변경', emoji: '🔑', action: 'changePw' as const }]
-              : []),
             { label: '약관 및 정책', emoji: '📜', go: '/legal' as const },
             { label: '로그아웃', emoji: '🚪', action: 'logout' as const },
-          ] as Array<{ label: string; emoji: string; go?: '/legal'; action?: 'logout' | 'changePw' }>).map((it, i, arr) => (
+          ] as Array<{ label: string; emoji: string; go?: '/legal'; action?: 'logout' }>).map((it, i, arr) => (
             <button
               key={it.label}
               onClick={() => {
                 if (it.action === 'logout') setLogoutSheetOpen(true);
-                else if (it.action === 'changePw') setPwOpen(true);
                 else if (it.go) router.push(it.go);
               }}
               className="w-full tap"
@@ -513,6 +509,8 @@ export default function MyPage() {
             phone: profile.phone ?? '',
           }}
           uid={user.uid}
+          isPasswordUser={isPasswordUser}
+          onChangePassword={() => { setEditOpen(false); setPwOpen(true); }}
           onClose={() => setEditOpen(false)}
         />
       )}
@@ -758,10 +756,14 @@ function WithdrawSheet({
 function EditProfileSheet({
   initial,
   uid,
+  isPasswordUser,
+  onChangePassword,
   onClose,
 }: {
   initial: { displayName: string; bio: string; phone: string };
   uid: string;
+  isPasswordUser: boolean;
+  onChangePassword: () => void;
   onClose: () => void;
 }) {
   const [displayName, setDisplayName] = useState(initial.displayName);
@@ -902,6 +904,21 @@ function EditProfileSheet({
             <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>매장이 연락할 때 사용</div>
           </div>
         </div>
+
+        {/* 비밀번호 변경 — 이메일/비번 가입자만. 계정 정보 수정의 일부로 여기에 배치 */}
+        {isPasswordUser && (
+          <button
+            onClick={onChangePassword}
+            className="mt-4 w-full flex items-center gap-2.5 px-3 py-3 rounded-lg tap transition active:opacity-70"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+          >
+            <span className="text-[15px]" aria-hidden="true">🔑</span>
+            <span className="flex-1 text-left text-[13px] font-bold" style={{ color: 'var(--text-1)' }}>비밀번호 변경</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-3)' }} aria-hidden="true">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+        )}
 
         {error && (
           <div
