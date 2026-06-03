@@ -14,6 +14,7 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  deleteUser,
 } from 'firebase/auth';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { app } from './firebase';
@@ -21,6 +22,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  deleteDoc,
   serverTimestamp,
   collection,
   addDoc,
@@ -130,11 +132,32 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
     payload.password,
   );
   const uid = credential.user.uid;
+  const normalizedPhone = normalizePhone(payload.representativePhone);
+
+  // 1.5. 전화번호 선체크 (부분 실패 방지) — 매장/사진/유저 doc 생성 *전에* 중복이면 즉시 중단.
+  //      이미 등록된 번호면 방금 만든 Auth 계정까지 삭제해 orphan을 남기지 않는다.
+  //      (선체크~최종 등록 사이의 미세 경합은 하단 setUserPhone 트랜잭션이 최종 가드)
+  if (normalizedPhone) {
+    let phoneTaken = false;
+    try {
+      const idxSnap = await getDoc(doc(db, 'phoneIndex', normalizedPhone));
+      phoneTaken = idxSnap.exists() && (idxSnap.data() as { uid?: string }).uid !== uid;
+    } catch {
+      // phoneIndex 읽기 실패는 무시 — setUserPhone 트랜잭션이 어차피 가드함
+    }
+    if (phoneTaken) {
+      await deleteUser(credential.user).catch(() => {});
+      throw new Error('이미 다른 계정에 등록된 전화번호입니다');
+    }
+  }
 
   // 2. storeId 미리 확보 (Storage 경로에 사용)
   const newStoreRef = doc(collection(db, 'stores'));
   const storeId = newStoreRef.id;
 
+  // 부분 실패 롤백 래퍼 — 아래 단계 중 하나라도 실패하면 생성된 매장/유저/번호/Auth를 정리해
+  // 고아(orphan) 데이터를 남기지 않는다. (동시 가입이 몰려도 각 가입이 독립적으로 깔끔히 정리됨)
+  try {
   // 3. 매장 간판 사진 Storage 업로드 — 본사 심사 시 매장 실존 확인용
   const file = payload.signageImageFile;
   const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
@@ -213,8 +236,8 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
 
   // 4. 대표자 연락처를 phoneIndex에 등록 — 1인 1번호 정책.
   //    정규화 가능한 경우만 시도하고, 중복(다른 계정 사용)이면 throw하므로
-  //    signup 흐름 자체가 실패해 사용자에게 알림이 전달된다.
-  if (normalizePhone(payload.representativePhone)) {
+  //    signup 흐름 자체가 실패해 사용자에게 알림이 전달된다. (최종 원자적 가드)
+  if (normalizedPhone) {
     await setUserPhone(uid, payload.representativePhone);
   }
 
@@ -227,6 +250,16 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
   }));
 
   return storeRef.id;
+  } catch (err) {
+    // 부분 실패 롤백 — Firestore 먼저(권한 보존), Auth 마지막. 모두 best-effort.
+    try { await deleteDoc(newStoreRef); } catch { /* noop */ }
+    try { await deleteDoc(doc(db, 'users', uid)); } catch { /* noop */ }
+    if (normalizedPhone) {
+      try { await deleteDoc(doc(db, 'phoneIndex', normalizedPhone)); } catch { /* noop */ }
+    }
+    try { await deleteUser(credential.user); } catch { /* noop */ }
+    throw err;
+  }
 }
 
 // =====================================================================
