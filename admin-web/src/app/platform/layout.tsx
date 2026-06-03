@@ -381,23 +381,14 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
         ))}
       </nav>
 
-      {/* 푸터: 테마 토글 + 로그아웃 + 매장 어드민 이동 */}
+      {/* 푸터: 테마 토글 + 로그아웃 */}
+      {/* "← 매장 어드민으로" 버튼은 v0.1 겸직(본사+매장 한 계정) 유산이라 제거 —
+          순수 본사 계정은 / → /platform으로 되돌아오는 무용 동선이었음 (2026-06-04). */}
       <div
         className="px-3 py-3 space-y-2"
         style={{ borderTop: '1px solid var(--border)' }}
       >
         <ThemeToggle value={pref} onChange={change} />
-        <Link
-          href="/"
-          className="block text-center text-[11px] font-bold rounded-md px-2.5 py-1.5"
-          style={{
-            background: 'var(--surface-2)',
-            color: 'var(--text-1)',
-            border: '1px solid var(--border)',
-          }}
-        >
-          ← 매장 어드민으로
-        </Link>
         <button
           onClick={() => signOut(auth)}
           className="block w-full text-center text-xs underline"
