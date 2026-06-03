@@ -39,6 +39,7 @@ import {
   uploadBytes,
 } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
+import { compressImageForUpload } from '@/lib/imageCompress';
 import { stripUndefined } from '@/lib/firestoreUtil';
 
 // ─── 타입 ────────────────────────────────────────────────────
@@ -202,8 +203,9 @@ export async function uploadSplashAdImage(
 ): Promise<{ url: string; path: string }> {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
   const path = `splashAds/${adId}/cover.${ext}`;
+  file = await compressImageForUpload(file, 2048, 0.9); // 전면 광고 — 고해상도
   const r = storageRef(storage, path);
-  await uploadBytes(r, file);
+  await uploadBytes(r, file, { contentType: file.type });
   const url = await getDownloadURL(r);
   return { url, path };
 }

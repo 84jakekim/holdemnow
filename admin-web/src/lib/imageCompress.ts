@@ -14,8 +14,8 @@
 
 export async function compressImageForUpload(
   file: File,
-  maxDim = 1600,
-  quality = 0.82,
+  maxDim = 1920,
+  quality = 0.88,
 ): Promise<File> {
   // 브라우저 외(서버) 또는 미지원 환경 → 원본
   if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') return file;

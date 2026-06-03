@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { compressImageForUpload } from './imageCompress';
 import { stripUndefined } from './firestoreUtil';
 
 /**
@@ -181,8 +182,9 @@ export async function deleteEvent(eventId: string): Promise<void> {
  * ========================================================== */
 
 export async function uploadEventPoster(eventId: string, file: File): Promise<string> {
+  file = await compressImageForUpload(file, 2048, 0.9);
   if (file.size > 5 * 1024 * 1024) {
-    throw new Error('포스터는 5MB 이하만 업로드 가능합니다');
+    throw new Error('사진 용량이 커서 업로드할 수 없습니다. 더 작은 사진(JPG 권장)으로 다시 시도해 주세요.');
   }
   if (!file.type.startsWith('image/')) {
     throw new Error('이미지 파일만 업로드 가능합니다');

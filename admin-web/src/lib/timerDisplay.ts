@@ -30,6 +30,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { compressImageForUpload } from './imageCompress';
 import { stripUndefined } from './firestoreUtil';
 
 export type BackgroundType = 'solid' | 'gradient' | 'image';
@@ -498,8 +499,9 @@ export async function uploadTimerBackground(
   if (!file.type.startsWith('image/')) {
     throw new Error('이미지 파일만 업로드 가능합니다 (jpg, png, webp 등)');
   }
+  file = await compressImageForUpload(file, 2560, 0.9); // TV 송출 — 고해상도 유지
   if (file.size > MAX_TIMER_BACKGROUND_BYTES) {
-    throw new Error('이미지는 5MB 이하만 업로드 가능합니다');
+    throw new Error('사진 용량이 커서 업로드할 수 없습니다. 더 작은 사진(JPG 권장)으로 다시 시도해 주세요.');
   }
   const ts = Date.now();
   const rand = Math.random().toString(36).slice(2, 7);

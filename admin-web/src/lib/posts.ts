@@ -24,6 +24,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { compressImageForUpload } from './imageCompress';
 import { stripUndefined } from './firestoreUtil';
 import { moderateText, checkLinkWhitelist, capEmojis } from './moderation';
 
@@ -564,7 +565,8 @@ export async function uploadPostImage(
   postIdOrTemp: string,
   file: File,
 ): Promise<string> {
-  if (file.size > MAX_IMAGE_BYTES) throw new Error('이미지는 5MB 이하만 업로드 가능합니다');
+  file = await compressImageForUpload(file);
+  if (file.size > MAX_IMAGE_BYTES) throw new Error('사진 용량이 커서 업로드할 수 없습니다. 더 작은 사진(JPG 권장)으로 다시 시도해 주세요.');
   if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 업로드 가능합니다');
   const id = `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
@@ -674,7 +676,8 @@ export async function deletePinnedPost(id: string): Promise<void> {
 
 /** pinned 글 이미지 업로드 — posts/_pinned/{postIdOrTemp}/{filename} */
 export async function uploadPinnedImage(postIdOrTemp: string, file: File): Promise<string> {
-  if (file.size > MAX_IMAGE_BYTES) throw new Error('이미지는 5MB 이하만 업로드 가능합니다');
+  file = await compressImageForUpload(file);
+  if (file.size > MAX_IMAGE_BYTES) throw new Error('사진 용량이 커서 업로드할 수 없습니다. 더 작은 사진(JPG 권장)으로 다시 시도해 주세요.');
   if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 업로드 가능합니다');
   const id = `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
