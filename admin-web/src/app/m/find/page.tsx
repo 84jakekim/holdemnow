@@ -38,6 +38,7 @@ import { resolveCardVisual } from '@/lib/postCardStyle';
 import { formatRelativeKo } from '@/lib/relativeTime';
 import NotificationBellButton from '@/components/mobile/NotificationBellButton';
 import { RatingChip } from '@/components/mobile/RatingChip';
+import { StoreListRow } from '@/components/mobile/StoreListRow';
 import StoreFindModeToggle from '@/components/mobile/find/StoreFindModeToggle';
 import PrimaryLiveCard from '@/components/mobile/live/PrimaryLiveCard';
 import LiveSlider from '@/components/mobile/live/LiveSlider';
@@ -1259,10 +1260,16 @@ function PopularStoresAvatarScroll({ liveByStore, userLocation }: { liveByStore:
           <div className="section-title" style={{ marginBottom: 2 }}>POPULAR NEARBY</div>
           <div className="h3" style={{ color: 'var(--text-1)' }}>내 주변 인기 매장</div>
         </div>
-        <button onClick={() => window.location.href = '/m/find?mode=map'} className="text-[12px] font-bold flex items-center gap-0.5 transition active:opacity-60 mb-0.5" style={{ color: 'var(--brand)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-          지도로 보기
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
+        <div className="flex items-center gap-2 mb-0.5">
+          <Link href="/m/stores?type=popular" className="text-[12px] font-bold flex items-center gap-0.5 transition active:opacity-60" style={{ color: 'var(--text-2)' }}>
+            전체 목록
+          </Link>
+          <span style={{ color: 'var(--border)', fontSize: 10 }}>|</span>
+          <Link href="/m/stores?type=popular&mode=map" className="text-[12px] font-bold flex items-center gap-0.5 transition active:opacity-60" style={{ color: 'var(--brand)' }}>
+            지도로 보기
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </Link>
+        </div>
       </div>
       {appliedRadiusKm != null && (
         <div className="px-4 mb-3 text-[11px]" style={{ color: 'var(--text-3)' }}>
@@ -1366,6 +1373,16 @@ function NewlyJoinedStoresSection({ liveByStore, userLocation }: { liveByStore: 
           <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
             최근 30일 가입 · {userLocation ? `반경 ${feedCfg.newlyJoinedRadiusKm}km · 거리순` : '가입 최신순'}
           </div>
+        </div>
+        <div className="flex items-center gap-2 mb-1">
+          <Link href="/m/stores?type=new" className="text-[12px] font-bold flex items-center gap-0.5 transition active:opacity-60" style={{ color: 'var(--text-2)' }}>
+            전체 목록
+          </Link>
+          <span style={{ color: 'var(--border)', fontSize: 10 }}>|</span>
+          <Link href="/m/stores?type=new&mode=map" className="text-[12px] font-bold flex items-center gap-0.5 transition active:opacity-60" style={{ color: 'var(--brand)' }}>
+            지도로 보기
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </Link>
         </div>
       </div>
       <div className="pl-4 flex gap-3 overflow-x-auto scrollbar-none pb-2">
@@ -1611,10 +1628,16 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
             })()}
           </div>
         </div>
-        <button onClick={() => window.location.href = '/m/find?mode=map'} className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60 mb-1" style={{ color: 'var(--brand)' }}>
-          지도로 보기
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
+        <div className="flex items-center gap-2 mb-1">
+          <Link href="/m/stores?type=nearby" className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60" style={{ color: 'var(--text-2)' }}>
+            전체 목록
+          </Link>
+          <span style={{ color: 'var(--border)', fontSize: 10 }}>|</span>
+          <Link href="/m/stores?type=nearby&mode=map" className="text-[12px] font-semibold flex items-center gap-0.5 transition active:opacity-60" style={{ color: 'var(--brand)' }}>
+            지도로 보기
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </Link>
+        </div>
       </div>
 
       {/* 정렬 selector — 가로 스크롤 pill */}
@@ -1651,19 +1674,19 @@ function NearbyStoresSection({ liveByStore, initialStores, userLocation }: { liv
       {/* 가로 스크롤 */}
       <div className="pl-4 flex gap-3 overflow-x-auto scrollbar-none pb-2">
         {visible.slice(0, 10).map((st) => <NearbyStoreSquareCard key={st.id} store={st} live={liveByStore[st.id] || 0} />)}
-        <button onClick={() => window.location.href = '/m/find?mode=map'} className="w-[140px] flex-shrink-0 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95" style={{ aspectRatio: '4/3', background: 'var(--surface-2)', border: '1px solid var(--border)' }} aria-label="전체 매장 지도로 보기">
+        <Link href="/m/stores?type=nearby&mode=map" className="w-[140px] flex-shrink-0 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95" style={{ aspectRatio: '4/3', background: 'var(--surface-2)', border: '1px solid var(--border)' }} aria-label="내 주변 매장 지도로 보기">
           <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--surface-3)' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-2)' }} aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </div>
           <span className="text-[12px] font-semibold" style={{ color: 'var(--text-2)' }}>지도로</span>
-        </button>
+        </Link>
         <div className="w-3 flex-shrink-0" aria-hidden="true" />
       </div>
 
       {/* 리스트 */}
       <div className="mt-4">
         {(listExpanded ? visible : visible.slice(0, NEARBY_LIST_INITIAL_COUNT)).map((st, i) => (
-          <NearbyStoreListRow key={st.id} store={st} live={liveByStore[st.id] || 0} rank={i + 1} />
+          <StoreListRow key={st.id} store={st} live={liveByStore[st.id] || 0} rank={i + 1} impressionSource="find-nearby-list" />
         ))}
       </div>
 
@@ -1840,135 +1863,7 @@ function NearbyStoreSquareCard({ store: st, live }: { store: NearbyStore; live: 
   );
 }
 
-function NearbyStoreListRow({ store: st, live, rank }: { store: NearbyStore; live: number; rank: number }) {
-  useEffect(() => { trackImpressionOnce(st.id, 'find-nearby-list'); }, [st.id]);
-  const hasPitch = !!(st.pitch?.trim());
-  const facilityLabels = (st.facilities ?? []).slice(0, 2);
-
-  // 두 번째 줄: 거리 + 주소 (항상 표시)
-  const distStr = st.distance != null ? formatDistance(st.distance) : null;
-  const addrShort = st.address ? st.address.split(' ').slice(1, 3).join(' ') : '';
-  const subLine = [distStr, addrShort].filter(Boolean).join(' · ');
-
-  return (
-    <Link
-      href={`/m/store/${st.id}`}
-      onClick={() => bumpStoreMetric(st.id, 'cardClicks')}
-      className="flex items-center gap-3 px-4 py-3 transition active:bg-gray-50 tap"
-      style={{ borderBottom: '1px solid var(--border)' }}
-    >
-      {/* 순위 */}
-      <span
-        className="w-5 text-center text-[13px] font-extrabold flex-shrink-0 stat-number"
-        style={{ color: rank <= 3 ? 'var(--brand)' : 'var(--text-3)' }}
-      >
-        {rank}
-      </span>
-
-      {/* 썸네일 — 64×64 (4/3 비율 대신 정사각) */}
-      <div
-        className="w-16 h-16 rounded-xl flex-shrink-0 overflow-hidden relative"
-        style={{ background: 'var(--surface-2)' }}
-      >
-        {st.photoUrl
-          ? <Image src={st.photoUrl} alt={st.name} fill className="object-cover" sizes="64px" />
-          : (
-            <div
-              className="w-full h-full flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #FFF0F7 0%, #F3F4F6 100%)' }}
-            >
-              <span className="text-[18px] font-extrabold" style={{ color: 'var(--brand)', opacity: 0.45 }}>
-                {st.name.charAt(0)}
-              </span>
-            </div>
-          )
-        }
-        {live > 0 && (
-          <span
-            className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full pulse-live border-2 border-white"
-            style={{ background: 'var(--live)' }}
-            aria-label="LIVE 중"
-          />
-        )}
-      </div>
-
-      {/* 텍스트 — 최대 2줄 구조 */}
-      <div className="flex-1 min-w-0">
-        {/* 줄 1: 매장명 + LIVE 뱃지 */}
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[14px] font-bold truncate leading-snug" style={{ color: 'var(--text-1)' }}>
-            {st.name}
-          </span>
-          {live > 0 && (
-            <span className="badge-live flex-shrink-0"><span className="dot" />LIVE</span>
-          )}
-        </div>
-
-        {/* 줄 2: pitch(있으면) or 거리+주소 */}
-        {hasPitch ? (
-          <div className="mt-0.5 flex items-center gap-1 min-w-0">
-            <span style={{ fontSize: 10, lineHeight: 1, flexShrink: 0 }}>💬</span>
-            <span className="text-[11px] font-semibold italic truncate" style={{ color: '#D4176C' }}>
-              {st.pitch}
-            </span>
-          </div>
-        ) : (
-          subLine ? (
-            <div className="text-[12px] mt-0.5 truncate" style={{ color: 'var(--text-3)' }}>
-              {distStr && (
-                <span className="font-semibold stat-number" style={{ color: 'var(--text-2)' }}>
-                  {distStr}
-                  {addrShort ? ' · ' : ''}
-                </span>
-              )}
-              {addrShort}
-            </div>
-          ) : null
-        )}
-
-        {/* 줄 3(통합): pitch 있을 때 거리 + 평점을 한 줄에 */}
-        {hasPitch ? (
-          <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-            {distStr && (
-              <span className="text-[11px] stat-number font-semibold" style={{ color: 'var(--text-3)' }}>
-                {distStr}
-              </span>
-            )}
-            {(st.reviewCount ?? 0) > 0 && (
-              <RatingChip rating={st.averageRating} count={st.reviewCount} size="sm" />
-            )}
-          </div>
-        ) : (
-          <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-            {(st.reviewCount ?? 0) > 0 && (
-              <RatingChip rating={st.averageRating} count={st.reviewCount} size="sm" />
-            )}
-            {(st.reviewCount ?? 0) === 0 && facilityLabels.map((f) => (
-              <span
-                key={f}
-                className="text-[10px] rounded-full px-1.5 py-0.5"
-                style={{ background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
-              >
-                {FACILITY_ICON[f] ?? ''}{f}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 우측 화살표 */}
-      <svg
-        width="14" height="14" viewBox="0 0 24 24"
-        fill="none" stroke="currentColor" strokeWidth="2.2"
-        strokeLinecap="round" strokeLinejoin="round"
-        style={{ color: 'var(--text-3)', flexShrink: 0 }}
-        aria-hidden="true"
-      >
-        <path d="M9 18l6-6-6-6"/>
-      </svg>
-    </Link>
-  );
-}
+// NearbyStoreListRow는 StoreListRow(공용)로 대체됨 — components/mobile/StoreListRow.tsx 참조
 
 // ─── LIVE 서브 컴포넌트 ───────────────────────────────────────
 
