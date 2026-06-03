@@ -118,8 +118,11 @@ function MembersPageInner() {
   const [adminSearch, setAdminSearch] = useState('');
   const [adminModalOpen, setAdminModalOpen] = useState(false);
 
-  const [storeFilter, setStoreFilter] = useState<'all' | 'pending' | 'active' | 'rejected' | 'suspended'>('pending');
-  const [orgFilter, setOrgFilter] = useState<'all' | 'pending' | 'active' | 'rejected'>('pending');
+  // 기본필터 'all' — 과거 'pending'이 기본이라, 심사 대기 0건일 때 활성 매장이 110개여도
+  // "해당 조건의 매장이 없습니다"로 빈 화면처럼 보이던 문제. 심사 대기 건수는 탭 배지 +
+  // "심사 대기 (N)" 칩으로 이미 노출되므로 'all' 기본이 발견성 손실 없이 혼란만 제거한다.
+  const [storeFilter, setStoreFilter] = useState<'all' | 'pending' | 'active' | 'rejected' | 'suspended'>('all');
+  const [orgFilter, setOrgFilter] = useState<'all' | 'pending' | 'active' | 'rejected'>('all');
   const [playerSearch, setPlayerSearch] = useState('');
 
   const [rejectModal, setRejectModal] = useState<{ id: string; type: 'store' | 'organizer'; name: string } | null>(null);
