@@ -56,35 +56,10 @@ const INITIAL: FormState = {
   agreeMarketing: false,
 };
 
-const MAX_SIGNAGE_BYTES = 5 * 1024 * 1024; // 5MB — Storage rules와 동기
-
-/**
- * 간판 사진 클라이언트 압축 — 실제 폰 사진(3~8MB)을 ~1600px / JPEG로 재인코딩.
- * 목적: 최종 "사전등록하기" 제출 시 업로드가 거의 즉시 끝나도록(보통 200~600KB) 만든다.
- *   (압축 전엔 제출 시 수 초간 "신청 중" 정체 → 사장님 "안 됨" 체감)
- * 실패(일부 HEIC 디코드 불가 등) 시 원본 그대로 반환(폴백).
- */
-async function compressSignage(file: File, maxDim = 1600, quality = 0.82): Promise<File> {
-  try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-    const w = Math.max(1, Math.round(bitmap.width * scale));
-    const h = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) { bitmap.close?.(); return file; }
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    bitmap.close?.();
-    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', quality));
-    if (!blob || blob.size >= file.size) return file; // 압축이 더 크면 원본 유지
-    const base = file.name.replace(/\.[^.]+$/, '') || 'signage';
-    return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
-  } catch {
-    return file; // 디코딩 실패 → 원본 그대로 (업로드는 됨)
-  }
-}
+// 선택 단계 허용 한도(원본 기준). 실제 업로드는 signupAsStore에서 압축(보통 <1MB) 후 진행한다.
+// 큰 폰 사진(4~8MB)이 선택에서 막히지 않도록 넉넉히 25MB까지 허용.
+// 미리보기는 항상 "원본"을 그대로 보여주므로 엑박스(깨짐)가 발생하지 않는다.
+const MAX_SIGNAGE_BYTES = 25 * 1024 * 1024;
 
 const STEP_LABELS = ['', '계정 정보', '매장 기본 정보', '대표자 정보', '약관 동의'];
 const STEP_SUBS = ['', '로그인에 사용할 이메일·비밀번호', '매장명·주소·영업시간', '대표자·사업자 정보', '약관 동의 후 제출'];
@@ -739,7 +714,6 @@ function SignageUploader({
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   // ObjectURL 메모리 누수 방지 — file 변경 시 이전 URL revoke
   useEffect(() => {
@@ -752,7 +726,7 @@ function SignageUploader({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  const handlePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
     const f = e.target.files?.[0] ?? null;
     e.target.value = '';
@@ -761,23 +735,13 @@ function SignageUploader({
       setError('이미지 파일만 첨부 가능합니다 (JPG/PNG)');
       return;
     }
-    // 원본이 과도하게 크면 메모리 보호 차원에서 거부 (압축으로도 무리)
-    if (f.size > 25 * 1024 * 1024) {
-      setError('사진이 너무 큽니다. 25MB 이하 사진을 사용해 주세요.');
+    if (f.size > maxBytes) {
+      setError(`파일 크기는 ${Math.floor(maxBytes / 1024 / 1024)}MB 이하여야 합니다`);
       return;
     }
-    setBusy(true);
-    try {
-      // 선택 즉시 압축 → 최종 제출 시 업로드가 거의 즉시 끝남
-      const compressed = await compressSignage(f);
-      if (compressed.size > maxBytes) {
-        setError(`압축 후에도 ${Math.floor(maxBytes / 1024 / 1024)}MB를 초과합니다. 더 작은 사진을 사용해 주세요.`);
-        return;
-      }
-      onChange(compressed);
-    } finally {
-      setBusy(false);
-    }
+    // 원본 그대로 보관 — 미리보기는 항상 정상 렌더(엑박스 방지).
+    // 실제 업로드 시점(signupAsStore)에 압축한다.
+    onChange(f);
   };
 
   if (file && previewUrl) {
@@ -818,22 +782,12 @@ function SignageUploader({
   return (
     <div>
       <label
-        className={`flex flex-col items-center justify-center w-full rounded-xl border-[1.5px] border-dashed border-gray-300 transition py-8 px-4 text-center ${busy ? 'opacity-60 cursor-wait' : 'cursor-pointer hover:border-[#FF1F8F] hover:bg-pink-50/40'}`}
+        className="flex flex-col items-center justify-center w-full rounded-xl border-[1.5px] border-dashed border-gray-300 hover:border-[#FF1F8F] hover:bg-pink-50/40 transition cursor-pointer py-8 px-4 text-center"
       >
-        {busy ? (
-          <>
-            <div className="text-3xl mb-2 animate-pulse">🖼️</div>
-            <div className="text-sm font-bold text-gray-900 mb-0.5">사진 처리 중…</div>
-            <div className="text-[11px] text-gray-500">잠시만 기다려 주세요</div>
-          </>
-        ) : (
-          <>
-            <div className="text-3xl mb-2">📸</div>
-            <div className="text-sm font-bold text-gray-900 mb-0.5">매장 간판 사진 추가</div>
-            <div className="text-[11px] text-gray-500">탭하여 사진 선택</div>
-          </>
-        )}
-        <input type="file" accept="image/*" className="hidden" onChange={handlePick} disabled={busy} />
+        <div className="text-3xl mb-2">📸</div>
+        <div className="text-sm font-bold text-gray-900 mb-0.5">매장 간판 사진 추가</div>
+        <div className="text-[11px] text-gray-500">탭하여 사진 선택</div>
+        <input type="file" accept="image/*" className="hidden" onChange={handlePick} />
       </label>
       {error && <FieldError>{error}</FieldError>}
     </div>

@@ -33,6 +33,7 @@ import { stripUndefined } from './firestoreUtil';
 import { setUserPhone } from './userProfile';
 import { normalizePhone } from './phone';
 import { regionCodeFromAddress } from './geo';
+import { compressImageForUpload } from './imageCompress';
 
 // =====================================================================
 // 타입 정의
@@ -158,9 +159,16 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
   // 부분 실패 롤백 래퍼 — 아래 단계 중 하나라도 실패하면 생성된 매장/유저/번호/Auth를 정리해
   // 고아(orphan) 데이터를 남기지 않는다. (동시 가입이 몰려도 각 가입이 독립적으로 깔끔히 정리됨)
   try {
-  // 3. 매장 간판 사진 Storage 업로드 — 본사 심사 시 매장 실존 확인용
-  const file = payload.signageImageFile;
-  const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  // 3. 매장 간판 사진 — 업로드 직전 압축(보통 <1MB). 디코드 실패 시 원본 폴백.
+  //    압축을 여기서 하므로 미리보기는 원본을 그대로 써서 엑박스가 발생하지 않는다.
+  const file = await compressImageForUpload(payload.signageImageFile);
+  // Storage 규칙(5MB) 보호 — 압축 실패 + 원본 초과 시 명확히 안내하고 중단(롤백).
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('사진 용량이 커서 업로드할 수 없습니다. 더 작은 사진(JPG 권장)으로 다시 시도해 주세요.');
+  }
+  const ext = file.type === 'image/jpeg'
+    ? 'jpg'
+    : ((file.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg');
   const path = `stores/${storeId}/photos/signage.${ext}`;
   await uploadBytes(storageRef(storage, path), file, { contentType: file.type });
   const signageImageUrl = await getDownloadURL(storageRef(storage, path));
