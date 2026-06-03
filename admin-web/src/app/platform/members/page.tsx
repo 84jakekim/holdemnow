@@ -180,19 +180,14 @@ function MembersPageInner() {
       ),
     );
 
-    // 매장 — 회원관리는 "실제 가입 매장"만. 데모 매장(isDemo)은 가입자가 아니므로 제외
-    // (데모 100개가 섞여 진짜 가입 매장이 묻히던 문제, 2026-06-04 수정).
-    // 데모 매장 관리는 /platform/demo, 심사·전체 모니터링은 /platform/stores 담당.
+    // 매장 전체 구독 — 데모 포함 표시 (PM 결정 2026-06-04: 데모 매장도 어드민 진입해
+    // 운영 가능하므로 함께 표시. 데모는 추후 일괄 삭제 예정이라 별도 토글 불필요.
+    // 실제 가입 매장만 골라 볼 땐 검색·상태 필터 활용, 데모는 카드 DEMO 배지로 구분).
     const sq = query(collection(db, 'stores'), orderBy('createdAt', 'desc'));
     unsubs.push(
       onSnapshot(
         sq,
-        (snap) =>
-          setStores(
-            snap.docs
-              .map((d) => ({ id: d.id, ...(d.data() as Omit<StoreRow, 'id'>) }))
-              .filter((s) => !s.isDemo),
-          ),
+        (snap) => setStores(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StoreRow, 'id'>) }))),
         () => {},
       ),
     );
