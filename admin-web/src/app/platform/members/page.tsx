@@ -15,11 +15,12 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import MembersTabExportButton from '@/components/platform/MembersTabExportButton';
 import PlayerCsActionCell from '@/components/platform/PlayerCsActionCell';
+import ForceDeleteUserButton from '@/components/platform/ForceDeleteUserButton';
 import { summarizeReview, type StoreApplicationData } from '@/lib/storeReview';
 import {
   createPlatformAdmin,
@@ -244,6 +245,11 @@ function MembersPageInner() {
   };
   const activatePlayer = async (id: string) => {
     await updateDoc(doc(db, 'users', id), { status: 'active', updatedAt: serverTimestamp() });
+  };
+
+  // 강제 탈퇴 성공 시 낙관적 행 제거 (서버에서 doc/Auth가 삭제되면 onSnapshot도 곧 따라옴)
+  const handleUserDeleted = (id: string) => {
+    setPlayers((prev) => prev.filter((p) => p.id !== id));
   };
 
   // 반려 모달 처리
@@ -538,6 +544,15 @@ function MembersPageInner() {
                             >
                               정지
                             </button>
+                          )}
+                          {/* 강제 탈퇴 — platform_admin 행·자기 자신에는 노출하지 않음(파괴적·되돌릴 수 없음) */}
+                          {!isRowPlatformAdmin(p) && p.id !== auth.currentUser?.uid && (
+                            <ForceDeleteUserButton
+                              uid={p.id}
+                              email={p.email}
+                              displayName={p.displayName}
+                              onDeleted={handleUserDeleted}
+                            />
                           )}
                         </div>
                       </td>
@@ -1100,6 +1115,14 @@ function OrganizerCard({
         </div>
       </div>
     </div>
+  );
+}
+
+// platform_admin 판별 — 강제 탈퇴 버튼 가드 등에서 재사용
+function isRowPlatformAdmin(user: { roles?: string[]; role?: string }): boolean {
+  return (
+    (Array.isArray(user.roles) && user.roles.includes('platform_admin')) ||
+    user.role === 'platform_admin'
   );
 }
 

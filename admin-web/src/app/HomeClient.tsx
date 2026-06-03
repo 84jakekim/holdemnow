@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
-import { getLoginIntent, clearLoginIntent } from '@/lib/auth';
+import { getLoginIntent, clearLoginIntent, deriveProviders, deriveSignupSource } from '@/lib/auth';
 import AppSplash from '@/components/AppSplash';
 
 export default function Home() {
@@ -79,6 +79,9 @@ export default function Home() {
     }
     // intent='player' 또는 없음 → player로 문서 생성 후 /m
     clearLoginIntent();
+    // providers는 하드코딩하지 않고 실제 Firebase Auth providerData에서 도출한다.
+    // (과거 'google' 하드코딩으로 이메일·카카오 사용자가 "구글"로 오표시되던 버그 수정)
+    const providers = deriveProviders(authState.user);
     setDoc(
       doc(db, 'users', uid),
       {
@@ -87,8 +90,8 @@ export default function Home() {
         roles: ['player'],
         email: authState.user.email ?? null,
         displayName: authState.user.displayName ?? null,
-        providers: ['google'],
-        signupSource: 'oauth',
+        providers,
+        signupSource: deriveSignupSource(providers),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },

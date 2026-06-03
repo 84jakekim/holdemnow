@@ -31,6 +31,29 @@ export async function sendPasswordResetByAdmin(input: {
 }
 
 /**
+ * 악성 사용자 강제 탈퇴 (platform_admin only).
+ * 불법 유도 등 악성 유저를 본사가 강제로 탈퇴 처리한다.
+ * Cloud Function이 platform_admin 권한 검증 + Firestore 정리 + Firebase Auth 계정 삭제 수행.
+ * 파괴적·되돌릴 수 없는 작업 — 호출부에서 반드시 2단계 확인을 거칠 것.
+ */
+export interface ForceDeleteUserResult {
+  success: boolean;
+  reason?: string;
+}
+
+export async function forceDeleteUser(input: {
+  targetUid: string;
+  reason?: string;
+}): Promise<ForceDeleteUserResult> {
+  const fn = httpsCallable<typeof input, ForceDeleteUserResult>(
+    getFunctions(app, 'asia-northeast3'),
+    'deleteUserByAdmin',
+  );
+  const res = await fn(input);
+  return res.data;
+}
+
+/**
  * 특정 사용자의 인증 방식 조회 (platform_admin only).
  * providerData + uid 접두사로 Email/Google/Kakao 판별.
  */

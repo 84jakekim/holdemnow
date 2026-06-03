@@ -25,7 +25,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 import { startKakaoLogin } from '@/lib/kakaoAuth';
-import { loginAsPlayerWithGoogle, getLoginIntent, clearLoginIntent } from '@/lib/auth';
+import { loginAsPlayerWithGoogle, getLoginIntent, clearLoginIntent, deriveProviders, deriveSignupSource } from '@/lib/auth';
 import { loginWithEmailExpecting, WrongRoleError } from '@/lib/emailAuth';
 import { RabbitLogo } from '@/components/ui';
 
@@ -118,6 +118,9 @@ function LoginPageInner() {
       return;
     }
     clearLoginIntent();
+    // providers는 하드코딩하지 않고 실제 Firebase Auth providerData에서 도출한다.
+    // (과거 'google' 하드코딩으로 이메일·카카오 사용자가 "구글"로 오표시되던 버그 수정)
+    const providers = deriveProviders(authState.user);
     setDoc(
       doc(db, 'users', uid),
       {
@@ -125,8 +128,8 @@ function LoginPageInner() {
         role: 'player',
         email: authState.user.email ?? null,
         displayName: authState.user.displayName ?? null,
-        providers: ['google'],
-        signupSource: 'oauth',
+        providers,
+        signupSource: deriveSignupSource(providers),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },

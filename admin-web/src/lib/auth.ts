@@ -1,7 +1,44 @@
 'use client';
 
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, type User } from 'firebase/auth';
 import { auth } from './firebase';
+
+/**
+ * Firebase Auth User → providers 배열 도출.
+ *
+ * 회원관리 "로그인 방법" 표시의 단일 진실 원천. providerData를 우선으로 매핑하고,
+ * 카카오 custom token은 providerData에 안 잡히므로 uid 접두사로 보정한다.
+ *  - providerData[].providerId: 'google.com'→'google', 'password'→'password', 그 외는 원본 유지
+ *  - uid가 'kakao:'로 시작 → ['kakao'] (custom token이라 providerData가 비어 있음)
+ *
+ * ⚠️ 가입/세션 재진입 fallback에서 providers를 하드코딩하지 말 것.
+ *    과거 'google' 하드코딩으로 이메일·카카오 사용자가 "구글"로 오표시되던 버그가 있었음.
+ */
+export function deriveProviders(user: User): string[] {
+  // 카카오 custom token — providerData에 잡히지 않으므로 uid로 판별
+  if (user.uid.startsWith('kakao:')) return ['kakao'];
+
+  const mapped = (user.providerData ?? [])
+    .map((p) => p?.providerId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    .map((id) => {
+      if (id === 'google.com') return 'google';
+      if (id === 'password') return 'password';
+      return id; // 그 외(예: 'facebook.com')는 원본 id 유지
+    });
+
+  // 중복 제거 (순서 보존)
+  return Array.from(new Set(mapped));
+}
+
+/**
+ * providers 배열 → signupSource 값 도출.
+ * password가 포함되면 이메일 가입('email'), 소셜(google/kakao 등)만 있으면 'oauth'.
+ * (기존 emailAuth.ts의 '*-signup' 컨벤션과는 별개의, OAuth 신규 생성 경로 전용 값)
+ */
+export function deriveSignupSource(providers: string[]): 'email' | 'oauth' {
+  return providers.includes('password') ? 'email' : 'oauth';
+}
 
 /**
  * 로그인 의도 추적 — Google 로그인은 사용자/사장 둘 다 가능하므로
