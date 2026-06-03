@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -59,7 +59,33 @@ function AdminPageInner({ storeId }: { storeId: string }) {
   const store = useStoreDoc(storeId);
   const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+  // activeMenu — URL ?tab과 동기화. 메뉴 전환을 브라우저 히스토리 엔트리로 만들어,
+  // 모바일에서 메뉴 진입 후 '뒤로가기'가 로그인으로 튕기지 않고 이전 메뉴로 돌아가게 한다.
+  // (좌측 메뉴는 라우트가 아닌 클라이언트 상태라, 동기화 안 하면 back 한 번에 어드민 전체를
+  //  빠져나가 직전 페이지=로그인으로 이동하던 문제.)
+  const [activeMenu, setActiveMenuState] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'dashboard';
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return t && MENUS.some((m) => m.id === t) ? t : 'dashboard';
+  });
+  const setActiveMenu = useCallback((id: string) => {
+    setActiveMenuState(id);
+    if (typeof window === 'undefined') return;
+    const url = id === 'dashboard' ? `/admin/${storeId}` : `/admin/${storeId}?tab=${id}`;
+    if (window.location.pathname + window.location.search === url) return;
+    // dashboard는 기본 화면이라 엔트리 누적 방지 위해 replace, 그 외 메뉴는 push로 히스토리 적립.
+    if (id === 'dashboard') window.history.replaceState({ tab: id }, '', url);
+    else window.history.pushState({ tab: id }, '', url);
+  }, [storeId]);
+  // 뒤로/앞으로(popstate) 시 URL의 tab으로 메뉴 복원 — 어드민 안에서 메뉴만 전환됨.
+  useEffect(() => {
+    const onPop = () => {
+      const t = new URLSearchParams(window.location.search).get('tab');
+      setActiveMenuState(t && MENUS.some((m) => m.id === t) ? t : 'dashboard');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [showPwModal, setShowPwModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [unreadReservationCount, setUnreadReservationCount] = useState(0);
