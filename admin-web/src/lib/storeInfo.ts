@@ -10,6 +10,7 @@ import {
 import { db, storage } from './firebase';
 import { stripUndefined } from './firestoreUtil';
 import { regionCodeFromAddress } from './geo';
+import { compressImageForUpload } from './imageCompress';
 
 export const FACILITY_OPTIONS = [
   '주차', '발렛', '식사', '24시간', '흡연실', '룸', '여성전용시간', 'VIP룸',
@@ -42,16 +43,22 @@ export async function updateStoreInfo(
   }));
 }
 
-/** 매장 사진 1장 업로드 → download URL 반환 */
-export async function uploadStorePhoto(storeId: string, file: File): Promise<string> {
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error('사진은 5MB 이하만 업로드 가능합니다');
-  }
-  if (!file.type.startsWith('image/')) {
+/** 매장 사진 1장 업로드 → download URL 반환.
+ *  실제 폰 사진(4~8MB)이 5MB 규칙에 막히지 않도록 업로드 직전 압축(보통 <1MB).
+ *  디코드 실패(일부 HEIC 등) 시 원본 폴백. 압축 후에도 5MB 초과면 명확히 안내. */
+export async function uploadStorePhoto(storeId: string, rawFile: File): Promise<string> {
+  if (!rawFile.type.startsWith('image/')) {
     throw new Error('이미지 파일만 업로드 가능합니다');
   }
+  if (rawFile.size > 25 * 1024 * 1024) {
+    throw new Error('사진이 너무 큽니다 (25MB 이하)');
+  }
+  const file = await compressImageForUpload(rawFile);
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('사진 용량이 커서 업로드할 수 없습니다. 더 작은 사진(JPG 권장)으로 다시 시도해 주세요.');
+  }
   const photoId = `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const ext = file.type === 'image/jpeg' ? 'jpg' : ((file.name.split('.').pop() || 'jpg').toLowerCase());
   const path = `stores/${storeId}/photos/${photoId}.${ext}`;
   const fileRef = storageRef(storage, path);
   await uploadBytes(fileRef, file, { contentType: file.type });
