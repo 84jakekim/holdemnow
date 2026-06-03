@@ -45,3 +45,6 @@ next-env.d.ts
 /test-results
 /playwright-report
 /playwright/.cache
+
+# 스모크 감사 스크린샷 출력
+scripts/audit-out/
