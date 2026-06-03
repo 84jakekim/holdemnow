@@ -441,7 +441,8 @@ function ListMode({ userLocation }: { userLocation: LatLng | null }) {
           <circle cx="12" cy="10" r="3"/>
         </svg>
         <span className="text-[13px] font-extrabold" style={{ color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
-          {regionLabel ?? '위치 확인 중'}
+          {/* 좌표는 잡혔는데 역지오코딩(지역명)이 늦거나 실패해도 "위치 확인 중"에 고착되지 않도록 폴백 */}
+          {regionLabel ?? (userLocation ? '내 주변' : '위치 확인 중')}
         </span>
         <svg
           width="11" height="11" viewBox="0 0 24 24"

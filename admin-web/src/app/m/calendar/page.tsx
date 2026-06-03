@@ -269,9 +269,9 @@ export default function CalendarPage() {
             >
               📅
             </div>
-            <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-1)' }}>예정 토너 없음</div>
+            <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-1)' }}>예정된 토너가 없어요</div>
             <div className="text-[11px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
-              매장 어드민에서 사전 등록 시 여기에 표시됩니다
+              다른 날짜를 둘러보거나, 즐겨찾기 매장의 알림을 켜두면 새 토너가 열릴 때 알려드려요
             </div>
           </div>
         ) : (
