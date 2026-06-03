@@ -37,6 +37,12 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '*.kakaocdn.net',
       },
+      {
+        // Unsplash — 데모/시드 매장 100개의 플레이스홀더 사진.
+        // 미등록 시 next/image가 렌더 중 throw → /m/find 등 매장 카드 섹션 전체가 깨짐.
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
     ],
   },
   async headers() {
