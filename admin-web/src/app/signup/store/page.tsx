@@ -9,6 +9,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import {
   signupAsStore,
   validatePassword,
@@ -139,6 +141,10 @@ export default function StoreSignupPage() {
         agreePrivacy: form.agreePrivacy,
         agreeMarketing: form.agreeMarketing,
       });
+      // 사전등록은 "접수만" — Firebase Auth가 가입 시 자동 로그인시키므로 즉시 로그아웃.
+      //   세션을 남기지 않아야 ① "지금 로그인 안 해도 됨" 안내와 일치하고
+      //   ② 매장 계정이 사용자앱(/m·/intro)으로 새는 것을 원천 차단한다.
+      try { await signOut(auth); } catch { /* noop */ }
       setDone(true);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

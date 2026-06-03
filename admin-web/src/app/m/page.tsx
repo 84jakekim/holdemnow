@@ -63,11 +63,17 @@ export default function MobileHome() {
   const isPlatformAdmin = hasRole(userDoc, 'platform_admin');
 
   // 첫 진입 사용자 — /intro 슬라이드 가이드로 redirect (한 번 보면 안 보임)
+  //   ⚠️ 매장/대회사/본사 계정은 제외 — 사용자 온보딩으로 새면 안 됨.
+  //      (userDoc 로딩 대기 후 판정. AuthGate가 /m 자체를 차단하지만, 이 redirect가
+  //       먼저 발화해 /intro로 빠지는 경합을 원천 차단하는 가드.)
   useEffect(() => {
+    if (authState.status === 'authenticated' && userDoc === undefined) return; // userDoc 로딩 대기
+    const nonPlayer = !!userDoc && (!!userDoc.storeId || !!userDoc.organizerId || hasRole(userDoc, 'platform_admin'));
+    if (nonPlayer) return;
     if (!hasSeenOnboarding()) {
       router.replace('/intro');
     }
-  }, [router]);
+  }, [router, userDoc, authState.status]);
 
   // 4섹션 콘텐츠 0건 여부 — 모든 사용자에게 적용
   //  - platform_admin: 본사 어드민 이동 안내 카드

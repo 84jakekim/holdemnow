@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { RabbitLogo } from '@/components/ui';
 import { markOnboardingSeen } from '@/lib/onboarding';
+import { useAuth, useUserDoc, hasRole } from '@/lib/hooks';
 
 interface Slide {
   id: number;
@@ -62,6 +63,19 @@ const ONBOARDING_SLIDES: Slide[] = [
 export default function IntroPage() {
   const router = useRouter();
   const [idx, setIdx] = useState(0);
+
+  // ⚠️ 역할 게이트 — 사용자 온보딩은 플레이어/방문자 전용.
+  //    매장·대회사·본사 계정이 (어떤 경로로든) /intro에 닿으면 자기 홈으로 즉시 돌려보낸다.
+  //    "매장 아이디로 일반 사용자앱 화면을 보면 안 된다"는 핵심 정책의 안전망.
+  const authState = useAuth();
+  const userDoc = useUserDoc(authState.status === 'authenticated' ? authState.user.uid : null);
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return;
+    if (userDoc === undefined || !userDoc) return;
+    if (userDoc.storeId) { router.replace(`/admin/${userDoc.storeId}`); return; }
+    if (userDoc.organizerId) { router.replace(`/organizer/${userDoc.organizerId}`); return; }
+    if (hasRole(userDoc, 'platform_admin')) { router.replace('/platform'); return; }
+  }, [authState.status, userDoc, router]);
 
   // 스와이프 (터치/마우스 드래그)
   const [dragStart, setDragStart] = useState<number | null>(null);
