@@ -163,18 +163,15 @@ function MembersPageInner() {
           }
           setOwnerEmailByUid(emailMap);
 
+          // 일반 사용자 = 어드민·매장·대회사가 아닌 모든 계정 (명시 필드 기준).
+          // 과거엔 providers/signupSource로 간접 추정해서 ① OAuth 가입 매장 사장이
+          // 일반 탭에 섞이고 ② 이메일 가입 플레이어(player-signup)는 어느 탭에도
+          // 안 보이는 버그가 있었다 (2026-06-04 수정).
           setPlayers(
             all.filter((u) => {
-              if (isPlatformAdmin(u)) return false; // 어드민은 일반 탭에서 제외
-              const src = u.signupSource;
-              const prov = u.providers ?? [];
-              return (
-                src === 'oauth' ||
-                src === undefined ||
-                prov.includes('google') ||
-                prov.includes('kakao') ||
-                (!src && !prov.includes('password'))
-              );
+              if (isPlatformAdmin(u)) return false; // 어드민 탭에서 관리
+              if (u.storeId || u.organizerId) return false; // 매장/대회사 탭에서 관리
+              return true;
             }),
           );
           setLoading(false);
@@ -183,12 +180,19 @@ function MembersPageInner() {
       ),
     );
 
-    // 매장 전체
+    // 매장 — 회원관리는 "실제 가입 매장"만. 데모 매장(isDemo)은 가입자가 아니므로 제외
+    // (데모 100개가 섞여 진짜 가입 매장이 묻히던 문제, 2026-06-04 수정).
+    // 데모 매장 관리는 /platform/demo, 심사·전체 모니터링은 /platform/stores 담당.
     const sq = query(collection(db, 'stores'), orderBy('createdAt', 'desc'));
     unsubs.push(
       onSnapshot(
         sq,
-        (snap) => setStores(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StoreRow, 'id'>) }))),
+        (snap) =>
+          setStores(
+            snap.docs
+              .map((d) => ({ id: d.id, ...(d.data() as Omit<StoreRow, 'id'>) }))
+              .filter((s) => !s.isDemo),
+          ),
         () => {},
       ),
     );
