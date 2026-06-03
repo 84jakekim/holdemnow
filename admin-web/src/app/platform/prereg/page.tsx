@@ -64,6 +64,35 @@ function fmtDayLabel(key: string): string {
   const wd = WEEKDAYS[new Date(y, m - 1, d).getDay()];
   return `${m}/${d} (${wd})`;
 }
+// 상대시간 — "방금", "N분 전", "N시간 전", "어제", 그 이상은 날짜
+function relTime(d: Date, now: number): string {
+  const diff = Math.max(0, now - d.getTime());
+  const sec = Math.floor(diff / 1000);
+  if (sec < 10) return '방금';
+  if (sec < 60) return `${sec}초 전`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  // 같은 달력일 기준으로 "어제" 판별
+  const a = new Date(now); const b = new Date(d);
+  const dayDelta = Math.round((new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()
+    - new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime()) / 86400000);
+  if (dayDelta === 0 && hr < 24) return `${hr}시간 전`;
+  if (dayDelta === 1) return '어제';
+  if (dayDelta < 7) return `${dayDelta}일 전`;
+  return `${b.getMonth() + 1}/${b.getDate()}`;
+}
+
+// 연락처 마스킹 — 표시 피드 전용 (원본 테이블·CSV는 풀 노출 유지)
+function maskPhone(raw?: string): string {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 7) return raw;
+  const head = digits.slice(0, 3);
+  const tail = digits.slice(-4);
+  return `${head}-****-${tail}`;
+}
+
 function downloadCsv(filename: string, rows: (string | number)[][]) {
   const esc = (v: string | number) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const csv = '﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n');
@@ -87,6 +116,18 @@ export default function PreRegPage() {
   const [savingBase, setSavingBase] = useState(false);
   const baseInit = useRef(false);
   const [copied, setCopied] = useState(false);
+
+  // 실시간성 — 마지막 스냅샷 수신 시각 + 1초 틱(상대시간 표시용)
+  const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
+  const [nowTick, setNowTick] = useState<number>(Date.now());
+  // 직전 스냅샷에 존재하던 피드 항목 id 집합 — 신규 도착 감지(플래시)용
+  const seenIds = useRef<Set<string> | null>(null);
+  const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const copyLink = async () => {
     try {
@@ -126,10 +167,12 @@ export default function PreRegPage() {
     const u1 = onSnapshot(collection(db, 'stores'), (snap) => {
       setStores(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StoreRow, 'id'>) })));
       setLoaded((p) => ({ ...p, s: true }));
+      setLastUpdate(Date.now());
     }, () => setLoaded((p) => ({ ...p, s: true })));
     const u2 = onSnapshot(collection(db, 'preRegLeads'), (snap) => {
       setLeads(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LeadRow, 'id'>) })));
       setLoaded((p) => ({ ...p, l: true }));
+      setLastUpdate(Date.now());
     }, () => setLoaded((p) => ({ ...p, l: true })));
     return () => { u1(); u2(); };
   }, []);
@@ -214,6 +257,89 @@ export default function PreRegPage() {
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [apps]);
 
+  // 실시간 접수 피드 — 매장 + 리드 병합, createdAt 역순, 최근 20건
+  type FeedItem = { id: string; kind: 'store' | 'lead'; name: string; sub: string; ts: number };
+  const feed = useMemo<FeedItem[]>(() => {
+    const items: FeedItem[] = [];
+    apps.forEach((s) => {
+      const t = s.createdAt?.toDate?.();
+      if (!t) return;
+      const region = (s.regionCode ?? '').trim();
+      const ph = maskPhone(s.representativePhone || s.phone);
+      const sub = [region, ph].filter(Boolean).join(' · ') || '매장 사전등록';
+      items.push({ id: `s_${s.id}`, kind: 'store', name: s.name || '이름 없는 매장', sub, ts: t.getTime() });
+    });
+    leads.forEach((l) => {
+      const t = l.createdAt?.toDate?.();
+      if (!t) return;
+      const ph = maskPhone(l.phone);
+      const sub = ph ? `출시알림 · ${ph}` : '출시알림 신청';
+      items.push({ id: `l_${l.id}`, kind: 'lead', name: l.storeName || '관심 매장 미입력', sub, ts: t.getTime() });
+    });
+    items.sort((a, b) => b.ts - a.ts);
+    return items.slice(0, 20);
+  }, [apps, leads]);
+
+  // 신규 도착 감지 — 직전 스냅샷에 없던 id를 잠깐 하이라이트(플래시)
+  useEffect(() => {
+    const currentIds = new Set(feed.map((f) => f.id));
+    if (seenIds.current === null) {
+      // 최초 마운트분은 플래시하지 않음(전부 신규로 번쩍이는 것 방지)
+      seenIds.current = currentIds;
+      return;
+    }
+    const fresh: string[] = [];
+    for (const f of feed) if (!seenIds.current.has(f.id)) fresh.push(f.id);
+    seenIds.current = currentIds;
+    if (fresh.length === 0) return;
+    setFlashIds((prev) => {
+      const next = new Set(prev);
+      fresh.forEach((id) => next.add(id));
+      return next;
+    });
+    const timer = setTimeout(() => {
+      setFlashIds((prev) => {
+        const next = new Set(prev);
+        fresh.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, 2600);
+    return () => clearTimeout(timer);
+  }, [feed]);
+
+  // 오늘 집중 뷰 — 시간대(0~23시)별 매장/리드 누적 + 어제 같은 시각까지 대비
+  const today = useMemo(() => {
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startYesterday = startToday - 86400000;
+    const curHour = now.getHours();
+    const curMin = now.getMinutes();
+    const hours = Array.from({ length: 24 }, () => ({ store: 0, lead: 0 }));
+    let todayStore = 0, todayLead = 0;
+    let yToNowStore = 0, yToNowLead = 0; // 어제 같은 시각(현재 시:분)까지 누적
+    const yCutoff = startYesterday + (curHour * 60 + curMin) * 60000;
+    const bump = (t: Date | undefined, k: 'store' | 'lead') => {
+      if (!t) return;
+      const ms = t.getTime();
+      if (ms >= startToday) {
+        hours[t.getHours()][k]++;
+        if (k === 'store') todayStore++; else todayLead++;
+      } else if (ms >= startYesterday && ms <= yCutoff) {
+        if (k === 'store') yToNowStore++; else yToNowLead++;
+      }
+    };
+    apps.forEach((s) => bump(s.createdAt?.toDate?.(), 'store'));
+    leads.forEach((l) => bump(l.createdAt?.toDate?.(), 'lead'));
+    const todayTotal = todayStore + todayLead;
+    const yTotal = yToNowStore + yToNowLead;
+    const max = Math.max(1, ...hours.map((h) => h.store + h.lead));
+    // 증감: 어제 동시각 0건이면 비교 불가 처리
+    let deltaPct: number | null = null;
+    if (yTotal > 0) deltaPct = Math.round(((todayTotal - yTotal) / yTotal) * 100);
+    else if (todayTotal > 0) deltaPct = null; // 어제 0 → %계산 불가, "신규"로 표현
+    return { hours, curHour, todayStore, todayLead, todayTotal, yTotal, deltaPct, max };
+  }, [apps, leads, nowTick]);
+
   const exportStores = () => {
     downloadCsv(`사전등록_매장_${Date.now()}.csv`, [
       ['매장명', '주소', '대표자', '연락처', '매장전화', '사업자번호', '상태', '신청일'],
@@ -232,10 +358,28 @@ export default function PreRegPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <div className="section-title" style={{ color: 'var(--gold)' }}>PRE-REGISTRATION</div>
-        <h1 className="h2" style={{ color: 'var(--text-1)' }}>📝 사전등록 현황</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>랜딩페이지 유입 — 매장 사전등록 · 출시알림 신청 통합 관리</p>
+      {/* 라이브 인디케이터 + 상대 갱신시간 애니메이션 (전역 keyframes 1회 주입) */}
+      <style>{`
+        @keyframes prereg-pulse { 0%{transform:scale(1);opacity:1} 70%{transform:scale(2.6);opacity:0} 100%{transform:scale(2.6);opacity:0} }
+        @keyframes prereg-flash { 0%{background:rgba(245,158,11,0.28)} 100%{background:transparent} }
+        @keyframes prereg-countpulse { 0%{transform:scale(1)} 35%{transform:scale(1.18)} 100%{transform:scale(1)} }
+      `}</style>
+
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="section-title" style={{ color: 'var(--gold)' }}>PRE-REGISTRATION</div>
+          <h1 className="h2" style={{ color: 'var(--text-1)' }}>📝 사전등록 현황</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-2)' }}>랜딩페이지 유입 — 매장 사전등록 · 출시알림 신청 통합 관리</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-full px-3 py-1.5"
+          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+          <span style={{ position: 'relative', display: 'inline-flex', width: 9, height: 9 }}>
+            <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#10B981', animation: 'prereg-pulse 1.8s ease-out infinite' }} />
+            <span style={{ position: 'relative', width: 9, height: 9, borderRadius: '50%', background: '#10B981' }} />
+          </span>
+          <span className="text-[11px] font-extrabold tracking-wider" style={{ color: '#10B981' }}>LIVE</span>
+          <span className="text-[11px]" style={{ color: 'var(--text-3)' }}>· 마지막 갱신 {relTime(new Date(lastUpdate), nowTick)}</span>
+        </div>
       </div>
 
       {/* 사전등록 링크 — 매장 사장에게 배포 */}
@@ -279,6 +423,94 @@ export default function PreRegPage() {
         <Kpi label="출시알림 신청" value={leads.length} tone="#FF1F8F" />
       </div>
 
+      {/* 실시간 2열: 오늘 집중 뷰 + 실시간 접수 피드 */}
+      <div className="grid lg:grid-cols-2 gap-4 mb-6">
+        {/* 오늘 집중 뷰 — 시간대별 막대 + 어제 동시각 대비 */}
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+          <div className="flex items-end justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>⏱️ 오늘 접수 (시간대별)</div>
+              <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>0~23시 매장·출시알림 누적</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>오늘 합계</div>
+              <div className="flex items-baseline gap-2 justify-end">
+                <span key={today.todayTotal} className="text-2xl font-extrabold mono"
+                  style={{ color: 'var(--gold)', display: 'inline-block', animation: 'prereg-countpulse 0.5s ease-out' }}>
+                  {today.todayTotal}
+                </span>
+                <DeltaBadge todayTotal={today.todayTotal} yTotal={today.yTotal} deltaPct={today.deltaPct} />
+              </div>
+            </div>
+          </div>
+          {today.todayTotal === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center" style={{ height: 132 }}>
+              <div style={{ fontSize: 26, opacity: 0.5 }}>🌱</div>
+              <div className="text-xs font-bold mt-1" style={{ color: 'var(--text-2)' }}>오늘 첫 접수를 기다리는 중</div>
+              <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>접수가 들어오면 실시간으로 표시됩니다</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 120, marginTop: 6 }}>
+                {today.hours.map((h, i) => {
+                  const total = h.store + h.lead;
+                  const ht = (total / today.max) * 100;
+                  const isCur = i === today.curHour;
+                  return (
+                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}
+                      title={`${i}시 · 매장 ${h.store} · 출시알림 ${h.lead}`}>
+                      <div style={{ width: '100%', height: `${ht}%`, minHeight: total > 0 ? 4 : 0, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', background: 'var(--surface-2)', outline: isCur ? '1px solid var(--gold)' : 'none' }}>
+                        <div style={{ height: `${total ? (h.store / total) * 100 : 0}%`, background: 'var(--gold)' }} />
+                        <div style={{ height: `${total ? (h.lead / total) * 100 : 0}%`, background: '#FF1F8F' }} />
+                      </div>
+                      {i % 6 === 0 && <div style={{ fontSize: 8, color: 'var(--text-3)' }}>{i}시</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              <Legend items={[{ c: 'var(--gold)', l: `매장 ${today.todayStore}` }, { c: '#FF1F8F', l: `출시알림 ${today.todayLead}` }]} />
+            </>
+          )}
+        </div>
+
+        {/* 실시간 접수 피드 */}
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>📡 실시간 접수 피드</div>
+            <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>최근 {feed.length}건</span>
+          </div>
+          {feed.length === 0 ? (
+            <Empty label="아직 접수된 신청이 없습니다" />
+          ) : (
+            <div style={{ maxHeight: 340, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {feed.map((f) => {
+                const flash = flashIds.has(f.id);
+                const accent = f.kind === 'store' ? 'var(--gold)' : '#FF1F8F';
+                return (
+                  <div key={f.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9,
+                    background: 'var(--surface-2)', borderLeft: `3px solid ${flash ? accent : 'transparent'}`,
+                    animation: flash ? 'prereg-flash 2.6s ease-out' : 'none',
+                  }}>
+                    <span className="text-[9px] font-extrabold rounded px-1.5 py-0.5 shrink-0"
+                      style={{ background: f.kind === 'store' ? 'rgba(245,158,11,0.15)' : 'rgba(255,31,143,0.15)', color: accent }}>
+                      {f.kind === 'store' ? '매장' : '출시알림'}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.sub}</div>
+                    </div>
+                    <span className="mono shrink-0" style={{ fontSize: 11, color: flash ? accent : 'var(--text-3)', fontWeight: flash ? 800 : 500 }}>
+                      {relTime(new Date(f.ts), nowTick)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* 일자별 가입 신청 현황 — 하루하루 실시간 카운트 */}
       <div className="rounded-xl p-4 mb-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
         <div className="flex items-end justify-between mb-3 flex-wrap gap-2">
@@ -289,7 +521,7 @@ export default function PreRegPage() {
           <div className="flex gap-4">
             <div className="text-right">
               <div className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>오늘 신규</div>
-              <div className="text-2xl font-extrabold mono" style={{ color: 'var(--gold)' }}>{daily.todayTotal}</div>
+              <div key={daily.todayTotal} className="text-2xl font-extrabold mono" style={{ color: 'var(--gold)', display: 'inline-block', animation: 'prereg-countpulse 0.5s ease-out' }}>{daily.todayTotal}</div>
             </div>
             <div className="text-right">
               <div className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>누적 합계</div>
@@ -469,6 +701,24 @@ function Kpi({ label, value, tone }: { label: string; value: number; tone: strin
       <div className="text-[11px] font-bold" style={{ color: 'var(--text-3)' }}>{label}</div>
       <div className="text-3xl font-extrabold mt-1" style={{ color: tone }}>{value.toLocaleString()}</div>
     </div>
+  );
+}
+// 어제 같은 시각까지 대비 증감 뱃지
+function DeltaBadge({ todayTotal, yTotal, deltaPct }: { todayTotal: number; yTotal: number; deltaPct: number | null }) {
+  // 어제 동시각 0건 + 오늘 신규 발생 → "NEW"
+  if (yTotal === 0 && todayTotal > 0) {
+    return <span className="text-[10px] font-extrabold rounded px-1.5 py-0.5" style={{ background: 'rgba(16,185,129,0.16)', color: '#10B981' }}>NEW</span>;
+  }
+  if (deltaPct === null) {
+    return <span className="text-[10px] font-bold" style={{ color: 'var(--text-3)' }}>—</span>;
+  }
+  const up = deltaPct >= 0;
+  const color = deltaPct === 0 ? 'var(--text-3)' : up ? '#10B981' : '#EF4444';
+  const arrow = deltaPct === 0 ? '·' : up ? '▲' : '▼';
+  return (
+    <span className="text-[11px] font-extrabold" style={{ color }} title="어제 같은 시각까지 누적 대비">
+      {arrow} {Math.abs(deltaPct)}%
+    </span>
   );
 }
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
