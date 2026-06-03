@@ -57,7 +57,7 @@ const POST_MAX_LENGTH = 500;
 export const HEADLINE_MAX_LENGTH = 40;
 
 const POST_TTL_MS = 24 * 60 * 60 * 1000;
-export const MAX_POST_IMAGES = 4;
+export const MAX_POST_IMAGES = 1; // 사용자 카드는 첫 1장(세로 포스터)만 노출 → 1장으로 제한
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /**

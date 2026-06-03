@@ -760,7 +760,13 @@ function PostEditModal({
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">이미지 ({imageUrls.length}/{MAX_POST_IMAGES}장)</label>
+            <label className="block text-xs font-bold text-gray-700 mb-1">대표 이미지 ({imageUrls.length}/{MAX_POST_IMAGES}장)</label>
+            {/* 세로 포스터 비율 안내 — 사용자 카드가 세로형(원본비율 유지)으로 노출됨 */}
+            <div className="text-[11px] text-gray-600 leading-relaxed mb-2 bg-pink-50/70 border border-pink-100 rounded-lg px-2.5 py-2">
+              📐 <b className="text-gray-800">세로형(포스터) 사진을 권장합니다</b> — 사용자 화면에 세로 카드로 노출돼요.<br />
+              추천 비율 <b>4:5</b> 또는 <b>3:4</b> · 예: <span className="font-mono">1080×1350</span> / <span className="font-mono">1080×1440</span>px<br />
+              가로 사진은 작게 보입니다. 글자가 들어간 포스터는 이 비율로 만들면 딱 맞아요.
+            </div>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
               {imageUrls.map((url) => (
                 <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200">
@@ -778,7 +784,6 @@ function PostEditModal({
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                multiple
                 onChange={onFileSelect}
                 disabled={busy}
                 className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-gray-200 file:bg-white file:text-xs file:font-bold file:cursor-pointer disabled:opacity-40"
