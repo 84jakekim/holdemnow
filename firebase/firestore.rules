@@ -558,6 +558,12 @@ service cloud.firestore {
     match /{path=**}/reviews/{reviewId} {
       allow read: if true;
     }
+    // 본사 대시보드의 collectionGroup('fcmTokens') 토큰 수 집계 — platform_admin만.
+    // (중첩 규칙 users/{uid}/fcmTokens 는 본인 read/write 그대로 유지. collectionGroup
+    //  쿼리는 이 와일드카드 규칙으로만 허용돼 403 없이 count 집계가 동작한다.)
+    match /{path=**}/fcmTokens/{tokenId} {
+      allow read: if isPlatformAdmin();
+    }
     // 내 예약 전체 보기(collectionGroup('reservations')) — 본인 또는 platform_admin만 read.
     // 매장 owner/member용 매장별 조회는 nested rule이 처리하며, 이 와일드카드는
     // 사용자 본인 마이페이지(전 매장 자기 예약)와 본사 모니터링에 한정.
