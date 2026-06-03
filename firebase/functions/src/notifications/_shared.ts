@@ -271,7 +271,7 @@ export interface InAppNotificationInput {
   body: string;
   linkPath?: string | null;
   payload?: Record<string, string | number | boolean | null> | null;
-  /** TTL 일수 (기본 30일). 마케팅은 60일 권장. */
+  /** TTL 일수 (기본 1일). 인앱 알림은 누적 데이터 최소화를 위해 하루만 보존. */
   ttlDays?: number;
 }
 
@@ -289,7 +289,7 @@ export async function writeInAppNotification(
 ): Promise<string | null> {
   if (!uid) return null;
   const db = admin.firestore();
-  const ttlDays = input.ttlDays ?? 30;
+  const ttlDays = input.ttlDays ?? 1;
   const now = admin.firestore.Timestamp.now();
   const expiresAt = admin.firestore.Timestamp.fromMillis(
     now.toMillis() + ttlDays * 24 * 3600 * 1000,

@@ -28,6 +28,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks';
 import {
   type InAppNotification,
+  deleteNotification,
   markAllAsRead,
   markAsRead,
   notificationVisual,
@@ -83,6 +84,16 @@ export default function NotificationsPage() {
     if (n.linkPath) {
       router.push(n.linkPath);
     }
+  }
+
+  function onDelete(e: React.MouseEvent, n: InAppNotification) {
+    e.stopPropagation();
+    if (!uid) return;
+    // 낙관적 제거 — onSnapshot이 곧 동기화하지만 즉시 반응성 제공
+    setItems((prev) => prev.filter((i) => i.id !== n.id));
+    deleteNotification(uid, n.id).catch(() => {
+      // 실패 시 onSnapshot이 원복
+    });
   }
 
   async function onMarkAll() {
@@ -177,7 +188,7 @@ export default function NotificationsPage() {
               const visual = notificationVisual(n.type);
               const createdMs = n.createdAt?.toMillis() ?? null;
               return (
-                <li key={n.id}>
+                <li key={n.id} style={{ position: 'relative' }}>
                   <button
                     type="button"
                     onClick={() => onCardClick(n)}
@@ -187,6 +198,7 @@ export default function NotificationsPage() {
                       gap: 12,
                       alignItems: 'flex-start',
                       padding: 14,
+                      paddingRight: 44,
                       textAlign: 'left',
                       background: n.read ? 'var(--surface-1)' : 'rgba(236, 72, 153, 0.06)',
                       border: n.read
@@ -265,19 +277,48 @@ export default function NotificationsPage() {
                       </div>
                     </div>
                   </button>
+
+                  {/* 삭제 버튼 — 카드와 형제(중첩 button 회피), 우상단 고정 */}
+                  <button
+                    type="button"
+                    onClick={(e) => onDelete(e, n)}
+                    aria-label="알림 삭제"
+                    className="tap"
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      width: 28,
+                      height: 28,
+                      borderRadius: 99,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'var(--surface-2)',
+                      color: 'var(--text-3)',
+                      border: '1px solid var(--border)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
                 </li>
               );
             })}
           </ul>
         )}
 
-        {/* 안내 푸터 — 30일 자동 정리 */}
+        {/* 안내 푸터 — 하루 자동 정리 + 수동 삭제 안내 */}
         {uid && !loading && items.length > 0 && (
           <div
             className="text-[11px]"
-            style={{ color: 'var(--text-3)', textAlign: 'center', marginTop: 16 }}
+            style={{ color: 'var(--text-3)', textAlign: 'center', marginTop: 16, lineHeight: 1.6 }}
           >
-            30일 이전 알림은 자동으로 정리됩니다
+            알림은 하루(24시간) 뒤 자동으로 정리됩니다
+            <br />
+            필요 없는 알림은 ✕로 바로 지울 수 있어요
           </div>
         )}
       </section>

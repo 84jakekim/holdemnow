@@ -76,6 +76,8 @@ export { notifyStoreOnReview } from './notifications/notifyStoreOnReview';
 export { cleanupExpiredInterests } from './notifications/cleanupExpiredInterests';
 // 시작 시각+3h 지났는데 LIVE 시작 안 된 scheduled 토너를 expired로 자동 변경
 export { cleanupExpiredTournaments } from './notifications/cleanupExpiredTournaments';
+// 만료된 인앱 알림(expiresAt < now) 자동 삭제 — 매 6시간. TTL 1일 + 누적 데이터 최소화.
+export { cleanupExpiredNotifications } from './notifications/cleanupExpiredNotifications';
 
 // ===== LIVE =====
 // 마지막 레벨 종료 후 그레이스(180초) 만료된 세션을 status=completed로 자동 정리.

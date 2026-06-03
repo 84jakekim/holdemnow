@@ -396,6 +396,14 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "items",
+      "fieldPath": "expiresAt",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
       "collectionGroup": "reviews",
       "fieldPath": "createdAt",
       "indexes": [
