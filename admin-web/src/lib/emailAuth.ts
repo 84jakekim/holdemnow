@@ -520,7 +520,13 @@ export async function loginWithEmailExpecting(
     try { await auth.signOut(); } catch {}
     throw new Error('계정 정보를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.');
   }
-  const data = snap.exists() ? (snap.data() as { storeId?: string; organizerId?: string; role?: string; roles?: string[] }) : null;
+  const data = snap.exists() ? (snap.data() as { storeId?: string; organizerId?: string; role?: string; roles?: string[]; status?: string }) : null;
+
+  // 정지 계정 차단 — 본사 회원관리에서 정지(users.status='suspended')된 계정은 로그인 불가.
+  if (data?.status === 'suspended') {
+    try { await auth.signOut(); } catch {}
+    throw new Error('정지된 계정입니다. 본사에 문의해 주세요.');
+  }
 
   // 역할 판정 — AuthGate.classifyAccount와 동일 규칙
   const roles = data?.roles ?? [];
@@ -542,6 +548,32 @@ export async function loginWithEmailExpecting(
     // 역할 불일치 — 즉시 signOut → 호출부에서 "없는 계정" 메시지로 안내.
     try { await auth.signOut(); } catch {}
     throw new WrongRoleError(actualKind);
+  }
+
+  // 정지된 매장/대회사 차단 — 본사가 매장(stores.status)·대회사(organizers.status)를
+  // 정지하면 해당 어드민은 로그인 자체가 차단된다 (안내: 본사 문의).
+  // 조회 실패는 로그인을 막지 않음(가용성 우선) — 매장은 StoreApprovalGate가 후속 차단.
+  if (actualKind === 'store' && data?.storeId) {
+    let storeSuspended = false;
+    try {
+      const s = await getDoc(doc(db, 'stores', data.storeId));
+      storeSuspended = s.exists() && (s.data() as { status?: string }).status === 'suspended';
+    } catch { /* noop */ }
+    if (storeSuspended) {
+      try { await auth.signOut(); } catch {}
+      throw new Error('정지된 매장입니다. 본사에 문의해 주세요.');
+    }
+  }
+  if (actualKind === 'organizer' && data?.organizerId) {
+    let orgSuspended = false;
+    try {
+      const o = await getDoc(doc(db, 'organizers', data.organizerId));
+      orgSuspended = o.exists() && (o.data() as { status?: string }).status === 'suspended';
+    } catch { /* noop */ }
+    if (orgSuspended) {
+      try { await auth.signOut(); } catch {}
+      throw new Error('정지된 대회사입니다. 본사에 문의해 주세요.');
+    }
   }
 }
 
