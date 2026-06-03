@@ -45,6 +45,27 @@ export async function setUserPhone(uid: string, phoneRaw: string): Promise<void>
   const normalized = normalizePhone(phoneRaw);
   if (!normalized) throw new Error('유효하지 않은 전화번호 형식입니다 (예: 010-1234-5678)');
 
+  // 차단 체크 — 강제 탈퇴(영구)/본인 탈퇴(쿨다운) 번호는 재등록 불가.
+  // 모든 가입(이메일·OAuth)이 거치는 단일 choke point라 여기서 phone 차단을 보장한다.
+  try {
+    const banSnap = await getDoc(doc(db, 'bannedContacts', normalized));
+    if (banSnap.exists()) {
+      const exp = (banSnap.data() as { expiresAt?: { toMillis?: () => number; toDate?: () => Date } | null }).expiresAt;
+      if (!exp) {
+        throw new Error('이용이 제한된 번호입니다. 본사에 문의해 주세요.');
+      }
+      const ms = typeof exp.toMillis === 'function' ? exp.toMillis() : 0;
+      if (ms > Date.now()) {
+        const d = exp.toDate ? exp.toDate() : new Date(ms);
+        const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+        throw new Error(`탈퇴 후 재가입은 ${dateStr} 이후 가능합니다.`);
+      }
+    }
+  } catch (e) {
+    // 차단으로 인한 throw는 그대로 전파, 단순 조회 실패는 무시(가용성 우선)
+    if (e instanceof Error && (e.message.includes('제한된') || e.message.includes('재가입은'))) throw e;
+  }
+
   // 트랜잭션: 중복 검사 + 이전 번호 정리 + 새 번호 등록 + users doc 업데이트
   await runTransaction(db, async (tx) => {
     const userRef = doc(db, 'users', uid);

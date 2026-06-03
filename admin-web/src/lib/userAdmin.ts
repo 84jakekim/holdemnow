@@ -54,6 +54,26 @@ export async function forceDeleteUser(input: {
 }
 
 /**
+ * 차단 해제 (platform_admin only) — banlist + bannedContacts 삭제 → 재가입 다시 허용.
+ * 강제 탈퇴(영구)·본인 탈퇴(쿨다운) 모두 해제 가능.
+ */
+export interface LiftUserBanResult {
+  success: boolean;
+}
+
+export async function liftUserBan(input: {
+  uid: string;
+  reason?: string;
+}): Promise<LiftUserBanResult> {
+  const fn = httpsCallable<typeof input, LiftUserBanResult>(
+    getFunctions(app, 'asia-northeast3'),
+    'liftUserBan',
+  );
+  const res = await fn(input);
+  return res.data;
+}
+
+/**
  * 특정 사용자의 인증 방식 조회 (platform_admin only).
  * providerData + uid 접두사로 Email/Google/Kakao 판별.
  */

@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { writeBan } from './_ban';
 
 export interface DeleteOwnAccountResult {
   success: boolean;
@@ -105,6 +106,23 @@ export const deleteOwnAccount = onCall(
       console.error(`[deleteOwnAccount] recursiveDelete users/${uid} failed:`, e);
       // 폴백 — 문서만이라도 삭제
       try { await userRef.delete(); } catch { /* ignore */ }
+    }
+
+    // 4.5) 쿨다운 차단 기록 (banlist + bannedContacts) — 탈퇴 후 COOLDOWN_MONTHS 동안 동일 번호/이메일 재가입 제한.
+    if (phone || email) {
+      try {
+        await writeBan(fs, {
+          uid,
+          phone,
+          email,
+          displayName: (data as { displayName?: string } | undefined)?.displayName ?? null,
+          type: 'self_withdrawal',
+          reason: '본인 탈퇴',
+          bannedBy: 'self',
+        });
+      } catch (e) {
+        console.error(`[deleteOwnAccount] writeBan(cooldown) failed for ${uid}:`, e);
+      }
     }
 
     // 5) 감사 로그

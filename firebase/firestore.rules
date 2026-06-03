@@ -414,6 +414,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== 차단 lookup (가입 차단 O(1) 조회) =====
+    // key = 정규화 전화번호 또는 소문자 이메일.
+    // 가입 직전(미인증) assertNotBanned/setUserPhone이 조회 → get 공개. 단 list(열거)는 본사만.
+    // 쓰기/삭제는 Cloud Function(admin SDK)만 → 클라이언트 위변조 차단.
+    match /bannedContacts/{key} {
+      allow get: if true;
+      allow list: if isPlatformAdmin();
+      allow write: if false;
+    }
+
+    // ===== 차단 목록 (본사 관리/조회용 1인 1문서) =====
+    // 강제 탈퇴(영구)/본인 탈퇴(쿨다운) 기록. PII(번호/이메일) 포함 → 본사만 열람.
+    // 쓰기는 Cloud Function(deleteUserByAdmin/deleteOwnAccount), 해제는 liftUserBan(admin SDK)만.
+    match /banlist/{uid} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
     // ===== 사전등록 리드 (랜딩 "출시 알림" 신청) =====
     // 랜딩페이지는 비로그인 공개 페이지 → anonymous create 허용.
     // 단 연락처(PII)가 담기므로 read/관리는 본사(platform_admin)만.

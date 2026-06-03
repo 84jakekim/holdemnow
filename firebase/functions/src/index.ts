@@ -23,8 +23,10 @@ export { sendPasswordResetByAdmin } from './admin/sendPasswordResetByAdmin';
 export { getUserAuthInfo } from './admin/getUserAuthInfo';
 // 임시 비밀번호 강제 발급 (platform_admin only) — 원본 비번 조회 불가 → 임시 비번으로 덮어쓰고 평문 반환(CS용).
 export { setTemporaryPasswordByAdmin } from './admin/setTemporaryPasswordByAdmin';
-// 악성 사용자 강제 탈퇴 (platform_admin only) — users 문서 + Auth 계정 삭제, 자기 자신/타 admin 삭제 차단, 감사 로그.
+// 악성 사용자 강제 탈퇴 (platform_admin only) — users 문서+Auth 삭제 + 영구 차단(banlist) 기록, 자기 자신/타 admin 삭제 차단, 감사 로그.
 export { deleteUserByAdmin } from './admin/deleteUserByAdmin';
+// 차단 해제 (platform_admin only) — banlist + bannedContacts 삭제 → 재가입 다시 허용, 감사 로그.
+export { liftUserBan } from './admin/liftUserBan';
 // providers 데이터 교정 (platform_admin only) — 실제 Auth providerData 기준 backfill. apply=false 기본 DRY-RUN.
 export { backfillUserProviders } from './admin/backfillUserProviders';
 

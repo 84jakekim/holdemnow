@@ -21,6 +21,7 @@ import { Suspense } from 'react';
 import MembersTabExportButton from '@/components/platform/MembersTabExportButton';
 import PlayerCsActionCell from '@/components/platform/PlayerCsActionCell';
 import ForceDeleteUserButton from '@/components/platform/ForceDeleteUserButton';
+import BanlistPanel from '@/components/platform/BanlistPanel';
 import { summarizeReview, type StoreApplicationData } from '@/lib/storeReview';
 import {
   createPlatformAdmin,
@@ -42,7 +43,7 @@ const FIREBASE_CONFIG_FOR_AUX: FirebaseOptions = {
 // 타입
 // =====================================================================
 
-type Tab = 'admins' | 'players' | 'stores' | 'organizers';
+type Tab = 'admins' | 'players' | 'stores' | 'organizers' | 'banned';
 
 interface PlayerRow {
   id: string;
@@ -333,6 +334,7 @@ function MembersPageInner() {
             { id: 'players' as Tab, label: '일반 사용자', count: players.length, badge: 0 },
             { id: 'stores' as Tab, label: '매장', badge: pendingStores, count: stores.length },
             { id: 'organizers' as Tab, label: '대회사', badge: pendingOrgs, count: organizers.length },
+            { id: 'banned' as Tab, label: '🚫 차단 관리', badge: 0, count: undefined as number | undefined },
           ]
         ).map((t) => (
           <button
@@ -346,7 +348,7 @@ function MembersPageInner() {
             }
           >
             {t.label}
-            <span className="ml-1.5 text-[10px] text-gray-400">({t.count})</span>
+            {t.count !== undefined && <span className="ml-1.5 text-[10px] text-gray-400">({t.count})</span>}
             {t.badge > 0 ? (
               <span className="absolute -top-1.5 -right-1 min-w-[18px] h-[18px] rounded-full text-[9px] font-extrabold flex items-center justify-center px-1 text-white" style={{ background: '#FF1F8F' }}>
                 {t.badge}
@@ -713,6 +715,9 @@ function MembersPageInner() {
           )}
         </div>
       )}
+
+      {/* ── Tab 5: 차단 관리 ── */}
+      {activeTab === 'banned' && !loading && <BanlistPanel />}
 
       {/* 반려 모달 */}
       {rejectModal && (

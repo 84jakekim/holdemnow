@@ -122,10 +122,56 @@ export function formatBusinessReg(raw: string): string {
 }
 
 // =====================================================================
+// 차단(banlist) 체크 — 가입 직전 호출
+// =====================================================================
+
+/**
+ * 강제 탈퇴(영구) / 본인 탈퇴(쿨다운) 차단 여부를 bannedContacts에서 조회.
+ * 차단 중이면 throw → Auth 계정 생성 전에 가입을 막는다.
+ * - 영구(expiresAt 없음): "이용 제한" 안내
+ * - 쿨다운(expiresAt 미래): 재가입 가능일 안내
+ * - 만료된 쿨다운(expiresAt 과거): 통과
+ */
+export async function assertNotBanned(input: { email?: string; phone?: string }): Promise<void> {
+  const keys: string[] = [];
+  const normPhone = normalizePhone(input.phone);
+  if (normPhone) keys.push(normPhone);
+  const email = input.email?.trim().toLowerCase();
+  if (email) keys.push(email);
+  if (keys.length === 0) return;
+
+  for (const key of keys) {
+    let snap;
+    try {
+      snap = await getDoc(doc(db, 'bannedContacts', key));
+    } catch {
+      continue; // 조회 실패는 가입을 막지 않음(가용성 우선)
+    }
+    if (!snap.exists()) continue;
+    const data = snap.data() as { expiresAt?: { toMillis?: () => number; toDate?: () => Date } | null };
+    const exp = data.expiresAt;
+    // 영구(null) → 항상 차단
+    if (!exp) {
+      throw new Error('이용이 제한된 계정입니다. 본사에 문의해 주세요.');
+    }
+    // 쿨다운 — 만료 전이면 차단
+    const ms = typeof exp.toMillis === 'function' ? exp.toMillis() : 0;
+    if (ms > Date.now()) {
+      const d = exp.toDate ? exp.toDate() : new Date(ms);
+      const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+      throw new Error(`탈퇴 후 재가입은 ${dateStr} 이후 가능합니다.`);
+    }
+  }
+}
+
+// =====================================================================
 // 매장 자체 가입
 // =====================================================================
 
 export async function signupAsStore(payload: StoreSignupPayload): Promise<string> {
+  // 0. 차단 체크 (Auth 계정 생성 전)
+  await assertNotBanned({ email: payload.email, phone: payload.representativePhone });
+
   // 1. Firebase Auth 계정 생성
   const credential = await createUserWithEmailAndPassword(
     auth,
@@ -275,6 +321,12 @@ export async function signupAsStore(payload: StoreSignupPayload): Promise<string
 // =====================================================================
 
 export async function signupAsOrganizer(payload: OrganizerSignupPayload): Promise<string> {
+  // 0. 차단 체크 (Auth 계정 생성 전) — 등록 번호는 contactPersonPhone 우선
+  await assertNotBanned({
+    email: payload.email,
+    phone: payload.contactPersonPhone || payload.representativePhone,
+  });
+
   const credential = await createUserWithEmailAndPassword(
     auth,
     payload.email.trim().toLowerCase(),
@@ -364,6 +416,9 @@ export interface PlayerSignupPayload {
 }
 
 export async function signupAsPlayer(payload: PlayerSignupPayload): Promise<void> {
+  // 0) 차단 체크 (Auth 계정 생성 전)
+  await assertNotBanned({ email: payload.email, phone: payload.phone });
+
   // 1) Firebase Auth 계정 생성
   const credential = await createUserWithEmailAndPassword(
     auth,

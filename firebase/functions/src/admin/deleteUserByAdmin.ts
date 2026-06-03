@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { writeBan } from '../account/_ban';
 
 interface Input {
   targetUid?: string;
@@ -44,7 +45,9 @@ export const deleteUserByAdmin = onCall(
 
     // 안전장치 ②: 대상이 platform_admin이면 삭제 금지
     const targetSnap = await admin.firestore().collection('users').doc(targetUid).get();
-    const targetData = targetSnap.data() as { role?: string; roles?: string[]; email?: string } | undefined;
+    const targetData = targetSnap.data() as
+      | { role?: string; roles?: string[]; email?: string; phone?: string; displayName?: string }
+      | undefined;
     const targetIsAdmin = targetData?.role === 'platform_admin' || targetData?.roles?.includes('platform_admin');
     if (targetIsAdmin) {
       throw new HttpsError('failed-precondition', 'cannot delete a platform_admin user');
@@ -61,10 +64,49 @@ export const deleteUserByAdmin = onCall(
       }
     }
 
-    // ③ Firestore users 문서 삭제 (없어도 delete는 에러 없이 성공)
-    await admin.firestore().collection('users').doc(targetUid).delete();
+    const targetPhone = targetData?.phone ?? null; // users.phone은 정규화 저장(phoneIndex 키와 동일)
+    const fs = admin.firestore();
 
-    // ④ Firebase Auth 계정 삭제 — 이미 없으면(user-not-found) 무시
+    // ③ 영구 차단 기록 (banlist + bannedContacts) — 동일 번호/이메일 재가입 차단.
+    //    문서 삭제 전에 확보한 phone/email로 기록.
+    try {
+      await writeBan(fs, {
+        uid: targetUid,
+        phone: targetPhone,
+        email: targetEmail,
+        displayName: targetData?.displayName ?? null,
+        type: 'force_delete',
+        reason: input.reason ?? null,
+        bannedBy: req.auth.uid,
+      });
+    } catch (e) {
+      console.error(`[deleteUserByAdmin] writeBan failed for ${targetUid}:`, e);
+    }
+
+    // ④ phoneIndex / passwordRecovery 정리 (orphan 제거 — 차단은 banlist가 담당)
+    if (targetPhone) {
+      try {
+        const idxRef = fs.collection('phoneIndex').doc(targetPhone);
+        const idxSnap = await idxRef.get();
+        if (idxSnap.exists && (idxSnap.data() as { uid?: string }).uid === targetUid) {
+          await idxRef.delete();
+        }
+      } catch (e) {
+        console.error(`[deleteUserByAdmin] phoneIndex cleanup failed:`, e);
+      }
+    }
+    if (targetEmail) {
+      try {
+        await fs.collection('passwordRecovery').doc(targetEmail).delete();
+      } catch (e) {
+        console.error(`[deleteUserByAdmin] passwordRecovery cleanup failed:`, e);
+      }
+    }
+
+    // ⑤ Firestore users 문서 삭제 (없어도 delete는 에러 없이 성공)
+    await fs.collection('users').doc(targetUid).delete();
+
+    // ⑥ Firebase Auth 계정 삭제 — 이미 없으면(user-not-found) 무시
     try {
       await admin.auth().deleteUser(targetUid);
     } catch (e) {
@@ -74,7 +116,7 @@ export const deleteUserByAdmin = onCall(
       }
     }
 
-    // ⑤ 감사 로그
+    // ⑦ 감사 로그
     await admin.firestore().collection('adminAuditLog').add({
       action: 'force_delete_user',
       callerUid: req.auth.uid,
