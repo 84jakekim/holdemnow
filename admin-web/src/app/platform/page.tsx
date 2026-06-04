@@ -38,6 +38,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { auth } from '@/lib/firebase';
+import {
+  subscribeKpiTargets,
+  saveKpiTargets,
+  currentPhaseOf,
+  KPI_TARGETS_DEFAULT,
+  type KpiTargets,
+  type KpiPhaseTargets,
+} from '@/lib/kpiTargets';
 import {
   loadUserStats,
   loadEngagementStats,
@@ -622,71 +631,10 @@ export default function PlatformDashboard() {
         />
       </div>
 
-      {/* ━━ 1.5 유료 전환 게이지 — B안 트리거 (2026-06-04 PM 회의) ━━
-          활성 매장 ≥40 / 주간 LIVE ≥50 / WAU ≥300 중 2개 충족 + PG 활성화 → 유료 도입 검토.
+      {/* ━━ 1.5 유료 전환 게이지 — Phase별 목표 (2026-06-04 시장조사 기반 PM 확정) ━━
+          목표치는 meta/kpiTargets로 외부화 — 본사가 연필 버튼으로 직접 수정 (코드 배포 불필요).
           일별 추이는 snapshotDailyKpis 함수가 platformKpis/{date}에 매일 박제. */}
-      <div
-        className="rounded-xl p-4 mb-6"
-        style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-      >
-        {(() => {
-          const gauges = [
-            { label: '활성 매장 (실가입)', value: data?.engagement.activeRealStores ?? 0, target: 40, unit: '곳', color: '#06B6D4' },
-            { label: '주간 LIVE 세션', value: data?.live.thisWeek ?? 0, target: 50, unit: '회', color: '#EF4444' },
-            { label: 'WAU (주간 활성 사용자)', value: data?.engagement.wau ?? 0, target: 300, unit: '명', color: '#10B981' },
-          ];
-          const metCount = gauges.filter((g) => g.value >= g.target).length;
-          return (
-            <>
-              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
-                <div>
-                  <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>
-                    💰 유료 전환 게이지
-                  </div>
-                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-                    3개 중 <b>2개 충족 + PG 활성화</b> 시 유료 도입 검토 (30일 사전 공지 · 초기 매장 그랜드파더링)
-                  </div>
-                </div>
-                <span
-                  className="text-[11px] font-extrabold rounded-full px-3 py-1"
-                  style={
-                    metCount >= 2
-                      ? { background: 'rgba(16,185,129,.15)', color: '#10B981', border: '1px solid rgba(16,185,129,.4)' }
-                      : { background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }
-                  }
-                >
-                  충족 {metCount}/3{metCount >= 2 ? ' — 도입 검토 시점!' : ''}
-                </span>
-              </div>
-              <div className="grid md:grid-cols-3 gap-4">
-                {gauges.map((g) => {
-                  const pct = Math.min(100, (g.value / g.target) * 100);
-                  const met = g.value >= g.target;
-                  return (
-                    <div key={g.label}>
-                      <div className="flex items-baseline justify-between mb-1">
-                        <span className="text-[11px] font-bold" style={{ color: 'var(--text-2)' }}>{g.label}</span>
-                        <span className="text-sm font-extrabold mono" style={{ color: met ? '#10B981' : 'var(--text-1)' }}>
-                          {g.value.toLocaleString()}<span style={{ color: 'var(--text-3)', fontWeight: 600 }}> / {g.target}{g.unit}</span>
-                        </span>
-                      </div>
-                      <div style={{ height: 8, borderRadius: 5, background: 'var(--surface-2)', overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 5, background: met ? '#10B981' : g.color, minWidth: g.value > 0 ? 4 : 0, transition: 'width .4s' }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="text-[11px] mt-3" style={{ color: 'var(--text-3)' }}>
-                DAU <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.engagement.dau ?? 0).toLocaleString()}</b>
-                {' · '}MAU <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.engagement.mau ?? 0).toLocaleString()}</b>
-                {' · '}실시간 접속 <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.users.activeNow ?? 0).toLocaleString()}</b>
-                {' · '}일별 추이는 매일 00:05 자동 기록(platformKpis) — 누적되면 주간/월간 분석 차트 추가 예정
-              </div>
-            </>
-          );
-        })()}
-      </div>
+      <MonetizationGauge data={data} />
 
       {/* ━━ 2. 30일 추이 AreaChart ━━ */}
       <ChartCard
@@ -1447,6 +1395,230 @@ export default function PlatformDashboard() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ─────────────────────────────────────────────────────────────
+// MonetizationGauge — 유료 전환 게이지 (Phase별 목표, meta/kpiTargets 구독)
+// 2026-06-04 시장조사(전국 모수 2,000~2,800 · 플레이어 ~30만) 기반 PM 확정:
+//   P1 거점 60/240/2,400 (유료 트리거) → P2 전국 180/900/12,000 → P3 수익화 400/2,400/40,000
+// 목표치는 본사가 연필 버튼으로 직접 수정 — meta/kpiTargets에 저장, 코드 배포 불필요.
+// ─────────────────────────────────────────────────────────────
+function MonetizationGauge({ data }: { data: DashboardData | null }) {
+  const [targets, setTargets] = useState<KpiTargets>(KPI_TARGETS_DEFAULT);
+  const [editOpen, setEditOpen] = useState(false);
+  const [draft, setDraft] = useState<KpiTargets | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => subscribeKpiTargets(setTargets), []);
+
+  const phase = currentPhaseOf(targets);
+  const gauges = [
+    { key: 'activeRealStores' as const, label: '활성 매장 (실가입)', value: data?.engagement.activeRealStores ?? 0, target: phase.targets.activeRealStores, unit: '곳', color: '#06B6D4' },
+    { key: 'weeklyLive' as const, label: '주간 LIVE 세션', value: data?.live.thisWeek ?? 0, target: phase.targets.weeklyLive, unit: '회', color: '#EF4444' },
+    { key: 'wau' as const, label: 'WAU (주간 활성 사용자)', value: data?.engagement.wau ?? 0, target: phase.targets.wau, unit: '명', color: '#10B981' },
+  ];
+  const metCount = gauges.filter((g) => g.value >= g.target).length;
+  const triggered = metCount >= targets.requiredMetCount;
+
+  const openEdit = () => {
+    const plain = { ...targets, updatedAt: undefined, updatedBy: undefined };
+    setDraft(JSON.parse(JSON.stringify(plain)) as KpiTargets);
+    setEditOpen(true);
+  };
+
+  const save = async () => {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      await saveKpiTargets(draft, { actorUid: auth.currentUser?.uid ?? 'unknown' });
+      setEditOpen(false);
+    } catch (e) {
+      alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setDraftTarget = (phaseId: string, key: keyof KpiPhaseTargets, raw: string) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const n = parseInt(raw.replace(/\D/g, ''), 10);
+      return {
+        ...prev,
+        phases: prev.phases.map((p) =>
+          p.id === phaseId
+            ? { ...p, targets: { ...p.targets, [key]: Number.isFinite(n) ? n : 0 } }
+            : p,
+        ),
+      };
+    });
+  };
+
+  return (
+    <div
+      className="rounded-xl p-4 mb-6"
+      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+    >
+      {/* 헤더 + 충족 배지 + 편집 버튼 */}
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+        <div>
+          <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>
+            💰 유료 전환 게이지
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+            현재 단계 <b style={{ color: 'var(--gold)' }}>{phase.label}</b> — {targets.requiredMetCount}/3 충족 + PG 활성화 시 유료 도입 검토
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[11px] font-extrabold rounded-full px-3 py-1"
+            style={
+              triggered
+                ? { background: 'rgba(16,185,129,.15)', color: '#10B981', border: '1px solid rgba(16,185,129,.4)' }
+                : { background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }
+            }
+          >
+            충족 {metCount}/3{triggered ? (targets.pgEnabled ? ' — 도입 검토 시점!' : ' — PG 활성화 대기') : ''}
+          </span>
+          <button
+            onClick={editOpen ? () => setEditOpen(false) : openEdit}
+            title="목표치 편집"
+            className="text-[11px] font-bold rounded-md px-2 py-1"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
+          >
+            {editOpen ? '✕ 닫기' : '✏️ 목표 편집'}
+          </button>
+        </div>
+      </div>
+
+      {/* Phase 로드맵 칩 */}
+      <div className="flex gap-1.5 flex-wrap mb-3 overflow-x-auto">
+        {targets.phases.map((p) => {
+          const isCurrent = p.id === phase.id;
+          return (
+            <span
+              key={p.id}
+              className="text-[10px] font-extrabold rounded-full px-2.5 py-1 whitespace-nowrap"
+              style={
+                isCurrent
+                  ? { background: 'rgba(245,158,11,0.12)', color: 'var(--gold)', border: '1px solid var(--gold)' }
+                  : { background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }
+              }
+            >
+              {p.shortLabel} · {p.targets.activeRealStores}곳/{p.targets.weeklyLive}회/{p.targets.wau.toLocaleString()}명{isCurrent ? ' ◀' : ''}
+            </span>
+          );
+        })}
+      </div>
+
+      {/* 현재 Phase 게이지 3-바 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {gauges.map((g) => {
+          const pct = Math.min(100, (g.value / Math.max(1, g.target)) * 100);
+          const met = g.value >= g.target;
+          return (
+            <div key={g.key}>
+              <div className="flex items-baseline justify-between mb-1">
+                <span className="text-[11px] font-bold" style={{ color: 'var(--text-2)' }}>{g.label}</span>
+                <span className="text-sm font-extrabold mono" style={{ color: met ? '#10B981' : 'var(--text-1)' }}>
+                  {g.value.toLocaleString()}
+                  <span style={{ color: 'var(--text-3)', fontWeight: 600 }}> / {g.target.toLocaleString()}{g.unit}</span>
+                </span>
+              </div>
+              <div style={{ height: 8, borderRadius: 5, background: 'var(--surface-2)', overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 5, background: met ? '#10B981' : g.color, minWidth: g.value > 0 ? 4 : 0, transition: 'width .4s' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 보조 지표 + 산정 근거 */}
+      <div className="text-[11px] mt-3" style={{ color: 'var(--text-3)' }}>
+        DAU <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.engagement.dau ?? 0).toLocaleString()}</b>
+        {' · '}MAU <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.engagement.mau ?? 0).toLocaleString()}</b>
+        {' · '}실시간 접속 <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.users.activeNow ?? 0).toLocaleString()}</b>
+        {phase.note ? <span>{' · '}산정 근거: {phase.note}</span> : null}
+      </div>
+
+      {/* 접이식 목표 편집 패널 — prereg 오프셋 편집 패턴 */}
+      {editOpen && draft && (
+        <div className="mt-4 rounded-lg p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+          <div className="text-[11px] font-extrabold mb-2" style={{ color: 'var(--text-2)' }}>
+            🎚️ Phase별 목표치 편집 — 저장 즉시 반영 (코드 배포 불필요)
+          </div>
+          {draft.phases.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 flex-wrap mb-2">
+              <span className="text-[11px] font-bold" style={{ width: 86, color: 'var(--text-2)' }}>{p.shortLabel}</span>
+              {([['activeRealStores', '매장'], ['weeklyLive', 'LIVE/주'], ['wau', 'WAU']] as const).map(([k, lab]) => (
+                <label key={k} className="flex items-center gap-1">
+                  <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{lab}</span>
+                  <input
+                    value={String(p.targets[k])}
+                    onChange={(e) => setDraftTarget(p.id, k, e.target.value)}
+                    inputMode="numeric"
+                    className="mono"
+                    style={{ width: 76, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-1)', color: 'var(--text-1)', fontSize: 12 }}
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
+          <div className="flex items-center gap-3 flex-wrap mt-3">
+            <label className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-2)' }}>
+              현재 단계
+              <select
+                value={draft.currentPhaseId}
+                onChange={(e) => setDraft((prev) => (prev ? { ...prev, currentPhaseId: e.target.value } : prev))}
+                style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-1)', color: 'var(--text-1)', fontSize: 12 }}
+              >
+                {draft.phases.map((p) => (
+                  <option key={p.id} value={p.id}>{p.shortLabel}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-2)' }}>
+              충족 기준
+              <select
+                value={draft.requiredMetCount}
+                onChange={(e) => setDraft((prev) => (prev ? { ...prev, requiredMetCount: Number(e.target.value) } : prev))}
+                style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-1)', color: 'var(--text-1)', fontSize: 12 }}
+              >
+                <option value={1}>1/3</option>
+                <option value={2}>2/3</option>
+                <option value={3}>3/3</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-2)' }}>
+              <input
+                type="checkbox"
+                checked={draft.pgEnabled}
+                onChange={(e) => setDraft((prev) => (prev ? { ...prev, pgEnabled: e.target.checked } : prev))}
+              />
+              PG(결제) 활성화됨
+            </label>
+            <div className="ml-auto flex gap-2">
+              <button
+                onClick={() => setEditOpen(false)}
+                className="px-3 py-1.5 rounded-md text-[11px] font-bold"
+                style={{ background: 'var(--surface-1)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
+              >
+                취소
+              </button>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="px-3 py-1.5 rounded-md text-[11px] font-extrabold disabled:opacity-40"
+                style={{ background: 'var(--gold)', color: '#0F1419' }}
+              >
+                {saving ? '저장 중…' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // KpiCard — 큰 숫자 + 증감률 + sparkline
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
