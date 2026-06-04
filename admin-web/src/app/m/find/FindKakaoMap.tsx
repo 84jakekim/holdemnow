@@ -143,6 +143,27 @@ export default function FindKakaoMap({
     return () => { cancelled = true; };
   }, [onError, userLocation, locationDenied, mapInstanceRef]);
 
+  // 언마운트 전용 정리 (2026-06-04) — 목록↔지도 왕복·뒤로가기 시 지도 인스턴스를
+  // 완전 해제. mapInstanceRef는 부모 소유라 언마운트돼도 truthy로 남아, 재마운트 시
+  // 위 초기화 가드(mapInstanceRef.current 체크)에 걸려 떼어진 DOM을 참조하는 죽은
+  // 인스턴스가 재사용되며 크래시/빈 지도가 되던 문제. (위 effect의 cleanup에 넣으면
+  // userLocation 갱신마다 지도가 파괴·재생성되므로 deps 없는 별도 effect로 분리.)
+  useEffect(() => {
+    return () => {
+      try { clustererRef.current?.clear?.(); } catch { /* noop */ }
+      clustererRef.current = null;
+      for (const m of normalMarkersRef.current.values()) { try { m.setMap(null); } catch { /* noop */ } }
+      normalMarkersRef.current.clear();
+      for (const m of liveMarkersRef.current.values()) { try { m.setMap(null); } catch { /* noop */ } }
+      liveMarkersRef.current.clear();
+      try { userMarkerRef.current?.setMap?.(null); } catch { /* noop */ }
+      userMarkerRef.current = null;
+      try { radiusCircleRef.current?.setMap?.(null); } catch { /* noop */ }
+      radiusCircleRef.current = null;
+      mapInstanceRef.current = null; // 핵심 — 재마운트 시 새 인스턴스 생성 허용
+    };
+  }, [mapInstanceRef]);
+
   useEffect(() => {
     if (!mapReady || !userLocation || !mapInstanceRef.current) return;
     const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
@@ -178,7 +199,8 @@ export default function FindKakaoMap({
   }, [mapReady]);
 
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
+    // mapReady 가드 추가 (2026-06-04) — 초기화 완료 전/해제 후 마커 작업 방지
+    if (!mapReady || !mapInstanceRef.current) return;
     const maps = (window as Window & { kakao?: { maps: any } }).kakao?.maps;
     if (!maps) return;
     const clusterer = clustererRef.current;
@@ -220,7 +242,7 @@ export default function FindKakaoMap({
     if (clusterer && newClusterMarkers.length > 0) clusterer.addMarkers(newClusterMarkers);
     for (const [id, m] of normalMarkersRef.current) { if (!seenNormal.has(id)) { if (clusterer) clusterer.removeMarker(m); else m.setMap(null); normalMarkersRef.current.delete(id); } }
     for (const [id, m] of liveMarkersRef.current) { if (!seenLive.has(id)) { m.setMap(null); liveMarkersRef.current.delete(id); } }
-  }, [stores, liveCountByStore, selectedId, onSelect, mapInstanceRef]);
+  }, [mapReady, stores, liveCountByStore, selectedId, onSelect, mapInstanceRef]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

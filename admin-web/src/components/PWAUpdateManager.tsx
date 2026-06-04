@@ -47,6 +47,39 @@ export default function PWAUpdateManager() {
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reloadingRef = useRef(false);
 
+  // stale chunk 전역 캐치 (2026-06-04) — 배포 직후 구버전 클라이언트가 새 빌드의
+  // 해시 청크를 404로 받으면 ChunkLoadError. error boundary(app/error.tsx) 도달 전에
+  // 여기서 먼저 잡아 세션당 1회 자동 새로고침 (이벤트 핸들러·비동기 reject 경로 커버).
+  useEffect(() => {
+    const RELOAD_FLAG = 'hn:chunkReloaded';
+    const isChunkErr = (v: unknown): boolean => {
+      const s =
+        v instanceof Error ? `${v.name} ${v.message}` : typeof v === 'string' ? v : '';
+      return /ChunkLoadError|Loading chunk|CSS chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(s);
+    };
+    const tryReload = () => {
+      try {
+        if (window.sessionStorage.getItem(RELOAD_FLAG)) return;
+        window.sessionStorage.setItem(RELOAD_FLAG, '1');
+        window.location.reload();
+      } catch {
+        // noop
+      }
+    };
+    const onError = (e: ErrorEvent) => {
+      if (isChunkErr(e.error) || isChunkErr(e.message)) tryReload();
+    };
+    const onRejection = (e: PromiseRejectionEvent) => {
+      if (isChunkErr(e.reason)) tryReload();
+    };
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
