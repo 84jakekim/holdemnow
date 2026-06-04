@@ -40,6 +40,8 @@ import {
 } from 'recharts';
 import {
   loadUserStats,
+  loadEngagementStats,
+  type EngagementStats,
   loadStoreStats,
   loadOrganizerStats,
   loadLiveStats,
@@ -168,6 +170,7 @@ function formatTs(ts: { toDate(): Date } | Date | null | undefined): string {
 
 interface DashboardData {
   users: UserStats;
+  engagement: EngagementStats;
   stores: StoreStats;
   organizers: OrganizerStats;
   live: LiveStats;
@@ -209,6 +212,7 @@ export default function PlatformDashboard() {
     try {
       const [
         users,
+        engagement,
         stores,
         organizers,
         live,
@@ -232,6 +236,7 @@ export default function PlatformDashboard() {
         regionTimeSeries,
       ] = await Promise.all([
         loadUserStats(),
+        loadEngagementStats(),
         loadStoreStats(),
         loadOrganizerStats(),
         loadLiveStats(),
@@ -256,6 +261,7 @@ export default function PlatformDashboard() {
       ]);
       setData({
         users,
+        engagement,
         stores,
         organizers,
         live,
@@ -614,6 +620,72 @@ export default function PlatformDashboard() {
           loading={loading && !data}
           subValue={data ? `평균 ★${data.reviews.avgRating.toFixed(1)}` : undefined}
         />
+      </div>
+
+      {/* ━━ 1.5 유료 전환 게이지 — B안 트리거 (2026-06-04 PM 회의) ━━
+          활성 매장 ≥40 / 주간 LIVE ≥50 / WAU ≥300 중 2개 충족 + PG 활성화 → 유료 도입 검토.
+          일별 추이는 snapshotDailyKpis 함수가 platformKpis/{date}에 매일 박제. */}
+      <div
+        className="rounded-xl p-4 mb-6"
+        style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+      >
+        {(() => {
+          const gauges = [
+            { label: '활성 매장 (실가입)', value: data?.engagement.activeRealStores ?? 0, target: 40, unit: '곳', color: '#06B6D4' },
+            { label: '주간 LIVE 세션', value: data?.live.thisWeek ?? 0, target: 50, unit: '회', color: '#EF4444' },
+            { label: 'WAU (주간 활성 사용자)', value: data?.engagement.wau ?? 0, target: 300, unit: '명', color: '#10B981' },
+          ];
+          const metCount = gauges.filter((g) => g.value >= g.target).length;
+          return (
+            <>
+              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <div className="text-xs font-extrabold" style={{ color: 'var(--text-2)' }}>
+                    💰 유료 전환 게이지
+                  </div>
+                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+                    3개 중 <b>2개 충족 + PG 활성화</b> 시 유료 도입 검토 (30일 사전 공지 · 초기 매장 그랜드파더링)
+                  </div>
+                </div>
+                <span
+                  className="text-[11px] font-extrabold rounded-full px-3 py-1"
+                  style={
+                    metCount >= 2
+                      ? { background: 'rgba(16,185,129,.15)', color: '#10B981', border: '1px solid rgba(16,185,129,.4)' }
+                      : { background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }
+                  }
+                >
+                  충족 {metCount}/3{metCount >= 2 ? ' — 도입 검토 시점!' : ''}
+                </span>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4">
+                {gauges.map((g) => {
+                  const pct = Math.min(100, (g.value / g.target) * 100);
+                  const met = g.value >= g.target;
+                  return (
+                    <div key={g.label}>
+                      <div className="flex items-baseline justify-between mb-1">
+                        <span className="text-[11px] font-bold" style={{ color: 'var(--text-2)' }}>{g.label}</span>
+                        <span className="text-sm font-extrabold mono" style={{ color: met ? '#10B981' : 'var(--text-1)' }}>
+                          {g.value.toLocaleString()}<span style={{ color: 'var(--text-3)', fontWeight: 600 }}> / {g.target}{g.unit}</span>
+                        </span>
+                      </div>
+                      <div style={{ height: 8, borderRadius: 5, background: 'var(--surface-2)', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 5, background: met ? '#10B981' : g.color, minWidth: g.value > 0 ? 4 : 0, transition: 'width .4s' }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] mt-3" style={{ color: 'var(--text-3)' }}>
+                DAU <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.engagement.dau ?? 0).toLocaleString()}</b>
+                {' · '}MAU <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.engagement.mau ?? 0).toLocaleString()}</b>
+                {' · '}실시간 접속 <b className="mono" style={{ color: 'var(--text-2)' }}>{(data?.users.activeNow ?? 0).toLocaleString()}</b>
+                {' · '}일별 추이는 매일 00:05 자동 기록(platformKpis) — 누적되면 주간/월간 분석 차트 추가 예정
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {/* ━━ 2. 30일 추이 AreaChart ━━ */}

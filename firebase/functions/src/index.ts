@@ -33,6 +33,9 @@ export { backfillUserProviders } from './admin/backfillUserProviders';
 // ===== Account — 본인 회원 탈퇴 (player/store/organizer 공용) =====
 export { deleteOwnAccount } from './account/deleteOwnAccount';
 
+// ===== Metrics — 일별 플랫폼 KPI 스냅샷 (유료 전환 게이지 추이, 매일 00:05 KST) =====
+export { snapshotDailyKpis } from './metrics/snapshotDailyKpis';
+
 // ===== YouTube — 채널 페이지 메타 추출 (API key 불필요, og:meta 파싱) =====
 export { getYoutubeChannelMeta } from './youtube/getYoutubeChannelMeta';
 

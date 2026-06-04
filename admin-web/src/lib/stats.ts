@@ -392,6 +392,43 @@ export async function loadLiveStats(): Promise<LiveStats> {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 활성 사용자(DAU/WAU/MAU) + 실가입 활성 매장 — 유료 전환 게이지용
+// (2026-06-04 회의: 유료 재노출 트리거 = 활성 매장 ≥40 / 주간 LIVE ≥50 / WAU ≥300 중 2개 + PG)
+// lastActiveAt은 사용자앱 5분 heartbeat(lib/heartbeat.ts)가 갱신.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface EngagementStats {
+  /** lastActiveAt >= 24시간 전 */
+  dau: number;
+  /** lastActiveAt >= 7일 전 */
+  wau: number;
+  /** lastActiveAt >= 30일 전 */
+  mau: number;
+  /** status='active' AND 데모 제외 — 실제 가입 활성 매장 */
+  activeRealStores: number;
+}
+
+export async function loadEngagementStats(): Promise<EngagementStats> {
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  const t1 = Timestamp.fromDate(new Date(now - DAY));
+  const t7 = Timestamp.fromDate(new Date(now - 7 * DAY));
+  const t30 = Timestamp.fromDate(new Date(now - 30 * DAY));
+
+  const [dau, wau, mau, activeTotal, activeDemo] = await Promise.all([
+    countDocs('users', [where('lastActiveAt', '>=', t1)]).catch(() => 0),
+    countDocs('users', [where('lastActiveAt', '>=', t7)]).catch(() => 0),
+    countDocs('users', [where('lastActiveAt', '>=', t30)]).catch(() => 0),
+    countDocs('stores', [where('status', '==', 'active')]).catch(() => 0),
+    // 실매장엔 isDemo 필드가 없을 수 있어 ==false 쿼리는 누락 위험 → active 전체 − active 데모 차감.
+    // (status, isDemo) 복합 인덱스는 firestore.indexes.json에 이미 존재.
+    countDocs('stores', [where('status', '==', 'active'), where('isDemo', '==', true)]).catch(() => 0),
+  ]);
+
+  return { dau, wau, mau, activeRealStores: Math.max(0, activeTotal - activeDemo) };
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 리뷰 통계
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

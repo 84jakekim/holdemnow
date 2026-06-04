@@ -414,6 +414,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== 플랫폼 일별 KPI 스냅샷 (유료 전환 게이지 추이) =====
+    // snapshotDailyKpis 함수(admin SDK)만 기록. 본사만 열람.
+    match /platformKpis/{dateKey} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
     // ===== 차단 lookup (가입 차단 O(1) 조회) =====
     // key = 정규화 전화번호 또는 소문자 이메일.
     // 가입 직전(미인증) assertNotBanned/setUserPhone이 조회 → get 공개. 단 list(열거)는 본사만.
