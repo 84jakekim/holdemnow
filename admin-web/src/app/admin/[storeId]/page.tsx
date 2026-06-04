@@ -31,6 +31,12 @@ import { subscribeStoreReservations } from '@/lib/reservations';
 import { changePassword, syncPasswordRecovery, validatePassword, deleteOwnAccount } from '@/lib/emailAuth';
 import { RabbitLogo } from '@/components/ui';
 
+// 광고/플랜 메뉴 노출 플래그 — 2026-06-04 PM 회의 결정(B안): 사전등록~베타 무료 기간 동안 숨김.
+// 결제 비활성(PG 심사 전) 상태의 가격표가 "오픈하자마자 유료" 인상만 주는 문제.
+// 유료 재노출 트리거(활성 매장·주간 LIVE·WAU 임계 + PG 활성화) 충족 시 true로 전환 —
+// MENUS에서 빠지면 사이드 메뉴·딥링크(?tab=ads)·패널 렌더가 모두 함께 차단/복원된다.
+const ADS_MENU_ENABLED = false;
+
 const MENUS = [
   { id: 'dashboard', icon: '📊', label: '대시보드' },
   // 🎬 토너 운영 — LIVE + 토너 템플릿 + 디스플레이 슬롯 + 타이머 화면 설정을 한 페이지에서 통합 (2026-05-21)
@@ -44,7 +50,7 @@ const MENUS = [
   { id: 'store', icon: '🏬', label: '매장 정보' },
   { id: 'ads', icon: '📣', label: '광고' },
   { id: 'stats', icon: '📈', label: '통계' },
-];
+].filter((m) => ADS_MENU_ENABLED || m.id !== 'ads');
 
 // pending 매장에서 차단되는 외부 노출 메뉴 — 본사 승인 후에만 활성
 // tournament는 LIVE+템플릿+디스플레이 통합 메뉴이므로 함께 차단
