@@ -7,7 +7,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 
 /**
  * 매장별 누적 카운터 (stores/{storeId}/metrics/global)
@@ -68,8 +68,44 @@ function alreadyBumped(storeId: string, field: StoreMetricField): boolean {
   }
 }
 
+/**
+ * 테스트 트래픽 차단 — "실사용자만 카운트" (2026-06-04).
+ * 배경: 누적 노출 26,100회가 전부 개발·테스트 트래픽으로 판명(dev 서버가 prod Firestore에
+ * 연결 + Playwright 스모크 감사 + QA 계정 브라우징). 매장 사장에게 가짜 성과로 보이는 문제.
+ * 차단 대상:
+ *  1) 로컬/사설망 dev 서버 — 최대 오염원
+ *  2) 자동화 브라우저 (Playwright/Selenium — navigator.webdriver)
+ *  3) 내부 QA·관리자 계정
+ *  4) 수동 옵트아웃: localStorage 'hn:noTrack' = '1'
+ * 판별 실패 시엔 카운트 진행(가용성 우선). 기존 누적분 리셋은 출시 전 초기화 절차에서.
+ */
+const TEST_ACCOUNT_EMAILS = new Set([
+  'thethego@naver.com',   // 총관리자
+  'pinkrabbit@naver.com', // QA 플레이어
+  'ssibak@empal.com',     // QA 본사
+  '1111@naver.com',       // QA 매장
+]);
+
+function isTestTraffic(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1' || h.startsWith('192.168.') || h.startsWith('10.')) {
+      return true;
+    }
+    if (navigator.webdriver) return true;
+    if (window.localStorage.getItem('hn:noTrack') === '1') return true;
+    const email = auth.currentUser?.email?.toLowerCase();
+    if (email && TEST_ACCOUNT_EMAILS.has(email)) return true;
+  } catch {
+    // 판별 자체가 실패하면 실사용자로 간주하고 카운트
+  }
+  return false;
+}
+
 export function bumpStoreMetric(storeId: string, field: StoreMetricField) {
   if (!storeId) return;
+  if (isTestTraffic()) return; // 테스트 트래픽 — 카운트 제외
   // 같은 세션 중복 카운트 방지 (favoriteAdds/directionsClicks 등). impressions는 trackImpressionOnce가 별도 처리.
   if (field !== 'impressions' && alreadyBumped(storeId, field)) return;
   // 1) 누적 카운터 (기존)
